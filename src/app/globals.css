@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  /* Base surfaces */
+  --color-bg: oklch(0.985 0.004 90);
+  --color-surface-warm: oklch(0.96 0.008 90);
+  --color-surface-dark: oklch(0.22 0.01 90);
+  --color-surface-dark-2: oklch(0.27 0.012 90);
+
+  /* Borders */
+  --color-border: oklch(0.9 0.005 90);
+  --color-border-soft: oklch(0.93 0.005 90);
+  --color-input-border: oklch(0.88 0.005 90);
+  --color-input-bg: oklch(0.99 0.002 90);
+
+  /* Ink / text */
+  --color-ink: oklch(0.22 0.01 90);
+  --color-ink-strong: oklch(0.18 0.01 90);
+  --color-ink-soft: oklch(0.42 0.01 90);
+  --color-ink-mute: oklch(0.35 0.01 90);
+  --color-text-body: oklch(0.3 0.01 90);
+  --color-text-body-2: oklch(0.32 0.01 90);
+  --color-text-muted: oklch(0.5 0.01 90);
+  --color-text-muted-2: oklch(0.45 0.01 90);
+  --color-text-faint: oklch(0.55 0.01 90);
+  --color-text-on-dark: oklch(0.98 0.005 90);
+  --color-text-on-dark-soft: oklch(0.7 0.01 90);
+  --color-text-on-dark-soft-2: oklch(0.72 0.01 90);
+
+  /* Accent (brand blue) */
+  --color-accent: oklch(0.55 0.15 250);
+  --color-accent-soft: oklch(0.94 0.03 250);
+  --color-accent-soft-text: oklch(0.4 0.12 250);
+  --color-accent-soft-text-2: oklch(0.38 0.12 250);
+  --color-step-num: oklch(0.88 0.02 250);
+  --color-card-shadow: oklch(0.2 0.02 250 / 0.2);
+  --color-selection: oklch(0.62 0.15 250 / 0.25);
+
+  /* Product / status accents */
+  --color-green: oklch(0.6 0.15 150);
+  --color-green-soft: oklch(0.9 0.06 150);
+  --color-green-soft-text: oklch(0.35 0.1 150);
+  --color-orange: oklch(0.6 0.15 30);
+  --color-purple: oklch(0.6 0.15 300);
+}
+
+@theme inline {
+  --font-heading: var(--font-space-grotesk);
+  --font-sans: var(--font-ibm-plex-sans);
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 0.7s ease both;
+}
+
+.animate-float-up-slow {
+  animation: floatUp 0.9s ease both;
+}
+
+::selection {
+  background: var(--color-selection);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
