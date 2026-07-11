@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+import { getResendClient } from "@/lib/resend";
 export const runtime = "nodejs";
 
 const MAX_FIELD_LENGTH = 300;
 const MAX_NOTES_LENGTH = 2000;
+
+const LEAD_NOTIFICATION_TO = "info@winsalotcorp.com";
+const LEAD_NOTIFICATION_FROM =
+  process.env.RESEND_FROM_EMAIL ?? "Winsalot Lead Generation <info@winsalotcorp.com>";
 
 type IntakePayload = {
   businessName: string;
@@ -42,6 +47,71 @@ function isValidLeadsPerMonth(value: string): boolean {
 
 function isValidDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function sendLeadNotificationEmail(payload: IntakePayload) {
+  const fields: [string, string][] = [
+    ["Business Name", payload.businessName],
+    ["Contact Person", payload.contactPerson],
+    ["Business Email", payload.businessEmail],
+    ["Phone Number", payload.phoneNumber],
+    ["Business Website", payload.businessWebsite || "—"],
+    ["Target Industry", payload.targetIndustry],
+    ["Services to Promote", payload.servicesToPromote],
+    ["Leads Required Per Month", payload.leadsPerMonth],
+    ["Preferred Start Date", payload.preferredStartDate || "—"],
+    ["Additional Notes", payload.additionalNotes || "—"],
+  ];
+
+  const text = fields.map(([label, value]) => `${label}: ${value}`).join("\n");
+  const html = `
+    <h2>New Lead Generation Client Intake</h2>
+    <table cellpadding="6" cellspacing="0">
+      ${fields
+        .map(
+          ([label, value]) =>
+            `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(value)}</td></tr>`
+        )
+        .join("")}
+    </table>
+  `;
+
+  console.log("[lead-generation-intake] Resend config check:", {
+    hasApiKey: Boolean(process.env.RESEND_API_KEY),
+    apiKeyLength: process.env.RESEND_API_KEY?.length ?? 0,
+    fromEnvVarSet: Boolean(process.env.RESEND_FROM_EMAIL),
+    resolvedFrom: LEAD_NOTIFICATION_FROM,
+    resolvedTo: LEAD_NOTIFICATION_TO,
+  });
+
+  const resend = getResendClient();
+  const { data, error } = await resend.emails.send({
+    from: LEAD_NOTIFICATION_FROM,
+    to: LEAD_NOTIFICATION_TO,
+    replyTo: payload.businessEmail,
+    subject: `New Lead Generation Signup: ${payload.businessName}`,
+    text,
+    html,
+  });
+
+  if (error) {
+    console.error(
+      "[lead-generation-intake] Resend API returned an error:",
+      JSON.stringify(error, null, 2)
+    );
+    throw new Error(error.message ?? "Unknown Resend error.");
+  }
+
+  console.log("[lead-generation-intake] Resend notification sent:", { id: data?.id });
 }
 
 export async function POST(request: Request) {
@@ -126,21 +196,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Database error: ${insertError.message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
-}
-import "server-only";
-import { Resend } from "resend";
+  console.log("[lead-generation-intake] Lead saved, sending notification email:", {
+    businessName: businessName.trim(),
+    businessEmail: businessEmail.trim(),
+  });
 
-let cachedClient: Resend | null = null;
-
-export function getResendClient(): Resend {
-  if (cachedClient) return cachedClient;
-
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing RESEND_API_KEY environment variable.");
+  try {
+    await sendLeadNotificationEmail({
+      businessName,
+      contactPerson,
+      businessEmail,
+      phoneNumber,
+      businessWebsite,
+      targetIndustry,
+      servicesToPromote,
+      leadsPerMonth,
+      preferredStartDate,
+      additionalNotes,
+    });
+  } catch (err) {
+    console.error("[lead-generation-intake] Failed to send lead notification email:", err);
+    const message = err instanceof Error ? err.message : "Unknown error.";
+    return NextResponse.json(
+      {
+        ok: true,
+        error: `Lead was saved, but the notification email failed to send: ${message}`,
+      },
+      { status: 502 }
+    );
   }
 
-  cachedClient = new Resend(apiKey);
-  return cachedClient;
+  return NextResponse.json({ ok: true }, { status: 201 });
 }
