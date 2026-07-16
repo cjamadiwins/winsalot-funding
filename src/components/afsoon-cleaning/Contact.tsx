@@ -1,5 +1,6 @@
 import { Phone, Mail, Clock, MapPin } from "lucide-react";
 import { businessConfig } from "@/config/business";
+import FulfillmentNotice from "./FulfillmentNotice";
 
 const items = [
   {
@@ -34,7 +35,11 @@ export default function Contact() {
           <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Contact Us</h2>
         </div>
 
-        <div className="mx-auto mt-12 grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="mx-auto mt-6 max-w-2xl">
+          <FulfillmentNotice variant="compact" />
+        </div>
+
+        <div className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-2">
           {items.map((item) => (
             <div key={item.label} className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">

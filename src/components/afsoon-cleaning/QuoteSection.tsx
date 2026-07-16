@@ -1,4 +1,5 @@
 import QuoteForm from "./QuoteForm";
+import FulfillmentNotice from "./FulfillmentNotice";
 
 export default function QuoteSection() {
   return (
@@ -12,7 +13,11 @@ export default function QuoteSection() {
           </p>
         </div>
 
-        <div className="relative mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mt-6">
+          <FulfillmentNotice variant="full" />
+        </div>
+
+        <div className="relative mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <QuoteForm />
         </div>
       </div>

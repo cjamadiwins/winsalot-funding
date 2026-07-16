@@ -24,7 +24,7 @@ export default function Hero() {
             className="flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-8 py-3.5 text-base font-semibold text-slate-800 transition hover:border-slate-400 sm:w-auto"
           >
             <Phone className="h-4 w-4" />
-            Call Now: {businessConfig.phone.display}
+            Call the Quote Team: {businessConfig.phone.display}
           </a>
         </div>
       </div>
