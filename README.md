@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Afsoon Cleaning Team landing page
+
+This repo also includes a standalone quote-request landing page for Afsoon Cleaning Team at
+`/afsoon-cleaning`. See [`docs/afsoon-cleaning-team.md`](docs/afsoon-cleaning-team.md) for
+setup, environment variables, deployment and testing instructions specific to that page.
+
 ## Getting Started
 
 First, run the development server:
