@@ -6,12 +6,21 @@ const LEAD_GEN_HOSTS = new Set([
   "www.leads.winsalotcorp.com",
 ]);
 
+const CLEANING_QUOTE_HOSTS = new Set([
+  "cleaning.winsalotcorp.com",
+  "www.cleaning.winsalotcorp.com",
+]);
+
 export async function proxy(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0];
   const { pathname } = request.nextUrl;
 
   if (pathname === "/" && LEAD_GEN_HOSTS.has(host)) {
     return NextResponse.rewrite(new URL("/lead-generation", request.url));
+  }
+
+  if (pathname === "/" && CLEANING_QUOTE_HOSTS.has(host)) {
+    return NextResponse.rewrite(new URL("/commercial-cleaning-quote", request.url));
   }
 
   if (pathname.startsWith("/admin")) {
