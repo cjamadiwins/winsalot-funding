@@ -6,6 +6,11 @@ This repo also includes a standalone quote-request landing page for Afsoon Clean
 `/afsoon-cleaning`. See [`docs/afsoon-cleaning-team.md`](docs/afsoon-cleaning-team.md) for
 setup, environment variables, deployment and testing instructions specific to that page.
 
+A private admin dashboard at `/admin` lets you assign incoming requests to a cleaning
+provider via a secure link and approve the final quote before it's sent to the customer.
+See [`docs/provider-quote-system.md`](docs/provider-quote-system.md) for setup and how it
+works.
+
 ## Getting Started
 
 First, run the development server:
