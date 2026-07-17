@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { QUICK_QUOTE_EVENT, type QuickQuoteEvent } from "@/lib/quick-quote";
 
 const CLEANING_TYPES = [
   "Residential cleaning",
@@ -80,6 +81,25 @@ export default function QuoteForm() {
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+
+  // Subscribes to the compact hero quick-quote form so values it collects
+  // can flow into this form's state the moment the visitor submits it,
+  // regardless of when this component happened to mount.
+  useEffect(() => {
+    function handleQuickQuote(event: Event) {
+      const { detail } = event as QuickQuoteEvent;
+      setForm((prev) => ({
+        ...prev,
+        fullName: detail.fullName || prev.fullName,
+        phone: detail.phone || prev.phone,
+        email: detail.email || prev.email,
+        description: detail.description || prev.description,
+      }));
+    }
+
+    window.addEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
+    return () => window.removeEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
