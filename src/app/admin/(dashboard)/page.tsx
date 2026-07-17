@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { QuoteRequestRow } from "@/lib/admin-types";
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_STYLES, type QuoteRequestRow } from "@/lib/admin-types";
 
+// Older rows may still carry the pre-workflow-update lowercase statuses;
+// keep their labels/styles alongside the current QUOTE_STATUS_* maps so the
+// list doesn't show a raw, unstyled string for historical requests.
 const STATUS_LABELS: Record<string, string> = {
+  ...QUOTE_STATUS_LABELS,
   new: "New",
   assigned: "Assigned",
   provider_quote_received: "Provider Quote Received",
@@ -10,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
+  ...QUOTE_STATUS_STYLES,
   new: "bg-slate-100 text-slate-700",
   assigned: "bg-amber-100 text-amber-800",
   provider_quote_received: "bg-sky-100 text-sky-800",
