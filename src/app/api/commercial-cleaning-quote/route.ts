@@ -64,7 +64,7 @@ function truncate(value: string, maxLength: number): string {
 
 async function sendQuoteNotificationSms(payload: QuotePayload) {
   const lines = [
-    "New Afsoon Cleaning Team quote request",
+    "New Cleaning Quote Request",
     `Name: ${payload.fullName}`,
     `Phone: ${payload.phone}`,
     `City: ${payload.city}`,
@@ -98,7 +98,7 @@ async function sendQuoteNotificationEmail(payload: QuotePayload) {
 
   const text = fields.map(([label, value]) => `${label}: ${value}`).join("\n");
   const html = `
-    <h2>New Quote Request - Afsoon Cleaning Team</h2>
+    <h2>New Cleaning Quote Request</h2>
     <table cellpadding="6" cellspacing="0">
       ${fields
         .map(
@@ -110,13 +110,13 @@ async function sendQuoteNotificationEmail(payload: QuotePayload) {
   `;
 
   const toEmail = process.env.NOTIFICATION_EMAIL || businessConfig.email;
-  const fromEmail = process.env.EMAIL_FROM || "Afsoon Cleaning Team <onboarding@resend.dev>";
+  const fromEmail = process.env.EMAIL_FROM || "Cleaning Quote Request <onboarding@resend.dev>";
 
   const resend = getResendClient();
   const { error } = await resend.emails.send({
     from: fromEmail,
     to: toEmail,
-    subject: "New Quote Request - Afsoon Cleaning Team",
+    subject: "New Cleaning Quote Request",
     text,
     html,
   });

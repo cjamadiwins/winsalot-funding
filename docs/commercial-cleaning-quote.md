@@ -53,10 +53,15 @@ environment variables instead, so they can be changed per-environment without to
 1. Create a free project at [supabase.com](https://supabase.com) (or reuse an existing
    project — this table doesn't conflict with the `leads` / `lead_generation` tables already
    used by the rest of this app).
-2. In the Supabase dashboard, open the **SQL Editor** and run the contents of
-   [`supabase/migrations/0003_create_quote_requests.sql`](../supabase/migrations/0003_create_quote_requests.sql),
-   then [`0004_provider_quote_system.sql`](../supabase/migrations/0004_provider_quote_system.sql)
-   for the admin/provider workflow.
+2. In the Supabase dashboard, open the **SQL Editor** and run the migrations in order:
+   [`0003_create_quote_requests.sql`](../supabase/migrations/0003_create_quote_requests.sql)
+   (creates the table),
+   [`0004_provider_quote_system.sql`](../supabase/migrations/0004_provider_quote_system.sql)
+   (admin/provider workflow), and
+   [`0005_neutral_quote_source_default.sql`](../supabase/migrations/0005_neutral_quote_source_default.sql)
+   (only needed if your database already ran 0003 before it was updated — cleans up a
+   leftover branded value in the `source` column; a brand-new install gets the correct
+   value straight from 0003 and can skip it).
 3. In **Project Settings → API**, copy:
    - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
    - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -114,11 +119,9 @@ With `npm run dev` running and at least Supabase configured:
    and the form should disappear (refreshing the page brings it back, by design).
 4. Check the `quote_requests` table in Supabase for the new row.
 5. If Twilio is configured, check the destination phone for a text starting with
-   *"New Afsoon Cleaning Team quote request"* — this is an internal alert to you, not shown
-   to customers; the label is a naming leftover you're free to change in
-   `src/app/api/commercial-cleaning-quote/route.ts` if it bothers you.
-6. If Resend is configured, check the notification inbox for a *"New Quote Request -
-   Afsoon Cleaning Team"* email (same note as above).
+   *"New Cleaning Quote Request"*.
+6. If Resend is configured, check the notification inbox for an email with subject
+   *"New Cleaning Quote Request"*.
 
 To test validation, try submitting with required fields empty (client-side validation should
 block it) and check the terminal running `npm run dev` for `[commercial-cleaning-quote]` log
@@ -155,8 +158,7 @@ lines if something fails server-side.
 - [ ] Submitting the form with all required fields filled shows the thank-you message
 - [ ] Submitting with a required field missing is blocked client-side with a clear message
 - [ ] The new row appears in Supabase → `quote_requests`, with `status = new` and
-      `source = Afsoon Cleaning Team landing page` (an internal `source` label, not shown to
-      customers — see the note in Section 6)
+      `source = Cleaning Quote Request` (an internal tracking label, not shown to customers)
 - [ ] The SMS notification arrives at the configured `SMS_NOTIFICATION_NUMBER`
 - [ ] The backup email notification arrives at `NOTIFICATION_EMAIL` and includes all
       submitted fields

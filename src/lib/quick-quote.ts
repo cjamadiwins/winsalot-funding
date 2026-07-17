@@ -5,7 +5,7 @@
 // the honeypot, and the actual API submission. This keeps there being
 // exactly one code path that talks to the backend.
 
-export const QUICK_QUOTE_EVENT = "afsoon-quick-quote";
+export const QUICK_QUOTE_EVENT = "cleaning-quick-quote";
 
 export type QuickQuotePrefill = {
   fullName: string;
