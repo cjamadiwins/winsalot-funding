@@ -19,8 +19,9 @@ automatically — this system is how you (the admin) route requests manually.
 4. The provider opens the link and sees **only** that one job's cleaning details (property
    type, size, location, description, etc.) — not the customer's name, phone, or email, not
    your other requests, and not your other providers. They enter their price and submit.
-5. You get notified by SMS + email that a provider quote came in. The request is marked
-   **Provider Quote Received**.
+5. You get notified by SMS + email that a provider quote came in — the message includes the
+   provider's name, the customer's name, the city, the submitted price, and a link straight to
+   the request in `/admin`. The request is marked **Provider Quote Received**.
 6. You review the provider's number, write/edit the price and summary the *customer* will
    see, and click **Approve Quote**.
 7. The approved quote is never sent automatically. You copy it, download it as a text file,
@@ -41,10 +42,10 @@ Like every other table in this project, RLS is enabled with no public policies �
 service role key (used server-side by the admin dashboard and the token-validated provider
 page) can read or write any of this.
 
-## 2. Add the new environment variable
+## 2. Add the new environment variables
 
 The admin dashboard uses [Supabase Auth](https://supabase.com/docs/guides/auth) for your
-login. Add one new variable to `.env.local` (and to Vercel):
+login. Add this variable to `.env.local` (and to Vercel):
 
 ```
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -54,6 +55,10 @@ Get it from Supabase → **Project Settings → API → Project API keys → ano
 key is safe to expose to the browser (that's what "public" means) — it's only used to sign
 you in and out; it can't read or write any data on its own because RLS blocks it, same as
 before.
+
+Also set `NEXT_PUBLIC_SITE_URL` (e.g. `https://leads.winsalotcorp.com`) so the "view in admin
+dashboard" link included in provider-quote notification emails/SMS points at your real
+domain — see `.env.example`.
 
 ## 3. Create your admin login
 
@@ -112,8 +117,9 @@ Adding a new provider never requires a code change or a redeploy — it's just a
       shows it again
 - [ ] Opening the generated link in an incognito/private window shows only that job's
       cleaning details — no customer name/phone/email, no other requests
-- [ ] Submitting a price on that page notifies you by SMS + email and updates the request
-      to "Provider Quote Received"
+- [ ] Submitting a price on that page notifies you by SMS + email — including the provider
+      name, customer name, city, price, and a working link to the request in `/admin` — and
+      updates the request to "Provider Quote Received"
 - [ ] Opening the same link again after submitting shows "already submitted", not the form
 - [ ] Revoking a link makes it show "no longer valid" immediately
 - [ ] An expired link (or one for a deleted/mismatched token) also shows "no longer valid"

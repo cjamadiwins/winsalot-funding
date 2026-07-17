@@ -19,9 +19,13 @@ export async function sendSms(body: string): Promise<void> {
   const toNumberRaw = process.env.SMS_NOTIFICATION_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber || !toNumberRaw) {
-    throw new Error(
-      "Missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER or SMS_NOTIFICATION_NUMBER environment variables."
-    );
+    const missing = [
+      !accountSid && "TWILIO_ACCOUNT_SID",
+      !authToken && "TWILIO_AUTH_TOKEN",
+      !fromNumber && "TWILIO_PHONE_NUMBER",
+      !toNumberRaw && "SMS_NOTIFICATION_NUMBER",
+    ].filter(Boolean);
+    throw new Error(`Missing environment variable(s): ${missing.join(", ")}.`);
   }
 
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");

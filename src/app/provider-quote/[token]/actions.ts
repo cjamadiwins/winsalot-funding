@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { hashProviderToken } from "@/lib/tokens";
 import { sendSms } from "@/lib/twilio";
 import { getResendClient } from "@/lib/resend";
+import { getSiteUrl } from "@/lib/site-url";
+import { escapeHtml } from "@/lib/html";
 
 const PRICE_TYPES = ["hourly", "per_visit", "weekly", "monthly", "one_time"] as const;
 
@@ -16,16 +18,22 @@ function toNullableNumber(value: FormDataEntryValue | null): number | null {
 
 async function notifyAdminOfProviderQuote(params: {
   companyName: string;
+  customerName: string;
   customerCity: string;
   cleaningType: string;
   price: number;
   priceType: string;
+  quoteRequestId: string;
 }) {
+  const adminUrl = `${getSiteUrl()}/admin/requests/${params.quoteRequestId}`;
+
   const smsBody = [
     "New provider quote submitted",
     `Provider: ${params.companyName}`,
+    `Customer: ${params.customerName}`,
     `Job: ${params.cleaningType} in ${params.customerCity}`,
     `Price: $${params.price} (${params.priceType})`,
+    `View: ${adminUrl}`,
   ].join("\n");
 
   const results = await Promise.allSettled([
@@ -36,13 +44,29 @@ async function notifyAdminOfProviderQuote(params: {
       const fromEmail = process.env.EMAIL_FROM || "Quote Notifications <onboarding@resend.dev>";
       if (!toEmail) throw new Error("NOTIFICATION_EMAIL is not configured.");
 
+      const html = `
+        <p>New provider quote submitted</p>
+        <ul>
+          <li><strong>Provider:</strong> ${escapeHtml(params.companyName)}</li>
+          <li><strong>Customer:</strong> ${escapeHtml(params.customerName)}</li>
+          <li><strong>Job:</strong> ${escapeHtml(params.cleaningType)} in ${escapeHtml(params.customerCity)}</li>
+          <li><strong>Price:</strong> $${params.price} (${escapeHtml(params.priceType)})</li>
+        </ul>
+        <p><a href="${escapeHtml(adminUrl)}">View the request in the admin dashboard</a></p>
+      `;
+
       const { error } = await resend.emails.send({
         from: fromEmail,
         to: toEmail,
         subject: "Provider Quote Received",
         text: smsBody,
+        html,
       });
-      if (error) throw new Error(error.message ?? "Unknown Resend error.");
+      if (error) {
+        throw new Error(
+          `${error.message ?? "Unknown Resend error."} (NOTIFICATION_EMAIL="${toEmail}", EMAIL_FROM="${fromEmail}")`
+        );
+      }
     })(),
   ]);
 
@@ -127,17 +151,19 @@ export async function submitProviderQuoteAction(
       .maybeSingle(),
     supabase
       .from("quote_requests")
-      .select("city, cleaning_type")
+      .select("full_name, city, cleaning_type")
       .eq("id", tokenRow.quote_request_id)
       .maybeSingle(),
   ]);
 
   await notifyAdminOfProviderQuote({
     companyName: provider?.company_name ?? "A provider",
+    customerName: request?.full_name ?? "A customer",
     customerCity: request?.city ?? "",
     cleaningType: request?.cleaning_type ?? "",
     price,
     priceType,
+    quoteRequestId: tokenRow.quote_request_id,
   });
 
   return { ok: true };
