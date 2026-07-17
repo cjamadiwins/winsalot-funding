@@ -6,14 +6,14 @@ import {
   createProviderAndAssignAction,
   generateProviderLinkAction,
   revokeProviderLinkAction,
-  saveCustomerQuoteAction,
   approveCustomerQuoteAction,
-  markQuoteSentAction,
+  sendQuoteToCustomerAction,
 } from "./actions";
 import {
   PRICE_TYPE_LABELS,
+  QUOTE_STATUS_LABELS,
+  QUOTE_STATUS_STYLES,
   isTokenActive,
-  type PriceType,
   type ProviderQuoteSubmissionRow,
   type ProviderQuoteTokenRow,
   type ProviderRow,
@@ -33,25 +33,9 @@ function formatMoney(value: number | null): string {
   return `$${value.toFixed(2)}`;
 }
 
-function buildCustomerQuoteText(request: QuoteRequestRow): string {
-  const priceLabel = request.customer_quote_price_type
-    ? PRICE_TYPE_LABELS[request.customer_quote_price_type as PriceType] ?? request.customer_quote_price_type
-    : "";
-
-  const lines = [
-    `Quote for ${request.full_name}`,
-    `Property: ${request.property_type} — ${request.cleaning_type}`,
-    `Location: ${request.city}`,
-    "",
-    `Price: ${formatMoney(request.customer_quote_price)}${priceLabel ? ` (${priceLabel})` : ""}`,
-  ];
-
-  if (request.customer_quote_summary) {
-    lines.push("", request.customer_quote_summary);
-  }
-
-  return lines.join("\n");
-}
+// Statuses at or beyond "sent" — the customer-facing quote is final and no
+// longer editable from here.
+const SENT_STATUSES = new Set(["Sent to Customer", "Customer Accepted", "Customer Declined"]);
 
 export default function RequestWorkflowPanel({
   request,
@@ -70,11 +54,17 @@ export default function RequestWorkflowPanel({
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState(request.assigned_provider_id ?? "");
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [sendConfirmation, setSendConfirmation] = useState<string | null>(null);
 
   const assignedProvider = providers.find((p) => p.id === request.assigned_provider_id) ?? null;
   const latestSubmission = submissions[0] ?? null;
   const activeTokens = tokens.filter(isTokenActive);
   const activeProviders = providers.filter((p) => p.status === "active");
+  const isApproved = request.status === "Approved";
+  const isSent = SENT_STATUSES.has(request.status);
+  const statusLabel = QUOTE_STATUS_LABELS[request.status as keyof typeof QUOTE_STATUS_LABELS] ?? request.status;
+  const statusStyle = QUOTE_STATUS_STYLES[request.status as keyof typeof QUOTE_STATUS_STYLES] ?? "bg-slate-100 text-slate-700";
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -101,6 +91,19 @@ export default function RequestWorkflowPanel({
     });
   }
 
+  function handleSendToCustomer() {
+    setError(null);
+    setSendConfirmation(null);
+    startTransition(async () => {
+      try {
+        await sendQuoteToCustomerAction(request.id, expiresInDays);
+        setSendConfirmation("The quote email has been sent to the customer.");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to send the quote to the customer.");
+      }
+    });
+  }
+
   async function copyText(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -111,19 +114,14 @@ export default function RequestWorkflowPanel({
     }
   }
 
-  function downloadQuote() {
-    const text = buildCustomerQuoteText(request);
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `quote-${request.full_name.replace(/\s+/g, "-").toLowerCase()}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusStyle}`}>
+          {statusLabel}
+        </span>
+      </div>
+
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
@@ -280,11 +278,11 @@ export default function RequestWorkflowPanel({
         </section>
       )}
 
-      {/* Provider's submitted quote */}
+      {/* Provider's submitted quote — private to Winsalot Corp, never shown to the customer */}
       {latestSubmission && (
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Provider&apos;s Submitted Price
+            Provider&apos;s Submitted Price (Private)
           </h2>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -325,15 +323,19 @@ export default function RequestWorkflowPanel({
         </section>
       )}
 
-      {/* Customer quote draft */}
-      {latestSubmission && (
+      {/* Review, edit, and approve the customer-facing quote — approving alone never sends anything */}
+      {latestSubmission && !isSent && (
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Customer-Facing Quote
           </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Review and edit what the customer will see. Nothing is sent until you click
+            &quot;Send Quote to Customer&quot; below.
+          </p>
 
           <form
-            action={(formData) => runAction(() => saveCustomerQuoteAction(request.id, formData))}
+            action={(formData) => runAction(() => approveCustomerQuoteAction(request.id, formData))}
             className="mt-4 space-y-4"
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -353,7 +355,7 @@ export default function RequestWorkflowPanel({
               </div>
               <div>
                 <label htmlFor="priceType" className={labelClasses}>
-                  Price type
+                  Pricing unit
                 </label>
                 <select
                   id="priceType"
@@ -368,83 +370,137 @@ export default function RequestWorkflowPanel({
                   ))}
                 </select>
               </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="providerName" className={labelClasses}>
+                  Provider name (shown to customer)
+                </label>
+                <input
+                  id="providerName"
+                  name="providerName"
+                  defaultValue={request.customer_quote_provider_name ?? assignedProvider?.company_name ?? ""}
+                  className={`${inputClasses} mt-1.5`}
+                />
+              </div>
             </div>
 
             <div>
               <label htmlFor="summary" className={labelClasses}>
-                Quote summary (shown to the customer)
+                Service description (shown to the customer)
               </label>
               <textarea
                 id="summary"
                 name="summary"
-                rows={4}
+                rows={3}
                 defaultValue={request.customer_quote_summary ?? ""}
                 className={`${inputClasses} mt-1.5`}
               />
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isPending} className={secondaryButtonClasses}>
-                Save Draft
+            <div>
+              <label htmlFor="notes" className={labelClasses}>
+                Additional notes or terms (shown to the customer)
+              </label>
+              <textarea
+                id="notes"
+                name="notes"
+                rows={3}
+                defaultValue={request.customer_quote_notes ?? ""}
+                className={`${inputClasses} mt-1.5`}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit" disabled={isPending} className={buttonClasses}>
+                {isApproved ? "Save Changes" : "Approve"}
               </button>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => runAction(() => approveCustomerQuoteAction(request.id))}
-                className={buttonClasses}
-              >
-                Approve Quote
-              </button>
+              {isApproved && (
+                <span className="text-xs font-medium text-emerald-700">
+                  Approved {request.customer_quote_approved_at && new Date(request.customer_quote_approved_at).toLocaleString()}
+                </span>
+              )}
             </div>
           </form>
+
+          {isApproved && (
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="expiresInDays" className={labelClasses}>
+                    Expires in (days)
+                  </label>
+                  <input
+                    id="expiresInDays"
+                    type="number"
+                    min={1}
+                    value={expiresInDays}
+                    onChange={(e) => setExpiresInDays(Number(e.target.value) || 7)}
+                    className={`${inputClasses} mt-1.5 w-28`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleSendToCustomer}
+                  className={buttonClasses}
+                >
+                  Send Quote to Customer
+                </button>
+              </div>
+              {sendConfirmation && (
+                <p className="mt-2 text-sm text-emerald-700">{sendConfirmation}</p>
+              )}
+            </div>
+          )}
         </section>
       )}
 
-      {/* Approved, ready to send */}
-      {request.customer_quote_approved_at && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-            Approved Quote — Ready to Send
+      {/* Customer response — read-only once the quote has been sent */}
+      {isSent && (
+        <section
+          className={`rounded-2xl border p-6 ${
+            request.customer_response === "accepted"
+              ? "border-emerald-200 bg-emerald-50"
+              : request.customer_response === "declined"
+                ? "border-rose-200 bg-rose-50"
+                : "border-purple-200 bg-purple-50"
+          }`}
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Customer Response
           </h2>
-          <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm text-slate-800">
-            {buildCustomerQuoteText(request)}
-          </pre>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => copyText(buildCustomerQuoteText(request), "Quote")}
-              className={secondaryButtonClasses}
-            >
-              Copy
-            </button>
-            <button type="button" onClick={downloadQuote} className={secondaryButtonClasses}>
-              Download
-            </button>
-            <a
-              href={`mailto:${request.email ?? ""}?subject=${encodeURIComponent(
-                "Your Cleaning Quote"
-              )}&body=${encodeURIComponent(buildCustomerQuoteText(request))}`}
-              className={secondaryButtonClasses}
-            >
-              Email
-            </a>
-            {!request.customer_quote_sent_at && (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => runAction(() => markQuoteSentAction(request.id))}
-                className={buttonClasses}
-              >
-                Mark as Sent
-              </button>
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Sent to customer</dt>
+              <dd className="font-medium text-slate-900">
+                {request.customer_quote_sent_at && new Date(request.customer_quote_sent_at).toLocaleString()}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium text-slate-900">
+                {request.customer_response
+                  ? request.customer_response === "accepted"
+                    ? "Accepted"
+                    : "Declined"
+                  : "Awaiting customer response"}
+              </dd>
+            </div>
+            {request.customer_response_at && (
+              <div className="flex justify-between">
+                <dt className="text-slate-500">Responded</dt>
+                <dd className="font-medium text-slate-900">
+                  {new Date(request.customer_response_at).toLocaleString()}
+                </dd>
+              </div>
             )}
-          </div>
-
-          {request.customer_quote_sent_at && (
-            <p className="mt-3 text-sm text-emerald-700">
-              Sent {new Date(request.customer_quote_sent_at).toLocaleString()}
-            </p>
+          </dl>
+          {request.customer_response_comments && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-slate-500">Customer comments</p>
+              <p className="mt-1 whitespace-pre-wrap text-slate-900">
+                {request.customer_response_comments}
+              </p>
+            </div>
           )}
         </section>
       )}

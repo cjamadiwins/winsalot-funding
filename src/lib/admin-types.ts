@@ -25,6 +25,49 @@ export type QuoteRequestRow = {
   customer_quote_summary: string | null;
   customer_quote_approved_at: string | null;
   customer_quote_sent_at: string | null;
+  customer_quote_provider_name: string | null;
+  customer_quote_notes: string | null;
+  quote_expires_at: string | null;
+  customer_response: "accepted" | "declined" | null;
+  customer_response_at: string | null;
+  customer_response_comments: string | null;
+};
+
+// The 8-stage customer quote approval pipeline. quote_requests.status has no
+// CHECK constraint (see migration 0004's comment), so this is purely a
+// display convention — earlier rows may still hold the older lowercase
+// values ("new", "assigned", "provider_quote_received", "quote_approved")
+// and are shown via the raw-string fallback wherever these maps are used.
+export const QUOTE_STATUSES = [
+  "Request Submitted",
+  "Sent to Provider",
+  "Awaiting Winsalot Approval",
+  "Approved",
+  "Sent to Customer",
+  "Customer Accepted",
+  "Customer Declined",
+] as const;
+
+export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  "Request Submitted": "Request Submitted",
+  "Sent to Provider": "Sent to Provider",
+  "Awaiting Winsalot Approval": "Awaiting Winsalot Approval",
+  Approved: "Approved",
+  "Sent to Customer": "Sent to Customer",
+  "Customer Accepted": "Customer Accepted",
+  "Customer Declined": "Customer Declined",
+};
+
+export const QUOTE_STATUS_STYLES: Record<QuoteStatus, string> = {
+  "Request Submitted": "bg-slate-100 text-slate-700",
+  "Sent to Provider": "bg-amber-100 text-amber-800",
+  "Awaiting Winsalot Approval": "bg-sky-100 text-sky-800",
+  Approved: "bg-indigo-100 text-indigo-800",
+  "Sent to Customer": "bg-purple-100 text-purple-800",
+  "Customer Accepted": "bg-emerald-100 text-emerald-800",
+  "Customer Declined": "bg-rose-100 text-rose-800",
 };
 
 export type ProviderStatus = "active" | "inactive";
@@ -82,4 +125,13 @@ export type ProviderQuoteSubmissionRow = {
   travel_charge: number | null;
   additional_charges: number | null;
   notes: string | null;
+};
+
+export type CustomerQuoteTokenRow = {
+  id: string;
+  created_at: string;
+  quote_request_id: string;
+  expires_at: string;
+  revoked_at: string | null;
+  viewed_at: string | null;
 };

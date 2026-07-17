@@ -256,6 +256,7 @@ export async function POST(request: Request) {
     preferred_contact_method: payload.preferredContactMethod || null,
     description: payload.description,
     consent_to_contact: payload.consent,
+    status: "Request Submitted",
   });
 
   if (insertError) {

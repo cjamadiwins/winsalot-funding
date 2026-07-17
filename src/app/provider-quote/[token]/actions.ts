@@ -140,7 +140,7 @@ export async function submitProviderQuoteAction(
 
   await supabase
     .from("quote_requests")
-    .update({ status: "provider_quote_received" })
+    .update({ status: "Awaiting Winsalot Approval" })
     .eq("id", tokenRow.quote_request_id);
 
   const [{ data: provider }, { data: request }] = await Promise.all([
