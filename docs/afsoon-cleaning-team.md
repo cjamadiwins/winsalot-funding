@@ -127,6 +127,7 @@ lines if something fails server-side.
    |---|---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | Yes | From Supabase → Project Settings → API |
    | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Same page. Server-only — do not prefix with `NEXT_PUBLIC_` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes, for `/admin` | Same page (anon/public key). Powers admin dashboard sign-in — see [`docs/provider-quote-system.md`](./provider-quote-system.md) |
    | `TWILIO_ACCOUNT_SID` | Optional | Enables SMS alerts |
    | `TWILIO_AUTH_TOKEN` | Optional | |
    | `TWILIO_PHONE_NUMBER` | Optional | |
