@@ -7,7 +7,6 @@ import { businessConfig } from "@/config/business";
 const navLinks = [
   { label: "Home", href: "#home" },
   { label: "Services", href: "#services" },
-  { label: "Pricing", href: "#pricing" },
   { label: "Request a Quote", href: "#quote" },
 ];
 

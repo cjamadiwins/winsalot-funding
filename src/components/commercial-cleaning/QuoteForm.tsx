@@ -114,7 +114,7 @@ export default function QuoteForm() {
     setStatus("submitting");
 
     try {
-      const response = await fetch("/api/afsoon-cleaning-quote", {
+      const response = await fetch("/api/commercial-cleaning-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

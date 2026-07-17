@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
 import { businessConfig } from "@/config/business";
 
-const title = "Request a Commercial Cleaning Quote";
+const title = "Request a Commercial or Home Cleaning Quote";
 const description =
-  "Tell us about your cleaning needs and receive a customized quote from a professional cleaning provider.";
+  "Tell us about your commercial or residential cleaning needs and receive a customized quote from a professional cleaning provider.";
 
 export const metadata: Metadata = {
   title,
   description,
   keywords: [
     "commercial cleaning quote",
+    "home cleaning quote",
+    "residential cleaning services",
     "office cleaning services",
+    "house cleaning quote",
     "custom cleaning quote",
     "professional cleaning services",
-    "business cleaning services",
     "cleaning service request",
   ],
   openGraph: {
@@ -32,7 +34,7 @@ const structuredData = {
   email: businessConfig.email,
 };
 
-export default function AfsoonCleaningLayout({
+export default function CommercialCleaningQuoteLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

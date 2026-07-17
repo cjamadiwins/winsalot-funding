@@ -1,7 +1,7 @@
 # Private Quote Management System
 
 A private admin dashboard for managing quote requests submitted through the public
-landing page (`/afsoon-cleaning`), assigning them to one of your cleaning providers via a
+landing page (`/commercial-cleaning-quote`), assigning them to one of your cleaning providers via a
 secure link, and approving the final price before it goes to the customer.
 
 The public page never mentions a specific cleaning company and never contacts a provider
@@ -100,7 +100,7 @@ Adding a new provider never requires a code change or a redeploy — it's just a
   mutation unprotected).
 - Nothing here changes how the public form, its API route, the Supabase service-role key,
   or the Twilio/Resend notifications work — see
-  [`docs/afsoon-cleaning-team.md`](./afsoon-cleaning-team.md) for that setup.
+  [`docs/commercial-cleaning-quote.md`](./commercial-cleaning-quote.md) for that setup.
 
 ## 6. Testing checklist
 

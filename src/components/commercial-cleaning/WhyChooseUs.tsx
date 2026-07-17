@@ -14,7 +14,7 @@ const reasons = [
   },
   {
     title: "Local and Regional Service",
-    description: `Serving businesses in ${businessConfig.serviceAreaSummary}.`,
+    description: `Serving homes and businesses in ${businessConfig.serviceAreaSummary}.`,
     icon: MapPin,
   },
   {

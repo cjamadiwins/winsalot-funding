@@ -1,6 +1,6 @@
 // Edit this file to update the business information shown on the landing
-// page (/afsoon-cleaning). No other file should need to change for basic
-// content updates.
+// page (/commercial-cleaning-quote). No other file should need to change
+// for basic content updates.
 //
 // This page is intentionally brand-neutral so the same codebase can be
 // reused for different commercial cleaning clients and ad campaigns —
@@ -11,7 +11,7 @@
 // changed per-environment without a code change. See .env.example.
 
 export const businessConfig = {
-  name: "Professional Commercial Cleaning Services",
+  name: "Professional Commercial & Home Cleaning Services",
 
   // Shown on buttons like "Call the Quote Team" and in the contact section.
   // `display` is what customers see, `href` is what the tel: link dials.
@@ -27,11 +27,6 @@ export const businessConfig = {
 
   // Kept generic on purpose — see note at the top of this file.
   serviceAreaSummary: "your area",
-
-  // No fixed rates: pricing depends on the property and is quoted per
-  // request. Shown near the quote form instead of a price list.
-  pricingNote:
-    "Every quote is customized based on your property size, cleaning frequency, required services and location. There are no fixed rates — request a quote below for pricing tailored to your business.",
 
   // Fulfillment arrangement: Winsalot Corp handles inbound calls and quote
   // requests on the cleaning provider's behalf. This is disclosed near the

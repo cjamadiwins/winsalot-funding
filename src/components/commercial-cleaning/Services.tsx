@@ -54,7 +54,7 @@ export default function Services() {
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Our Services</h2>
           <p className="mt-4 text-slate-600">
-            Cleaning services for businesses of every size, serving your area.
+            Cleaning services for homes and businesses of every size, serving your area.
           </p>
         </div>
 

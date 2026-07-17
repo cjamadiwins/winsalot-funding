@@ -241,7 +241,7 @@ export async function POST(request: Request) {
   try {
     supabaseAdmin = getSupabaseAdmin();
   } catch (err) {
-    console.error("[afsoon-cleaning-quote] Supabase is not configured:", err);
+    console.error("[commercial-cleaning-quote] Supabase is not configured:", err);
     return NextResponse.json(
       { error: "Something went wrong. Please try again later." },
       { status: 500 }
@@ -267,7 +267,7 @@ export async function POST(request: Request) {
   });
 
   if (insertError) {
-    console.error("[afsoon-cleaning-quote] Failed to save quote request:", insertError);
+    console.error("[commercial-cleaning-quote] Failed to save quote request:", insertError);
     return NextResponse.json(
       { error: "Something went wrong. Please try again later." },
       { status: 500 }
@@ -282,10 +282,10 @@ export async function POST(request: Request) {
   ]);
 
   if (smsResult.status === "rejected") {
-    console.error("[afsoon-cleaning-quote] Failed to send SMS notification:", smsResult.reason);
+    console.error("[commercial-cleaning-quote] Failed to send SMS notification:", smsResult.reason);
   }
   if (emailResult.status === "rejected") {
-    console.error("[afsoon-cleaning-quote] Failed to send email notification:", emailResult.reason);
+    console.error("[commercial-cleaning-quote] Failed to send email notification:", emailResult.reason);
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
