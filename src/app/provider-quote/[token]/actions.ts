@@ -62,7 +62,11 @@ async function notifyAdminOfProviderQuote(params: {
         text: smsBody,
         html,
       });
-      if (error) throw new Error(error.message ?? "Unknown Resend error.");
+      if (error) {
+        throw new Error(
+          `${error.message ?? "Unknown Resend error."} (NOTIFICATION_EMAIL="${toEmail}", EMAIL_FROM="${fromEmail}")`
+        );
+      }
     })(),
   ]);
 
