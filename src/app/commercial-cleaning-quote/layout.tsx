@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { businessConfig } from "@/config/business";
 
-const title = "Request a Commercial or Home Cleaning Quote";
-const description =
-  "Tell us about your commercial or residential cleaning needs and receive a customized quote from a professional cleaning provider.";
+const title = "Winsalot Corp Cleaning Services";
+const description = "Request a free commercial or home cleaning quote.";
+const canonicalUrl = "https://cleaning.winsalotcorp.com";
 
 export const metadata: Metadata = {
   title,
@@ -18,10 +18,19 @@ export const metadata: Metadata = {
     "professional cleaning services",
     "cleaning service request",
   ],
+  alternates: {
+    canonical: canonicalUrl,
+  },
   openGraph: {
     title,
     description,
+    url: canonicalUrl,
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
   },
 };
 
