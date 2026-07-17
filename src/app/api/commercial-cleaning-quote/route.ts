@@ -4,6 +4,7 @@ import { getResendClient } from "@/lib/resend";
 import { sendSms } from "@/lib/twilio";
 import { isRateLimited, getClientIp } from "@/lib/rate-limit";
 import { businessConfig } from "@/config/business";
+import { escapeHtml } from "@/lib/html";
 
 export const runtime = "nodejs";
 
@@ -46,15 +47,6 @@ function isValidEmail(value: string): boolean {
 
 function isValidDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime());
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function truncate(value: string, maxLength: number): string {
