@@ -138,7 +138,7 @@ export default function QuoteForm() {
   if (status === "success") {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-        <h3 className="text-xl font-semibold text-emerald-900">Thank you for contacting Afsoon Cleaning Team.</h3>
+        <h3 className="text-xl font-semibold text-emerald-900">Thank you for your request.</h3>
         <p className="mt-3 text-emerald-800">
           Your quote request has been received. We will contact you shortly to discuss your
           cleaning needs.

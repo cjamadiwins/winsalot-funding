@@ -1,22 +1,20 @@
 import type { Metadata } from "next";
 import { businessConfig } from "@/config/business";
 
-const title = "Afsoon Cleaning Team | Cleaning Services in Toronto and the GTA";
+const title = "Request a Commercial Cleaning Quote";
 const description =
-  "Request a quote from Afsoon Cleaning Team for dependable residential and commercial cleaning services across Toronto and the Greater Toronto Area.";
+  "Tell us about your cleaning needs and receive a customized quote from a professional cleaning provider.";
 
 export const metadata: Metadata = {
   title,
   description,
   keywords: [
-    "cleaning services Toronto",
-    "GTA cleaning company",
-    "residential cleaning Toronto",
-    "commercial cleaning GTA",
-    "office cleaning Toronto",
-    "move-in move-out cleaning Toronto",
-    "deep cleaning services GTA",
-    "house cleaning Greater Toronto Area",
+    "commercial cleaning quote",
+    "office cleaning services",
+    "custom cleaning quote",
+    "professional cleaning services",
+    "business cleaning services",
+    "cleaning service request",
   ],
   openGraph: {
     title,
@@ -32,8 +30,6 @@ const structuredData = {
   description,
   telephone: businessConfig.phone.href,
   email: businessConfig.email,
-  areaServed: businessConfig.serviceAreas,
-  priceRange: "$$",
 };
 
 export default function AfsoonCleaningLayout({

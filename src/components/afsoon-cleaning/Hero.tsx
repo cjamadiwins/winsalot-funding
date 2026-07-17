@@ -51,14 +51,14 @@ export default function Hero() {
     <section id="home" className="bg-white">
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 sm:py-24">
         <p className="text-sm font-semibold uppercase tracking-widest text-sky-600">
-          Professional Cleaning Services • GTA
+          Professional Commercial Cleaning Services
         </p>
         <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-          Get a Free Cleaning Quote
+          Request a Commercial Cleaning Quote
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
-          Reliable cleaning services across the Greater Toronto Area • Fast response • Affordable
-          rates
+          Tell us about your cleaning needs and receive a customized quote from a professional
+          cleaning provider.
         </p>
 
         <form
@@ -138,7 +138,7 @@ export default function Hero() {
         </form>
 
         <p className="mt-4 text-sm text-slate-500">
-          No obligation • Fast response • Residential &amp; commercial cleaning
+          No obligation • Fast response • Serving businesses in your area
         </p>
         <a
           href={`tel:${businessConfig.phone.href}`}
