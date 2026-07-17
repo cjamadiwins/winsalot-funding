@@ -13,8 +13,8 @@ const reasons = [
     icon: CalendarDays,
   },
   {
-    title: "Service Throughout Toronto and the GTA",
-    description: `We serve ${businessConfig.serviceAreaSummary}.`,
+    title: "Local and Regional Service",
+    description: `Serving homes and businesses in ${businessConfig.serviceAreaSummary}.`,
     icon: MapPin,
   },
   {

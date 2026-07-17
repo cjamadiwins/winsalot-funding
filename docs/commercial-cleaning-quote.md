@@ -1,12 +1,15 @@
-# Afsoon Cleaning Team — Landing Page
+# Commercial &amp; Home Cleaning Quote — Landing Page
 
-A quote-request landing page for Afsoon Cleaning Team, served at **`/afsoon-cleaning`** in
-this Next.js project. It lives alongside the existing site in this repo and doesn't change
-anything at `/`.
+A quote-request landing page, served at **`/commercial-cleaning-quote`** in this Next.js
+project. It's intentionally brand-neutral (no company name, no city, no fixed pricing) so
+it can be reused for different cleaning clients and ad campaigns — see
+[`docs/provider-quote-system.md`](./provider-quote-system.md) for how requests get routed
+to a specific cleaning provider behind the scenes. It lives alongside the existing site in
+this repo and doesn't change anything at `/`.
 
-- Page: `src/app/afsoon-cleaning/page.tsx` + `src/components/afsoon-cleaning/*`
-- API route: `src/app/api/afsoon-cleaning-quote/route.ts`
-- Business info (name, phone, pricing, hours, service area): `src/config/business.ts`
+- Page: `src/app/commercial-cleaning-quote/page.tsx` + `src/components/commercial-cleaning/*`
+- API route: `src/app/api/commercial-cleaning-quote/route.ts`
+- Business info (name, phone, hours, service area): `src/config/business.ts`
 - Database migration: `supabase/migrations/0003_create_quote_requests.sql`
 
 ## 1. Install and run locally
@@ -18,7 +21,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000/afsoon-cleaning](http://localhost:3000/afsoon-cleaning).
+Open [http://localhost:3000/commercial-cleaning-quote](http://localhost:3000/commercial-cleaning-quote).
 
 The form will not fully work yet — you need to connect Supabase, and optionally Twilio and
 Resend, first. See below.
@@ -28,16 +31,20 @@ Resend, first. See below.
 Open **`src/config/business.ts`**. Everything a non-developer would want to change lives
 there:
 
-- Business name
-- Phone number (`display` is what customers see, `href` is what the "Call Now" button dials)
+- Business name (kept generic on purpose — see the note at the top of the file)
+- Phone number (`display` is what customers see, `href` is what the "Call the Quote Team"
+  button dials)
 - Email address
 - Operating hours
-- Service areas
-- Pricing (Toronto rate, GTA rate range, travel time note, disclaimer)
+- Service area summary
+
+There are no fixed rates anywhere on the page — pricing is explained as customized per
+request, and the actual number is set later in the admin dashboard once a provider quotes
+the job (see `docs/provider-quote-system.md`).
 
 Service cards, "Why choose us" bullets, and page copy live in the individual components
-under `src/components/afsoon-cleaning/`. The SMS/email **notification destinations** (where
-alerts are sent, as opposed to the business's own public phone/email) are set via
+under `src/components/commercial-cleaning/`. The SMS/email **notification destinations**
+(where alerts are sent, as opposed to the business's own public phone/email) are set via
 environment variables instead, so they can be changed per-environment without touching code
 — see the next section.
 
@@ -47,16 +54,18 @@ environment variables instead, so they can be changed per-environment without to
    project — this table doesn't conflict with the `leads` / `lead_generation` tables already
    used by the rest of this app).
 2. In the Supabase dashboard, open the **SQL Editor** and run the contents of
-   [`supabase/migrations/0003_create_quote_requests.sql`](../supabase/migrations/0003_create_quote_requests.sql).
-   This creates the `quote_requests` table.
+   [`supabase/migrations/0003_create_quote_requests.sql`](../supabase/migrations/0003_create_quote_requests.sql),
+   then [`0004_provider_quote_system.sql`](../supabase/migrations/0004_provider_quote_system.sql)
+   for the admin/provider workflow.
 3. In **Project Settings → API**, copy:
    - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - **service_role secret key** → `SUPABASE_SERVICE_ROLE_KEY`
-4. Copy `.env.example` to `.env.local` and paste both values in.
+4. Copy `.env.example` to `.env.local` and paste the values in.
 
 The service role key bypasses Row Level Security and must never be exposed to the browser —
-it's only read in `src/lib/supabase-admin.ts`, which is server-only code (API routes), never
-imported by a client component.
+it's only read in `src/lib/supabase-admin.ts`, which is server-only code (API routes, Server
+Actions), never imported by a client component.
 
 To check submissions: Supabase dashboard → **Table Editor → quote_requests**.
 
@@ -75,7 +84,7 @@ To check submissions: Supabase dashboard → **Table Editor → quote_requests**
    ```
 
 If these variables are missing or invalid, quote requests are still saved to Supabase — the
-SMS step just fails quietly and is logged server-side (see Section 7).
+SMS step just fails quietly and is logged server-side (see Section 8).
 
 ## 5. Connect Resend (optional — backup email alert on each new quote request)
 
@@ -88,7 +97,7 @@ SMS step just fails quietly and is logged server-side (see Section 7).
    ```
    RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    NOTIFICATION_EMAIL=info@winsalotcorp.com
-   EMAIL_FROM=Afsoon Cleaning Team <quotes@yourdomain.com>
+   EMAIL_FROM=Quote Notifications <quotes@yourdomain.com>
    ```
 
 Like SMS, a missing/invalid Resend config never blocks the Supabase save — it only skips the
@@ -98,19 +107,21 @@ email and logs the failure server-side.
 
 With `npm run dev` running and at least Supabase configured:
 
-1. Go to `http://localhost:3000/afsoon-cleaning#quote`.
+1. Go to `http://localhost:3000/commercial-cleaning-quote#quote`.
 2. Fill in the required fields (Full name, Phone, City, Property type, Cleaning type,
    Description, Consent checkbox) and submit.
-3. You should see: *"Thank you for contacting Afsoon Cleaning Team..."* and the form should
-   disappear (refreshing the page brings it back, by design).
+3. You should see: *"Thank you for your request. Your quote request has been received..."*
+   and the form should disappear (refreshing the page brings it back, by design).
 4. Check the `quote_requests` table in Supabase for the new row.
 5. If Twilio is configured, check the destination phone for a text starting with
-   *"New Afsoon Cleaning Team quote request"*.
-6. If Resend is configured, check the notification inbox for a *"New Quote Request - Afsoon
-   Cleaning Team"* email.
+   *"New Afsoon Cleaning Team quote request"* — this is an internal alert to you, not shown
+   to customers; the label is a naming leftover you're free to change in
+   `src/app/api/commercial-cleaning-quote/route.ts` if it bothers you.
+6. If Resend is configured, check the notification inbox for a *"New Quote Request -
+   Afsoon Cleaning Team"* email (same note as above).
 
 To test validation, try submitting with required fields empty (client-side validation should
-block it) and check the terminal running `npm run dev` for `[afsoon-cleaning-quote]` log
+block it) and check the terminal running `npm run dev` for `[commercial-cleaning-quote]` log
 lines if something fails server-side.
 
 ## 7. Deploying to Vercel
@@ -127,6 +138,7 @@ lines if something fails server-side.
    |---|---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | Yes | From Supabase → Project Settings → API |
    | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Same page. Server-only — do not prefix with `NEXT_PUBLIC_` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes, for `/admin` | Same page (anon/public key). Powers admin dashboard sign-in — see [`docs/provider-quote-system.md`](./provider-quote-system.md) |
    | `TWILIO_ACCOUNT_SID` | Optional | Enables SMS alerts |
    | `TWILIO_AUTH_TOKEN` | Optional | |
    | `TWILIO_PHONE_NUMBER` | Optional | |
@@ -135,7 +147,7 @@ lines if something fails server-side.
    | `NOTIFICATION_EMAIL` | Optional | Defaults suggestion: `info@winsalotcorp.com` |
    | `EMAIL_FROM` | Optional | Must be on a domain verified in Resend |
 
-4. Deploy. Your live page will be at `https://<your-project>.vercel.app/afsoon-cleaning`.
+4. Deploy. Your live page will be at `https://<your-project>.vercel.app/commercial-cleaning-quote`.
 5. Point a custom domain at it under **Project → Settings → Domains**, if desired.
 
 ## 8. Testing checklist (production / staging)
@@ -143,19 +155,19 @@ lines if something fails server-side.
 - [ ] Submitting the form with all required fields filled shows the thank-you message
 - [ ] Submitting with a required field missing is blocked client-side with a clear message
 - [ ] The new row appears in Supabase → `quote_requests`, with `status = new` and
-      `source = Afsoon Cleaning Team landing page`
-- [ ] The SMS notification arrives at the configured `SMS_NOTIFICATION_NUMBER` and starts
-      with "New Afsoon Cleaning Team quote request"
-- [ ] The backup email notification arrives at `NOTIFICATION_EMAIL` with subject
-      "New Quote Request - Afsoon Cleaning Team" and includes all submitted fields
+      `source = Afsoon Cleaning Team landing page` (an internal `source` label, not shown to
+      customers — see the note in Section 6)
+- [ ] The SMS notification arrives at the configured `SMS_NOTIFICATION_NUMBER`
+- [ ] The backup email notification arrives at `NOTIFICATION_EMAIL` and includes all
+      submitted fields
 - [ ] Temporarily breaking the Twilio or Resend env vars (e.g. wrong auth token) still lets
       the form submit successfully and still saves to Supabase — check the Vercel function
-      logs for the corresponding `[afsoon-cleaning-quote]` error line
+      logs for the corresponding `[commercial-cleaning-quote]` error line
 - [ ] Submitting the form more than 5 times quickly from the same device returns a
       "Too many requests" message instead of saving further rows
 - [ ] The page renders correctly on a phone-sized screen, a tablet, and a desktop browser
-- [ ] The "Call Now" button dials the correct number on a phone
-- [ ] Nav links (Home, Services, Pricing, Request a Quote) scroll to the right section
+- [ ] The "Call the Quote Team" button dials the correct number on a phone
+- [ ] Nav links (Home, Services, Request a Quote) scroll to the right section
 
 ## 9. Notes on the spam protections
 

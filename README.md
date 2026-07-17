@@ -1,10 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Afsoon Cleaning Team landing page
+## Commercial & home cleaning quote landing page
 
-This repo also includes a standalone quote-request landing page for Afsoon Cleaning Team at
-`/afsoon-cleaning`. See [`docs/afsoon-cleaning-team.md`](docs/afsoon-cleaning-team.md) for
-setup, environment variables, deployment and testing instructions specific to that page.
+This repo also includes a standalone, brand-neutral quote-request landing page at
+`/commercial-cleaning-quote`. See
+[`docs/commercial-cleaning-quote.md`](docs/commercial-cleaning-quote.md) for setup,
+environment variables, deployment and testing instructions specific to that page.
+
+A private admin dashboard at `/admin` lets you assign incoming requests to a cleaning
+provider via a secure link and approve the final quote before it's sent to the customer.
+See [`docs/provider-quote-system.md`](docs/provider-quote-system.md) for setup and how it
+works.
 
 ## Getting Started
 

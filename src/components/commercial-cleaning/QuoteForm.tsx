@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { QUICK_QUOTE_EVENT, type QuickQuoteEvent } from "@/lib/quick-quote";
 
 const CLEANING_TYPES = [
   "Residential cleaning",
@@ -81,6 +82,25 @@ export default function QuoteForm() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  // Subscribes to the compact hero quick-quote form so values it collects
+  // can flow into this form's state the moment the visitor submits it,
+  // regardless of when this component happened to mount.
+  useEffect(() => {
+    function handleQuickQuote(event: Event) {
+      const { detail } = event as QuickQuoteEvent;
+      setForm((prev) => ({
+        ...prev,
+        fullName: detail.fullName || prev.fullName,
+        phone: detail.phone || prev.phone,
+        email: detail.email || prev.email,
+        description: detail.description || prev.description,
+      }));
+    }
+
+    window.addEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
+    return () => window.removeEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -94,7 +114,7 @@ export default function QuoteForm() {
     setStatus("submitting");
 
     try {
-      const response = await fetch("/api/afsoon-cleaning-quote", {
+      const response = await fetch("/api/commercial-cleaning-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -118,7 +138,7 @@ export default function QuoteForm() {
   if (status === "success") {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-        <h3 className="text-xl font-semibold text-emerald-900">Thank you for contacting Afsoon Cleaning Team.</h3>
+        <h3 className="text-xl font-semibold text-emerald-900">Thank you for your request.</h3>
         <p className="mt-3 text-emerald-800">
           Your quote request has been received. We will contact you shortly to discuss your
           cleaning needs.
