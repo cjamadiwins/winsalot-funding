@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { ACTIVITY_TYPES, LEAD_STAGES, type ActivityType, type LeadStage } from "@/lib/crm-types";
+import {
+  ACTIVITY_TYPES,
+  AGENT_SETTABLE_STAGES,
+  type ActivityType,
+  type LeadStage,
+} from "@/lib/crm-types";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -51,11 +56,14 @@ export async function updateLeadDetailsAction(leadId: string, formData: FormData
   revalidatePath(`/agent/leads/${leadId}`);
 }
 
+// The database also enforces this (migration 0009's BEFORE UPDATE
+// trigger) - this check exists so an agent gets a clear message instead
+// of a raw Postgres exception if they try anyway.
 export async function updateLeadStageAction(leadId: string, stage: string) {
   await requireCrmUser();
 
-  if (!LEAD_STAGES.includes(stage as LeadStage)) {
-    throw new Error("Invalid stage.");
+  if (!AGENT_SETTABLE_STAGES.includes(stage as LeadStage)) {
+    throw new Error("You don't have permission to set a lead to this stage.");
   }
 
   const supabase = await createSupabaseServerClient();

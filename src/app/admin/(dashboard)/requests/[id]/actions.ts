@@ -189,6 +189,9 @@ export async function sendQuoteToCustomerAction(
 
   if (tokenError) throw new Error("Failed to generate the customer link.");
 
+  // Customer-facing quote emails must always appear to come from Winsalot
+  // Corp's own address, never a per-purpose alias, unless an admin
+  // explicitly configures one later via EMAIL_FROM.
   const siteUrl = getSiteUrl();
   const acceptUrl = `${siteUrl}/customer-quote/${token}`;
   const declineUrl = `${siteUrl}/customer-quote/${token}?action=decline`;
@@ -211,10 +214,15 @@ export async function sendQuoteToCustomerAction(
   };
 
   const resend = getResendClient();
-  const fromEmail = process.env.EMAIL_FROM || "Winsalot Corp <onboarding@resend.dev>";
+  const fromEmail =
+    process.env.CUSTOMER_QUOTE_EMAIL_FROM ||
+    process.env.EMAIL_FROM ||
+    "Winsalot Corp <info@winsalotcorp.com>";
+  const replyToEmail = process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
   const { error: emailError } = await resend.emails.send({
     from: fromEmail,
     to: request.email,
+    replyTo: replyToEmail,
     subject: "Your Cleaning Quote Is Ready",
     text: buildCustomerQuoteEmailText(emailParams),
     html: buildCustomerQuoteEmailHtml(emailParams),

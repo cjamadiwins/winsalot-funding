@@ -10,10 +10,17 @@ import {
   type CrmLeadRow,
   type CrmUserRow,
 } from "@/lib/crm-types";
-import type { QuoteRequestRow } from "@/lib/admin-types";
+import type {
+  ProviderQuoteSubmissionRow,
+  ProviderQuoteTokenRow,
+  ProviderRow,
+  QuoteRequestRow,
+} from "@/lib/admin-types";
+import RequestWorkflowPanel from "@/app/admin/(dashboard)/requests/[id]/RequestWorkflowPanel";
 import {
   addActivityAction,
   deleteLeadAction,
+  finalApproveLeadAction,
   linkQuoteAction,
   searchQuoteRequestsAction,
   unlinkQuoteAction,
@@ -31,11 +38,17 @@ export default function AdminLeadDetailClient({
   activities,
   agents,
   linkedQuote,
+  providers,
+  tokens,
+  submissions,
 }: {
   lead: CrmLeadRow;
   activities: CrmActivityRow[];
   agents: CrmUserRow[];
   linkedQuote: QuoteRequestRow | null;
+  providers: ProviderRow[];
+  tokens: ProviderQuoteTokenRow[];
+  submissions: ProviderQuoteSubmissionRow[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -223,44 +236,8 @@ export default function AdminLeadDetailClient({
             </h2>
 
             {linkedQuote ? (
-              <div className="mt-3 space-y-2 text-sm">
-                <Row label="Status" value={linkedQuote.status} />
-                <Row label="Provider" value={linkedQuote.customer_quote_provider_name} />
-                <Row
-                  label="Quote Amount"
-                  value={
-                    linkedQuote.customer_quote_price != null
-                      ? `$${linkedQuote.customer_quote_price} (${linkedQuote.customer_quote_price_type ?? ""})`
-                      : null
-                  }
-                />
-                <Row
-                  label="Quote Received"
-                  value={
-                    linkedQuote.customer_quote_approved_at
-                      ? new Date(linkedQuote.customer_quote_approved_at).toLocaleString()
-                      : null
-                  }
-                />
-                <Row
-                  label="Sent to Customer"
-                  value={
-                    linkedQuote.customer_quote_sent_at
-                      ? new Date(linkedQuote.customer_quote_sent_at).toLocaleString()
-                      : null
-                  }
-                />
-                <Row
-                  label="Customer Response"
-                  value={
-                    linkedQuote.customer_response
-                      ? linkedQuote.customer_response === "accepted"
-                        ? "Accepted"
-                        : "Declined"
-                      : "Awaiting response"
-                  }
-                />
-                <div className="flex items-center gap-3 pt-2">
+              <div className="mt-3">
+                <div className="flex items-center justify-between gap-3">
                   <Link
                     href={`/admin/requests/${linkedQuote.id}`}
                     className="text-sm font-medium text-sky-600 hover:text-sky-700"
@@ -276,6 +253,41 @@ export default function AdminLeadDetailClient({
                     Unlink
                   </button>
                 </div>
+
+                {/* Reuses the same review/approve/send workflow as the
+                    standalone quote dashboard - this is the admin-only
+                    "Send Quote to Customer" control. Agents never see this
+                    component; they only get the read-only summary on
+                    /agent/leads/[id]. */}
+                <div className="mt-4">
+                  <RequestWorkflowPanel
+                    request={linkedQuote}
+                    providers={providers}
+                    tokens={tokens}
+                    submissions={submissions}
+                  />
+                </div>
+
+                {linkedQuote.customer_response && lead.stage !== "Closed/completed" && (
+                  <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                      Final Approval
+                    </h3>
+                    <p className="mt-1 text-sm text-indigo-900">
+                      The customer has {linkedQuote.customer_response}. Close out this opportunity
+                      once you&apos;re done — this marks the lead Closed/completed and is recorded
+                      in the activity history.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => runAction(() => finalApproveLeadAction(lead.id))}
+                      className={`${buttonClasses} mt-3 bg-indigo-600 hover:bg-indigo-700`}
+                    >
+                      Final Approval — Close Opportunity
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-3">
@@ -373,16 +385,6 @@ export default function AdminLeadDetailClient({
           )}
         </section>
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-medium text-slate-900">{value}</dd>
     </div>
   );
 }

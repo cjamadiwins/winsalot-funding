@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
-  LEAD_STAGES,
+  AGENT_SETTABLE_STAGES,
   LEAD_STAGE_STYLES,
   type CrmActivityRow,
   type CrmLeadRow,
@@ -71,19 +71,33 @@ export default function LeadDetailClient({
             {lead.phone} · {lead.city}
           </p>
         </div>
-        <select
-          value={lead.stage}
-          disabled={isPending}
-          onChange={(e) => runAction(() => updateLeadStageAction(lead.id, e.target.value))}
-          className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${LEAD_STAGE_STYLES[lead.stage as LeadStage]}`}
-        >
-          {LEAD_STAGES.map((stage) => (
-            <option key={stage} value={stage}>
-              {stage}
-            </option>
-          ))}
-        </select>
+        {AGENT_SETTABLE_STAGES.includes(lead.stage as LeadStage) ? (
+          <select
+            value={lead.stage}
+            disabled={isPending}
+            onChange={(e) => runAction(() => updateLeadStageAction(lead.id, e.target.value))}
+            className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${LEAD_STAGE_STYLES[lead.stage as LeadStage]}`}
+          >
+            {AGENT_SETTABLE_STAGES.map((stage) => (
+              <option key={stage} value={stage}>
+                {stage}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span
+            title="This stage is set automatically and can only be changed by an admin."
+            className={`rounded-full px-3.5 py-2 text-[13px] font-semibold ${LEAD_STAGE_STYLES[lead.stage as LeadStage]}`}
+          >
+            {lead.stage}
+          </span>
+        )}
       </div>
+      {!AGENT_SETTABLE_STAGES.includes(lead.stage as LeadStage) && (
+        <p className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">
+          This stage is set automatically and can only be changed by an admin.
+        </p>
+      )}
 
       {error && (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

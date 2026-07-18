@@ -3,7 +3,12 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmActivityRow, CrmLeadRow, CrmUserRow } from "@/lib/crm-types";
-import type { QuoteRequestRow } from "@/lib/admin-types";
+import type {
+  ProviderQuoteSubmissionRow,
+  ProviderQuoteTokenRow,
+  ProviderRow,
+  QuoteRequestRow,
+} from "@/lib/admin-types";
 import AdminLeadDetailClient from "./AdminLeadDetailClient";
 
 export default async function AdminCrmLeadDetailPage({
@@ -31,15 +36,36 @@ export default async function AdminCrmLeadDetailPage({
 
   const leadRow = lead as CrmLeadRow;
 
+  // Fetched with the service-role client, same as /admin/requests/[id] —
+  // safe here because this whole page is already gated by
+  // requireCrmAdmin() above, and quote_requests has no RLS policies of
+  // its own to rely on instead (see migration 0003).
   let linkedQuote: QuoteRequestRow | null = null;
+  let providers: ProviderRow[] = [];
+  let tokens: ProviderQuoteTokenRow[] = [];
+  let submissions: ProviderQuoteSubmissionRow[] = [];
+
   if (leadRow.quote_request_id) {
     const admin = getSupabaseAdmin();
-    const { data } = await admin
-      .from("quote_requests")
-      .select("*")
-      .eq("id", leadRow.quote_request_id)
-      .maybeSingle();
-    linkedQuote = data;
+    const [{ data: quote }, { data: providerRows }, { data: tokenRows }, { data: submissionRows }] =
+      await Promise.all([
+        admin.from("quote_requests").select("*").eq("id", leadRow.quote_request_id).maybeSingle(),
+        admin.from("cleaning_providers").select("*").order("company_name"),
+        admin
+          .from("provider_quote_tokens")
+          .select("*")
+          .eq("quote_request_id", leadRow.quote_request_id)
+          .order("created_at", { ascending: false }),
+        admin
+          .from("provider_quote_submissions")
+          .select("*")
+          .eq("quote_request_id", leadRow.quote_request_id)
+          .order("created_at", { ascending: false }),
+      ]);
+    linkedQuote = quote;
+    providers = (providerRows ?? []) as ProviderRow[];
+    tokens = (tokenRows ?? []) as ProviderQuoteTokenRow[];
+    submissions = (submissionRows ?? []) as ProviderQuoteSubmissionRow[];
   }
 
   return (
@@ -48,6 +74,9 @@ export default async function AdminCrmLeadDetailPage({
       activities={(activities ?? []) as CrmActivityRow[]}
       agents={(agents ?? []) as CrmUserRow[]}
       linkedQuote={linkedQuote}
+      providers={providers}
+      tokens={tokens}
+      submissions={submissions}
     />
   );
 }

@@ -171,3 +171,53 @@ export async function unlinkQuoteAction(leadId: string) {
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
 }
+
+// The dedicated "final approval" step: after the customer has accepted or
+// declined, the admin clicks this to formally close out the CRM
+// opportunity. This is a CRM-only action - it doesn't touch the linked
+// quote_requests row at all, only crm_leads.stage. Distinct from the
+// existing pre-send "Approve" step in RequestWorkflowPanel (which
+// approves the quote's price/content before it's ever sent).
+export async function finalApproveLeadAction(leadId: string) {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase
+    .from("crm_leads")
+    .select("quote_request_id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (!lead) throw new Error("Lead not found.");
+  if (!lead.quote_request_id) {
+    throw new Error("This lead isn't linked to a quote request yet.");
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: quote } = await admin
+    .from("quote_requests")
+    .select("customer_response")
+    .eq("id", lead.quote_request_id)
+    .maybeSingle();
+
+  if (!quote?.customer_response) {
+    throw new Error("The customer hasn't responded to the quote yet.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("crm_leads")
+    .update({ stage: "Closed/completed" })
+    .eq("id", leadId);
+
+  if (updateError) throw new Error("Failed to close the opportunity.");
+
+  await supabase.from("crm_activities").insert({
+    lead_id: leadId,
+    agent_id: crmUser.id,
+    activity_type: "outcome",
+    notes: "Admin gave final approval — opportunity closed.",
+  });
+
+  revalidatePath(`/admin/crm/leads/${leadId}`);
+  revalidatePath("/admin/crm");
+}
