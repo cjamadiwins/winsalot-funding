@@ -29,8 +29,15 @@ export default function AdminSetPasswordClient() {
       /access_token=/.test(window.location.hash) &&
       /type=(invite|recovery)/.test(window.location.hash)
   );
+  // createBrowserClient (@supabase/ssr) defaults to flowType "pkce", which
+  // is what this project's recovery links actually use: a ?code=...
+  // query param, not a #access_token hash fragment. See the matching
+  // comment in src/app/agent/set-password/SetPasswordClient.tsx for the
+  // full explanation - this was the bug behind a recovery link reporting
+  // "invalid or expired" even though Supabase had verified it correctly.
+  const [hadAuthCodeOnLoad] = useState(() => Boolean(searchParams.get("code")));
 
-  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad;
+  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad || hadAuthCodeOnLoad;
 
   const [status, setStatus] = useState<Status>(() => {
     if (linkError) return "invalid";
