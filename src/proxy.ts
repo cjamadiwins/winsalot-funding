@@ -24,7 +24,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/admin")) {
-    return handleSessionGate(request, "/admin/login", "/admin");
+    return handleSessionGate(
+      request,
+      "/admin/login",
+      "/admin",
+      ["/admin/forgot-password", "/admin/set-password"],
+      "/admin/set-password"
+    );
   }
 
   if (pathname.startsWith("/agent")) {
@@ -58,11 +64,18 @@ export async function proxy(request: NextRequest) {
 // publicPaths are reachable whether or not a session exists, and never
 // trigger the "already signed in, bounce to postLoginPath" redirect that
 // the login page itself gets - only exact-matching loginPath does that.
+//
+// forcePasswordChangePath, when given, redirects a signed-in visitor
+// whose account has user_metadata.must_change_password set (an operator-
+// initiated reset, see src/lib/admin-auth.ts) to that path before letting
+// them reach anything else in this section - except the public paths and
+// that path itself, so the reset flow doesn't redirect-loop.
 async function handleSessionGate(
   request: NextRequest,
   loginPath: string,
   postLoginPath: string,
-  publicPaths: string[] = []
+  publicPaths: string[] = [],
+  forcePasswordChangePath?: string
 ) {
   let response = NextResponse.next({ request });
 
@@ -104,6 +117,15 @@ async function handleSessionGate(
 
   if (data.user && pathname === loginPath) {
     return NextResponse.redirect(new URL(postLoginPath, request.url));
+  }
+
+  if (
+    forcePasswordChangePath &&
+    data.user?.user_metadata?.must_change_password &&
+    pathname !== forcePasswordChangePath &&
+    !isPublicPath
+  ) {
+    return NextResponse.redirect(new URL(forcePasswordChangePath, request.url));
   }
 
   return response;
