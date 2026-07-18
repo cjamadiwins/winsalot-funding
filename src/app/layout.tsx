@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans } from "next/font/google";
+import AuthInviteRedirector from "@/components/AuthInviteRedirector";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -46,6 +47,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} scroll-smooth`}
     >
       <body className="font-sans bg-[var(--color-bg)] text-[var(--color-ink)] min-h-screen">
+        <AuthInviteRedirector />
         {children}
       </body>
     </html>

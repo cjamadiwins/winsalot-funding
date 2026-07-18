@@ -256,7 +256,7 @@ redirect has to land back on the *same* deployment that sent the email:
 
 - If `NEXT_PUBLIC_SITE_URL` is set, it's used as-is. This should only ever be set on Vercel's
   **Production** environment (scoped to Production only in Project Settings → Environment
-  Variables) — e.g. `https://clean.winsalotcorp.com`.
+  Variables) — e.g. `https://cleaning.winsalotcorp.com`.
 - Otherwise it falls back to `VERCEL_URL`, which Vercel sets automatically to the current
   deployment's own hostname — this is what makes a Preview invite redirect back to that same
   preview, with zero configuration needed per-deployment.
@@ -264,25 +264,46 @@ redirect has to land back on the *same* deployment that sent the email:
 
 **This code fix alone is not sufficient.** Supabase Auth only honors a `redirectTo` value that
 matches an entry in the project's Redirect URLs allow-list (Authentication → URL
-Configuration); anything else is silently replaced with the project's Site URL default —
-which, on a project that's never had this configured, is Supabase's own placeholder,
-`http://localhost:3000`. That's almost certainly why invitations were landing on localhost
-regardless of what the code passed. See the next section for the exact settings to change.
+Configuration); anything else is silently replaced with the project's **Site URL**, dropping
+the path entirely — landing on that domain's bare `/`, which on this project rewrites (see
+`src/proxy.ts`) to a public marketing/quote page. The `access_token`/`type` hash fragment is
+still appended to the URL when this happens (hash fragments are client-side only, so the
+server-side fallback can't strip or validate them) — it's just stuck on the wrong page. See
+the next section for the exact settings to add.
+
+### Safety net: AuthInviteRedirector
+
+Because a Site URL/Redirect URL mismatch strands a real, usable token on whatever page Site
+URL points to — and that could be a public page — `src/components/AuthInviteRedirector.tsx` is
+mounted in the root layout (`src/app/layout.tsx`) and runs on every single page. It does
+nothing unless it sees an `#access_token=...` hash fragment with `type=invite` or
+`type=recovery`, in which case it immediately forwards the browser to `/agent/set-password`
+with that same fragment intact. This means an invitation/reset link can never leave someone on
+a public page with a live token doing nothing, even if the Supabase dashboard configuration
+drifts again later — but it's a safety net, not a substitute for the correct configuration
+below, since a *server-side* Redirect URL mismatch (the `?token_hash=...` flow verified by
+`/auth/confirm`) fails before any browser-side JavaScript ever runs.
 
 ### Supabase dashboard settings to update
 
 In the Supabase dashboard, **Authentication → URL Configuration**:
 
-- **Site URL**: set to your production domain, e.g. `https://clean.winsalotcorp.com`
-  (currently likely still the default `http://localhost:3000` placeholder).
+- **Site URL**: set to your production domain, `https://cleaning.winsalotcorp.com` (currently
+  likely still the default `http://localhost:3000` placeholder, or a domain that doesn't
+  exactly match what's configured for this project).
 - **Redirect URLs** (add, don't remove anything already relied on elsewhere):
-  - `https://clean.winsalotcorp.com/agent/set-password`
-  - `https://clean.winsalotcorp.com/auth/confirm`
+  - `https://cleaning.winsalotcorp.com/agent/set-password`
+  - `https://cleaning.winsalotcorp.com/auth/confirm`
   - A wildcard covering every Preview deployment of this Vercel project, e.g.
     `https://winsalot-funding-*-<your-vercel-team-slug>.vercel.app/**` — scoped to this
     project's own deployment URL pattern rather than a bare `https://*.vercel.app/**`, since
     the latter would let *any* Vercel deployment (not just yours) be used as an auth redirect
     target.
+
+There is no need for a separate `/crm/setup-password` or `/admin/setup-password` route —
+`/agent/set-password` already is that dedicated page (reads the invitation/reset session,
+requires a password + confirmation, then redirects to `/agent/dashboard`); the fix is getting
+Supabase to actually deliver its link there.
 
 ## Closing two access-control gaps (migration 0010)
 
@@ -332,6 +353,11 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       `/agent/set-password`
 - [ ] `/agent/set-password` and `/agent/forgot-password` are reachable while signed out and
       don't redirect to `/agent/login`
+- [ ] An invite/reset link lands on `/agent/set-password` with a working "set password" form —
+      not on the homepage or any other public page, even if pasted into a fresh
+      incognito/private window
+- [ ] (Safety-net check) manually visiting any page with `#access_token=...&type=invite` in the
+      URL immediately forwards to `/agent/set-password` with that same token
 - [ ] Deactivating an agent immediately blocks their access to leads previously assigned to
       them, not just future logins (test by deactivating, then trying to load one of their
       leads with their existing session)
