@@ -22,7 +22,13 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      const redirectUrl = new URL(next, request.url);
+      // Proves to /agent/set-password that this session was just established
+      // by our own verifyOtp call above, not merely a pre-existing session
+      // in the visitor's browser (see SetPasswordClient's session-provenance
+      // check for why that distinction matters).
+      redirectUrl.searchParams.set("verified", "1");
+      return NextResponse.redirect(redirectUrl);
     }
   }
 
