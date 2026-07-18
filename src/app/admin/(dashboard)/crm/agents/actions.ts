@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { getSiteUrl } from "@/lib/site-url";
+import { getAuthRedirectBaseUrl } from "@/lib/site-url";
 
 // The only way an agent account gets created: the admin supplies a name +
 // email, never a password. Supabase emails the invite link itself (the
@@ -27,7 +27,7 @@ export async function inviteAgentAction(formData: FormData) {
 
   const admin = getSupabaseAdmin();
   const { data: authUser, error: authError } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${getSiteUrl()}/agent/set-password`,
+    redirectTo: `${getAuthRedirectBaseUrl()}/agent/set-password`,
     data: { full_name: fullName },
   });
 

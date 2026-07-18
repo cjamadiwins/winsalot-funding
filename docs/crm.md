@@ -215,6 +215,42 @@ isn't something a migration or this codebase controls. Building both paths means
 either way, but it's worth sending yourself a test invite to confirm mail delivery is working
 before relying on it for real agents.
 
+### Which base URL the redirect link uses
+
+`redirectTo` is built from `getAuthRedirectBaseUrl()` (`src/lib/site-url.ts`), not the
+`getSiteUrl()` used elsewhere in this codebase — deliberately different, since an auth
+redirect has to land back on the *same* deployment that sent the email:
+
+- If `NEXT_PUBLIC_SITE_URL` is set, it's used as-is. This should only ever be set on Vercel's
+  **Production** environment (scoped to Production only in Project Settings → Environment
+  Variables) — e.g. `https://clean.winsalotcorp.com`.
+- Otherwise it falls back to `VERCEL_URL`, which Vercel sets automatically to the current
+  deployment's own hostname — this is what makes a Preview invite redirect back to that same
+  preview, with zero configuration needed per-deployment.
+- Otherwise, `http://localhost:3000` (local dev only).
+
+**This code fix alone is not sufficient.** Supabase Auth only honors a `redirectTo` value that
+matches an entry in the project's Redirect URLs allow-list (Authentication → URL
+Configuration); anything else is silently replaced with the project's Site URL default —
+which, on a project that's never had this configured, is Supabase's own placeholder,
+`http://localhost:3000`. That's almost certainly why invitations were landing on localhost
+regardless of what the code passed. See the next section for the exact settings to change.
+
+### Supabase dashboard settings to update
+
+In the Supabase dashboard, **Authentication → URL Configuration**:
+
+- **Site URL**: set to your production domain, e.g. `https://clean.winsalotcorp.com`
+  (currently likely still the default `http://localhost:3000` placeholder).
+- **Redirect URLs** (add, don't remove anything already relied on elsewhere):
+  - `https://clean.winsalotcorp.com/agent/set-password`
+  - `https://clean.winsalotcorp.com/auth/confirm`
+  - A wildcard covering every Preview deployment of this Vercel project, e.g.
+    `https://winsalot-funding-*-<your-vercel-team-slug>.vercel.app/**` — scoped to this
+    project's own deployment URL pattern rather than a bare `https://*.vercel.app/**`, since
+    the latter would let *any* Vercel deployment (not just yours) be used as an auth redirect
+    target.
+
 ## Closing two access-control gaps (migration 0010)
 
 Building real invite/deactivate/remove controls surfaced two gaps in the original `crm_users`/

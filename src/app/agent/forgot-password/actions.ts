@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getSiteUrl } from "@/lib/site-url";
+import { getAuthRedirectBaseUrl } from "@/lib/site-url";
 
 // Always redirects the same way regardless of whether the email exists or
 // the Supabase call succeeds — never reveals which emails have accounts.
@@ -12,7 +12,7 @@ export async function requestAgentPasswordResetAction(formData: FormData) {
   if (email) {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getSiteUrl()}/agent/set-password`,
+      redirectTo: `${getAuthRedirectBaseUrl()}/agent/set-password`,
     });
   }
 
