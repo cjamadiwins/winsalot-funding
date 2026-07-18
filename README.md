@@ -12,6 +12,13 @@ provider via a secure link and approve the final quote before it's sent to the c
 See [`docs/provider-quote-system.md`](docs/provider-quote-system.md) for setup and how it
 works.
 
+## Calling agent CRM
+
+A CRM for calling agents at `/agent/login` to enter interested leads, follow up after a quote
+is sent, and track the pipeline through to a closed opportunity — connected to, not
+duplicating, the quote system above. See [`docs/crm.md`](docs/crm.md) for the full workflow,
+schema, and roles.
+
 ## Getting Started
 
 First, run the development server:

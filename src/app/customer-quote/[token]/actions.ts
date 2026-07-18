@@ -75,6 +75,46 @@ async function notifyAdminOfCustomerResponse(params: {
   });
 }
 
+// Keeps a linked CRM lead's stage in sync with the customer's response, so
+// agents never have to manually enter the outcome. Uses the service-role
+// client because this route has no CRM user session (it's a public,
+// token-gated page) - crm_leads has no anonymous RLS policy, so this is
+// the only way to write here, same as every other write in this file.
+// Never blocks the customer's accept/decline on a sync failure.
+async function syncCrmLeadOnCustomerResponse(quoteRequestId: string, decision: Decision) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: lead } = await supabase
+      .from("crm_leads")
+      .select("id")
+      .eq("quote_request_id", quoteRequestId)
+      .maybeSingle();
+
+    if (!lead) return;
+
+    const stage = decision === "accepted" ? "Customer accepted" : "Customer declined";
+
+    const { error: leadError } = await supabase
+      .from("crm_leads")
+      .update({ stage })
+      .eq("id", lead.id);
+
+    if (leadError) {
+      console.error("[customer-quote] Failed to sync CRM lead stage:", leadError);
+      return;
+    }
+
+    await supabase.from("crm_activities").insert({
+      lead_id: lead.id,
+      agent_id: null,
+      activity_type: "outcome",
+      notes: `Customer ${decision} the quote (synced automatically).`,
+    });
+  } catch (err) {
+    console.error("[customer-quote] Failed to sync CRM lead:", err);
+  }
+}
+
 export async function respondToCustomerQuoteAction(
   token: string,
   decision: Decision,
@@ -127,6 +167,8 @@ export async function respondToCustomerQuoteAction(
     console.error("[customer-quote] Failed to record response:", updateError);
     return { ok: false, error: "Something went wrong. Please try again." };
   }
+
+  await syncCrmLeadOnCustomerResponse(tokenRow.quote_request_id, decision);
 
   await notifyAdminOfCustomerResponse({
     decision,
