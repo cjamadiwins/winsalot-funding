@@ -21,6 +21,14 @@ export async function requireAdminUser() {
     redirect("/admin/login");
   }
 
+  // An operator-initiated password reset (see the admin agents/forgot-
+  // password flows) sets this flag; every admin Server Action bounces to
+  // the set-password page until it's cleared, mirroring the proxy.ts
+  // check for requests that reach here directly.
+  if (data.user.user_metadata?.must_change_password) {
+    redirect("/admin/set-password");
+  }
+
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("role")

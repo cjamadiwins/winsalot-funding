@@ -53,6 +53,13 @@ export default async function AdminLoginPage({
             Sign In
           </button>
         </form>
+
+        <a
+          href="/admin/forgot-password"
+          className="mt-4 block text-center text-sm font-medium text-sky-600"
+        >
+          Forgot password?
+        </a>
       </div>
     </div>
   );
