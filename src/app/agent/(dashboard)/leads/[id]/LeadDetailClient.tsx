@@ -6,12 +6,19 @@ import {
   ACTIVITY_TYPE_LABELS,
   AGENT_SETTABLE_STAGES,
   LEAD_STAGE_STYLES,
+  toDatetimeLocal,
   type CrmActivityRow,
+  type CrmFollowUpRow,
   type CrmLeadRow,
   type LeadStage,
 } from "@/lib/crm-types";
 import type { QuoteRequestRow } from "@/lib/admin-types";
 import { addActivityAction, updateLeadDetailsAction, updateLeadStageAction } from "./actions";
+import {
+  completeFollowUpAction,
+  rescheduleFollowUpAction,
+  scheduleFollowUpAction,
+} from "../../followup-actions";
 
 const inputClass =
   "w-full rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14.5px]";
@@ -30,17 +37,21 @@ type LinkedQuote = Pick<
 export default function LeadDetailClient({
   lead,
   activities,
+  followUps,
   linkedQuote,
   justAdded,
 }: {
   lead: CrmLeadRow;
   activities: CrmActivityRow[];
+  followUps: CrmFollowUpRow[];
   linkedQuote: LinkedQuote;
   justAdded: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -255,6 +266,115 @@ export default function LeadDetailClient({
               </dl>
             </div>
           )}
+
+          <div className="mt-5 border-t border-[var(--color-border-soft)] pt-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                Scheduled Callbacks
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSchedule((v) => !v)}
+                className="text-[13px] font-semibold text-[var(--color-accent)]"
+              >
+                {showSchedule ? "Cancel" : "+ Schedule"}
+              </button>
+            </div>
+
+            {showSchedule && (
+              <form
+                action={(formData) => {
+                  runAction(() => scheduleFollowUpAction(lead.id, formData));
+                  setShowSchedule(false);
+                }}
+                className="mt-3 space-y-2"
+              >
+                <input type="datetime-local" name="scheduled_at" required className={inputClass} />
+                <input name="note" placeholder="Short note (optional)" className={inputClass} />
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-[13.5px] font-semibold text-white transition hover:opacity-90"
+                >
+                  Schedule
+                </button>
+              </form>
+            )}
+
+            {followUps.length === 0 ? (
+              <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">
+                No callbacks scheduled for this lead.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {followUps.map((followUp) => (
+                  <li
+                    key={followUp.id}
+                    className="rounded-lg border border-[var(--color-border-soft)] px-3.5 py-3 text-[13.5px]"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-[var(--color-ink-strong)]">
+                        {new Date(followUp.scheduled_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {followUp.note && (
+                      <p className="mt-1 text-[var(--color-text-body)]">{followUp.note}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => runAction(() => completeFollowUpAction(followUp.id, lead.id))}
+                        className="text-[12.5px] font-semibold text-emerald-700 hover:text-emerald-800"
+                      >
+                        Mark Completed
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() =>
+                          setReschedulingId(reschedulingId === followUp.id ? null : followUp.id)
+                        }
+                        className="text-[12.5px] font-semibold text-[var(--color-accent)]"
+                      >
+                        Reschedule
+                      </button>
+                    </div>
+                    {reschedulingId === followUp.id && (
+                      <form
+                        action={(formData) => {
+                          runAction(() => rescheduleFollowUpAction(followUp.id, lead.id, formData));
+                          setReschedulingId(null);
+                        }}
+                        className="mt-2 space-y-2"
+                      >
+                        <input
+                          type="datetime-local"
+                          name="scheduled_at"
+                          required
+                          defaultValue={toDatetimeLocal(followUp.scheduled_at)}
+                          className={inputClass}
+                        />
+                        <input
+                          name="note"
+                          defaultValue={followUp.note ?? ""}
+                          placeholder="Note (optional)"
+                          className={inputClass}
+                        />
+                        <button
+                          type="submit"
+                          disabled={isPending}
+                          className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-semibold text-white transition hover:opacity-90"
+                        >
+                          Save
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
 
         <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-5">

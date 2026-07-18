@@ -26,6 +26,37 @@ and Vercel deployment.
 5. Once the admin is done, they click **Final Approval — Close Opportunity** on the lead page,
    which marks it `Closed/completed` and logs it in the activity history.
 
+## Follow-Up Calendar
+
+Scheduled callbacks are a dedicated table, **`crm_followups`** (migration
+`0011_crm_followups.sql`) — separate from the `crm_activities` timeline, since a real calendar
+needs multiple independent, reschedulable, completable entries per lead, which a single
+`crm_leads.next_follow_up_at` scalar can't represent on its own.
+
+- **Scheduling**: an agent picks a date/time and adds a short note, either from the **+
+  Schedule Callback** control on their own dashboard (with a lead picker) or from the
+  **Scheduled Callbacks** section on a lead's own page. Logging an activity with a follow-up
+  date (the pre-existing mechanism) also creates a `crm_followups` entry now, so every
+  follow-up — however it was scheduled — shows up in one place.
+- **`/agent/dashboard`** shows three grouped lists — **Overdue**, **Today**, **Upcoming** — of
+  the signed-in agent's own pending callbacks, each with **Mark Completed**, **Reschedule**
+  (inline date/time + note editor), and **Add Note** (logs a `crm_activities` note against the
+  lead, reusing the existing timeline rather than a second notes field).
+- **`crm_leads.next_follow_up_at`** is now a *derived* column: a database trigger
+  (`crm_followups_sync_lead_next_follow_up`) recomputes it as the earliest pending callback for
+  that lead on every insert/update/delete to `crm_followups`, so it stays correct automatically
+  and every existing place that already read it (dashboards, lead pages, `isOverdue`/`isDueToday`)
+  keeps working unchanged. Application code no longer writes to it directly.
+- **Access control**: exactly like `crm_activities`, a callback's visibility is scoped through
+  its lead's *current* `assigned_agent_id`, not a stored owner on the callback itself — so
+  reassigning a lead transfers its pending callbacks immediately, and the previous agent loses
+  access just as immediately. Verified directly against the live database: an agent can see and
+  complete/reschedule a callback on their own lead, but a callback on a lead assigned to someone
+  else is invisible to them and an attempted update silently affects zero rows.
+- **Admin** sees every agent's callbacks (grouped the same way, filterable by agent) on
+  **`/admin/crm`**. This view is read-only by design — day-to-day callback management belongs to
+  the assigned agent; admin's job here is oversight.
+
 ## User roles
 
 - **Admin** — every account that already exists today (see "Roles and the existing /admin
@@ -115,9 +146,11 @@ New migrations: [`0007_crm_leads.sql`](../supabase/migrations/0007_crm_leads.sql
 [`0008_crm_user_role_privileges.sql`](../supabase/migrations/0008_crm_user_role_privileges.sql)
 (locks down a helper function's execute privileges),
 [`0009_crm_agent_stage_restriction.sql`](../supabase/migrations/0009_crm_agent_stage_restriction.sql)
-(the agent stage-restriction trigger above), and
+(the agent stage-restriction trigger above),
 [`0010_crm_agent_isolation.sql`](../supabase/migrations/0010_crm_agent_isolation.sql) (roster
-visibility + deactivation-gap fixes, see below). Purely additive — no existing table, column,
+visibility + deactivation-gap fixes, see below), and
+[`0011_crm_followups.sql`](../supabase/migrations/0011_crm_followups.sql) (the Follow-Up
+Calendar table, RLS, and sync trigger, see above). Purely additive — no existing table, column,
 or row is touched.
 
 - **`crm_users`** — one row per Supabase Auth user who's part of the CRM: `full_name`, `email`,
@@ -330,5 +363,19 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       even by calling the action directly with a different stage value
 - [ ] "Final Approval — Close Opportunity" only appears once the customer has responded, and
       marks the lead `Closed/completed` with a logged activity entry
+- [ ] Scheduling a callback (from the dashboard's "+ Schedule Callback" or a lead's own
+      "Scheduled Callbacks" section) appears in the correct Overdue/Today/Upcoming group
+- [ ] "Mark Completed" removes a callback from the calendar and clears the lead's "Next
+      Follow-up" once no other pending callback remains for it
+- [ ] "Reschedule" updates a callback's date/time (and optionally its note) in place, without
+      creating a duplicate entry
+- [ ] "Add Note" on a callback logs a new entry in the lead's activity timeline
+- [ ] An agent cannot see or affect another agent's callbacks, even for a lead momentarily
+      guessed by id — the callback simply doesn't appear, and an attempted update affects zero
+      rows
+- [ ] Reassigning a lead to a different agent immediately moves its pending callbacks into that
+      agent's calendar and out of the previous agent's
+- [ ] `/admin/crm`'s "All Agents' Follow-Ups" section shows every agent's callbacks, filterable
+      by agent, and has no action buttons (view-only)
 - [ ] The existing `/commercial-cleaning-quote`, `/customer-quote/[token]`,
       `/provider-quote/[token]`, and `/sales-tracker` pages are all unaffected

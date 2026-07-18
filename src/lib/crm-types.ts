@@ -155,3 +155,54 @@ export function isDueToday(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">
   if (CLOSED_STAGES.includes(lead.stage)) return false;
   return startOfDay(new Date(lead.next_follow_up_at)) === startOfDay(new Date());
 }
+
+// Follow-Up Calendar: dedicated scheduled callbacks (crm_followups),
+// distinct from the crm_activities timeline. crm_leads.next_follow_up_at
+// is kept in sync with these automatically by a database trigger (see
+// migration 0011) - it's the earliest pending callback for that lead, not
+// something application code writes directly anymore.
+export type FollowUpStatus = "pending" | "completed";
+
+export type CrmFollowUpRow = {
+  id: string;
+  created_at: string;
+  lead_id: string;
+  scheduled_by: string | null;
+  scheduled_at: string;
+  note: string | null;
+  status: FollowUpStatus;
+  completed_at: string | null;
+  completed_by: string | null;
+};
+
+// Joined shape used wherever a follow-up is displayed outside the context
+// of its own lead page (the calendar, the admin follow-ups view) and
+// needs to show which lead/business it's for without a second round trip.
+export type CrmFollowUpWithLead = CrmFollowUpRow & {
+  crm_leads: Pick<CrmLeadRow, "id" | "business_name" | "phone" | "city" | "assigned_agent_id"> | null;
+};
+
+export function isFollowUpOverdue(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
+  if (followUp.status !== "pending") return false;
+  return startOfDay(new Date(followUp.scheduled_at)) < startOfDay(new Date());
+}
+
+export function isFollowUpDueToday(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
+  if (followUp.status !== "pending") return false;
+  return startOfDay(new Date(followUp.scheduled_at)) === startOfDay(new Date());
+}
+
+export function isFollowUpUpcoming(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
+  if (followUp.status !== "pending") return false;
+  return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
+}
+
+// Formats an ISO timestamp for a <input type="datetime-local"> defaultValue
+// (which needs "YYYY-MM-DDTHH:mm" in local time, not an ISO string).
+export function toDatetimeLocal(iso: string): string {
+  const date = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}

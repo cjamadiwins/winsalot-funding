@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { CrmActivityRow, CrmLeadRow } from "@/lib/crm-types";
+import type { CrmActivityRow, CrmFollowUpRow, CrmLeadRow } from "@/lib/crm-types";
 import type { QuoteRequestRow } from "@/lib/admin-types";
 import LeadDetailClient from "./LeadDetailClient";
 
@@ -21,13 +21,19 @@ export default async function AgentLeadDetailPage({
   // RLS (crm_leads_agent_select_own) means this returns null both when the
   // lead doesn't exist and when it exists but isn't assigned to this
   // agent - either way, a 404 is the correct response.
-  const [{ data: lead }, { data: activities }] = await Promise.all([
+  const [{ data: lead }, { data: activities }, { data: followUps }] = await Promise.all([
     supabase.from("crm_leads").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("crm_activities")
       .select("*")
       .eq("lead_id", id)
       .order("occurred_at", { ascending: false }),
+    supabase
+      .from("crm_followups")
+      .select("*")
+      .eq("lead_id", id)
+      .eq("status", "pending")
+      .order("scheduled_at", { ascending: true }),
   ]);
 
   if (!lead) {
@@ -69,6 +75,7 @@ export default async function AgentLeadDetailPage({
     <LeadDetailClient
       lead={leadRow}
       activities={(activities ?? []) as CrmActivityRow[]}
+      followUps={(followUps ?? []) as CrmFollowUpRow[]}
       linkedQuote={linkedQuote}
       justAdded={added === "1"}
     />

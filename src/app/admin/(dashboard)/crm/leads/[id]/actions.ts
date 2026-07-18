@@ -91,17 +91,30 @@ export async function addActivityAction(leadId: string, formData: FormData) {
 
   if (activityError) throw new Error("Failed to save the activity.");
 
+  // A follow-up date logged here creates a real Follow-Up Calendar entry
+  // (crm_followups) rather than writing crm_leads.next_follow_up_at
+  // directly - that column is derived automatically (migration 0011) from
+  // whichever pending callback is soonest.
+  if (nextFollowUpAt) {
+    const { error: followUpError } = await supabase.from("crm_followups").insert({
+      lead_id: leadId,
+      scheduled_by: crmUser.id,
+      scheduled_at: nextFollowUpAt,
+    });
+    if (followUpError) {
+      throw new Error("Activity saved, but failed to schedule the follow-up callback.");
+    }
+  }
+
   const { error: leadError } = await supabase
     .from("crm_leads")
-    .update({
-      last_contacted_at: new Date().toISOString(),
-      ...(nextFollowUpAt ? { next_follow_up_at: nextFollowUpAt } : {}),
-    })
+    .update({ last_contacted_at: new Date().toISOString() })
     .eq("id", leadId);
 
-  if (leadError) throw new Error("Activity saved, but failed to update the lead's follow-up date.");
+  if (leadError) throw new Error("Activity saved, but failed to update the lead's last-contacted date.");
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
+  revalidatePath("/admin/crm");
 }
 
 export type QuoteRequestSearchResult = {
