@@ -66,6 +66,34 @@ export default function RequestWorkflowPanel({
   const statusLabel = QUOTE_STATUS_LABELS[request.status as keyof typeof QUOTE_STATUS_LABELS] ?? request.status;
   const statusStyle = QUOTE_STATUS_STYLES[request.status as keyof typeof QUOTE_STATUS_STYLES] ?? "bg-slate-100 text-slate-700";
 
+  const confirmedProviderName =
+    request.customer_quote_provider_name ?? assignedProvider?.company_name ?? "the assigned provider";
+  const priceTypeLabel = request.customer_quote_price_type
+    ? PRICE_TYPE_LABELS[request.customer_quote_price_type as keyof typeof PRICE_TYPE_LABELS]
+    : null;
+  const acceptedPriceLabel = `${formatMoney(request.customer_quote_price)}${
+    priceTypeLabel ? ` (${priceTypeLabel})` : ""
+  }`;
+  const acceptanceDateLabel = request.customer_response_at
+    ? new Date(request.customer_response_at).toLocaleDateString()
+    : "—";
+  const providerConfirmationMessage = `Subject: Customer Accepted Your Cleaning Quote
+
+Hello ${confirmedProviderName},
+
+The customer has accepted your cleaning quote.
+
+Customer: ${request.full_name}
+Service: ${request.cleaning_type}
+City: ${request.city}
+Accepted Price: ${acceptedPriceLabel}
+Acceptance Date: ${acceptanceDateLabel}
+
+Please contact Winsalot Corp to confirm the next steps and scheduling.
+
+Thank you,
+Winsalot Corp`;
+
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
     startTransition(async () => {
@@ -500,6 +528,52 @@ export default function RequestWorkflowPanel({
               <p className="mt-1 whitespace-pre-wrap text-slate-900">
                 {request.customer_response_comments}
               </p>
+            </div>
+          )}
+
+          {request.customer_response === "accepted" && (
+            <div className="mt-4 border-t border-emerald-200 pt-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+                Accepted Quote Details
+              </h3>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Customer name</dt>
+                  <dd className="text-right font-medium text-slate-900">{request.full_name}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Provider name</dt>
+                  <dd className="text-right font-medium text-slate-900">{confirmedProviderName}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Service requested</dt>
+                  <dd className="text-right font-medium text-slate-900">{request.cleaning_type}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">City</dt>
+                  <dd className="text-right font-medium text-slate-900">{request.city}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Accepted price</dt>
+                  <dd className="text-right font-medium text-slate-900">{acceptedPriceLabel}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Acceptance date</dt>
+                  <dd className="text-right font-medium text-slate-900">{acceptanceDateLabel}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Status</dt>
+                  <dd className="text-right font-medium text-slate-900">Customer Accepted</dd>
+                </div>
+              </dl>
+
+              <button
+                type="button"
+                onClick={() => copyText(providerConfirmationMessage, "Provider confirmation message")}
+                className={`${secondaryButtonClasses} mt-4`}
+              >
+                Copy Provider Confirmation
+              </button>
             </div>
           )}
         </section>
