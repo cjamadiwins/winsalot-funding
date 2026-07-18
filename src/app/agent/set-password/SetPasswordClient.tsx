@@ -9,14 +9,19 @@ type Status = "checking" | "ready" | "invalid";
 // Shared completion page for both the agent invite flow and the forgot-
 // password flow - both end the same way: "you have a valid temporary
 // session from an email link, now set a password." Supabase links can
-// arrive two ways depending on project configuration:
+// arrive several ways depending on project/client configuration:
 //   1. ?token_hash=...&type=... - already verified server-side by
 //      /auth/confirm before redirecting here, which marks the redirect
 //      with ?verified=1 as proof this session was just established.
 //   2. #access_token=...&type=... - a hash fragment the server never
-//      sees at all; only the browser client (with its default
-//      detectSessionInUrl behavior) can pick this up, which is why this
-//      whole page has to be a client component.
+//      sees at all (implicit flow); only the browser client (with its
+//      default detectSessionInUrl behavior) can pick this up.
+//   3. ?code=... (PKCE flow) - createBrowserClient from @supabase/ssr
+//      defaults to flowType "pkce", which is what this project's invite/
+//      recovery links actually use, not the hash fragment. The browser
+//      client still exchanges this for a session automatically via
+//      detectSessionInUrl; this page just needs to recognize the
+//      parameter as proof, the same way it recognizes the hash.
 //
 // Critically, this page must never treat "a session merely exists" as
 // proof of a valid invite/recovery link - someone who's already logged
@@ -25,11 +30,11 @@ type Status = "checking" | "ready" | "invalid";
 // clicking "Set Password" would overwrite *their own* account's password
 // instead of failing closed. This happened in production: an admin's
 // password was overwritten this way. So readiness requires actual
-// evidence of a fresh link (hash fragment or ?verified=1), not just
-// getSession() returning something, and the submit handler re-checks the
-// session's user id hasn't silently changed since (e.g. via a same-
-// origin tab syncing a different session through localStorage) before
-// ever calling updateUser().
+// evidence of a fresh link (hash fragment, ?code=, or ?verified=1), not
+// just getSession() returning something, and the submit handler
+// re-checks the session's user id hasn't silently changed since (e.g.
+// via a same-origin tab syncing a different session through
+// localStorage) before ever calling updateUser().
 export default function SetPasswordClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,16 +42,18 @@ export default function SetPasswordClient() {
   const serverVerified = searchParams.get("verified") === "1";
 
   // Captured synchronously on first render, before the Supabase client is
-  // even created - detectSessionInUrl strips the hash asynchronously, so
-  // this has to run before that has a chance to happen.
+  // even created - detectSessionInUrl consumes the hash/code
+  // asynchronously (and may strip it from the URL afterward), so this has
+  // to run before that has a chance to happen.
   const [hadAuthHashOnLoad] = useState(
     () =>
       typeof window !== "undefined" &&
       /access_token=/.test(window.location.hash) &&
       /type=(invite|recovery)/.test(window.location.hash)
   );
+  const [hadAuthCodeOnLoad] = useState(() => Boolean(searchParams.get("code")));
 
-  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad;
+  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad || hadAuthCodeOnLoad;
 
   const [status, setStatus] = useState<Status>(() => {
     if (linkError) return "invalid";
