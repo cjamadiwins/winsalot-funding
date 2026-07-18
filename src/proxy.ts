@@ -24,18 +24,33 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/admin")) {
-    return handleAdminAuth(request);
+    return handleSessionGate(request, "/admin/login", "/admin");
+  }
+
+  if (pathname.startsWith("/agent")) {
+    return handleSessionGate(request, "/agent/login", "/agent/dashboard");
   }
 
   return NextResponse.next();
 }
 
-// Refreshes the Supabase Auth session cookie and gates /admin/* behind a
-// logged-in user. This is the first line of defense, not the only one —
-// every admin Server Action independently re-checks the session too (see
-// src/lib/admin-auth.ts), since Server Functions can bypass a proxy
-// matcher after an unrelated refactor.
-async function handleAdminAuth(request: NextRequest) {
+// Refreshes the Supabase Auth session cookie and gates a section of the
+// site (/admin/* or /agent/*) behind a logged-in user. This is the first
+// line of defense, not the only one — every admin/agent Server Action
+// independently re-checks the session too (see src/lib/admin-auth.ts and
+// src/lib/crm-auth.ts), since Server Functions can bypass a proxy matcher
+// after an unrelated refactor.
+//
+// This only confirms *a* Supabase session exists, same as before this
+// function was shared between /admin and /agent — role-specific checks
+// (e.g. blocking a CRM agent account from /admin, or requiring an active
+// crm_users row for /agent) happen server-side in requireAdminUser() and
+// requireCrmUser()/requireCrmAdmin(), not here.
+async function handleSessionGate(
+  request: NextRequest,
+  loginPath: string,
+  postLoginPath: string
+) {
   let response = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,8 +58,8 @@ async function handleAdminAuth(request: NextRequest) {
 
   if (!supabaseUrl || !anonKey) {
     // Fail closed rather than risk exposing the dashboard misconfigured.
-    if (request.nextUrl.pathname !== "/admin/login") {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+    if (request.nextUrl.pathname !== loginPath) {
+      return NextResponse.redirect(new URL(loginPath, request.url));
     }
     return response;
   }
@@ -65,21 +80,21 @@ async function handleAdminAuth(request: NextRequest) {
   });
 
   const { data } = await supabase.auth.getUser();
-  const isLoginPage = request.nextUrl.pathname === "/admin/login";
+  const isLoginPage = request.nextUrl.pathname === loginPath;
 
   if (!data.user && !isLoginPage) {
-    const loginUrl = new URL("/admin/login", request.url);
+    const loginUrl = new URL(loginPath, request.url);
     loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (data.user && isLoginPage) {
-    return NextResponse.redirect(new URL("/admin", request.url));
+    return NextResponse.redirect(new URL(postLoginPath, request.url));
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*"],
+  matcher: ["/", "/admin/:path*", "/agent/:path*"],
 };
