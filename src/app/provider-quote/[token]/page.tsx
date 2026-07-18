@@ -1,12 +1,17 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { hashProviderToken } from "@/lib/tokens";
-import { isTokenActive } from "@/lib/admin-types";
+import { isTokenActive, QUOTE_STATUSES, type QuoteStatus } from "@/lib/admin-types";
 import ProviderQuoteForm from "@/components/provider-quote/ProviderQuoteForm";
 
-// Fields a provider needs to price a job. Deliberately excludes the
-// customer's name, phone and email — Winsalot Corp is the only party that
-// contacts the customer directly.
+// Fields a provider needs to price a job. The customer's name, phone and
+// email are withheld until Winsalot Corp approves the quote (see
+// isApprovedOrLater below) — before that point, a provider only ever sees
+// what's needed to price the job, never who to contact directly.
 type ScopedRequest = {
+  full_name: string;
+  phone: string;
+  email: string | null;
+  status: string;
   city: string;
   service_address: string | null;
   property_type: string;
@@ -18,6 +23,14 @@ type ScopedRequest = {
   service_frequency: string | null;
   description: string;
 };
+
+// True once Winsalot Corp has approved the quote (or the pipeline has
+// moved past that point) — an unrecognized/legacy status value falls back
+// to "not approved", the conservative choice for gating customer PII.
+function isApprovedOrLater(status: string): boolean {
+  const index = QUOTE_STATUSES.indexOf(status as QuoteStatus);
+  return index >= QUOTE_STATUSES.indexOf("Approved");
+}
 
 function InvalidLink() {
   return (
@@ -62,7 +75,7 @@ export default async function ProviderQuotePage({
     supabase
       .from("quote_requests")
       .select(
-        "city, service_address, property_type, cleaning_type, bedrooms, bathrooms, property_size, preferred_date, service_frequency, description"
+        "full_name, phone, email, status, city, service_address, property_type, cleaning_type, bedrooms, bathrooms, property_size, preferred_date, service_frequency, description"
       )
       .eq("id", tokenRow.quote_request_id)
       .maybeSingle(),
@@ -121,6 +134,32 @@ export default async function ProviderQuotePage({
             </div>
           )}
         </section>
+
+        {isApprovedOrLater(details.status) && (
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Customer Contact
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              This quote has been approved — you can now contact the customer directly to
+              schedule the job.
+            </p>
+            <dl className="mt-4 space-y-2 text-sm">
+              {[
+                ["Name", details.full_name],
+                ["Phone", details.phone],
+                ["Email", details.email],
+              ]
+                .filter(([, value]) => value)
+                .map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-4">
+                    <dt className="text-slate-500">{label}</dt>
+                    <dd className="text-right font-medium text-slate-900">{value}</dd>
+                  </div>
+                ))}
+            </dl>
+          </section>
+        )}
 
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
           {existingSubmission ? (
