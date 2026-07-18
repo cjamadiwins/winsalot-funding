@@ -11,33 +11,69 @@ type Status = "checking" | "ready" | "invalid";
 // session from an email link, now set a password." Supabase links can
 // arrive two ways depending on project configuration:
 //   1. ?token_hash=...&type=... - already verified server-side by
-//      /auth/confirm before redirecting here, so a session cookie exists
-//      by the time this page loads.
+//      /auth/confirm before redirecting here, which marks the redirect
+//      with ?verified=1 as proof this session was just established.
 //   2. #access_token=...&type=... - a hash fragment the server never
 //      sees at all; only the browser client (with its default
 //      detectSessionInUrl behavior) can pick this up, which is why this
 //      whole page has to be a client component.
+//
+// Critically, this page must never treat "a session merely exists" as
+// proof of a valid invite/recovery link - someone who's already logged
+// in (e.g. an admin testing an agent invite in the same browser) would
+// otherwise have that pre-existing session silently accepted here, and
+// clicking "Set Password" would overwrite *their own* account's password
+// instead of failing closed. This happened in production: an admin's
+// password was overwritten this way. So readiness requires actual
+// evidence of a fresh link (hash fragment or ?verified=1), not just
+// getSession() returning something, and the submit handler re-checks the
+// session's user id hasn't silently changed since (e.g. via a same-
+// origin tab syncing a different session through localStorage) before
+// ever calling updateUser().
 export default function SetPasswordClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const linkError = searchParams.get("error");
+  const serverVerified = searchParams.get("verified") === "1";
 
-  const [status, setStatus] = useState<Status>(() => (linkError ? "invalid" : "checking"));
+  // Captured synchronously on first render, before the Supabase client is
+  // even created - detectSessionInUrl strips the hash asynchronously, so
+  // this has to run before that has a chance to happen.
+  const [hadAuthHashOnLoad] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      /access_token=/.test(window.location.hash) &&
+      /type=(invite|recovery)/.test(window.location.hash)
+  );
+
+  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad;
+
+  const [status, setStatus] = useState<Status>(() => {
+    if (linkError) return "invalid";
+    return hasProofOfFreshLink ? "checking" : "invalid";
+  });
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (linkError) return;
+    if (linkError || !hasProofOfFreshLink) return;
 
     let active = true;
     const supabase = createSupabaseBrowserClient();
 
+    function markReady(userId: string) {
+      if (!active) return;
+      setExpectedUserId(userId);
+      setStatus("ready");
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       if (data.session) {
-        setStatus("ready");
+        markReady(data.session.user.id);
         return;
       }
       // No session yet - give the client a moment to finish processing a
@@ -45,7 +81,9 @@ export default function SetPasswordClient() {
       setTimeout(() => {
         if (!active) return;
         supabase.auth.getSession().then(({ data: retry }) => {
-          if (active) setStatus(retry.session ? "ready" : "invalid");
+          if (!active) return;
+          if (retry.session) markReady(retry.session.user.id);
+          else setStatus("invalid");
         });
       }, 800);
     });
@@ -53,14 +91,14 @@ export default function SetPasswordClient() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active && session) setStatus("ready");
+      if (session) markReady(session.user.id);
     });
 
     return () => {
       active = false;
       subscription.unsubscribe();
     };
-  }, [linkError]);
+  }, [linkError, hasProofOfFreshLink]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -77,6 +115,19 @@ export default function SetPasswordClient() {
 
     setSubmitting(true);
     const supabase = createSupabaseBrowserClient();
+
+    // Re-verify the session is still the one this page validated as
+    // "fresh" - guards against a cross-tab session swap (e.g. another tab
+    // signing in as someone else) happening between page load and submit.
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser.user || currentUser.user.id !== expectedUserId) {
+      setSubmitting(false);
+      setSubmitError(
+        "Your session has changed since this page loaded. Please open the link from your email again."
+      );
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
 
