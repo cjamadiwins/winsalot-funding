@@ -59,6 +59,13 @@ export default async function AgentLoginPage({
             Sign In
           </button>
         </form>
+
+        <a
+          href="/agent/forgot-password"
+          className="mt-4 block text-center text-sm font-medium text-[var(--color-accent)]"
+        >
+          Forgot password?
+        </a>
       </div>
     </div>
   );

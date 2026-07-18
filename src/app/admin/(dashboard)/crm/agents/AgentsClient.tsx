@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { CrmUserRow } from "@/lib/crm-types";
-import { createAgentAction, updateAgentAction } from "./actions";
+import { inviteAgentAction, removeAgentAction, updateAgentAction } from "./actions";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -20,6 +20,7 @@ export default function AgentsClient({
   const [error, setError] = useState<string | null>(null);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>, onDone?: () => void) {
     setError(null);
@@ -41,6 +42,13 @@ export default function AgentsClient({
         </div>
       )}
 
+      {invitedEmail && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Invitation sent to {invitedEmail}. They can follow the link in that email to set a
+          password and sign in.
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setShowAddAgent((v) => !v)}
@@ -51,29 +59,29 @@ export default function AgentsClient({
 
       {showAddAgent && (
         <form
-          action={(formData) =>
-            runAction(() => createAgentAction(formData), () => setShowAddAgent(false))
-          }
+          action={(formData) => {
+            const email = String(formData.get("email") ?? "");
+            setInvitedEmail(null);
+            runAction(
+              () => inviteAgentAction(formData),
+              () => {
+                setShowAddAgent(false);
+                setInvitedEmail(email);
+              }
+            );
+          }}
           className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input name="full_name" placeholder="Full name" required className={inputClasses} />
             <input name="email" type="email" placeholder="Email" required className={inputClasses} />
-            <input
-              name="password"
-              type="text"
-              placeholder="Temporary password (min 8 characters)"
-              required
-              minLength={8}
-              className={inputClasses}
-            />
           </div>
           <p className="text-xs text-slate-500">
-            Share this password with the agent securely — they can sign in right away at{" "}
-            <span className="font-mono">/agent/login</span>.
+            Sends an email invitation with a secure link for the agent to set their own
+            password — no password is set here. They&apos;ll automatically get the Agent role.
           </p>
           <button type="submit" disabled={isPending} className={buttonClasses}>
-            Create Agent
+            Send Invitation
           </button>
         </form>
       )}
@@ -146,13 +154,32 @@ export default function AgentsClient({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(agent.id)}
-                        className="text-xs font-semibold text-sky-600 hover:text-sky-700"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(agent.id)}
+                          className="text-xs font-semibold text-sky-600 hover:text-sky-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => {
+                            if (
+                              !confirm(
+                                `Permanently remove ${agent.full_name || agent.email}'s login? Their leads and activity history will be kept but unassigned.`
+                              )
+                            ) {
+                              return;
+                            }
+                            runAction(() => removeAgentAction(agent.id));
+                          }}
+                          className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </td>
                   </>
                 )}

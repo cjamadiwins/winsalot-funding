@@ -4,33 +4,35 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
+import { getSiteUrl } from "@/lib/site-url";
 
-// Creating a Supabase Auth user is inherently a privileged operation (the
-// Admin API requires the service-role key), so this is the one place in
+// The only way an agent account gets created: the admin supplies a name +
+// email, never a password. Supabase emails the invite link itself (the
+// Admin API requires the service-role key, so this is the one place in
 // the CRM that uses getSupabaseAdmin() for a write rather than the
-// session-scoped client + RLS. Everything else about this agent's access
-// (which leads they can see/edit) is still enforced by the crm_leads/
-// crm_activities RLS policies from migration 0007, keyed off crm_users.id.
-export async function createAgentAction(formData: FormData) {
+// session-scoped client + RLS); the agent sets their own password at
+// /agent/set-password. There is no public sign-up route anywhere in this
+// app, so this invite is the only path into an agent account. Every
+// invited account gets role='agent' - promotion to admin, if ever needed,
+// is a separate, deliberate edit in updateAgentAction below.
+export async function inviteAgentAction(formData: FormData) {
   await requireCrmAdmin();
 
   const fullName = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
 
-  if (!fullName || !email || password.length < 8) {
-    throw new Error("Name, email, and a password of at least 8 characters are required.");
+  if (!fullName || !email) {
+    throw new Error("Name and email are required.");
   }
 
   const admin = getSupabaseAdmin();
-  const { data: authUser, error: authError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
+  const { data: authUser, error: authError } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${getSiteUrl()}/agent/set-password`,
+    data: { full_name: fullName },
   });
 
   if (authError || !authUser.user) {
-    throw new Error(authError?.message ?? "Failed to create the agent's login.");
+    throw new Error(authError?.message ?? "Failed to invite this agent.");
   }
 
   const { error: crmError } = await admin.from("crm_users").insert({
@@ -42,13 +44,30 @@ export async function createAgentAction(formData: FormData) {
   });
 
   if (crmError) {
-    // Roll back the orphaned auth user so a failed agent creation doesn't
-    // leave a login with no corresponding crm_users row.
+    // Roll back the orphaned auth user so a failed invite doesn't leave a
+    // login with no corresponding crm_users row.
     await admin.auth.admin.deleteUser(authUser.user.id);
     throw new Error("Failed to save the agent record.");
   }
 
   revalidatePath("/admin/crm/agents");
+}
+
+// Hard-removes an agent's login entirely. crm_users.id references
+// auth.users(id) on delete cascade, so the crm_users row goes with it;
+// crm_leads/crm_activities only reference crm_users with on delete set
+// null, so the agent's lead and activity history is preserved, just
+// unassigned - nothing about past work is destroyed.
+export async function removeAgentAction(agentId: string) {
+  await requireCrmAdmin();
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.auth.admin.deleteUser(agentId);
+
+  if (error) throw new Error("Failed to remove this agent.");
+
+  revalidatePath("/admin/crm/agents");
+  revalidatePath("/admin/crm");
 }
 
 export async function updateAgentAction(agentId: string, formData: FormData) {

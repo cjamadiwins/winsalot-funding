@@ -28,7 +28,15 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/agent")) {
-    return handleSessionGate(request, "/agent/login", "/agent/dashboard");
+    // set-password and forgot-password must work for a signed-out visitor
+    // (that's the whole point of an invite/reset link), and shouldn't
+    // bounce someone away just because they happen to already have an
+    // unrelated session - unlike the login page itself, which does bounce
+    // an already-authenticated visitor onward.
+    return handleSessionGate(request, "/agent/login", "/agent/dashboard", [
+      "/agent/set-password",
+      "/agent/forgot-password",
+    ]);
   }
 
   return NextResponse.next();
@@ -46,19 +54,26 @@ export async function proxy(request: NextRequest) {
 // (e.g. blocking a CRM agent account from /admin, or requiring an active
 // crm_users row for /agent) happen server-side in requireAdminUser() and
 // requireCrmUser()/requireCrmAdmin(), not here.
+//
+// publicPaths are reachable whether or not a session exists, and never
+// trigger the "already signed in, bounce to postLoginPath" redirect that
+// the login page itself gets - only exact-matching loginPath does that.
 async function handleSessionGate(
   request: NextRequest,
   loginPath: string,
-  postLoginPath: string
+  postLoginPath: string,
+  publicPaths: string[] = []
 ) {
   let response = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const pathname = request.nextUrl.pathname;
+  const isPublicPath = pathname === loginPath || publicPaths.includes(pathname);
 
   if (!supabaseUrl || !anonKey) {
     // Fail closed rather than risk exposing the dashboard misconfigured.
-    if (request.nextUrl.pathname !== loginPath) {
+    if (!isPublicPath) {
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
     return response;
@@ -80,15 +95,14 @@ async function handleSessionGate(
   });
 
   const { data } = await supabase.auth.getUser();
-  const isLoginPage = request.nextUrl.pathname === loginPath;
 
-  if (!data.user && !isLoginPage) {
+  if (!data.user && !isPublicPath) {
     const loginUrl = new URL(loginPath, request.url);
-    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+    loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (data.user && isLoginPage) {
+  if (data.user && pathname === loginPath) {
     return NextResponse.redirect(new URL(postLoginPath, request.url));
   }
 

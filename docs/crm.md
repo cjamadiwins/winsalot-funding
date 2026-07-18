@@ -113,10 +113,12 @@ system-only stage.
 
 New migrations: [`0007_crm_leads.sql`](../supabase/migrations/0007_crm_leads.sql),
 [`0008_crm_user_role_privileges.sql`](../supabase/migrations/0008_crm_user_role_privileges.sql)
-(locks down a helper function's execute privileges), and
+(locks down a helper function's execute privileges),
 [`0009_crm_agent_stage_restriction.sql`](../supabase/migrations/0009_crm_agent_stage_restriction.sql)
-(the agent stage-restriction trigger above). Purely additive — no existing table, column, or
-row is touched.
+(the agent stage-restriction trigger above), and
+[`0010_crm_agent_isolation.sql`](../supabase/migrations/0010_crm_agent_isolation.sql) (roster
+visibility + deactivation-gap fixes, see below). Purely additive — no existing table, column,
+or row is touched.
 
 - **`crm_users`** — one row per Supabase Auth user who's part of the CRM: `full_name`, `email`,
   `role` (`admin` | `agent`), `active`.
@@ -136,8 +138,11 @@ tables have real policies driven by `auth.uid()`:
 
 - Admins (`crm_users.role = 'admin'`) can read, write, and delete every row.
 - Agents can only `select`/`update` `crm_leads`/`crm_activities` rows tied to their own
-  `assigned_agent_id`, can `insert` a lead only assigned to themselves, and have no `delete`
-  policy at all — matching "agents cannot permanently delete leads."
+  `assigned_agent_id` *while still an active agent* (see migration 0010 below), can `insert` a
+  lead only assigned to themselves, and have no `delete` policy at all — matching "agents
+  cannot permanently delete leads."
+- Agents can only ever read their own `crm_users` row, never another agent's (migration 0010) —
+  only admins can read the full roster.
 - A `security definer` helper function (`crm_user_role`) looks up a caller's role without
   re-triggering RLS on `crm_users` itself; its `EXECUTE` privilege is restricted to the
   `authenticated` Postgres role (needed for policy evaluation) and revoked from `anon`.
@@ -154,14 +159,85 @@ These policies were verified directly against the live database (temporarily fli
 existing account between `admin`/`agent` and confirming visibility, insert, update, and delete
 behavior in each case) before this branch was opened as a PR.
 
-## Creating an agent account
+## Inviting, deactivating, and removing agents
 
-From **`/admin/crm/agents`**, click **+ Add Agent** and set a name, email, and a temporary
-password (min. 8 characters) — this calls the Supabase Auth Admin API server-side (the one
-place in the CRM that needs the service-role key) to create the login and the matching
-`crm_users` row together. Share the password with the agent so they can sign in right away at
-`/agent/login`. There's no in-app password change yet, same as the existing admin account
-model.
+There is no public sign-up route anywhere in this app — the only way an agent account is ever
+created is an admin inviting one from **`/admin/crm/agents`**:
+
+1. Admin clicks **+ Add Agent** and enters a name and email — no password field. This calls
+   `inviteAgentAction` (`src/app/admin/(dashboard)/crm/agents/actions.ts`), which uses the
+   Supabase Auth Admin API (`inviteUserByEmail` — the one place in the CRM that needs the
+   service-role key) to create the login and send the invitation email, then inserts the
+   matching `crm_users` row with `role = 'agent'` immediately — every invited account
+   automatically gets the Agent role, never Admin.
+2. The agent receives an email and clicks the link, which lands on **`/agent/set-password`**
+   with a valid temporary session (see "How the invite/reset link works" below) and sets their
+   own password. They're then signed in and redirected to `/agent/dashboard`.
+3. **Forgot password**: `/agent/login` has a "Forgot password?" link to **`/agent/forgot-password`**,
+   which emails a reset link (same completion page, `/agent/set-password`) via
+   `supabase.auth.resetPasswordForEmail`. The response is always the same generic "if an
+   account exists…" message, whether or not the email is registered, to avoid leaking which
+   emails have accounts.
+4. **Deactivate**: toggling an agent's "Active" checkbox (in the existing edit form) immediately
+   revokes their database-level access — see "Closing the deactivation gap" below — not just
+   the app-level login check.
+5. **Remove**: the new **Remove** button calls `removeAgentAction`, which hard-deletes the
+   Supabase Auth user via the Admin API. `crm_users.id` references `auth.users(id) on delete
+   cascade`, so the `crm_users` row goes with it; `crm_leads`/`crm_activities` only reference
+   `crm_users` with `on delete set null`, so the agent's leads and activity history are kept,
+   just unassigned — nothing about past work is destroyed. A confirmation dialog is required
+   before this fires, since it's not reversible the way deactivating is.
+
+### How the invite/reset link works
+
+`inviteUserByEmail` and `resetPasswordForEmail` both point `redirectTo` at
+`/agent/set-password`. Depending on the Supabase project's email template configuration, the
+link the agent actually receives can take one of two forms:
+
+- **`?token_hash=...&type=...`** (Supabase's current recommended template format) — handled by
+  a new server-side route, **`src/app/auth/confirm/route.ts`**, which calls
+  `supabase.auth.verifyOtp()` using the normal cookie-based server client and then redirects
+  into `/agent/set-password` with a real session already established.
+- **`#access_token=...&type=...`** (the older/default hash-fragment format) — the server never
+  sees a URL fragment at all, so this is handled entirely client-side: `/agent/set-password`
+  is the one page in this app that uses a browser Supabase client
+  (`src/lib/supabase-browser.ts`, via `createBrowserClient` from `@supabase/ssr` — every other
+  page uses the cookie-based server client), which auto-detects the fragment on load and
+  establishes the session (and, critically, syncs it into cookies so the rest of the app's
+  server-side checks pick it up too).
+
+`/agent/set-password` handles both cases the same way after that: once any session is
+detected, it shows a "set your password" form and calls `supabase.auth.updateUser({ password })`.
+
+**Dependency you should check**: which format actually gets sent depends on the Supabase
+project's Auth email template settings (Dashboard → Authentication → Email Templates) — this
+isn't something a migration or this codebase controls. Building both paths means it works
+either way, but it's worth sending yourself a test invite to confirm mail delivery is working
+before relying on it for real agents.
+
+## Closing two access-control gaps (migration 0010)
+
+Building real invite/deactivate/remove controls surfaced two gaps in the original `crm_users`/
+`crm_leads` policies from migration 0007, both fixed in
+[`0010_crm_agent_isolation.sql`](../supabase/migrations/0010_crm_agent_isolation.sql):
+
+1. **Agents could read the entire `crm_users` roster.** The original
+   `crm_users_select_active_members` policy let any active CRM member (agent or admin) select
+   every row — every other agent's name, email, role, and active status — because it only
+   checked "is the caller an active member," not whose row it was. No agent-facing code
+   actually needs that (only the admin pages' agent-assignment dropdowns do), so it's now split
+   into `crm_users_select_self` (an agent can only ever read their own row) and
+   `crm_users_admin_select_all` (only admins get the full roster).
+2. **Deactivating an agent didn't revoke their existing lead access at the database level.**
+   `crm_leads_agent_select_own`/`_update_own` and the `crm_activities` equivalents only checked
+   `assigned_agent_id = auth.uid()` — they never checked that the caller was still an *active*
+   agent. The application-level check in `requireCrmUser()` already blocked a deactivated agent
+   from any full-page navigation, but a direct Supabase client call bypassing that layer would
+   still have worked. All four policies now also require `crm_user_role(auth.uid()) = 'agent'`
+   (which itself requires `active = true`), so deactivation is an immediate, database-enforced
+   lockout — verified directly against the live database (a lead the account could see while
+   active became completely invisible to it the moment `active` was set to `false`, with no
+   app code involved).
 
 ## What's intentionally not built yet
 
@@ -169,7 +245,8 @@ model.
   response counts in-app; wiring the existing Resend/Twilio notifications to the CRM (e.g. a
   daily digest) was left out of this first pass to keep scope focused, per the brief's "use
   existing services only if already configured."
-- Agent self-service password reset.
+- Any in-app indicator of "invited but hasn't accepted yet" on the agents list — the invite
+  either works or the admin sees an error; there's no separate pending/accepted status shown.
 
 ## Testing checklist
 
@@ -178,9 +255,21 @@ model.
       (same as the existing `/admin` behavior)
 - [ ] An existing admin account still reaches `/admin` and every existing quote-dashboard page
       exactly as before
-- [ ] Creating an agent from `/admin/crm/agents` lets that email/password sign in at
-      `/agent/login`
+- [ ] Inviting an agent from `/admin/crm/agents` (name + email, no password field) sends an
+      email; clicking its link lands on `/agent/set-password` with a working "set password" form
+- [ ] After setting a password, the agent is signed in and lands on `/agent/dashboard`
+- [ ] `/agent/forgot-password` always shows the same generic confirmation message, whether or
+      not the submitted email has an account; its reset link also completes at
+      `/agent/set-password`
+- [ ] `/agent/set-password` and `/agent/forgot-password` are reachable while signed out and
+      don't redirect to `/agent/login`
+- [ ] Deactivating an agent immediately blocks their access to leads previously assigned to
+      them, not just future logins (test by deactivating, then trying to load one of their
+      leads with their existing session)
+- [ ] Removing an agent (with confirmation) deletes their login; their past leads/activities
+      remain, now unassigned, and are still visible/reassignable from `/admin/crm`
 - [ ] An agent account is redirected away from `/admin` and cannot browse the quote dashboard
+- [ ] An agent cannot read another agent's `crm_users` row (name/email/role) by any means
 - [ ] An agent can add a lead from `/agent/leads/new` and it appears assigned to them
 - [ ] An agent cannot see or open a lead assigned to a different agent (try the URL directly)
 - [ ] Logging a call/email/text/voicemail/note/outcome on a lead appears in its timeline in
