@@ -12,18 +12,22 @@ const buttonClasses =
 export default function AgentsClient({
   agents,
   leadCounts,
+  currentUserId,
 }: {
   agents: CrmUserRow[];
   leadCounts: Record<string, number>;
+  currentUserId: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>, onDone?: () => void) {
     setError(null);
+    setSuccessMessage(null);
     startTransition(async () => {
       try {
         await fn();
@@ -39,6 +43,12 @@ export default function AgentsClient({
       {error && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {successMessage}
         </div>
       )}
 
@@ -162,23 +172,29 @@ export default function AgentsClient({
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() => {
-                            if (
-                              !confirm(
-                                `Permanently remove ${agent.full_name || agent.email}'s login? Their leads and activity history will be kept but unassigned.`
-                              )
-                            ) {
-                              return;
-                            }
-                            runAction(() => removeAgentAction(agent.id));
-                          }}
-                          className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Remove
-                        </button>
+                        {agent.id !== currentUserId && (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => {
+                              const name = agent.full_name || agent.email;
+                              if (
+                                !confirm(
+                                  `Permanently remove ${name}'s login? Their leads and activity history will be kept but unassigned.`
+                                )
+                              ) {
+                                return;
+                              }
+                              runAction(
+                                () => removeAgentAction(agent.id),
+                                () => setSuccessMessage(`${name} was removed.`)
+                              );
+                            }}
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </td>
                   </>

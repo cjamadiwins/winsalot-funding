@@ -84,9 +84,25 @@ async function handleSessionGate(
   const pathname = request.nextUrl.pathname;
   const isPublicPath = pathname === loginPath || publicPaths.includes(pathname);
 
+  // Server Action submissions (e.g. removeAgentAction, loginAction) POST
+  // back to the current page URL carrying a `Next-Action` header, and the
+  // browser's action runtime expects a Server Action response back - not
+  // an arbitrary 3xx. A raw NextResponse.redirect() here breaks that fetch
+  // and surfaces as an opaque error in the UI (this is what "removing an
+  // agent produces an error" traced back to: the session had expired, this
+  // gate 307'd the removeAgentAction POST to /admin/login, and the browser
+  // couldn't parse a redirect where it expected an action response).
+  // Every admin/agent Server Action already re-checks the session itself
+  // (requireAdminUser/requireCrmAdmin/requireCrmUser, see src/lib/
+  // admin-auth.ts and src/lib/crm-auth.ts) and calls redirect() from
+  // *within* the action when it fails, which Next.js does encode correctly
+  // for the client to follow - so it's safe to let these through and let
+  // the action's own check redirect instead.
+  const isServerAction = request.headers.has("next-action");
+
   if (!supabaseUrl || !anonKey) {
     // Fail closed rather than risk exposing the dashboard misconfigured.
-    if (!isPublicPath) {
+    if (!isPublicPath && !isServerAction) {
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
     return response;
@@ -110,12 +126,14 @@ async function handleSessionGate(
   const { data } = await supabase.auth.getUser();
 
   if (!data.user && !isPublicPath) {
+    if (isServerAction) return response;
     const loginUrl = new URL(loginPath, request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (data.user && pathname === loginPath) {
+    if (isServerAction) return response;
     return NextResponse.redirect(new URL(postLoginPath, request.url));
   }
 
@@ -125,6 +143,7 @@ async function handleSessionGate(
     pathname !== forcePasswordChangePath &&
     !isPublicPath
   ) {
+    if (isServerAction) return response;
     return NextResponse.redirect(new URL(forcePasswordChangePath, request.url));
   }
 

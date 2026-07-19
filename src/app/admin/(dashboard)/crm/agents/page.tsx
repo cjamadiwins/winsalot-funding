@@ -4,7 +4,7 @@ import type { CrmUserRow } from "@/lib/crm-types";
 import AgentsClient from "./AgentsClient";
 
 export default async function AdminCrmAgentsPage() {
-  await requireCrmAdmin();
+  const currentAdmin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const [{ data: agents, error: agentsError }, { data: leadCounts, error: countsError }] =
@@ -34,7 +34,11 @@ export default async function AdminCrmAgentsPage() {
 
       {!agentsError && !countsError && (
         <div className="mt-6">
-          <AgentsClient agents={(agents ?? []) as CrmUserRow[]} leadCounts={counts} />
+          <AgentsClient
+            agents={(agents ?? []) as CrmUserRow[]}
+            leadCounts={counts}
+            currentUserId={currentAdmin.id}
+          />
         </div>
       )}
     </div>
