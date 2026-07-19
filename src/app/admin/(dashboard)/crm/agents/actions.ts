@@ -59,7 +59,11 @@ export async function inviteAgentAction(formData: FormData) {
 // null, so the agent's lead and activity history is preserved, just
 // unassigned - nothing about past work is destroyed.
 export async function removeAgentAction(agentId: string) {
-  await requireCrmAdmin();
+  const currentAdmin = await requireCrmAdmin();
+
+  if (agentId === currentAdmin.id) {
+    throw new Error("You can't remove your own account.");
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.auth.admin.deleteUser(agentId);

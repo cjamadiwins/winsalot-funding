@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
+  const password = String(formData.get("password") ?? "").trim();
   const requestedRedirect = String(formData.get("redirectTo") ?? "/admin");
   const redirectTo = requestedRedirect.startsWith("/admin") ? requestedRedirect : "/admin";
 

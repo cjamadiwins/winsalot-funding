@@ -93,11 +93,19 @@ export default function AdminSetPasswordClient() {
     e.preventDefault();
     setSubmitError(null);
 
-    if (password.length < 8) {
+    // Trimmed so a trailing space/newline picked up from a copy-paste (a
+    // generated password, a notes app) can't get saved here but left out
+    // when the same password is typed - rather than pasted - at
+    // /admin/login, which would otherwise save successfully here and then
+    // never be accepted at sign-in.
+    const trimmedPassword = password.trim();
+    const trimmedConfirm = confirmPassword.trim();
+
+    if (trimmedPassword.length < 8) {
       setSubmitError("Password must be at least 8 characters.");
       return;
     }
-    if (password !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirm) {
       setSubmitError("Passwords do not match.");
       return;
     }
@@ -115,7 +123,7 @@ export default function AdminSetPasswordClient() {
     }
 
     const { error } = await supabase.auth.updateUser({
-      password,
+      password: trimmedPassword,
       data: { must_change_password: false },
     });
     setSubmitting(false);
