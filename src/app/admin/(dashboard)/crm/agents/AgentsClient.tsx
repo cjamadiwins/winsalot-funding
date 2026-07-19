@@ -25,14 +25,23 @@ export default function AgentsClient({
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  function runAction(fn: () => Promise<unknown>, onDone?: () => void) {
+  function runAction(fn: () => Promise<{ error?: string } | void>, onDone?: () => void) {
     setError(null);
     setSuccessMessage(null);
     startTransition(async () => {
       try {
-        await fn();
+        const result = await fn();
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
         onDone?.();
       } catch (err) {
+        // Belt-and-suspenders: the actions this calls all return { error }
+        // now instead of throwing (see the comment in actions.ts on why),
+        // but this stays as a fallback for anything that throws
+        // unexpectedly - Next.js redacts the message to a generic one in
+        // production, which is still better than an unhandled rejection.
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     });
