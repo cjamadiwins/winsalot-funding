@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-
-const LEAD_GEN_HOSTS = new Set([
-  "leads.winsalotcorp.com",
-  "www.leads.winsalotcorp.com",
-]);
-
-const CLEANING_QUOTE_HOSTS = new Set([
-  "cleaning.winsalotcorp.com",
-  "www.cleaning.winsalotcorp.com",
-]);
+import { LEAD_GEN_HOSTS, CLEANING_QUOTE_HOSTS } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0];
