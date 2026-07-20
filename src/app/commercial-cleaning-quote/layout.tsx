@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { businessConfig } from "@/config/business";
+import GoogleAdsTag from "@/components/GoogleAdsTag";
 
 const title = "Winsalot Corp Cleaning Services";
 const description = "Request a free commercial or home cleaning quote.";
@@ -50,6 +51,7 @@ export default function CommercialCleaningQuoteLayout({
 }>) {
   return (
     <>
+      <GoogleAdsTag />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
