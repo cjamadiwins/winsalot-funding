@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { QUICK_QUOTE_EVENT, type QuickQuoteEvent } from "@/lib/quick-quote";
+import { gtag_report_conversion } from "@/lib/google-ads";
 
 const CLEANING_TYPES = [
   "Residential cleaning",
@@ -77,6 +78,13 @@ export default function QuoteForm() {
   const [form, setForm] = useState<FormState>(initialState);
   const [status, setStatus] = useState<"idle" | "submitting" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
+  // React state updates aren't applied synchronously, so two clicks
+  // dispatched in the same tick (a fast double-click, or a synthetic
+  // double dispatch) can both read the same stale `status` before either
+  // setStatus("submitting") call commits - the `status === "submitting"`
+  // check alone doesn't close that race. This ref is mutated immediately,
+  // so the second call always sees the first call's lock.
+  const submittingRef = useRef(false);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -103,6 +111,9 @@ export default function QuoteForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submittingRef.current) return;
+
     setError(null);
 
     const validationError = validate(form);
@@ -111,6 +122,7 @@ export default function QuoteForm() {
       return;
     }
 
+    submittingRef.current = true;
     setStatus("submitting");
 
     try {
@@ -125,13 +137,19 @@ export default function QuoteForm() {
       if (!response.ok) {
         setError(data.error || "Something went wrong. Please try again later.");
         setStatus("idle");
+        submittingRef.current = false;
         return;
       }
 
+      // Only reached once the request has been validated and saved by the
+      // API (it responds 201 only after the Supabase insert succeeds) -
+      // never on click, a validation error, or an API/DB failure above.
+      gtag_report_conversion();
       setStatus("success");
     } catch {
       setError("Something went wrong. Please check your connection and try again.");
       setStatus("idle");
+      submittingRef.current = false;
     }
   }
 
