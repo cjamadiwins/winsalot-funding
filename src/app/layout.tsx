@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans } from "next/font/google";
+import Script from "next/script";
 import AuthInviteRedirector from "@/components/AuthInviteRedirector";
 import "./globals.css";
 
@@ -50,6 +51,19 @@ export default function RootLayout({
         <AuthInviteRedirector />
         {children}
       </body>
+      {/* Google tag (gtag.js) */}
+      <Script
+        src="https://www.googletagmanager.com/gtag/js?id=AW-18338307179"
+        strategy="afterInteractive"
+      />
+      <Script id="google-ads-gtag" strategy="afterInteractive">
+        {`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'AW-18338307179');
+        `}
+      </Script>
     </html>
   );
 }
