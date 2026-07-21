@@ -13,7 +13,12 @@ import {
   type LeadStage,
 } from "@/lib/crm-types";
 import type { QuoteRequestRow } from "@/lib/admin-types";
-import { addActivityAction, updateLeadDetailsAction, updateLeadStageAction } from "./actions";
+import {
+  addActivityAction,
+  sendQuoteRequestEmailAction,
+  updateLeadDetailsAction,
+  updateLeadStageAction,
+} from "./actions";
 import {
   completeFollowUpAction,
   rescheduleFollowUpAction,
@@ -52,6 +57,7 @@ export default function LeadDetailClient({
   const [editing, setEditing] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [quoteEmailSuccess, setQuoteEmailSuccess] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -61,6 +67,28 @@ export default function LeadDetailClient({
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
+    });
+  }
+
+  const hasSentQuoteRequestEmail = activities.some(
+    (activity) =>
+      activity.activity_type === "email" &&
+      (activity.notes ?? "").startsWith("Quote request email sent")
+  );
+
+  function handleSendQuoteRequestEmail() {
+    if (!lead.email) return;
+    const confirmed = confirm(
+      hasSentQuoteRequestEmail
+        ? `A quote request email was already sent to ${lead.email}. Send another one?`
+        : `Send a quote request email to ${lead.email}?`
+    );
+    if (!confirmed) return;
+
+    setQuoteEmailSuccess(null);
+    runAction(async () => {
+      const result = await sendQuoteRequestEmailAction(lead.id);
+      setQuoteEmailSuccess(`Quote request email sent to ${result.email}.`);
     });
   }
 
@@ -266,6 +294,37 @@ export default function LeadDetailClient({
               </dl>
             </div>
           )}
+
+          <div className="mt-5 border-t border-[var(--color-border-soft)] pt-5">
+            <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              Quote Request Email
+            </h3>
+            <p className="mt-2 text-[13.5px] text-[var(--color-text-muted)]">
+              Sends the &quot;Get a Free Cleaning Quote&quot; email to{" "}
+              {lead.email ? (
+                <span className="font-medium text-[var(--color-ink-strong)]">{lead.email}</span>
+              ) : (
+                "this lead"
+              )}
+              , linking to the public quote form.
+            </p>
+            <button
+              type="button"
+              disabled={isPending || !lead.email}
+              onClick={handleSendQuoteRequestEmail}
+              className="mt-3 rounded-full bg-[var(--color-accent)] px-5 py-2 text-[13.5px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Send Quote Request Email
+            </button>
+            {!lead.email && (
+              <p className="mt-2 text-[12px] text-red-600">
+                Add an email address for this lead before sending.
+              </p>
+            )}
+            {quoteEmailSuccess && (
+              <p className="mt-2 text-[13px] font-medium text-emerald-700">{quoteEmailSuccess}</p>
+            )}
+          </div>
 
           <div className="mt-5 border-t border-[var(--color-border-soft)] pt-5">
             <div className="flex items-center justify-between">
