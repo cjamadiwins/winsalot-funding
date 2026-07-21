@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
+import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
 import { ACTIVITY_TYPES, LEAD_STAGES, type ActivityType, type LeadStage } from "@/lib/crm-types";
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -115,6 +116,21 @@ export async function addActivityAction(leadId: string, formData: FormData) {
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+}
+
+// Sends the "Get a Free Cleaning Quote" prospecting email to this lead's
+// saved address and logs it on the activity timeline. Distinct from
+// finalApproveLeadAction / RequestWorkflowPanel's "Send Quote to
+// Customer" — this never touches quote_requests, it's purely a CRM-side
+// nudge pointing the lead at the public quote form.
+export async function sendQuoteRequestEmailAction(leadId: string): Promise<{ email: string }> {
+  const crmUser = await requireCrmAdmin();
+  const result = await sendQuoteRequestEmailForLead(leadId, crmUser);
+
+  revalidatePath(`/admin/crm/leads/${leadId}`);
+  revalidatePath("/admin/crm");
+
+  return result;
 }
 
 export type QuoteRequestSearchResult = {

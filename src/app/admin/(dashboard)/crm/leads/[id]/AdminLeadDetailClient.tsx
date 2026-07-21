@@ -23,6 +23,7 @@ import {
   finalApproveLeadAction,
   linkQuoteAction,
   searchQuoteRequestsAction,
+  sendQuoteRequestEmailAction,
   unlinkQuoteAction,
   updateLeadAction,
   type QuoteRequestSearchResult,
@@ -55,6 +56,7 @@ export default function AdminLeadDetailClient({
   const [quoteQuery, setQuoteQuery] = useState("");
   const [quoteResults, setQuoteResults] = useState<QuoteRequestSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [quoteEmailSuccess, setQuoteEmailSuccess] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -64,6 +66,28 @@ export default function AdminLeadDetailClient({
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
+    });
+  }
+
+  const hasSentQuoteRequestEmail = activities.some(
+    (activity) =>
+      activity.activity_type === "email" &&
+      (activity.notes ?? "").startsWith("Quote request email sent")
+  );
+
+  function handleSendQuoteRequestEmail() {
+    if (!lead.email) return;
+    const confirmed = confirm(
+      hasSentQuoteRequestEmail
+        ? `A quote request email was already sent to ${lead.email}. Send another one?`
+        : `Send a quote request email to ${lead.email}?`
+    );
+    if (!confirmed) return;
+
+    setQuoteEmailSuccess(null);
+    runAction(async () => {
+      const result = await sendQuoteRequestEmailAction(lead.id);
+      setQuoteEmailSuccess(`Quote request email sent to ${result.email}.`);
     });
   }
 
@@ -229,6 +253,33 @@ export default function AdminLeadDetailClient({
               Save Changes
             </button>
           </form>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Quote Request Email
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Sends the &quot;Get a Free Cleaning Quote&quot; email to{" "}
+              {lead.email ? <span className="font-medium text-slate-900">{lead.email}</span> : "this lead"},
+              linking to the public quote form.
+            </p>
+            <button
+              type="button"
+              disabled={isPending || !lead.email}
+              onClick={handleSendQuoteRequestEmail}
+              className={`${buttonClasses} mt-3`}
+            >
+              Send Quote Request Email
+            </button>
+            {!lead.email && (
+              <p className="mt-2 text-xs text-rose-600">
+                Add an email address for this lead before sending.
+              </p>
+            )}
+            {quoteEmailSuccess && (
+              <p className="mt-2 text-sm font-medium text-emerald-700">{quoteEmailSuccess}</p>
+            )}
+          </div>
 
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">

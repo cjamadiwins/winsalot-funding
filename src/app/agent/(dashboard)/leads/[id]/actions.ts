@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
+import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
 import {
   ACTIVITY_TYPES,
   AGENT_SETTABLE_STAGES,
@@ -125,4 +126,19 @@ export async function addActivityAction(leadId: string, formData: FormData) {
 
   revalidatePath(`/agent/leads/${leadId}`);
   revalidatePath("/agent/dashboard");
+}
+
+// Sends the "Get a Free Cleaning Quote" prospecting email to this lead's
+// saved address and logs it on the activity timeline. RLS
+// (crm_leads_agent_select_own) means this throws "Lead not found" for a
+// lead that exists but isn't assigned to this agent, same as every other
+// read on this page.
+export async function sendQuoteRequestEmailAction(leadId: string): Promise<{ email: string }> {
+  const crmUser = await requireCrmUser();
+  const result = await sendQuoteRequestEmailForLead(leadId, crmUser);
+
+  revalidatePath(`/agent/leads/${leadId}`);
+  revalidatePath("/agent/dashboard");
+
+  return result;
 }
