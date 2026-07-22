@@ -10,12 +10,16 @@
 -- better for the latter, which is now the common case. Existing rows are
 -- migrated, not dropped.
 
+-- Constraint must be dropped BEFORE the rename update below, not after -
+-- the old constraint only allows ('Hot','Warm','Research'), so setting a
+-- row to 'Prospect' while it's still active would itself be rejected as a
+-- violation of the (still current) old constraint.
+alter table public.active_cleaning_opportunities
+  drop constraint if exists active_cleaning_opportunities_intent_level_check;
+
 update public.active_cleaning_opportunities
 set intent_level = 'Prospect'
 where intent_level = 'Research';
-
-alter table public.active_cleaning_opportunities
-  drop constraint if exists active_cleaning_opportunities_intent_level_check;
 
 alter table public.active_cleaning_opportunities
   add constraint active_cleaning_opportunities_intent_level_check
