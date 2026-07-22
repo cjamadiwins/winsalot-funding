@@ -923,11 +923,18 @@ function LastSuccessfulSearchPanel({ run }: { run: OpportunityCollectionRunRow |
             </div>
           </div>
           {run.errors.length > 0 && (
-            <ul className="mt-3 space-y-1 text-xs text-rose-600">
-              {run.errors.map((err, i) => (
-                <li key={i}>{err}</li>
-              ))}
-            </ul>
+            // Deliberately calm/neutral, not the red used for actual
+            // failures elsewhere on this page - a temporarily-unavailable
+            // search isn't an error state the admin needs to act on, just
+            // an FYI that a search will naturally come back around in a
+            // later run (see the sanitized message itself).
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <ul className="space-y-1 text-xs text-slate-800">
+                {run.errors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </>
       )}
