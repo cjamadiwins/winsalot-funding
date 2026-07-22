@@ -31,6 +31,15 @@ const MAX_REJECTED_SAMPLES = 30;
 // still needs its own margin.
 const CONNECTOR_TIME_BUDGET_MS = 30_000;
 const DELAY_BETWEEN_QUERIES_MS = 1_000;
+// A single city/industry query gets up to this many attempts (1 initial +
+// 2 retries) before that pair is given up on for the run - covers HTTP 429
+// (rate limited), 502/503/504 (the shared public instance is briefly
+// overloaded), a client-side fetch timeout/abort, and any other network
+// failure. A short, slightly-increasing delay between attempts (rather
+// than hammering it again immediately) is the polite response to a 429 in
+// particular, out of the same fair-use respect documented above.
+const MAX_ATTEMPTS_PER_QUERY = 3;
+const RETRY_DELAY_MS = [2_000, 4_000];
 
 type OverpassElement = {
   type: "node" | "way" | "relation";
@@ -70,6 +79,40 @@ async function fetchOverpass(query: string): Promise<OverpassElement[]> {
   }
 }
 
+// Retries a single (city, industry) query up to MAX_ATTEMPTS_PER_QUERY
+// times on any transient failure - a 429, a 5xx, a timed-out/aborted
+// fetch, and a plain network error are all treated as "try again," since
+// none of them mean the query itself is wrong (a malformed query would
+// fail identically on every attempt and just cost a little extra time).
+// The full error from every failed attempt is logged server-side
+// (console.error, visible in Vercel's runtime logs) - only a sanitized,
+// non-technical summary ever reaches the admin dashboard, built by the
+// caller from the returned failure count, never from these raw messages.
+async function fetchOverpassWithRetry(
+  query: string,
+  context: { cityName: string; industry: string },
+  budget: { startedAt: number; timeBudgetMs: number }
+): Promise<{ ok: true; elements: OverpassElement[] } | { ok: false }> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_QUERY; attempt++) {
+    try {
+      const elements = await fetchOverpass(query);
+      return { ok: true, elements };
+    } catch (error) {
+      console.error(
+        `[qualified-prospects] Overpass query failed (attempt ${attempt}/${MAX_ATTEMPTS_PER_QUERY}) for "${context.industry}" in ${context.cityName}:`,
+        error
+      );
+      const isLastAttempt = attempt === MAX_ATTEMPTS_PER_QUERY;
+      const overBudget = Date.now() - budget.startedAt > budget.timeBudgetMs;
+      if (isLastAttempt || overBudget) {
+        return { ok: false };
+      }
+      await sleep(RETRY_DELAY_MS[attempt - 1] ?? RETRY_DELAY_MS[RETRY_DELAY_MS.length - 1]);
+    }
+  }
+  return { ok: false };
+}
+
 function sourceUrlFor(element: OverpassElement): string {
   return `https://www.openstreetmap.org/${element.type}/${element.id}`;
 }
@@ -100,7 +143,12 @@ export async function runQualifiedProspectsConnector(): Promise<QualifiedProspec
   let rejectedCount = 0;
   const seenElementKeys = new Set<string>();
   const startedAt = Date.now();
-  const errors: string[] = [];
+  // Counts pairs that failed every attempt - the only thing that ever
+  // reaches the admin-facing summary about a failure (see the sanitized
+  // `error` message built below). No candidate or rejected-sample entry is
+  // ever recorded for a failed pair, and nothing about it touches the
+  // database - it's simply skipped, same as if that query had never run.
+  let failedPairCount = 0;
   const citiesSearched = new Set<string>();
   const industriesSearched = new Set<string>();
 
@@ -113,16 +161,17 @@ export async function runQualifiedProspectsConnector(): Promise<QualifiedProspec
     citiesSearched.add(pair.cityName);
     industriesSearched.add(pair.mapping.industry);
 
-    let elements: OverpassElement[];
-    try {
-      elements = await fetchOverpass(buildQuery(bboxForCity(pair.cityName), pair.mapping.filters));
-    } catch (error) {
-      errors.push(
-        `${pair.mapping.industry} in ${pair.cityName}: ${error instanceof Error ? error.message : "unknown error"}`
-      );
+    const result = await fetchOverpassWithRetry(
+      buildQuery(bboxForCity(pair.cityName), pair.mapping.filters),
+      { cityName: pair.cityName, industry: pair.mapping.industry },
+      { startedAt, timeBudgetMs: CONNECTOR_TIME_BUDGET_MS }
+    );
+    if (!result.ok) {
+      failedPairCount += 1;
       await sleep(DELAY_BETWEEN_QUERIES_MS);
       continue;
     }
+    const elements = result.elements;
 
     for (const element of elements) {
       if (candidates.length >= MAX_CANDIDATES) break;
@@ -204,12 +253,26 @@ export async function runQualifiedProspectsConnector(): Promise<QualifiedProspec
     await sleep(DELAY_BETWEEN_QUERIES_MS);
   }
 
+  // Admin-facing message is deliberately generic - never the underlying
+  // HTTP status, timeout, or network error text, which is only ever
+  // written to the server-side log above (fetchOverpassWithRetry's
+  // console.error calls). "Temporarily unavailable... tried again later"
+  // is also literally true: tomorrow's rotation (rotation.ts) will query a
+  // different slice of the city/industry matrix, but any of today's failed
+  // pairs will come back around within the ~2-week full cycle regardless.
+  const error =
+    failedPairCount === 0
+      ? undefined
+      : failedPairCount === 1
+        ? "This search was temporarily unavailable and can be tried again later."
+        : `${failedPairCount} searches were temporarily unavailable and can be tried again later.`;
+
   return {
     source_name: SOURCE_NAME,
     candidates,
     rejectedCount,
     rejected,
-    error: errors.length > 0 ? errors.slice(0, 5).join("; ") : undefined,
+    error,
     citiesSearched: Array.from(citiesSearched),
     industriesSearched: Array.from(industriesSearched),
   };

@@ -289,6 +289,16 @@ CRM list. Both new columns are protected by the same agent column-restriction tr
   candidates per run** ("up to 50 new prospects per day" - never padded with invented records
   if fewer valid businesses turn up). Also unverified against a live fetch - same sandbox
   limitation as BC Bid.
+  - **Transient-failure handling**: each (city, industry) query gets up to 3 attempts (1
+    initial + 2 retries) on an HTTP 429, a 502/503/504, a client-side fetch timeout, or any
+    other network error, with a short (2s, then 4s) delay between attempts - polite backoff for
+    a 429 in particular. If a query still fails after all attempts, that pair is skipped for
+    this run (no candidate, no rejected-sample entry, nothing written to the database) and the
+    next pair is tried; nothing about the admin's existing prospects is touched. The full
+    technical error from every failed attempt goes to `console.error` (visible in Vercel's
+    runtime logs) - the admin dashboard only ever sees a generic count, e.g. "3 searches were
+    temporarily unavailable and can be tried again later," never the raw HTTP status/timeout/
+    network-error text.
   - Each city's Overpass query area comes from an approximate centre + radius in
     `cities.ts` (`bboxForCity()`) - sized only to bound the query, never used to decide a
     result's city.
