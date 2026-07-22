@@ -19,6 +19,17 @@ is sent, and track the pipeline through to a closed opportunity — connected to
 duplicating, the quote system above. See [`docs/crm.md`](docs/crm.md) for the full workflow,
 schema, and roles.
 
+## Cleaning Opportunities (CRM)
+
+A "Cleaning Opportunities" section of the CRM above (`/admin/crm/opportunities` for admins,
+`/agent/opportunities` for agents — same logins, roles, activity timeline, and follow-up
+system as the rest of the CRM) that scans public, no-login sources (tenders, RFPs, and
+similar signals) for organizations in Metro Vancouver/the Lower Mainland and the Greater
+Toronto Area showing recent intent to buy commercial cleaning or janitorial services, scores
+each one's intent, and alerts `info@winsalotcorp.com` when a Hot opportunity is found. See
+[`docs/active-cleaning-opportunities.md`](docs/active-cleaning-opportunities.md) for the
+architecture, roles, sources, and how to enable the daily collection job.
+
 ## Getting Started
 
 First, run the development server:
