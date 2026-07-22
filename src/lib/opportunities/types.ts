@@ -21,12 +21,19 @@ export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
   other: "Other Signal",
 };
 
+// Full status list. 'Reviewing' and 'Assigned' are admin/system stages (an
+// admin triaging a new record, or the system marking it Assigned the
+// moment an agent is set) - the other eight are exactly the agent-facing
+// status list from the brief, and are the *only* ones an agent can set
+// (enforced in the database too - see migration 0012's
+// active_cleaning_opportunities_restrict_agent_edits trigger).
 export const OPPORTUNITY_STATUSES = [
   "New",
   "Reviewing",
   "Assigned",
   "Contacted",
-  "Follow-up",
+  "No answer",
+  "Follow-up required",
   "Quote requested",
   "Converted",
   "Not suitable",
@@ -35,12 +42,26 @@ export const OPPORTUNITY_STATUSES = [
 
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 
+export const AGENT_SETTABLE_OPPORTUNITY_STATUSES: OpportunityStatus[] = [
+  "New",
+  "Contacted",
+  "No answer",
+  "Follow-up required",
+  "Quote requested",
+  "Converted",
+  "Not suitable",
+  "Expired",
+];
+
+export const ADMIN_ONLY_OPPORTUNITY_STATUSES: OpportunityStatus[] = ["Reviewing", "Assigned"];
+
 export const OPPORTUNITY_STATUS_STYLES: Record<OpportunityStatus, string> = {
   New: "bg-slate-100 text-slate-700",
   Reviewing: "bg-sky-100 text-sky-800",
   Assigned: "bg-indigo-100 text-indigo-800",
   Contacted: "bg-amber-100 text-amber-800",
-  "Follow-up": "bg-orange-100 text-orange-800",
+  "No answer": "bg-orange-100 text-orange-800",
+  "Follow-up required": "bg-orange-100 text-orange-800",
   "Quote requested": "bg-purple-100 text-purple-800",
   Converted: "bg-emerald-100 text-emerald-800",
   "Not suitable": "bg-slate-200 text-slate-600",
@@ -57,7 +78,8 @@ export const INTENT_LEVEL_STYLES: Record<IntentLevel, string> = {
 
 export type Province = "BC" | "ON";
 
-// The full persisted record - matches supabase/migrations/0012_active_cleaning_opportunities.sql.
+// The full persisted record - matches
+// supabase/migrations/0012_active_cleaning_opportunities.sql.
 export type ActiveCleaningOpportunityRow = {
   id: string;
   organization_name: string | null;
@@ -81,8 +103,64 @@ export type ActiveCleaningOpportunityRow = {
   status: OpportunityStatus;
   assigned_agent: string | null;
   notes: string | null;
+  next_follow_up_at: string | null;
+  last_contacted_at: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// crm_activities row scoped to an opportunity (opportunity_id set, lead_id
+// null) - see migration 0013. Deliberately a separate type from the
+// existing CrmActivityRow (crm-types.ts) rather than widening that one:
+// every existing lead-focused query/component keeps assuming lead_id is
+// always present, exactly as before, since it only ever fetches rows
+// filtered to lead_id is not null.
+export type OpportunityActivityRow = {
+  id: string;
+  created_at: string;
+  opportunity_id: string;
+  agent_id: string | null;
+  activity_type: "call" | "email" | "text" | "voicemail" | "note" | "outcome";
+  notes: string | null;
+  occurred_at: string;
+  next_follow_up_at: string | null;
+};
+
+// crm_followups row scoped to an opportunity - same rationale as above.
+export type OpportunityFollowUpRow = {
+  id: string;
+  created_at: string;
+  opportunity_id: string;
+  scheduled_by: string | null;
+  scheduled_at: string;
+  note: string | null;
+  status: "pending" | "completed";
+  completed_at: string | null;
+  completed_by: string | null;
+};
+
+export type OpportunityAuditAction =
+  | "created"
+  | "edited"
+  | "assigned"
+  | "reassigned"
+  | "unassigned"
+  | "status_changed"
+  | "archived"
+  | "restored"
+  | "deleted"
+  | "merged";
+
+export type OpportunityAuditLogRow = {
+  id: string;
+  created_at: string;
+  opportunity_id: string | null;
+  opportunity_title_snapshot: string;
+  actor_id: string | null;
+  action: OpportunityAuditAction;
+  details: string | null;
 };
 
 // What a connector hands back, before scoring/dedupe/persistence. Every
@@ -122,3 +200,21 @@ export type Connector = {
   sourceName: string;
   run: () => Promise<ConnectorResult>;
 };
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+export function isOpportunityOverdue(
+  opportunity: Pick<ActiveCleaningOpportunityRow, "next_follow_up_at" | "archived_at">
+): boolean {
+  if (!opportunity.next_follow_up_at || opportunity.archived_at) return false;
+  return startOfDay(new Date(opportunity.next_follow_up_at)) < startOfDay(new Date());
+}
+
+export function isOpportunityDueToday(
+  opportunity: Pick<ActiveCleaningOpportunityRow, "next_follow_up_at" | "archived_at">
+): boolean {
+  if (!opportunity.next_follow_up_at || opportunity.archived_at) return false;
+  return startOfDay(new Date(opportunity.next_follow_up_at)) === startOfDay(new Date());
+}

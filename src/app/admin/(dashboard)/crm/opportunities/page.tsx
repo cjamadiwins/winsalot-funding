@@ -1,16 +1,16 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { requireAdminUser } from "@/lib/admin-auth";
+import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { ActiveCleaningOpportunityRow } from "@/lib/opportunities/types";
 import type { CrmUserRow } from "@/lib/crm-types";
-import OpportunitiesClient from "./OpportunitiesClient";
+import OpportunitiesAdminClient from "./OpportunitiesAdminClient";
 
-export default async function OpportunitiesPage() {
-  await requireAdminUser();
+export default async function AdminCrmOpportunitiesPage() {
+  await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   // RLS (active_cleaning_opportunities_admin_all / crm_users_admin_select_all)
-  // permits a full read here because this page is already gated by
-  // requireAdminUser().
+  // permits a full read here, archived rows included, because this page is
+  // already gated by requireCrmAdmin().
   const [
     { data: opportunities, error: opportunitiesError },
     { data: agents, error: agentsError },
@@ -24,11 +24,11 @@ export default async function OpportunitiesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Active Cleaning Opportunities</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Cleaning Opportunities</h1>
       <p className="mt-1 max-w-3xl text-sm text-slate-500">
         Publicly available businesses and organizations showing recent intent to purchase commercial
         cleaning, janitorial, custodial, or building-maintenance services across Metro Vancouver and
-        the Greater Toronto Area. Every record below is a potential opportunity surfaced from a public
+        the Greater Toronto Area. Every record is a potential opportunity surfaced from a public
         source, not a guaranteed buyer.
       </p>
 
@@ -40,7 +40,7 @@ export default async function OpportunitiesPage() {
 
       {!opportunitiesError && !agentsError && (
         <div className="mt-6">
-          <OpportunitiesClient
+          <OpportunitiesAdminClient
             opportunities={(opportunities ?? []) as ActiveCleaningOpportunityRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
           />
