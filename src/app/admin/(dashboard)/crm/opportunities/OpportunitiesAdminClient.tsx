@@ -77,7 +77,7 @@ export default function OpportunitiesAdminClient({
   const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [mergePrimaryId, setMergePrimaryId] = useState<string | null>(null);
-  const [runResult, setRunResult] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<Awaited<ReturnType<typeof runCollectionNowAction>> | null>(null);
   const [skipEmailForRun, setSkipEmailForRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, startRunTransition] = useTransition();
@@ -178,17 +178,7 @@ export default function OpportunitiesAdminClient({
     setRunResult(null);
     startRunTransition(async () => {
       const result = await runCollectionNowAction(skipEmailForRun);
-      if (result.error) {
-        setRunResult(`Failed: ${result.error}`);
-      } else if (result.summary) {
-        const s = result.summary;
-        setRunResult(
-          `Candidates found: ${s.candidatesFound} (${s.duplicatesWithinRun} duplicate within this run, ${s.duplicatesAlreadyStored} already on file). ` +
-            `New records added: ${s.newRecordsInserted} — Hot: ${s.hotCount}, Warm: ${s.warmCount}, Research: ${s.researchCount}. ` +
-            `Expired at discovery: ${s.expiredAtDiscovery}. Existing records swept to Expired: ${s.expiredSwept}. ` +
-            `Hot alert emails — sent: ${s.hotAlertsSent}, skipped: ${s.hotAlertsSkipped}, failed: ${s.hotAlertErrors}.`
-        );
-      }
+      setRunResult(result);
     });
   }
 
@@ -260,6 +250,8 @@ export default function OpportunitiesAdminClient({
       "Source",
       "Source URL",
       "Date Discovered",
+      "Matched Cleaning Terms",
+      "Accepted Reason",
       "Archived",
     ];
     const rows = filtered.map((o) => {
@@ -282,6 +274,8 @@ export default function OpportunitiesAdminClient({
         o.source_name,
         o.source_url,
         o.date_discovered,
+        o.matched_cleaning_terms?.join("; ") ?? "",
+        o.accepted_reason,
         o.archived_at ? "Yes" : "No",
       ];
     });
@@ -342,7 +336,8 @@ export default function OpportunitiesAdminClient({
           Export CSV ({filtered.length})
         </button>
       </div>
-      {runResult && <p className="mt-2 text-sm text-slate-600">{runResult}</p>}
+      {runResult?.error && <p className="mt-2 text-sm text-rose-600">Run failed: {runResult.error}</p>}
+      {runResult?.summary && <RunSummaryPanel summary={runResult.summary} />}
 
       <div className="mt-4 flex flex-wrap gap-3">
         <input
@@ -676,6 +671,93 @@ export default function OpportunitiesAdminClient({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+type RunCollectionSummary = NonNullable<
+  Awaited<ReturnType<typeof runCollectionNowAction>>["summary"]
+>;
+
+// Shown after every "Run Collection Now" click - the exact breakdown the
+// brief asks for: total candidates found (accepted + rejected, after
+// in-run dedup), accepted vs. rejected, Hot/Warm/Research/duplicate/
+// expired counts, and a sample of rejected records with the reason each
+// one didn't pass the strict cleaning-relevance filter.
+function RunSummaryPanel({ summary }: { summary: RunCollectionSummary }) {
+  const acceptedCount = summary.newRecordsInserted + summary.duplicatesWithinRun + summary.duplicatesAlreadyStored;
+
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Collection Run — {new Date(summary.ranAt).toLocaleString()}
+      </h3>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryStat label="Candidates Found" value={summary.candidatesFound} />
+        <SummaryStat label="Accepted" value={acceptedCount} />
+        <SummaryStat label="Rejected" value={summary.rejectedCount} />
+        <SummaryStat label="New Records Added" value={summary.newRecordsInserted} />
+        <SummaryStat label="Hot" value={summary.hotCount} />
+        <SummaryStat label="Warm" value={summary.warmCount} />
+        <SummaryStat label="Research" value={summary.researchCount} />
+        <SummaryStat
+          label="Duplicates"
+          value={summary.duplicatesWithinRun + summary.duplicatesAlreadyStored}
+        />
+        <SummaryStat label="Expired at Discovery" value={summary.expiredAtDiscovery} />
+        <SummaryStat label="Existing Records Expired" value={summary.expiredSwept} />
+        <SummaryStat
+          label="Hot Alerts"
+          value={`${summary.hotAlertsSent} sent / ${summary.hotAlertsSkipped} skipped / ${summary.hotAlertErrors} failed`}
+        />
+      </div>
+
+      <div className="mt-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          By Source ({summary.connectors.length})
+        </h4>
+        <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+          {summary.connectors.map((c) => (
+            <li key={c.source_name}>
+              {c.source_name}: {c.found} accepted, {c.rejectedCount} rejected
+              {c.error ? ` — error: ${c.error}` : ""}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {summary.rejectedSamples.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Rejected Records ({summary.rejectedSamples.length} shown of {summary.rejectedCount})
+          </h4>
+          <ul className="mt-1 max-h-64 space-y-2 overflow-y-auto text-xs">
+            {summary.rejectedSamples.map((r, i) => (
+              <li key={i} className="border-t border-slate-100 pt-2 text-slate-600">
+                <div className="font-medium text-slate-800">{r.opportunity_title}</div>
+                <div className="text-slate-500">
+                  {r.source_name} — {r.reason}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-4 text-xs text-slate-400">
+        Accepted records now appear in the table above with their matched cleaning phrase and
+        acceptance reason on each record&apos;s detail page.
+      </p>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="mt-0.5 text-base font-bold text-slate-900">{value}</div>
     </div>
   );
 }

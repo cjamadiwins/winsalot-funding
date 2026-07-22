@@ -211,10 +211,22 @@ export default function AdminOpportunityDetailClient({
                 <Field label="Source" value={opportunity.source_name} />
                 <Field label="Last Follow-up" value={opportunity.last_contacted_at ? new Date(opportunity.last_contacted_at).toLocaleDateString() : null} />
                 <Field label="Next Follow-up" value={opportunity.next_follow_up_at ? new Date(opportunity.next_follow_up_at).toLocaleString() : null} />
+                <Field
+                  label="Matched Cleaning Terms"
+                  value={opportunity.matched_cleaning_terms?.length ? opportunity.matched_cleaning_terms.join(", ") : null}
+                />
                 {opportunity.description && (
                   <div className="col-span-full">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</dt>
                     <dd className="mt-0.5 text-slate-700">{opportunity.description}</dd>
+                  </div>
+                )}
+                {opportunity.accepted_reason && (
+                  <div className="col-span-full">
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Why This Was Accepted
+                    </dt>
+                    <dd className="mt-0.5 text-slate-700">{opportunity.accepted_reason}</dd>
                   </div>
                 )}
                 {opportunity.notes && (

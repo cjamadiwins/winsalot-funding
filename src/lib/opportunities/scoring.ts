@@ -1,4 +1,5 @@
 import { lookupCity } from "./cities";
+import { hasExplicitRequestTerm, STRONG_CLEANING_PHRASES } from "./cleaning-relevance";
 import type { IntentLevel, OpportunityCandidate } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -7,9 +8,14 @@ function daysBetween(a: Date, b: Date): number {
   return Math.round((a.getTime() - b.getTime()) / DAY_MS);
 }
 
+// Revised thresholds per the stricter-filter brief: Hot 70-100, Warm
+// 45-69, Research 0-44. A record only ever reaches this function after
+// evaluateCleaningRelevance() has already accepted it - there is no
+// "Rejected" intent level stored in the database, since a rejected
+// candidate is never inserted at all (see run.ts).
 export function intentLevelForScore(score: number): IntentLevel {
   if (score >= 70) return "Hot";
-  if (score >= 40) return "Warm";
+  if (score >= 45) return "Warm";
   return "Research";
 }
 
@@ -18,44 +24,44 @@ export function isExpired(deadline: string | null | undefined, now: Date = new D
   return new Date(deadline).getTime() < now.getTime();
 }
 
-// Implements the scoring table from the project brief. Every rule is
-// independent and additive/subtractive, then the total is clamped to
-// [0, 100] - a candidate that already has a good base score plus every
-// bonus (e.g. a BC tender, posted this week, with a public phone number)
-// can legitimately hit the Hot ceiling without any single rule needing to
-// carry the whole score.
+// Implements the revised scoring table: cleaning-phrase strength is now
+// the dominant signal (title beats description/category), with an
+// explicit RFP/proposal/bid/tender request term as a separate bonus
+// rather than the sole basis for a "tender" score - a generic tender with
+// no strong cleaning phrase never reaches this function to begin with, so
+// there's no penalty term needed to counteract a false-positive base
+// score the way the old opportunity_type-based scoring needed one.
 export function scoreOpportunity(
   candidate: OpportunityCandidate,
   now: Date = new Date()
 ): { score: number; level: IntentLevel } {
   let score = 0;
 
-  switch (candidate.opportunity_type) {
-    case "rfp_tender":
-      score += 50;
-      break;
-    case "quote_request":
-      score += 40;
-      break;
-    case "new_location":
-      score += 15;
-      break;
-    case "hiring_signal":
-      score += 5;
-      break;
-    default:
-      break;
+  const titleLower = candidate.opportunity_title.toLowerCase();
+  const descriptionLower = (candidate.description ?? "").toLowerCase();
+  const categoryLower = (candidate.service_needed ?? "").toLowerCase();
+
+  const strongInTitle = STRONG_CLEANING_PHRASES.some((phrase) => titleLower.includes(phrase));
+  if (strongInTitle) {
+    score += 50;
+  } else if (
+    STRONG_CLEANING_PHRASES.some((phrase) => descriptionLower.includes(phrase) || categoryLower.includes(phrase))
+  ) {
+    score += 35;
+  }
+
+  if (hasExplicitRequestTerm(`${titleLower} ${descriptionLower}`)) {
+    score += 20;
   }
 
   if (candidate.deadline) {
     const daysToDeadline = daysBetween(new Date(candidate.deadline), now);
     if (daysToDeadline >= 0 && daysToDeadline <= 30) {
-      score += 20;
+      score += 15;
     }
   }
 
-  const city = lookupCity(candidate.city) ?? (candidate.province ? { province: candidate.province } : null);
-  if (city?.province === "BC") {
+  if (lookupCity(candidate.city)) {
     score += 15;
   }
 
@@ -66,14 +72,11 @@ export function scoreOpportunity(
   if (candidate.date_posted) {
     const daysSincePosted = daysBetween(now, new Date(candidate.date_posted));
     if (daysSincePosted >= 0 && daysSincePosted <= 14) {
-      score += 15;
-    }
-    if (daysSincePosted > 60) {
-      score -= 25;
+      score += 10;
     }
   }
 
-  score = Math.max(0, Math.min(100, score));
+  score = Math.min(100, score);
 
   return { score, level: intentLevelForScore(score) };
 }

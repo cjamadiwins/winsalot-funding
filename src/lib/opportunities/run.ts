@@ -6,12 +6,14 @@ import { runBcBidConnector } from "./connectors/bcbid";
 import { runBidsAndTendersConnectors } from "./connectors/bidsandtenders";
 import { dedupeCandidates, isDuplicateOpportunity } from "./dedupe";
 import { isExpired, scoreOpportunity } from "./scoring";
-import type { ActiveCleaningOpportunityRow, ConnectorResult, OpportunityStatus } from "./types";
+import type { ActiveCleaningOpportunityRow, ConnectorResult, OpportunityStatus, RejectedCandidate } from "./types";
 
 export type CollectionSummary = {
   ranAt: string;
-  connectors: { source_name: string; found: number; error?: string }[];
-  candidatesFound: number; // after in-run dedup, before the existing-database check
+  connectors: { source_name: string; found: number; rejectedCount: number; error?: string }[];
+  candidatesFound: number; // accepted + rejected, after in-run dedup - see RejectedCandidate for what counts as "found"
+  rejectedCount: number; // confirmed cleaning-related but not accepted (wrong scope or wrong region) - never persisted
+  rejectedSamples: RejectedCandidate[]; // a capped sample, with reasons, for review
   duplicatesWithinRun: number; // filtered out because they matched another candidate found in this same run
   duplicatesAlreadyStored: number; // filtered out because they matched a row already in the database
   newRecordsInserted: number;
@@ -61,17 +63,18 @@ async function fetchPotentialDuplicates(
   return [...(byUrl ?? []), ...(byTitle ?? [])];
 }
 
+const MAX_REJECTED_SAMPLES_IN_SUMMARY = 50;
+
 // The daily collection run: fetch every connector's candidates, dedupe
 // against both this run's own results and what's already stored, score
 // and persist the genuinely new ones, sweep past-deadline records to
 // Expired, and alert on any newly-discovered Hot opportunity. Every step
 // that can partially fail (a connector, an individual alert email) is
-// isolated so it doesn't take down the rest of the run. Note there is no
-// separate "rejected" step beyond duplicate filtering and a connector
-// failing outright - every candidate a connector returns (already
-// filtered to the target markets/keywords inside the connector itself)
-// gets scored and inserted, however low its score, so a low-intent
-// candidate shows up as Research rather than being silently dropped.
+// isolated so it doesn't take down the rest of the run. A candidate only
+// ever reaches this function's insert step after a connector's own
+// evaluateCleaningRelevance() check has confirmed at least one strong
+// cleaning-specific phrase and (for CanadaBuys) a structured buyer-city
+// match - see src/lib/opportunities/cleaning-relevance.ts.
 export async function runOpportunityCollection(options: CollectionOptions = {}): Promise<CollectionSummary> {
   const now = new Date();
   const admin = getSupabaseAdmin();
@@ -82,6 +85,9 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
     runBidsAndTendersConnectors(),
   ]);
   const results: ConnectorResult[] = [canadaBuys, bcBid, ...municipalPortals];
+
+  const rejectedCount = results.reduce((sum, r) => sum + r.rejectedCount, 0);
+  const rejectedSamples = results.flatMap((r) => r.rejected).slice(0, MAX_REJECTED_SAMPLES_IN_SUMMARY);
 
   const allCandidates = results.flatMap((r) => r.candidates);
   const deduped = dedupeCandidates(allCandidates);
@@ -118,6 +124,8 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
       intent_score: score,
       intent_level: level,
       status,
+      matched_cleaning_terms: candidate.matched_cleaning_terms,
+      accepted_reason: candidate.accepted_reason,
     };
   });
 
@@ -166,8 +174,15 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
 
   return {
     ranAt: now.toISOString(),
-    connectors: results.map((r) => ({ source_name: r.source_name, found: r.candidates.length, error: r.error })),
-    candidatesFound: deduped.length,
+    connectors: results.map((r) => ({
+      source_name: r.source_name,
+      found: r.candidates.length,
+      rejectedCount: r.rejectedCount,
+      error: r.error,
+    })),
+    candidatesFound: deduped.length + rejectedCount,
+    rejectedCount,
+    rejectedSamples,
     duplicatesWithinRun,
     duplicatesAlreadyStored,
     newRecordsInserted: inserted.length,

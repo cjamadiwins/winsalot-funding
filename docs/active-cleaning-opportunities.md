@@ -116,12 +116,77 @@ audit log.)
   prevents most true duplicates from ever being inserted; this tool is for what slips through
   (a manually-added test row, a near-duplicate from a slightly different source, etc.).
 
+## Intent scoring
+
+Only ever computed for a record the cleaning-relevance filter above has already accepted
+(`src/lib/opportunities/scoring.ts`):
+
+- Strong cleaning phrase in the **title**: +50; phrase only in description/category: +35
+- Explicit request term (RFP, RFQ, proposal, bid, tender, quotation) in title or description: +20
+- Deadline within 30 days: +15
+- Confirmed Metro Vancouver/GTA location: +15
+- Public email or phone available: +10
+- Posted within the last 14 days: +10
+- Score capped at 100. **Hot: 70-100, Warm: 45-69, Research: 0-44.**
+
+There's no "Rejected" intent level in the database - a rejected candidate is never inserted at
+all (see "Cleaning-relevance filter" above), so every stored row is already confirmed
+cleaning-specific by definition.
+
 ## CSV export
 
 Admin-only, client-side: the **Export CSV** button on `/admin/crm/opportunities` serializes
 whatever's currently loaded and filtered in the browser (no server round trip, no new API
 route) into a CSV download. It's explicitly for backup/reporting - the dashboard stays the
 system of record and the primary place work happens.
+
+## Cleaning-relevance filter
+
+The first live run imported two government tenders that turned out not to belong: one was a
+broad, multi-trade facilities-maintenance tender for ~100 Northern Canada buildings (HVAC,
+plumbing, landscaping, pest control, security, and "Janitorial Services" as one line item
+among a dozen unrelated ones), the other was a genuine janitorial tender - but for Ottawa, not
+Metro Vancouver/the GTA. Both also got mis-tagged with the city "King, Ontario" because the
+old location logic did a plain substring search for a target city name across the whole
+description, and "King" matched inside "par**king**" and "see**king**" - the "positive
+match required" and "no guessing location" rules below exist specifically to prevent both
+failure modes. Both bad records were reviewed, marked `Not suitable`, left unassigned, and
+their audit log entries explain why (see `active_cleaning_opportunities_audit_log`).
+
+**Positive match required** (`src/lib/opportunities/cleaning-relevance.ts`): a record is only
+ever considered a candidate if its title, description, or category contains at least one of a
+fixed list of strong, unambiguous cleaning-related phrases (`commercial cleaning`,
+`janitorial services`, `custodial services`, `cleaning contract`, `sanitation services`,
+`disinfection services`, etc. - the full list is in that file). Generic procurement vocabulary
+(`RFP`, `tender`, `procurement`, `facilities`, `construction`, `maintenance`, `property
+management`, `government services`, `building services`, `vendor services`) is never enough on
+its own.
+
+**Title carries the deciding weight.** A strong phrase in the title accepts the record outright.
+A strong phrase found only in the description/category is accepted unless either: the title
+itself is dominated by an exclusion term (`construction`, `HVAC`, `plumbing`, `landscaping`,
+`security`, `pest control`, `snow removal`, `staffing`, `laundry`, `food services`, etc.), or
+two or more distinct exclusion terms appear in the body alongside it - the second check is
+what would have caught the Northern Canada facilities tender.
+
+**Location is never guessed.** `lookupCity()` (`src/lib/opportunities/cities.ts`) now matches
+on word boundaries, not a raw substring, so "King" can no longer match inside "parking" or
+"seeking." More importantly, the CanadaBuys connector now resolves a record's city **only**
+from the feed's own structured buyer-city column - the old fallback that scanned the whole
+title/description for any target-city mention has been removed entirely. A record whose buyer
+city isn't itself a confirmed Metro Vancouver/GTA market is left out, never guessed at from
+unrelated text. (BC Bid's scraped listings have no structured location field to fall back to,
+so that connector still does a word-boundary text scan as a best-effort measure - flagged as a
+known limitation in its own file.)
+
+**Data quality fields** (migration `0015`): every accepted record stores `matched_cleaning_terms`
+(the exact strong phrase(s) that got it accepted, `text[]`) and `accepted_reason` (a short
+human-readable explanation) - visible on the record's detail page and included in CSV export.
+A rejected candidate is never persisted at all; its title, source, and rejection reason are
+only kept in that run's summary (`CollectionSummary.rejectedSamples`), shown on the admin
+dashboard after **Run Collection Now**, never written to the database or shown in the normal
+CRM list. Both new columns are protected by the same agent column-restriction trigger as
+`intent_score`/`source_url` - an agent can never edit them.
 
 ## Compliance approach (unchanged from Phase 1)
 
@@ -153,14 +218,16 @@ ToS-compliant search API).
 
 ## Database
 
-Two migrations, neither yet applied to any live project:
+Four migrations, **all applied to the live "Business Finance" Supabase project** and verified
+(tables/policies/functions/permissions confirmed to exist; existing CRM and quote-system row
+counts confirmed unchanged before/after each):
 
 - **[`0012_active_cleaning_opportunities.sql`](../supabase/migrations/0012_active_cleaning_opportunities.sql)**
-  - the `active_cleaning_opportunities` table itself (now including `archived_at`/
-    `archived_by`, `next_follow_up_at`/`last_contacted_at` mirroring `crm_leads`' derived/
-    contact-tracking columns, and the full 10-status list), its RLS policies (admin-all,
-    agent-select-own, agent-update-own), the column-restriction trigger, the `updated_at`
-    trigger, and the new `active_cleaning_opportunities_audit_log` table + its trigger.
+  - the `active_cleaning_opportunities` table itself (`archived_at`/`archived_by`,
+    `next_follow_up_at`/`last_contacted_at` mirroring `crm_leads`' derived/contact-tracking
+    columns, and the full 10-status list), its RLS policies (admin-all, agent-select-own,
+    agent-update-own), the column-restriction trigger, the `updated_at` trigger, and the new
+    `active_cleaning_opportunities_audit_log` table + its trigger.
 - **[`0013_crm_opportunities_integration.sql`](../supabase/migrations/0013_crm_opportunities_integration.sql)**
   - **alters the already-applied** `crm_activities` and `crm_followups` tables (from
     migrations `0007`/`0011`): adds a nullable `opportunity_id` alongside the existing
@@ -168,13 +235,19 @@ Two migrations, neither yet applied to any live project:
     agent-facing RLS policies to cover both targets, and replaces
     `crm_followups_sync_lead_next_follow_up()` (`create or replace`, same function name) so it
     maintains `next_follow_up_at` on whichever side applies. Every existing lead-only row and
-    query keeps working unchanged - `lead_id` stays populated exactly as before for every row
-    that already exists, and the existing agent dashboard's Follow-Up Calendar is untouched
-    (it only ever queries/handles lead-based rows).
+    query keeps working unchanged.
+- **[`0014_fix_search_path_set_updated_at.sql`](../supabase/migrations/0014_fix_search_path_set_updated_at.sql)**
+  - adds `set search_path = public` to `active_cleaning_opportunities_set_updated_at` (a
+    Supabase security-advisor finding on the one function from `0012` that was missing it - no
+    behavior change).
+- **[`0015_cleaning_relevance_filter_fields.sql`](../supabase/migrations/0015_cleaning_relevance_filter_fields.sql)**
+  - adds `matched_cleaning_terms text[]` and `accepted_reason text` to
+    `active_cleaning_opportunities`, and extends the agent column-restriction trigger to
+    protect both.
 
-Both are purely additive to the schema; `0013` is the only one that touches a table with
-existing production data, and it only adds a column + loosens a `not null` constraint + adds
-policies - no existing row or value is modified.
+All four are additive to the schema; `0013` is the only one that touches a table with existing
+production data, and it only adds a column + loosens a `not null` constraint + adds policies -
+no existing row or value was modified (verified by row-count comparison before/after).
 
 ## Environment variables
 
@@ -227,19 +300,25 @@ testing.
     list.
 15. Confirm `/commercial-cleaning-quote`, `/admin` (quote dashboard), `/admin/crm` (leads),
     `/admin/crm/agents`, `/agent/dashboard`, `/agent/leads/*` are all completely unaffected.
+16. Run **Run Collection Now** with **Skip Hot-alert email for this run** checked; confirm the
+    results panel shows candidates found/accepted/rejected, Hot/Warm/Research/duplicate/expired
+    counts, a per-source breakdown, and a sample of rejected records with reasons; confirm no
+    email was sent (`hotAlertsSkipped` matches the Hot count, `hotAlertsSent` is 0) and no
+    record was auto-assigned. Spot-check a few accepted records' detail pages for a sensible
+    `matched_cleaning_terms`/`accepted_reason`.
 
 ## Deployment instructions
 
-**Not yet applied - waiting on approval per this revision's request.** Once approved:
+Migrations `0012`-`0015` are applied to the live Supabase project already. What's left:
 
-1. Apply `0012_active_cleaning_opportunities.sql` **then** `0013_crm_opportunities_integration.sql`,
-   in that order, to the live Supabase project.
+1. Merge the PR / deploy the app itself to production (not yet done - still only on the PR's
+   Vercel preview deployment as of this writing).
 2. Set `CRON_SECRET` and (optionally) `OPPORTUNITY_ALERT_EMAIL` in Vercel.
-3. Deploy. `/admin/crm/opportunities` and `/agent/opportunities` are live immediately (gated
-   exactly like the rest of `/admin` and `/agent`); the cron stays off until the `vercel.json`
-   entry is added separately.
-4. Run **Run Collection Now** once in production to seed real data and confirm the connectors
-   work against the live network (this sandbox couldn't verify BC Bid against a live fetch).
+3. Run **Run Collection Now** with **Skip Hot-alert email for this run** checked, review the
+   results panel (candidates found/accepted/rejected, Hot/Warm/Research/duplicate/expired
+   counts, rejected samples with reasons), and get sign-off before enabling the cron.
+4. Only then add the `crons` entry to `vercel.json` and redeploy - see "Enabling the daily
+   cron" above.
 
 ## What's intentionally not built yet
 
@@ -279,7 +358,9 @@ testing.
   "notes": null,
   "next_follow_up_at": null,
   "last_contacted_at": null,
-  "archived_at": null
+  "archived_at": null,
+  "matched_cleaning_terms": ["janitorial services"],
+  "accepted_reason": "Title contains a confirmed cleaning-specific phrase: \"janitorial services\"."
 }
 ```
 

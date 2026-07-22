@@ -1,8 +1,8 @@
 import "server-only";
 import { findColumn, parseCsv } from "../csv";
-import { lookupCity, TARGET_CITIES } from "../cities";
-import { classifyOpportunityType, matchesCleaningIntent } from "../keywords";
-import type { ConnectorResult, OpportunityCandidate } from "../types";
+import { lookupCity } from "../cities";
+import { evaluateCleaningRelevance } from "../cleaning-relevance";
+import type { ConnectorResult, OpportunityCandidate, RejectedCandidate } from "../types";
 
 // CanadaBuys' official open-data feed: a bilingual CSV of every current
 // Government of Canada tender notice, republished under the Open
@@ -14,6 +14,7 @@ const FEED_URL = "https://canadabuys.canada.ca/opendata/pub/openTenderNotice-ouv
 const SOURCE_NAME = "CanadaBuys (Government of Canada Open Data)";
 const FETCH_TIMEOUT_MS = 30_000;
 const MAX_CANDIDATES = 250;
+const MAX_REJECTED_SAMPLES = 50;
 
 function toIsoDate(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -71,6 +72,8 @@ export async function runCanadaBuysConnector(): Promise<ConnectorResult> {
     const categoryIdx = findColumn(headers, ["gsindescription", "unspscdescription", "category"]);
 
     const candidates: OpportunityCandidate[] = [];
+    const rejected: RejectedCandidate[] = [];
+    let rejectedCount = 0;
 
     for (let i = 1; i < rows.length && candidates.length < MAX_CANDIDATES; i++) {
       const row = rows[i];
@@ -80,27 +83,51 @@ export async function runCanadaBuysConnector(): Promise<ConnectorResult> {
 
       const description = cell(row, descriptionIdx);
       const category = cell(row, categoryIdx);
-      const combinedText = [title, description, category].filter(Boolean).join(" ");
-      if (!matchesCleaningIntent(combinedText)) continue;
 
-      // Filter to Metro Vancouver / GTA target markets - search the entity
-      // city column first, then fall back to scanning the title/description
-      // for a target city name (the "entity" city is the buyer's own
-      // office, which for a Crown corporation or regional buyer may differ
-      // from the delivery location actually named in the notice text).
-      const entityCity = cell(row, entityCityIdx);
-      let city = lookupCity(entityCity);
-      if (!city) {
-        city = TARGET_CITIES.find((c) => combinedText.toLowerCase().includes(c.name.toLowerCase())) ?? null;
+      const relevance = evaluateCleaningRelevance({ title, description, category });
+      // No cleaning-related phrase anywhere - not a candidate at all (the
+      // overwhelming majority of any tender feed), so it's skipped without
+      // counting toward "found"/"rejected" either way.
+      if (relevance.matchedTerms.length === 0) continue;
+
+      if (!relevance.accepted) {
+        rejectedCount += 1;
+        if (rejected.length < MAX_REJECTED_SAMPLES) {
+          rejected.push({ opportunity_title: title, source_name: SOURCE_NAME, source_url: noticeUrl, reason: relevance.reason });
+        }
+        continue;
       }
-      if (!city) continue;
+
+      // Location comes ONLY from the feed's own structured buyer-city
+      // column - never guessed by scanning the title/description for a
+      // target city name. That free-text fallback is what previously
+      // mis-tagged an Ottawa janitorial tender and a Northern Canada
+      // facilities tender as "King, Ontario" (both descriptions happened
+      // to contain "seeking"/"parking", which a naive substring match on
+      // "King" matched). A record whose buyer city isn't itself one of
+      // the target markets is left out entirely rather than guessed at -
+      // see docs/active-cleaning-opportunities.md.
+      const entityCity = cell(row, entityCityIdx);
+      const city = lookupCity(entityCity);
+      if (!city) {
+        rejectedCount += 1;
+        if (rejected.length < MAX_REJECTED_SAMPLES) {
+          rejected.push({
+            opportunity_title: title,
+            source_name: SOURCE_NAME,
+            source_url: noticeUrl,
+            reason: `Cleaning-specific, but buyer location "${entityCity ?? "(none listed)"}" is not a confirmed Metro Vancouver/GTA market - not guessed from description text.`,
+          });
+        }
+        continue;
+      }
 
       candidates.push({
         organization_name: cell(row, entityNameIdx) ?? null,
         opportunity_title: title,
         description: description?.slice(0, 2000) ?? null,
         opportunity_type: "rfp_tender",
-        service_needed: category ?? classifyOpportunityType(combinedText),
+        service_needed: category ?? null,
         city: city.name,
         province: city.province,
         contact_name: cell(row, contactNameIdx) ?? null,
@@ -111,14 +138,18 @@ export async function runCanadaBuysConnector(): Promise<ConnectorResult> {
         source_url: noticeUrl,
         date_posted: toIsoDate(cell(row, publicationDateIdx)) ?? null,
         deadline: toIsoDate(cell(row, closingDateIdx)) ?? null,
+        matched_cleaning_terms: relevance.matchedTerms,
+        accepted_reason: relevance.reason,
       });
     }
 
-    return { source_name: SOURCE_NAME, candidates };
+    return { source_name: SOURCE_NAME, candidates, rejectedCount, rejected };
   } catch (error) {
     return {
       source_name: SOURCE_NAME,
       candidates: [],
+      rejectedCount: 0,
+      rejected: [],
       error: error instanceof Error ? error.message : "Unknown CanadaBuys connector error",
     };
   }

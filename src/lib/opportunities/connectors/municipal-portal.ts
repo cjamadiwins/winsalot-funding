@@ -1,11 +1,12 @@
 import "server-only";
 import { isAllowedByRobots, OPPORTUNITY_BOT_USER_AGENT } from "../robots";
 import { extractDate, extractTableRows, resolveUrl } from "../html-scrape";
-import { matchesCleaningIntent } from "../keywords";
-import type { ConnectorResult, OpportunityCandidate, Province } from "../types";
+import { evaluateCleaningRelevance } from "../cleaning-relevance";
+import type { ConnectorResult, OpportunityCandidate, Province, RejectedCandidate } from "../types";
 
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_CANDIDATES_PER_PORTAL = 50;
+const MAX_REJECTED_SAMPLES = 50;
 
 export type MunicipalPortalConfig = {
   sourceName: string;
@@ -45,18 +46,31 @@ export async function runMunicipalPortalConnector(config: MunicipalPortalConfig)
     const html = await response.text();
     const rows = extractTableRows(html);
     const candidates: OpportunityCandidate[] = [];
+    const rejected: RejectedCandidate[] = [];
+    let rejectedCount = 0;
 
     for (const row of rows) {
       if (candidates.length >= MAX_CANDIDATES_PER_PORTAL) break;
-      if (!matchesCleaningIntent(row.text)) continue;
 
       const detailLink = row.links.find((link) => resolveUrl(config.listingUrl, link.href));
       if (!detailLink) continue;
       const sourceUrl = resolveUrl(config.listingUrl, detailLink.href);
       if (!sourceUrl) continue;
+      const title = detailLink.text || row.text.slice(0, 140);
+
+      const relevance = evaluateCleaningRelevance({ title, description: row.text });
+      if (relevance.matchedTerms.length === 0) continue;
+
+      if (!relevance.accepted) {
+        rejectedCount += 1;
+        if (rejected.length < MAX_REJECTED_SAMPLES) {
+          rejected.push({ opportunity_title: title, source_name: config.sourceName, source_url: sourceUrl, reason: relevance.reason });
+        }
+        continue;
+      }
 
       candidates.push({
-        opportunity_title: detailLink.text || row.text.slice(0, 140),
+        opportunity_title: title,
         description: row.text.slice(0, 2000),
         opportunity_type: "rfp_tender",
         city: config.city,
@@ -64,14 +78,18 @@ export async function runMunicipalPortalConnector(config: MunicipalPortalConfig)
         source_name: config.sourceName,
         source_url: sourceUrl,
         deadline: extractDate(row.text) ?? null,
+        matched_cleaning_terms: relevance.matchedTerms,
+        accepted_reason: relevance.reason,
       });
     }
 
-    return { source_name: config.sourceName, candidates };
+    return { source_name: config.sourceName, candidates, rejectedCount, rejected };
   } catch (error) {
     return {
       source_name: config.sourceName,
       candidates: [],
+      rejectedCount: 0,
+      rejected: [],
       error: error instanceof Error ? error.message : `Unknown error for ${config.sourceName}`,
     };
   }

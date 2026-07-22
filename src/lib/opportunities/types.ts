@@ -107,6 +107,12 @@ export type ActiveCleaningOpportunityRow = {
   last_contacted_at: string | null;
   archived_at: string | null;
   archived_by: string | null;
+  // The strong cleaning-specific phrase(s) that got this record accepted
+  // (see src/lib/opportunities/cleaning-relevance.ts), and a short
+  // human-readable reason. Both null for any row inserted before this
+  // filter existed - see migration 0015.
+  matched_cleaning_terms: string[] | null;
+  accepted_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -183,16 +189,41 @@ export type OpportunityCandidate = {
   source_url: string;
   date_posted?: string | null; // ISO date (yyyy-mm-dd)
   deadline?: string | null; // ISO date (yyyy-mm-dd)
+  // Set by every connector via evaluateCleaningRelevance() before a
+  // candidate is ever returned - a candidate that didn't pass that check
+  // is never included in a connector's `candidates` array in the first
+  // place (see `rejected` on ConnectorResult instead).
+  matched_cleaning_terms: string[];
+  accepted_reason: string;
+};
+
+// A candidate a connector found (it mentioned at least one strong
+// cleaning-related phrase somewhere) but did not ultimately accept - kept
+// only for the run summary (candidates found/accepted/rejected, with
+// reasons), never persisted to the database and never shown in the normal
+// CRM list. A record that never mentions any cleaning-related phrase at
+// all (the overwhelming majority of any tender feed - road paving,
+// vehicle supply, etc.) isn't a "candidate" in the first place and isn't
+// counted here at all, so this count stays meaningful rather than being
+// dominated by completely unrelated procurement noise.
+export type RejectedCandidate = {
+  opportunity_title: string;
+  source_name: string;
+  source_url?: string;
+  reason: string;
 };
 
 // One connector's outcome for a single run. `error` is set (and
 // `candidates` left empty) when the connector failed for any reason - the
 // orchestrator logs it and moves on to the next connector rather than
 // aborting the whole run, per the "a broken source does not stop the
-// entire search" requirement.
+// entire search" requirement. `rejectedCount` is the true total; `rejected`
+// is a capped sample of them (with reasons) for display.
 export type ConnectorResult = {
   source_name: string;
   candidates: OpportunityCandidate[];
+  rejectedCount: number;
+  rejected: RejectedCandidate[];
   error?: string;
 };
 
