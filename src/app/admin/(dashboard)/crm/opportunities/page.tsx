@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { ActiveCleaningOpportunityRow } from "@/lib/opportunities/types";
+import type { ActiveCleaningOpportunityRow, OpportunityCollectionRunRow } from "@/lib/opportunities/types";
 import type { CrmUserRow } from "@/lib/crm-types";
 import OpportunitiesAdminClient from "./OpportunitiesAdminClient";
 
@@ -8,18 +8,27 @@ export default async function AdminCrmOpportunitiesPage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  // RLS (active_cleaning_opportunities_admin_all / crm_users_admin_select_all)
-  // permits a full read here, archived rows included, because this page is
-  // already gated by requireCrmAdmin().
+  // RLS (active_cleaning_opportunities_admin_all / crm_users_admin_select_all /
+  // opportunity_collection_runs_admin_select) permits a full read here,
+  // archived rows included, because this page is already gated by
+  // requireCrmAdmin(). The run-log query is best-effort - it only exists
+  // from migration 0017 onward, so a missing table there shouldn't break
+  // the rest of the page.
   const [
     { data: opportunities, error: opportunitiesError },
     { data: agents, error: agentsError },
+    { data: prospectRuns },
   ] = await Promise.all([
     supabase
       .from("active_cleaning_opportunities")
       .select("*")
       .order("date_discovered", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
+    supabase
+      .from("opportunity_collection_runs")
+      .select("*")
+      .order("ran_at", { ascending: false })
+      .limit(1),
   ]);
 
   return (
@@ -43,6 +52,7 @@ export default async function AdminCrmOpportunitiesPage() {
           <OpportunitiesAdminClient
             opportunities={(opportunities ?? []) as ActiveCleaningOpportunityRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
+            latestProspectRun={(prospectRuns?.[0] as OpportunityCollectionRunRow | undefined) ?? null}
           />
         </div>
       )}

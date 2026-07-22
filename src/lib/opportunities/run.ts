@@ -7,7 +7,13 @@ import { runBidsAndTendersConnectors } from "./connectors/bidsandtenders";
 import { runQualifiedProspectsConnector } from "./connectors/qualified-prospects";
 import { dedupeCandidates, isDuplicateOpportunity } from "./dedupe";
 import { isExpired, scoreOpportunity, scoreQualifiedProspect } from "./scoring";
-import type { ActiveCleaningOpportunityRow, ConnectorResult, OpportunityStatus, RejectedCandidate } from "./types";
+import type {
+  ActiveCleaningOpportunityRow,
+  ConnectorResult,
+  OpportunityCandidate,
+  OpportunityStatus,
+  RejectedCandidate,
+} from "./types";
 
 export type CollectionSummary = {
   ranAt: string;
@@ -41,32 +47,45 @@ export type CollectionOptions = {
   skipHotAlertEmails?: boolean;
 };
 
+type PotentialDuplicateRow = {
+  organization_name: string | null;
+  opportunity_title: string;
+  source_url: string;
+  deadline: string | null;
+  public_phone: string | null;
+  website: string | null;
+  address: string | null;
+  osm_id: string | null;
+};
+
+const DUPLICATE_SELECT_COLUMNS = "organization_name, opportunity_title, source_url, deadline, public_phone, website, address, osm_id";
+
 // Existing DB rows that could conflict with a new candidate, fetched by
-// source_url and by title separately (two safe .in() queries, rather than
-// hand-building a single PostgREST filter string out of scraped text -
-// candidate titles/URLs are untrusted input and .in() is what properly
-// escapes them). Shared by both lead categories - a Qualified Prospect
-// and an Active Opportunity dedupe against the same table the same way.
+// source_url, by title, and (for prospects) by OpenStreetMap element id
+// separately (three safe .in() queries, rather than hand-building a single
+// PostgREST filter string out of scraped text - candidate titles/URLs are
+// untrusted input and .in() is what properly escapes them). Shared by both
+// lead categories - a Qualified Prospect and an Active Opportunity dedupe
+// against the same table the same way.
 async function fetchPotentialDuplicates(
   admin: ReturnType<typeof getSupabaseAdmin>,
   sourceUrls: string[],
-  titles: string[]
-) {
-  const [{ data: byUrl }, { data: byTitle }] = await Promise.all([
+  titles: string[],
+  osmIds: string[]
+): Promise<PotentialDuplicateRow[]> {
+  const empty: { data: PotentialDuplicateRow[] } = { data: [] };
+  const [{ data: byUrl }, { data: byTitle }, { data: byOsmId }] = await Promise.all([
     sourceUrls.length
-      ? admin
-          .from("active_cleaning_opportunities")
-          .select("organization_name, opportunity_title, source_url, deadline")
-          .in("source_url", sourceUrls)
-      : Promise.resolve({ data: [] as { organization_name: string | null; opportunity_title: string; source_url: string; deadline: string | null }[] }),
+      ? admin.from("active_cleaning_opportunities").select(DUPLICATE_SELECT_COLUMNS).in("source_url", sourceUrls)
+      : Promise.resolve(empty),
     titles.length
-      ? admin
-          .from("active_cleaning_opportunities")
-          .select("organization_name, opportunity_title, source_url, deadline")
-          .in("opportunity_title", titles)
-      : Promise.resolve({ data: [] as { organization_name: string | null; opportunity_title: string; source_url: string; deadline: string | null }[] }),
+      ? admin.from("active_cleaning_opportunities").select(DUPLICATE_SELECT_COLUMNS).in("opportunity_title", titles)
+      : Promise.resolve(empty),
+    osmIds.length
+      ? admin.from("active_cleaning_opportunities").select(DUPLICATE_SELECT_COLUMNS).in("osm_id", osmIds)
+      : Promise.resolve(empty),
   ]);
-  return [...(byUrl ?? []), ...(byTitle ?? [])];
+  return [...((byUrl as PotentialDuplicateRow[] | null) ?? []), ...((byTitle as PotentialDuplicateRow[] | null) ?? []), ...((byOsmId as PotentialDuplicateRow[] | null) ?? [])];
 }
 
 const MAX_REJECTED_SAMPLES_IN_SUMMARY = 50;
@@ -101,19 +120,36 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
 
   const sourceUrls = Array.from(new Set(deduped.map((c) => c.source_url)));
   const titles = Array.from(new Set(deduped.map((c) => c.opportunity_title)));
-  const existingRows = await fetchPotentialDuplicates(admin, sourceUrls, titles);
+  const osmIds = Array.from(new Set(deduped.map((c) => c.osm_id).filter((v): v is string => Boolean(v))));
+  const existingRows = await fetchPotentialDuplicates(admin, sourceUrls, titles, osmIds);
 
   const newCandidates = deduped.filter(
     (candidate) => !existingRows.some((existing) => isDuplicateOpportunity(existing, candidate))
   );
   const duplicatesAlreadyStored = deduped.length - newCandidates.length;
 
+  // Object-identity bookkeeping so the per-source run log below (written
+  // just for the qualified-prospects connector - see
+  // opportunity_collection_runs) can report duplicates skipped specific to
+  // that connector's own candidates, without re-deriving it from scratch.
+  const dedupedSet = new Set<OpportunityCandidate>(deduped);
+  const newCandidatesSet = new Set<OpportunityCandidate>(newCandidates);
+  const prospectDuplicatesWithinRun = qualifiedProspects.candidates.filter((c) => !dedupedSet.has(c)).length;
+  const prospectDuplicatesAlreadyStored = qualifiedProspects.candidates.filter(
+    (c) => dedupedSet.has(c) && !newCandidatesSet.has(c)
+  ).length;
+
   const rowsToInsert = newCandidates.map((candidate) => {
     const { score, level } =
       candidate.lead_category === "Qualified Prospect"
         ? scoreQualifiedProspect(candidate)
         : scoreOpportunity(candidate, now);
-    const status: OpportunityStatus = isExpired(candidate.deadline, now) ? "Expired" : "New";
+    const status: OpportunityStatus =
+      candidate.lead_category === "Qualified Prospect"
+        ? "Unverified Prospect"
+        : isExpired(candidate.deadline, now)
+          ? "Expired"
+          : "New";
     return {
       lead_category: candidate.lead_category,
       organization_name: candidate.organization_name ?? null,
@@ -124,6 +160,8 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
       industry: candidate.industry ?? null,
       city: candidate.city ?? null,
       province: candidate.province ?? null,
+      address: candidate.address ?? null,
+      osm_id: candidate.osm_id ?? null,
       contact_name: candidate.contact_name ?? null,
       public_email: candidate.public_email ?? null,
       public_phone: candidate.public_phone ?? null,
@@ -151,6 +189,25 @@ export async function runOpportunityCollection(options: CollectionOptions = {}):
       throw new Error(`Failed to save opportunities: ${error.message}`);
     }
     inserted = (data ?? []) as ActiveCleaningOpportunityRow[];
+  }
+
+  // One row per run recording what the qualified-prospects connector
+  // searched and found - the only connector whose targets rotate day to
+  // day, so it's the only one the admin dashboard needs a persisted "last
+  // successful search" panel for (see migration 0017). A failure here
+  // never fails the whole collection run - it's a log, not a dependency.
+  const { error: runLogError } = await admin.from("opportunity_collection_runs").insert({
+    source_name: qualifiedProspects.source_name,
+    cities_searched: qualifiedProspects.citiesSearched,
+    industries_searched: qualifiedProspects.industriesSearched,
+    candidates_found: qualifiedProspects.candidates.length + qualifiedProspects.rejectedCount,
+    new_records_added: inserted.filter((r) => r.lead_category === "Qualified Prospect").length,
+    duplicates_skipped: prospectDuplicatesWithinRun + prospectDuplicatesAlreadyStored,
+    errors: qualifiedProspects.error ? [qualifiedProspects.error] : [],
+    success: !qualifiedProspects.error,
+  });
+  if (runLogError) {
+    console.error("Failed to record qualified-prospects collection run:", runLogError.message);
   }
 
   const { data: expiredRows, error: expireError } = await admin

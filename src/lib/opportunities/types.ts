@@ -59,13 +59,14 @@ export const TARGET_INDUSTRIES = [
 ] as const;
 export type TargetIndustry = (typeof TARGET_INDUSTRIES)[number];
 
-// Full status list. 'Reviewing' and 'Assigned' are admin/system stages (an
-// admin triaging a new record, or the system marking it Assigned the
-// moment an agent is set) - the other eight are exactly the agent-facing
-// status list from the brief, and are the *only* ones an agent can set
-// (enforced in the database too - see migration 0012's
-// active_cleaning_opportunities_restrict_agent_edits trigger).
-export const OPPORTUNITY_STATUSES = [
+// Full Active Opportunity status list. 'Reviewing' and 'Assigned' are
+// admin/system stages (an admin triaging a new record, or the system
+// marking it Assigned the moment an agent is set) - the other eight are
+// exactly the agent-facing status list from the brief, and are the *only*
+// ones an agent can set on an Active Opportunity (enforced in the database
+// too - see migration 0012's active_cleaning_opportunities_restrict_agent_edits
+// trigger, extended in migration 0017 to branch by lead_category).
+export const ACTIVE_OPPORTUNITY_STATUSES = [
   "New",
   "Reviewing",
   "Assigned",
@@ -78,9 +79,28 @@ export const OPPORTUNITY_STATUSES = [
   "Expired",
 ] as const;
 
+// Qualified Prospect status list (migration 0017). 'Unverified Prospect' is
+// the system-set default every new prospect starts at - not something an
+// agent chooses, the same way 'New' isn't a deliberate agent choice for an
+// Active Opportunity either. The other six are exactly the agent-facing
+// vocabulary from the brief.
+export const QUALIFIED_PROSPECT_STATUSES = [
+  "Unverified Prospect",
+  "Verified",
+  "Invalid",
+  "Called",
+  "Interested",
+  "Follow-up",
+  "Not Interested",
+] as const;
+
+// One shared `status` column on the table holds either vocabulary,
+// distinguished by lead_category - see statusesForCategory() below.
+export const OPPORTUNITY_STATUSES = [...ACTIVE_OPPORTUNITY_STATUSES, ...QUALIFIED_PROSPECT_STATUSES] as const;
+
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 
-export const AGENT_SETTABLE_OPPORTUNITY_STATUSES: OpportunityStatus[] = [
+export const AGENT_SETTABLE_ACTIVE_OPPORTUNITY_STATUSES: OpportunityStatus[] = [
   "New",
   "Contacted",
   "No answer",
@@ -91,7 +111,31 @@ export const AGENT_SETTABLE_OPPORTUNITY_STATUSES: OpportunityStatus[] = [
   "Expired",
 ];
 
+export const AGENT_SETTABLE_QUALIFIED_PROSPECT_STATUSES: OpportunityStatus[] = [
+  "Verified",
+  "Invalid",
+  "Called",
+  "Interested",
+  "Follow-up",
+  "Not Interested",
+];
+
+// Kept as the pre-existing name so every caller written before Qualified
+// Prospects got their own status vocabulary keeps working unchanged - it's
+// simply an alias for the Active Opportunity set.
+export const AGENT_SETTABLE_OPPORTUNITY_STATUSES = AGENT_SETTABLE_ACTIVE_OPPORTUNITY_STATUSES;
+
 export const ADMIN_ONLY_OPPORTUNITY_STATUSES: OpportunityStatus[] = ["Reviewing", "Assigned"];
+
+export function statusesForCategory(category: LeadCategory): readonly OpportunityStatus[] {
+  return category === "Qualified Prospect" ? QUALIFIED_PROSPECT_STATUSES : ACTIVE_OPPORTUNITY_STATUSES;
+}
+
+export function agentSettableStatusesForCategory(category: LeadCategory): OpportunityStatus[] {
+  return category === "Qualified Prospect"
+    ? AGENT_SETTABLE_QUALIFIED_PROSPECT_STATUSES
+    : AGENT_SETTABLE_ACTIVE_OPPORTUNITY_STATUSES;
+}
 
 export const OPPORTUNITY_STATUS_STYLES: Record<OpportunityStatus, string> = {
   New: "bg-slate-100 text-slate-700",
@@ -104,6 +148,13 @@ export const OPPORTUNITY_STATUS_STYLES: Record<OpportunityStatus, string> = {
   Converted: "bg-emerald-100 text-emerald-800",
   "Not suitable": "bg-slate-200 text-slate-600",
   Expired: "bg-rose-100 text-rose-800",
+  "Unverified Prospect": "bg-slate-100 text-slate-500",
+  Verified: "bg-emerald-100 text-emerald-800",
+  Invalid: "bg-rose-100 text-rose-700",
+  Called: "bg-sky-100 text-sky-800",
+  Interested: "bg-amber-100 text-amber-800",
+  "Follow-up": "bg-orange-100 text-orange-800",
+  "Not Interested": "bg-slate-200 text-slate-600",
 };
 
 // 'Research' was renamed 'Prospect' (migration 0016) once this became a
@@ -137,6 +188,16 @@ export type ActiveCleaningOpportunityRow = {
   industry: string | null;
   city: string | null;
   province: Province | null;
+  // Street address, when the source provides one - currently only the
+  // qualified-prospects connector populates this (from OSM addr:* tags).
+  // Never guessed or geocoded from the city alone.
+  address: string | null;
+  // OpenStreetMap element identifier ("node/12345", "way/6789") for a
+  // Qualified Prospect - null for every Active Opportunity, which has no
+  // OSM origin. Used as the strongest possible dedupe key (see dedupe.ts)
+  // since it identifies the exact same real-world business record even if
+  // its name, phone, or source_url later changes.
+  osm_id: string | null;
   contact_name: string | null;
   public_email: string | null;
   public_phone: string | null;
@@ -217,6 +278,24 @@ export type OpportunityAuditLogRow = {
   details: string | null;
 };
 
+// One row per daily qualified-prospects collection run (migration 0017) -
+// what the admin dashboard's "Last Successful Search" panel reads from,
+// since candidates found/rejected/duplicates-skipped are never persisted
+// on the opportunities table itself (see run.ts).
+export type OpportunityCollectionRunRow = {
+  id: string;
+  ran_at: string;
+  source_name: string;
+  cities_searched: string[];
+  industries_searched: string[];
+  candidates_found: number;
+  new_records_added: number;
+  duplicates_skipped: number;
+  errors: string[];
+  success: boolean;
+  created_at: string;
+};
+
 // What a connector hands back, before scoring/dedupe/persistence. Every
 // field a connector can't determine from its source is left undefined -
 // scoring and the dashboard both treat a missing field as "unknown", never
@@ -231,6 +310,8 @@ export type OpportunityCandidate = {
   industry?: string | null;
   city?: string | null;
   province?: Province | null;
+  address?: string | null;
+  osm_id?: string | null;
   contact_name?: string | null;
   public_email?: string | null;
   public_phone?: string | null;

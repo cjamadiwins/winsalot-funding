@@ -34,6 +34,7 @@ export async function updateOpportunityFieldsAction(id: string, formData: FormDa
       industry: textOrNull(formData, "industry"),
       city: textOrNull(formData, "city"),
       province: textOrNull(formData, "province"),
+      address: textOrNull(formData, "address"),
       contact_name: textOrNull(formData, "contact_name"),
       public_email: textOrNull(formData, "public_email"),
       public_phone: textOrNull(formData, "public_phone"),

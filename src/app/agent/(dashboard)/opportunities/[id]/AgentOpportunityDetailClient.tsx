@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, toDatetimeLocal, type ActivityType } from "@/lib/crm-types";
 import {
-  AGENT_SETTABLE_OPPORTUNITY_STATUSES,
+  agentSettableStatusesForCategory,
   OPPORTUNITY_STATUS_STYLES,
   INTENT_LEVEL_STYLES,
   LEAD_CATEGORY_STYLES,
@@ -77,7 +77,7 @@ export default function AgentOpportunityDetailClient({
             onChange={(e) => runAction(() => updateOpportunityStatusAction(opportunity.id, e.target.value))}
             className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${OPPORTUNITY_STATUS_STYLES[opportunity.status]}`}
           >
-            {AGENT_SETTABLE_OPPORTUNITY_STATUSES.map((status) => (
+            {agentSettableStatusesForCategory(opportunity.lead_category).map((status) => (
               <option key={status} value={status}>
                 {status}
               </option>
@@ -94,6 +94,7 @@ export default function AgentOpportunityDetailClient({
           <Field label="City" value={[opportunity.city, opportunity.province].filter(Boolean).join(", ")} />
           <Field label="Service Needed" value={opportunity.service_needed} />
           <Field label="Industry" value={opportunity.industry} />
+          <Field label="Address" value={opportunity.address} />
           <Field label="Public Phone" value={opportunity.public_phone} />
           <Field label="Public Email" value={opportunity.public_email} />
           <Field label="Deadline" value={opportunity.deadline ? new Date(opportunity.deadline).toLocaleDateString() : null} />

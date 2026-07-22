@@ -10,11 +10,11 @@ import {
   type CrmUserRow,
 } from "@/lib/crm-types";
 import {
-  OPPORTUNITY_STATUSES,
   OPPORTUNITY_STATUS_STYLES,
   OPPORTUNITY_TYPE_LABELS,
   INTENT_LEVEL_STYLES,
   LEAD_CATEGORY_STYLES,
+  statusesForCategory,
   type ActiveCleaningOpportunityRow,
   type OpportunityActivityRow,
   type OpportunityAuditLogRow,
@@ -109,7 +109,7 @@ export default function AdminOpportunityDetailClient({
             onChange={(e) => runAction(() => updateOpportunityStatusAction(opportunity.id, e.target.value as OpportunityStatus))}
             className={`rounded-full border-none px-3 py-1.5 text-xs font-semibold ${OPPORTUNITY_STATUS_STYLES[opportunity.status]}`}
           >
-            {OPPORTUNITY_STATUSES.map((status) => (
+            {statusesForCategory(opportunity.lead_category).map((status) => (
               <option key={status} value={status}>
                 {status}
               </option>
@@ -152,6 +152,10 @@ export default function AdminOpportunityDetailClient({
                 <label className="text-xs font-medium text-slate-500">
                   City
                   <input name="city" defaultValue={opportunity.city ?? ""} className={`mt-1 ${inputClass}`} />
+                </label>
+                <label className="text-xs font-medium text-slate-500">
+                  Address
+                  <input name="address" defaultValue={opportunity.address ?? ""} className={`mt-1 ${inputClass}`} />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
                   Province
@@ -212,6 +216,7 @@ export default function AdminOpportunityDetailClient({
                 <Field label="Opportunity Type" value={OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]} />
                 <Field label="Service Needed" value={opportunity.service_needed} />
                 <Field label="Industry" value={opportunity.industry} />
+                <Field label="Address" value={opportunity.address} />
                 <Field label="Contact Name" value={opportunity.contact_name} />
                 <Field label="Public Email" value={opportunity.public_email} />
                 <Field label="Public Phone" value={opportunity.public_phone} />
@@ -226,6 +231,7 @@ export default function AdminOpportunityDetailClient({
                   label="Matched Cleaning Terms"
                   value={opportunity.matched_cleaning_terms?.length ? opportunity.matched_cleaning_terms.join(", ") : null}
                 />
+                <Field label="OpenStreetMap ID" value={opportunity.osm_id} />
                 {opportunity.description && (
                   <div className="col-span-full">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</dt>

@@ -10,9 +10,11 @@ import {
   INTENT_LEVEL_STYLES,
   LEAD_CATEGORIES,
   LEAD_CATEGORY_STYLES,
+  statusesForCategory,
   type ActiveCleaningOpportunityRow,
   type IntentLevel,
   type LeadCategory,
+  type OpportunityCollectionRunRow,
   type OpportunityStatus,
   type OpportunityType,
 } from "@/lib/opportunities/types";
@@ -63,9 +65,11 @@ function downloadCsv(filename: string, csv: string) {
 export default function OpportunitiesAdminClient({
   opportunities,
   agents,
+  latestProspectRun,
 }: {
   opportunities: ActiveCleaningOpportunityRow[];
   agents: CrmUserRow[];
+  latestProspectRun: OpportunityCollectionRunRow | null;
 }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<LeadCategory | "all">("all");
@@ -281,6 +285,7 @@ export default function OpportunitiesAdminClient({
       "Opportunity Title",
       "City",
       "Province",
+      "Address",
       "Service Needed",
       "Contact Name",
       "Public Phone",
@@ -307,6 +312,7 @@ export default function OpportunitiesAdminClient({
         o.opportunity_title,
         o.city,
         o.province,
+        o.address,
         o.service_needed,
         o.contact_name,
         o.public_phone,
@@ -357,6 +363,7 @@ export default function OpportunitiesAdminClient({
       </div>
 
       <DailySummaryPanel stats={todayStats} />
+      <LastSuccessfulSearchPanel run={latestProspectRun} />
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
@@ -654,7 +661,7 @@ export default function OpportunitiesAdminClient({
                       }
                       className={`rounded-full border-none px-2.5 py-1 text-xs font-medium ${OPPORTUNITY_STATUS_STYLES[o.status]}`}
                     >
-                      {OPPORTUNITY_STATUSES.map((status) => (
+                      {statusesForCategory(o.lead_category).map((status) => (
                         <option key={status} value={status}>
                           {status}
                         </option>
@@ -874,6 +881,68 @@ function DailySummaryPanel({ stats }: { stats: TodayStats }) {
         Duplicates skipped and rejected records for today&apos;s collection run(s) are shown in the
         Collection Run panel above, right after each Run Collection Now click - they&apos;re never
         stored, so they can&apos;t be tallied retroactively here.
+      </p>
+    </div>
+  );
+}
+
+// Persisted summary of the qualified-prospects connector's most recent
+// daily run (migration 0017's opportunity_collection_runs table) - unlike
+// the ephemeral Collection Run panel above, this survives a page reload
+// and reflects the cron's own runs, not just manual ones.
+function LastSuccessfulSearchPanel({ run }: { run: OpportunityCollectionRunRow | null }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Last Successful Search — Qualified Prospects (OpenStreetMap)
+      </h3>
+
+      {!run ? (
+        <p className="mt-2 text-sm text-slate-500">No prospect collection run has been recorded yet.</p>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-slate-400">{new Date(run.ran_at).toLocaleString()}</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryStat label="Candidates Found" value={run.candidates_found} />
+            <SummaryStat label="New Records Added" value={run.new_records_added} />
+            <SummaryStat label="Duplicates Skipped" value={run.duplicates_skipped} />
+            <SummaryStat label="Errors" value={run.errors.length} />
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Cities Searched ({run.cities_searched.length})
+              </div>
+              <div className="mt-0.5 text-xs text-slate-600">{run.cities_searched.join(", ") || "—"}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Industries Searched ({run.industries_searched.length})
+              </div>
+              <div className="mt-0.5 text-xs text-slate-600">{run.industries_searched.join(", ") || "—"}</div>
+            </div>
+          </div>
+          {run.errors.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-rose-600">
+              {run.errors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      <p className="mt-3 text-xs text-slate-400">
+        Qualified Prospect business data includes information from{" "}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-slate-600"
+        >
+          OpenStreetMap
+        </a>
+        , made available under the Open Database License (ODbL). © OpenStreetMap contributors.
       </p>
     </div>
   );

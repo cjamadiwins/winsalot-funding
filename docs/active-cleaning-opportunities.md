@@ -8,8 +8,9 @@ categories share one table, one status pipeline, and one CRM workflow:
 - **Active Opportunities** - direct, publicly-expressed cleaning intent (tenders, RFPs, quote
   requests). The strict tender collector from the original build, unchanged.
 - **Qualified Prospects** - strong-fit businesses in target industries (medical clinics, gyms,
-  daycares, restaurants, etc.) that haven't publicly requested cleaning yet, sourced from a
-  public business directory. New - see "Qualified Prospects" below.
+  daycares, restaurants, etc.) that haven't publicly requested cleaning yet, sourced daily from
+  OpenStreetMap's free, no-API-key Overpass directory, rotating through every target city over
+  time rather than repeatedly searching the same handful. See "Qualified Prospects" below.
 
 Every record is a **potential opportunity or prospect** surfaced from a public source, never a
 confirmed buyer. The dashboard, the alert email, and this doc all describe them that way
@@ -65,11 +66,15 @@ delete a selection; merge duplicates into a primary record.
 
 ### Agent can
 
-See only opportunities assigned to them; view organization, city, service needed, public
-phone, public email, deadline, intent level, and the original source link; add call notes
-(via `crm_activities`); set/change follow-up dates (via `crm_followups`); update status -
-**within the agent-facing status set only**: New, Contacted, No answer, Follow-up required,
-Quote requested, Converted, Not suitable, Expired.
+See only opportunities assigned to them; view organization, city, address, service needed,
+public phone, public email, deadline, intent level, and the original source link; add call
+notes (via `crm_activities`); set/change follow-up dates (via `crm_followups`); update status -
+**within their record's own category's agent-facing status set**:
+- **Active Opportunity**: New, Contacted, No answer, Follow-up required, Quote requested,
+  Converted, Not suitable, Expired.
+- **Qualified Prospect**: Verified, Invalid, Called, Interested, Follow-up, Not Interested.
+  (`Unverified Prospect` is the system-set default a new prospect starts at - not something an
+  agent chooses, same as a tender's `New`.)
 
 ### Agent cannot
 
@@ -83,9 +88,11 @@ This is enforced in three independent layers, same defense-in-depth as the rest 
 1. **RLS row-level policies** - an agent's `select`/`update` policies only match rows where
    `assigned_agent = auth.uid()` and `archived_at is null`.
 2. **A database trigger** (`active_cleaning_opportunities_restrict_agent_edits`, migration
-   `0012`) - column-level: even on their own assigned row, an agent's `UPDATE` is rejected if
-   it touches `assigned_agent`, `intent_score`, `intent_level`, `source_name`, `source_url`,
-   or any business/contact field, or sets `status` to anything outside the agent-facing list.
+   `0012`, extended in `0015`/`0016`/`0017`) - column-level: even on their own assigned row, an
+   agent's `UPDATE` is rejected if it touches `assigned_agent`, `intent_score`, `intent_level`,
+   `source_name`, `source_url`, `osm_id`, `lead_category`, `industry`, or any business/contact/
+   address field, or sets `status` to anything outside their record's own category's
+   agent-facing list (checked against `lead_category`, not a single shared list).
 3. **Application code** - the agent-facing Server Actions
    (`src/app/agent/(dashboard)/opportunities/actions.ts`) never expose a field-edit, assign,
    archive, or delete action in the first place; the UI never renders those controls.
@@ -96,9 +103,10 @@ Category (Active Opportunity / Qualified Prospect badge), Organization name, Cit
 needed/Industry, Contact name, Public phone, Public email, Deadline, Intent level, Status,
 Assigned agent, Last follow-up date - plus admin-only bulk-select checkboxes and
 Details/Archive/Delete row actions. (The detail page shows everything else - description,
-industry, source, intent score, matched cleaning terms/accepted reason, date
-posted/discovered, next follow-up, notes, timeline, audit log.) A **Category** filter (admin
-list) narrows to just one lead type.
+industry, address, OpenStreetMap ID, source, intent score, matched cleaning terms/accepted
+reason, date posted/discovered, next follow-up, notes, timeline, audit log.) A **Category**
+filter (admin list) narrows to just one lead type; the shared **Status** filter includes both
+categories' status vocabularies, since they're all one `status` column underneath.
 
 ## Lead categories
 
@@ -110,15 +118,17 @@ Only how a record is *found and scored* differs:
 
 - **Active Opportunity** - unchanged from the original build: CanadaBuys, BC Bid, and
   municipal-portal connectors, gated by the strict cleaning-relevance filter (see below).
-- **Qualified Prospect** - new: `src/lib/opportunities/connectors/qualified-prospects.ts`
-  queries OpenStreetMap's Overpass API for businesses in the brief's target industries
-  (property/office management has no reliable OSM tag and is a known coverage gap - see the
-  comment in `industries.ts`) within Metro Vancouver/GTA, keeping only records with a
-  confirmed target-city address and a public phone or email.
+- **Qualified Prospect** - `src/lib/opportunities/connectors/qualified-prospects.ts` queries
+  OpenStreetMap's Overpass API for businesses in the brief's target industries (property/office
+  management has no reliable OSM tag and is a known coverage gap - see the comment in
+  `industries.ts`), one target city at a time from a **daily rotation** across all 47 target
+  cities (`src/lib/opportunities/rotation.ts`), keeping only records with a confirmed
+  target-city address and a public phone or email.
 
 `opportunity_type` gained a `qualified_prospect` value (alongside the existing
-`rfp_tender`/`quote_request`/`hiring_signal`/`new_location`/`other`) and the table gained an
-`industry` column (nullable, only ever populated for prospects today).
+`rfp_tender`/`quote_request`/`hiring_signal`/`new_location`/`other`) and the table gained
+`industry`, `address`, and `osm_id` columns (nullable, only ever populated for prospects
+today).
 
 ## Record safety
 
@@ -248,6 +258,11 @@ CRM list. Both new columns are protected by the same agent column-restriction tr
 - Every record stores `source_url`, `source_name`, and `date_discovered`.
 - Only organization-level public contact info is ever stored - no private groups/profiles, no
   sensitive personal data.
+- OpenStreetMap data is used under its Open Database License (ODbL); the admin dashboard's
+  **Last Successful Search** panel carries the required "© OpenStreetMap contributors"
+  attribution and a link to `openstreetmap.org/copyright`. Query volume/frequency (one call per
+  city/industry pair, sequential with a 1s delay, ~45 calls/day) stays well inside OSM's public
+  Overpass instance fair-use expectations.
 
 ## Sources (connectors)
 
@@ -265,19 +280,37 @@ CRM list. Both new columns are protected by the same agent column-restriction tr
 **Qualified Prospects:**
 - `qualified-prospects.ts` - OpenStreetMap's Overpass API (`overpass-api.de`), a free, public,
   no-API-key business/POI directory, explicitly intended for this kind of programmatic query
-  under OSM's own usage policy. One query per (region, industry) pair (2 regions ×
-  13 industries), run **sequentially with a 1s delay between calls**, out of respect for the
-  shared public instance, plus a 30s overall time budget so a slow run can't blow past the
-  cron route's 60s `maxDuration`. Also unverified against a live fetch - same sandbox
+  under OSM's own usage policy. One query per **(city, industry) pair**, drawn from a **daily
+  rotation** (`rotation.ts`) across the full matrix of 47 target cities × 13 mapped industries
+  (611 pairs total) - 45 pairs per run, cycling through the whole matrix roughly every two
+  weeks, so no city/industry combination goes stale for long. Run **sequentially with a 1s
+  delay between calls**, out of respect for the shared public instance, plus a 30s overall time
+  budget so a slow run can't blow past the cron route's 60s `maxDuration`, and capped at **50
+  candidates per run** ("up to 50 new prospects per day" - never padded with invented records
+  if fewer valid businesses turn up). Also unverified against a live fetch - same sandbox
   limitation as BC Bid.
-  - City comes only from the POI's own `addr:city` tag, never guessed from the region bounding
-    box (the bbox just keeps the query a manageable size - plenty of POIs inside it fall
-    outside every actual target city).
+  - Each city's Overpass query area comes from an approximate centre + radius in
+    `cities.ts` (`bboxForCity()`) - sized only to bound the query, never used to decide a
+    result's city.
+  - City comes only from the POI's own `addr:city` tag, never guessed from the query's target
+    city or its bounding box - a result inside the bbox but tagged with a different (or no)
+    city is rejected, not reattributed.
+  - Address is built only from structured `addr:housenumber`/`addr:street`/`addr:city`/
+    `addr:province`/`addr:postcode` tags, never geocoded or guessed - missing pieces are
+    omitted rather than padded.
+  - `osm_id` (`"node/12345"` / `"way/6789"`) is stored on every record - the strongest possible
+    duplicate identity, since it names the exact same real-world OSM element even if its name,
+    phone, or `source_url` later changes.
   - A record is kept only if it has a name, a confirmed target-city `addr:city`, and a public
     phone or email - see "Qualified Prospect requirements" below.
   - Property management and office-building management companies have no reliable OSM tag and
     aren't covered by this connector - a known gap, not an oversight (see the comment in
     `industries.ts`).
+  - Every daily run is logged to `opportunity_collection_runs` (migration `0017`): cities
+    searched, industries searched, candidates found, new records added, duplicates skipped, and
+    any errors - shown in the admin dashboard's persistent **Last Successful Search** panel
+    (unlike the ephemeral post-click Collection Run panel, this survives a page reload and
+    reflects the cron's own runs too).
 
 Search-engine and social-post connectors remain out of scope (need a paid, ToS-compliant
 search API).
@@ -296,12 +329,23 @@ a source with that signal, it should reject on it the same way.
 
 ## Duplicate prevention across categories
 
-Both categories dedupe against the *same* table with the *same* logic
+Both categories dedupe against the *same* table with the *same* base logic
 (`src/lib/opportunities/dedupe.ts` + the `source_url`/`opportunity_title` unique index) - an
 Active Opportunity and a Qualified Prospect for the same organization aren't treated as
 duplicates of each other (they're different signals - a confirmed tender vs. a general
 business-fit match - and both are worth surfacing), but two runs finding the same OSM node or
-the same tender never produce two rows.
+the same tender never produce two rows. Two records are treated as the same:
+- Same `source_url` + `opportunity_title` (the common case), or
+- Same organization + title + deadline from a different URL (a tender re-published with a
+  tracking parameter), or
+- **Same `osm_id`** - the exact same OpenStreetMap element, regardless of anything else, or
+- **Same organization name plus any one matching phone, website, or address** - a prospect
+  re-appearing under a slightly different `source_url` (which embeds the OSM element type/id,
+  occasionally changed by an OSM edit between runs).
+
+Checked both within a single run's own candidates and against everything already stored
+(`source_url`, `opportunity_title`, and `osm_id` are each queried separately with safe `.in()`
+calls, never a hand-built filter string from untrusted scraped text).
 
 ## Daily Summary
 
@@ -316,7 +360,7 @@ becomes a row), so they only ever appear in the **Collection Run** panel immedia
 
 ## Database
 
-Four migrations, **all applied to the live "Business Finance" Supabase project** and verified
+Six migrations, **all applied to the live "Business Finance" Supabase project** and verified
 (tables/policies/functions/permissions confirmed to exist; existing CRM and quote-system row
 counts confirmed unchanged before/after each):
 
@@ -342,29 +386,36 @@ counts confirmed unchanged before/after each):
   - adds `matched_cleaning_terms text[]` and `accepted_reason text` to
     `active_cleaning_opportunities`, and extends the agent column-restriction trigger to
     protect both.
-- **`0016_qualified_prospects.sql`** (pending your approval - not yet applied)
+- **[`0016_qualified_prospects.sql`](../supabase/migrations/0016_qualified_prospects.sql)**
   - renames `intent_level`'s `Research` value to `Prospect` (existing rows updated first, then
-    the check constraint is redefined), adds `lead_category` (`Active Opportunity` /
-    `Qualified Prospect`, default `Active Opportunity` so every existing row is correctly
-    categorized with no manual backfill needed) and `industry`, adds `qualified_prospect` to
-    the `opportunity_type` check constraint, and extends the agent column-restriction trigger
-    to protect the two new fields.
+    the check constraint is redefined - the constraint must be dropped *before* the rename
+    update, not after, or the update itself violates the still-active old constraint), adds
+    `lead_category` (`Active Opportunity` / `Qualified Prospect`, default `Active Opportunity`
+    so every existing row is correctly categorized with no manual backfill needed) and
+    `industry`, adds `qualified_prospect` to the `opportunity_type` check constraint, and
+    extends the agent column-restriction trigger to protect the two new fields.
+- **`0017_qualified_prospect_engine.sql`** (pending your approval - not yet applied)
+  - adds `address` and `osm_id` columns; extends the `status` check constraint with the seven
+    Qualified Prospect statuses (`Unverified Prospect`, `Verified`, `Invalid`, `Called`,
+    `Interested`, `Follow-up`, `Not Interested`) alongside the existing ten Active Opportunity
+    ones; adds the `opportunity_collection_runs` log table (admin-only read, service-role-only
+    write); and extends the agent column-restriction trigger so the allowed status set branches
+    by `lead_category`, and `address`/`osm_id` join the other agent-protected fields.
 
-The first four are additive to the schema; `0013` is the only one that touches a table with
-existing production data, and it only adds a column + loosens a `not null` constraint + adds
-policies - no existing row or value was modified (verified by row-count comparison
-before/after). `0016` is the first migration in this feature that **rewrites** an existing
-column's data (the `Research` → `Prospect` rename) rather than only adding - see "Applying
-migration 0016" below before it's applied.
+The first five are additive to the schema; `0013` is the only one of them that touches a table
+with existing production data, and it only adds a column + loosens a `not null` constraint +
+adds policies - no existing row or value was modified (verified by row-count comparison
+before/after). `0016` is the only migration in this feature so far that **rewrote** an existing
+column's data (the `Research` → `Prospect` rename) rather than only adding - applied and
+verified: the rename affected exactly the one pre-existing row that had `intent_level =
+'Research'`, and all other CRM/quote data was confirmed unchanged before/after. `0017` is
+purely additive again (new columns, new table, a widened check constraint) - no existing row's
+data changes.
 
-### Applying migration 0016
+### Applying migration 0017
 
 Not yet applied - waiting on your approval, consistent with every prior schema change in this
-feature. It's reversible right up until it's applied (nothing to undo yet); after applying, a
-clean rollback (renaming `Prospect` back to `Research`, dropping `lead_category`/`industry`)
-is possible as long as no row has been given `lead_category = 'Qualified Prospect'` yet - once
-Qualified Prospect rows exist, they'd need to be deleted or re-categorized before a rollback of
-the `lead_category` column itself, same caveat pattern as migration `0013`.
+feature.
 
 ## Environment variables
 
@@ -428,6 +479,15 @@ testing.
     page reload issue, and that its numbers match what's actually in the table for today.
 18. Filter by **Category** (Active Opportunity / Qualified Prospect) and confirm the table,
     stat cards, and CSV export all respect it.
+19. (After `0017` is applied) Run **Run Collection Now** twice on two different days (or by
+    temporarily adjusting the system date in a test environment); confirm the **Last
+    Successful Search** panel updates with a different set of cities/industries each time
+    (rotation working), and that a newly-inserted prospect's `status` is `Unverified Prospect`,
+    not `New`. As an agent on an assigned prospect, confirm the status dropdown only offers
+    Verified/Invalid/Called/Interested/Follow-up/Not Interested (not the Active Opportunity
+    list), and that setting one of those succeeds. As admin, confirm a prospect's `address` and
+    `osm_id` are visible on its detail page and that editing `address` (but not `osm_id`, which
+    has no edit field) is possible.
 
 ## Manual test before enabling the daily cron (per your instructions)
 
@@ -450,8 +510,8 @@ Then stop and share the results for review before the `crons` entry is added to 
 
 ## Deployment instructions
 
-Migrations `0012`-`0015` are applied to the live Supabase project already; `0016` is pending
-approval (see above). Once `0016` is applied:
+Migrations `0012`-`0016` are applied to the live Supabase project already; `0017` is pending
+approval (see above). Once `0017` is applied:
 
 1. Merge the PR / deploy the app itself to production (not yet done - still only on the PR's
    Vercel preview deployment as of this writing).
@@ -475,8 +535,12 @@ approval (see above). Once `0016` is applied:
 - A richer prospect data source with buying-signal text (news, reviews, job postings) - today's
   OSM-only connector will produce almost exclusively `Prospect`-tier (not `Warm`) records, since
   it has no free text to detect a buying signal from.
-- A true historical daily digest for duplicates-skipped/rejected-records (only available
-  per-run, right after **Run Collection Now** - see "Daily Summary" above).
+- A true historical daily digest for duplicates-skipped/rejected-records across *all*
+  connectors (only available per-run, right after **Run Collection Now** - see "Daily Summary"
+  above). The qualified-prospects connector specifically now has a persisted history via
+  `opportunity_collection_runs`, but the tender connectors don't log a comparable row yet.
+- Migration `0017` is written but **not yet applied to the live project** - pending your
+  approval, same pattern as every prior schema change here.
 
 ## Sample records
 
@@ -493,6 +557,8 @@ approval (see above). Once `0016` is applied:
   "industry": null,
   "city": "Surrey",
   "province": "BC",
+  "address": null,
+  "osm_id": null,
   "contact_name": "Procurement Office",
   "public_email": "procurement@example-clinic.ca",
   "public_phone": null,
@@ -531,6 +597,8 @@ location + 10 public email + 15 posted-within-14-days [8 days old] = 110, clampe
   "industry": "Dental office",
   "city": "Burnaby",
   "province": "BC",
+  "address": "4720 Kingsway, Burnaby, BC, V5H 4J5",
+  "osm_id": "node/123456789",
   "contact_name": null,
   "public_email": null,
   "public_phone": "+1-604-555-0142",
@@ -542,7 +610,7 @@ location + 10 public email + 15 posted-within-14-days [8 days old] = 110, clampe
   "date_discovered": "2026-07-22T13:00:00.000Z",
   "intent_score": 35,
   "intent_level": "Prospect",
-  "status": "New",
+  "status": "Unverified Prospect",
   "assigned_agent": null,
   "notes": null,
   "next_follow_up_at": null,

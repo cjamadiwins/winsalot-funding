@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { AGENT_SETTABLE_OPPORTUNITY_STATUSES, type OpportunityStatus } from "@/lib/opportunities/types";
+import { agentSettableStatusesForCategory, type OpportunityStatus } from "@/lib/opportunities/types";
 
 type ActionResult = { error?: string };
 
@@ -23,16 +23,28 @@ function parseScheduledAt(formData: FormData): string {
 // RLS (active_cleaning_opportunities_agent_update_own) restricts this to
 // opportunities currently assigned to the signed-in agent. The database
 // also enforces the agent-settable status list independently (migration
-// 0012's restrict-agent-edits trigger) - this check just gives a clear
-// message instead of a raw Postgres exception if the dropdown is somehow
-// bypassed.
+// 0012's restrict-agent-edits trigger, extended in 0017 to branch by
+// lead_category) - this check just gives a clear message instead of a raw
+// Postgres exception if the dropdown is somehow bypassed. Which status set
+// applies depends on the record's own lead_category (an Active Opportunity
+// and a Qualified Prospect use different vocabularies), so it's looked up
+// first rather than assumed.
 export async function updateOpportunityStatusAction(id: string, status: string): Promise<ActionResult> {
   await requireCrmUser();
-  if (!AGENT_SETTABLE_OPPORTUNITY_STATUSES.includes(status as OpportunityStatus)) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: current } = await supabase
+    .from("active_cleaning_opportunities")
+    .select("lead_category")
+    .eq("id", id)
+    .maybeSingle();
+  if (!current) return { error: "Opportunity not found." };
+
+  const allowedStatuses = agentSettableStatusesForCategory(current.lead_category);
+  if (!allowedStatuses.includes(status as OpportunityStatus)) {
     return { error: "You don't have permission to set this status." };
   }
 
-  const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("active_cleaning_opportunities").update({ status }).eq("id", id);
   if (error) return { error: "Failed to update status." };
 
