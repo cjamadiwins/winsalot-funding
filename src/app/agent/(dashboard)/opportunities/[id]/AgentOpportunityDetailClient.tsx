@@ -7,6 +7,7 @@ import {
   AGENT_SETTABLE_OPPORTUNITY_STATUSES,
   OPPORTUNITY_STATUS_STYLES,
   INTENT_LEVEL_STYLES,
+  LEAD_CATEGORY_STYLES,
   type ActiveCleaningOpportunityRow,
   type OpportunityActivityRow,
   type OpportunityFollowUpRow,
@@ -64,6 +65,9 @@ export default function AgentOpportunityDetailClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-full px-3 py-1 text-[12.5px] font-medium ${LEAD_CATEGORY_STYLES[opportunity.lead_category]}`}>
+            {opportunity.lead_category}
+          </span>
           <span className={`rounded-full px-3 py-1 text-[12.5px] font-medium ${INTENT_LEVEL_STYLES[opportunity.intent_level]}`}>
             {opportunity.intent_level}
           </span>
@@ -89,6 +93,7 @@ export default function AgentOpportunityDetailClient({
           <Field label="Organization" value={opportunity.organization_name} />
           <Field label="City" value={[opportunity.city, opportunity.province].filter(Boolean).join(", ")} />
           <Field label="Service Needed" value={opportunity.service_needed} />
+          <Field label="Industry" value={opportunity.industry} />
           <Field label="Public Phone" value={opportunity.public_phone} />
           <Field label="Public Email" value={opportunity.public_email} />
           <Field label="Deadline" value={opportunity.deadline ? new Date(opportunity.deadline).toLocaleDateString() : null} />

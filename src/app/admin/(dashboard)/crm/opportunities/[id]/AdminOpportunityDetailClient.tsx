@@ -14,6 +14,7 @@ import {
   OPPORTUNITY_STATUS_STYLES,
   OPPORTUNITY_TYPE_LABELS,
   INTENT_LEVEL_STYLES,
+  LEAD_CATEGORY_STYLES,
   type ActiveCleaningOpportunityRow,
   type OpportunityActivityRow,
   type OpportunityAuditLogRow,
@@ -93,6 +94,11 @@ export default function AdminOpportunityDetailClient({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span
+            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${LEAD_CATEGORY_STYLES[opportunity.lead_category]}`}
+          >
+            {opportunity.lead_category}
+          </span>
+          <span
             className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${INTENT_LEVEL_STYLES[opportunity.intent_level]}`}
           >
             {opportunity.intent_level} ({opportunity.intent_score})
@@ -160,6 +166,10 @@ export default function AdminOpportunityDetailClient({
                   <input name="service_needed" defaultValue={opportunity.service_needed ?? ""} className={`mt-1 ${inputClass}`} />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
+                  Industry
+                  <input name="industry" defaultValue={opportunity.industry ?? ""} className={`mt-1 ${inputClass}`} />
+                </label>
+                <label className="text-xs font-medium text-slate-500">
                   Deadline
                   <input type="date" name="deadline" defaultValue={opportunity.deadline ?? ""} className={`mt-1 ${inputClass}`} />
                 </label>
@@ -201,6 +211,7 @@ export default function AdminOpportunityDetailClient({
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
                 <Field label="Opportunity Type" value={OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]} />
                 <Field label="Service Needed" value={opportunity.service_needed} />
+                <Field label="Industry" value={opportunity.industry} />
                 <Field label="Contact Name" value={opportunity.contact_name} />
                 <Field label="Public Email" value={opportunity.public_email} />
                 <Field label="Public Phone" value={opportunity.public_phone} />

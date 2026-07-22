@@ -123,6 +123,7 @@ export async function runCanadaBuysConnector(): Promise<ConnectorResult> {
       }
 
       candidates.push({
+        lead_category: "Active Opportunity",
         organization_name: cell(row, entityNameIdx) ?? null,
         opportunity_title: title,
         description: description?.slice(0, 2000) ?? null,

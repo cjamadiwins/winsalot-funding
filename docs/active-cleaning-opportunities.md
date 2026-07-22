@@ -1,12 +1,19 @@
 # Cleaning Opportunities (CRM)
 
-A lead-generation system that scans public, no-login sources for businesses and organizations
-in Metro Vancouver/the Lower Mainland (BC) and the Greater Toronto Area (ON) showing recent
-intent to buy commercial cleaning, janitorial, custodial, or building-maintenance services -
-built as a new section of the *existing* Winsalot CRM, not a parallel system.
+A daily commercial-cleaning lead engine that scans public, no-login sources for businesses and
+organizations in Metro Vancouver/the Lower Mainland (BC) and the Greater Toronto Area (ON) -
+built as a new section of the *existing* Winsalot CRM, not a parallel system. Two lead
+categories share one table, one status pipeline, and one CRM workflow:
 
-Every record is a **potential opportunity** surfaced from a public source, never a confirmed
-buyer. The dashboard, the alert email, and this doc all describe them that way deliberately.
+- **Active Opportunities** - direct, publicly-expressed cleaning intent (tenders, RFPs, quote
+  requests). The strict tender collector from the original build, unchanged.
+- **Qualified Prospects** - strong-fit businesses in target industries (medical clinics, gyms,
+  daycares, restaurants, etc.) that haven't publicly requested cleaning yet, sourced from a
+  public business directory. New - see "Qualified Prospects" below.
+
+Every record is a **potential opportunity or prospect** surfaced from a public source, never a
+confirmed buyer. The dashboard, the alert email, and this doc all describe them that way
+deliberately.
 
 ## Where it lives
 
@@ -30,10 +37,13 @@ There is **no separate login, role system, or CRM** for this feature - it reuses
 
 ## How it works
 
-1. A daily collection job (`src/lib/opportunities/run.ts`) runs each connector, dedupes,
-   scores 0-100 with an intent level (Hot/Warm/Research), and inserts genuinely new records.
+1. A daily collection job (`src/lib/opportunities/run.ts`) runs every connector - both the
+   Active Opportunity tender connectors and the Qualified Prospects connector - dedupes across
+   both categories against the same table, scores each record 0-100 with an intent level
+   (Hot/Warm/Prospect), and inserts genuinely new records.
 2. A newly-inserted **Hot** opportunity emails `info@winsalotcorp.com` (override with
-   `OPPORTUNITY_ALERT_EMAIL`).
+   `OPPORTUNITY_ALERT_EMAIL`) - Qualified Prospects never trigger this, since a prospect can
+   never score Hot by construction (see "Intent scoring" below).
 3. An **admin** reviews new records, edits business/contact details if needed, and assigns
    one to an agent (`/admin/crm/opportunities`). Assignment is a single `assigned_agent`
    column - reassigning shows the current agent first, so nothing is silently overwritten.
@@ -82,11 +92,33 @@ This is enforced in three independent layers, same defense-in-depth as the rest 
 
 ## Table columns (list view)
 
-Organization name, City, Service needed, Contact name, Public phone, Public email, Deadline,
-Intent level, Status, Assigned agent, Last follow-up date - plus admin-only bulk-select
-checkboxes and Details/Archive/Delete row actions. (The detail page shows everything else -
-description, source, intent score, date posted/discovered, next follow-up, notes, timeline,
-audit log.)
+Category (Active Opportunity / Qualified Prospect badge), Organization name, City, Service
+needed/Industry, Contact name, Public phone, Public email, Deadline, Intent level, Status,
+Assigned agent, Last follow-up date - plus admin-only bulk-select checkboxes and
+Details/Archive/Delete row actions. (The detail page shows everything else - description,
+industry, source, intent score, matched cleaning terms/accepted reason, date
+posted/discovered, next follow-up, notes, timeline, audit log.) A **Category** filter (admin
+list) narrows to just one lead type.
+
+## Lead categories
+
+Both categories live in the same `active_cleaning_opportunities` table (`lead_category`
+column, migration `0016`) rather than a second table or CRM section, because they share
+everything downstream: the same status pipeline, the same assignment/agent-visibility rules,
+the same `crm_activities`/`crm_followups` timeline, the same audit log, the same dedup logic.
+Only how a record is *found and scored* differs:
+
+- **Active Opportunity** - unchanged from the original build: CanadaBuys, BC Bid, and
+  municipal-portal connectors, gated by the strict cleaning-relevance filter (see below).
+- **Qualified Prospect** - new: `src/lib/opportunities/connectors/qualified-prospects.ts`
+  queries OpenStreetMap's Overpass API for businesses in the brief's target industries
+  (property/office management has no reliable OSM tag and is a known coverage gap - see the
+  comment in `industries.ts`) within Metro Vancouver/GTA, keeping only records with a
+  confirmed target-city address and a public phone or email.
+
+`opportunity_type` gained a `qualified_prospect` value (alongside the existing
+`rfp_tender`/`quote_request`/`hiring_signal`/`new_location`/`other`) and the table gained an
+`industry` column (nullable, only ever populated for prospects today).
 
 ## Record safety
 
@@ -118,20 +150,38 @@ audit log.)
 
 ## Intent scoring
 
-Only ever computed for a record the cleaning-relevance filter above has already accepted
-(`src/lib/opportunities/scoring.ts`):
+`intent_level`'s third tier was renamed **`Research` → `Prospect`** (migration `0016`) once it
+became a shared field: a weak-signal tender still lands there, and it's also the default tier
+for a Qualified Prospect with no detected buying signal - "Prospect" reads correctly for both.
+Existing rows were migrated, not dropped. Thresholds unchanged: **Hot 70-100, Warm 45-69,
+Prospect 0-44.**
 
+**Active Opportunities** (`scoreOpportunity()`) - only ever computed for a record the
+cleaning-relevance filter has already accepted:
 - Strong cleaning phrase in the **title**: +50; phrase only in description/category: +35
 - Explicit request term (RFP, RFQ, proposal, bid, tender, quotation) in title or description: +20
 - Deadline within 30 days: +15
 - Confirmed Metro Vancouver/GTA location: +15
 - Public email or phone available: +10
 - Posted within the last 14 days: +10
-- Score capped at 100. **Hot: 70-100, Warm: 45-69, Research: 0-44.**
+
+**Qualified Prospects** (`scoreQualifiedProspect()`) - deliberately simpler and **capped below
+Hot** (max score 69): a prospect has no confirmed cleaning request by definition, so it can
+never out-score its way into the Hot band - a business that *does* show a confirmed request
+belongs in Active Opportunities instead. Base score 20, +5 for a confirmed city, +5/+10 for
+one/both of phone+email, +5 for a website, +25 for a detected buying signal (new location,
+hiring pattern, relocation - `src/lib/opportunities/prospect-signals.ts`). The non-signal
+bonuses are capped so they can never add up past 40 on their own (below the 45 Warm floor) -
+without a detected signal, a prospect always stays `Prospect` regardless of how complete its
+contact info is; the +25 signal bonus alone guarantees at least `Warm` (min 20+25=45) whenever
+one's found, matching "Warm requires a strong public buying signal," not just complete contact
+info. In practice, the OSM-sourced connector has no free-text description to check for a buying
+signal, so today's prospects land at **Prospect** tier almost every time - that's expected; the
+Warm-upgrade path exists for a future connector with richer text (news, reviews, job postings).
 
 There's no "Rejected" intent level in the database - a rejected candidate is never inserted at
-all (see "Cleaning-relevance filter" above), so every stored row is already confirmed
-cleaning-specific by definition.
+all (see "Cleaning-relevance filter" below), so every stored row is already either a confirmed
+cleaning-specific tender or a confirmed target-industry business with valid contact info.
 
 ## CSV export
 
@@ -199,12 +249,11 @@ CRM list. Both new columns are protected by the same agent column-restriction tr
 - Only organization-level public contact info is ever stored - no private groups/profiles, no
   sensitive personal data.
 
-## Phase 1 sources (connectors)
+## Sources (connectors)
 
-Unchanged from the original Phase 1 build - see the connector table and "Activating municipal
-portals" notes that used to be here; the source code lives in
 `src/lib/opportunities/connectors/`:
 
+**Active Opportunities:**
 - `canadabuys.ts` - CanadaBuys open-data tender feed. Live.
 - `bcbid.ts` - BC Bid public opportunity browse page. Live, best-effort HTML parse - needs a
   live smoke test after first deploy (this sandbox has no outbound network access to verify
@@ -213,8 +262,57 @@ portals" notes that used to be here; the source code lives in
   **empty** config list on purpose (unverified subdomains aren't shipped as if confirmed) -
   see the comment in `bidsandtenders.ts` for how to activate one.
 
-Search-engine and social-post connectors remain out of scope for Phase 1 (need a paid,
-ToS-compliant search API).
+**Qualified Prospects:**
+- `qualified-prospects.ts` - OpenStreetMap's Overpass API (`overpass-api.de`), a free, public,
+  no-API-key business/POI directory, explicitly intended for this kind of programmatic query
+  under OSM's own usage policy. One query per (region, industry) pair (2 regions ×
+  13 industries), run **sequentially with a 1s delay between calls**, out of respect for the
+  shared public instance, plus a 30s overall time budget so a slow run can't blow past the
+  cron route's 60s `maxDuration`. Also unverified against a live fetch - same sandbox
+  limitation as BC Bid.
+  - City comes only from the POI's own `addr:city` tag, never guessed from the region bounding
+    box (the bbox just keeps the query a manageable size - plenty of POIs inside it fall
+    outside every actual target city).
+  - A record is kept only if it has a name, a confirmed target-city `addr:city`, and a public
+    phone or email - see "Qualified Prospect requirements" below.
+  - Property management and office-building management companies have no reliable OSM tag and
+    aren't covered by this connector - a known gap, not an oversight (see the comment in
+    `industries.ts`).
+
+Search-engine and social-post connectors remain out of scope (need a paid, ToS-compliant
+search API).
+
+## Qualified Prospect requirements
+
+A prospect is only accepted with: business/organization name, a confirmed target-city
+address, industry, a public phone or email, a website/source URL, a reason it fits commercial
+cleaning (`accepted_reason`), and a discovery date. Excluded automatically: no usable business
+name, no confirmed target-city address (never guessed), no public phone or email (prospects
+can never be Hot, so unlike an Active Opportunity there's no confirmed intent to offset
+missing contact info), and anything that would already be a duplicate in the CRM (same dedup
+pass as Active Opportunities - see below). Residential-only businesses, individual landlords,
+and closed businesses aren't distinguishable from OSM's tags alone; if a future connector adds
+a source with that signal, it should reject on it the same way.
+
+## Duplicate prevention across categories
+
+Both categories dedupe against the *same* table with the *same* logic
+(`src/lib/opportunities/dedupe.ts` + the `source_url`/`opportunity_title` unique index) - an
+Active Opportunity and a Qualified Prospect for the same organization aren't treated as
+duplicates of each other (they're different signals - a confirmed tender vs. a general
+business-fit match - and both are worth surfacing), but two runs finding the same OSM node or
+the same tender never produce two rows.
+
+## Daily Summary
+
+`/admin/crm/opportunities` shows a persistent **Today's Summary** panel (not just after a
+manual run): New Hot, New Warm, New Qualified Prospects, With Phone, With Email, Assigned,
+Contacted, and Quote Requests Generated - all computed from today's discovered records'
+*current* state (client-side, from what's already loaded - no extra query). Two figures from
+the brief aren't shown here because they're not derivable after the fact: **duplicates
+skipped** and **rejected records** are never persisted (a rejected/duplicate candidate never
+becomes a row), so they only ever appear in the **Collection Run** panel immediately after a
+**Run Collection Now** click, for that specific run.
 
 ## Database
 
@@ -244,10 +342,29 @@ counts confirmed unchanged before/after each):
   - adds `matched_cleaning_terms text[]` and `accepted_reason text` to
     `active_cleaning_opportunities`, and extends the agent column-restriction trigger to
     protect both.
+- **`0016_qualified_prospects.sql`** (pending your approval - not yet applied)
+  - renames `intent_level`'s `Research` value to `Prospect` (existing rows updated first, then
+    the check constraint is redefined), adds `lead_category` (`Active Opportunity` /
+    `Qualified Prospect`, default `Active Opportunity` so every existing row is correctly
+    categorized with no manual backfill needed) and `industry`, adds `qualified_prospect` to
+    the `opportunity_type` check constraint, and extends the agent column-restriction trigger
+    to protect the two new fields.
 
-All four are additive to the schema; `0013` is the only one that touches a table with existing
-production data, and it only adds a column + loosens a `not null` constraint + adds policies -
-no existing row or value was modified (verified by row-count comparison before/after).
+The first four are additive to the schema; `0013` is the only one that touches a table with
+existing production data, and it only adds a column + loosens a `not null` constraint + adds
+policies - no existing row or value was modified (verified by row-count comparison
+before/after). `0016` is the first migration in this feature that **rewrites** an existing
+column's data (the `Research` → `Prospect` rename) rather than only adding - see "Applying
+migration 0016" below before it's applied.
+
+### Applying migration 0016
+
+Not yet applied - waiting on your approval, consistent with every prior schema change in this
+feature. It's reversible right up until it's applied (nothing to undo yet); after applying, a
+clean rollback (renaming `Prospect` back to `Research`, dropping `lead_category`/`industry`)
+is possible as long as no row has been given `lead_category = 'Qualified Prospect'` yet - once
+Qualified Prospect rows exist, they'd need to be deleted or re-categorized before a rollback of
+the `lead_category` column itself, same caveat pattern as migration `0013`.
 
 ## Environment variables
 
@@ -301,28 +418,51 @@ testing.
 15. Confirm `/commercial-cleaning-quote`, `/admin` (quote dashboard), `/admin/crm` (leads),
     `/admin/crm/agents`, `/agent/dashboard`, `/agent/leads/*` are all completely unaffected.
 16. Run **Run Collection Now** with **Skip Hot-alert email for this run** checked; confirm the
-    results panel shows candidates found/accepted/rejected, Hot/Warm/Research/duplicate/expired
-    counts, a per-source breakdown, and a sample of rejected records with reasons; confirm no
-    email was sent (`hotAlertsSkipped` matches the Hot count, `hotAlertsSent` is 0) and no
-    record was auto-assigned. Spot-check a few accepted records' detail pages for a sensible
-    `matched_cleaning_terms`/`accepted_reason`.
+    results panel shows candidates found/accepted/rejected, new Active Opportunity vs. new
+    Qualified Prospect counts, Hot/Warm/Prospect/duplicate/expired counts, with-phone/
+    with-email counts, a per-source breakdown, and a sample of rejected records with reasons;
+    confirm no email was sent (`hotAlertsSkipped` matches the Hot count, `hotAlertsSent` is 0)
+    and no record was auto-assigned. Spot-check a few accepted records' detail pages for a
+    sensible `matched_cleaning_terms`/`accepted_reason` and (for prospects) `industry`.
+17. Confirm the **Today's Summary** panel updates to reflect newly-inserted records without a
+    page reload issue, and that its numbers match what's actually in the table for today.
+18. Filter by **Category** (Active Opportunity / Qualified Prospect) and confirm the table,
+    stat cards, and CSV export all respect it.
+
+## Manual test before enabling the daily cron (per your instructions)
+
+Cron stays disabled through all of this. On `/admin/crm/opportunities`, check **Skip Hot-alert
+email for this run**, click **Run Collection Now**, and confirm:
+
+1. **Exact sources used** - the "By Source" list in the Collection Run panel (CanadaBuys, BC
+   Bid, any configured municipal portals, and OpenStreetMap/Overpass).
+2. **Accepted and rejected counts** - `candidatesFound`/accepted/`rejectedCount` in the panel,
+   plus the New Active Opportunities / New Qualified Prospects split.
+3. **At least 10 sample accepted records**, if available - open a handful from the table
+   (mix of both categories if both produced results) and check their detail pages.
+4. **Duplicates prevented** - run it a second time immediately after; confirm
+   `newRecordsInserted` is 0 (or much lower) on the second run and `duplicatesAlreadyStored`
+   accounts for the records the first run already added.
+5. **No emails sent** - `hotAlertsSent` is 0, `hotAlertsSkipped` matches the Hot count found.
+6. **No auto-assignment** - every newly-inserted record has `assigned_agent = null`.
+
+Then stop and share the results for review before the `crons` entry is added to `vercel.json`.
 
 ## Deployment instructions
 
-Migrations `0012`-`0015` are applied to the live Supabase project already. What's left:
+Migrations `0012`-`0015` are applied to the live Supabase project already; `0016` is pending
+approval (see above). Once `0016` is applied:
 
 1. Merge the PR / deploy the app itself to production (not yet done - still only on the PR's
    Vercel preview deployment as of this writing).
 2. Set `CRON_SECRET` and (optionally) `OPPORTUNITY_ALERT_EMAIL` in Vercel.
-3. Run **Run Collection Now** with **Skip Hot-alert email for this run** checked, review the
-   results panel (candidates found/accepted/rejected, Hot/Warm/Research/duplicate/expired
-   counts, rejected samples with reasons), and get sign-off before enabling the cron.
+3. Run the manual test above, share the results, and get sign-off before enabling the cron.
 4. Only then add the `crons` entry to `vercel.json` and redeploy - see "Enabling the daily
    cron" above.
 
 ## What's intentionally not built yet
 
-- Search-engine and social-post connectors (Phase 2, needs a paid search API).
+- Search-engine and social-post connectors (needs a paid search API).
 - Automatic fuzzy-duplicate *detection* (the merge tool is manual/admin-initiated; the
   collection job's own dedup already prevents most true duplicates).
 - The municipal-portal (bids&tenders/Biddingo) connector list ships empty pending
@@ -330,16 +470,27 @@ Migrations `0012`-`0015` are applied to the live Supabase project already. What'
 - A combined admin view mixing leads and opportunities in one table - they're deliberately
   kept as separate CRM sections (separate list pages) since they have different field shapes,
   even though they now share the same activity/follow-up/audit mechanisms underneath.
+- Property-management and office-building-management coverage for Qualified Prospects (no
+  reliable OSM tag - see "Sources" above).
+- A richer prospect data source with buying-signal text (news, reviews, job postings) - today's
+  OSM-only connector will produce almost exclusively `Prospect`-tier (not `Warm`) records, since
+  it has no free text to detect a buying signal from.
+- A true historical daily digest for duplicates-skipped/rejected-records (only available
+  per-run, right after **Run Collection Now** - see "Daily Summary" above).
 
-## Sample opportunity record
+## Sample records
+
+**Active Opportunity:**
 
 ```json
 {
+  "lead_category": "Active Opportunity",
   "organization_name": "Riverside Medical Clinic",
   "opportunity_title": "Request for Proposal - Janitorial Services",
   "description": "The Riverside Medical Clinic is seeking proposals from qualified janitorial contractors for daily office and medical-space cleaning at its Surrey location...",
   "opportunity_type": "rfp_tender",
   "service_needed": "Medical office cleaning",
+  "industry": null,
   "city": "Surrey",
   "province": "BC",
   "contact_name": "Procurement Office",
@@ -366,3 +517,46 @@ Migrations `0012`-`0015` are applied to the live Supabase project already. What'
 
 (`intent_score` here: 50 rfp_tender + 20 deadline-within-30-days [13 days out] + 15 BC
 location + 10 public email + 15 posted-within-14-days [8 days old] = 110, clamped to 100.)
+
+**Qualified Prospect:**
+
+```json
+{
+  "lead_category": "Qualified Prospect",
+  "organization_name": "Fraser Valley Dental Centre",
+  "opportunity_title": "Fraser Valley Dental Centre",
+  "description": "Qualified prospect in the Dental office industry - a strong fit for commercial cleaning outreach based on its business category.",
+  "opportunity_type": "qualified_prospect",
+  "service_needed": null,
+  "industry": "Dental office",
+  "city": "Burnaby",
+  "province": "BC",
+  "contact_name": null,
+  "public_email": null,
+  "public_phone": "+1-604-555-0142",
+  "website": "https://fraservalleydentalcentre.example",
+  "source_name": "OpenStreetMap (Overpass API)",
+  "source_url": "https://www.openstreetmap.org/node/123456789",
+  "date_posted": null,
+  "deadline": null,
+  "date_discovered": "2026-07-22T13:00:00.000Z",
+  "intent_score": 35,
+  "intent_level": "Prospect",
+  "status": "New",
+  "assigned_agent": null,
+  "notes": null,
+  "next_follow_up_at": null,
+  "last_contacted_at": null,
+  "archived_at": null,
+  "matched_cleaning_terms": [],
+  "accepted_reason": "Dental office business with a confirmed Burnaby address and a public phone number - fits the commercial-cleaning target profile."
+}
+```
+
+(`intent_score` here: 20 base + 5 confirmed city + 5 phone-only [no email] + 5 website = 35,
+`Prospect` tier. The non-signal bonuses (city/contact/website) are capped so they can never add
+up past 40 on their own - a record only ever reaches `Warm` when
+`hasBuyingSignal()` detects an actual buying signal [+25] in its description, per the brief's
+"Warm requires a strong public buying signal" definition. Today's OSM-sourced connector has no
+free text to detect a signal from, so it will produce `Prospect`-tier records almost every
+time - see "Intent scoring" above.)

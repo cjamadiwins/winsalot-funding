@@ -3,6 +3,7 @@ export type OpportunityType =
   | "quote_request"
   | "hiring_signal"
   | "new_location"
+  | "qualified_prospect"
   | "other";
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = [
@@ -10,6 +11,7 @@ export const OPPORTUNITY_TYPES: OpportunityType[] = [
   "quote_request",
   "hiring_signal",
   "new_location",
+  "qualified_prospect",
   "other",
 ];
 
@@ -18,8 +20,44 @@ export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
   quote_request: "Quote / Proposal Request",
   hiring_signal: "Cleaning Hiring Signal",
   new_location: "New Commercial Location",
+  qualified_prospect: "Qualified Prospect",
   other: "Other Signal",
 };
+
+// Two source categories on the same table: an Active Opportunity is a
+// direct, publicly-expressed cleaning intent (tender, RFP, quote
+// request); a Qualified Prospect is a strong-fit business that hasn't
+// publicly requested cleaning yet, sourced from a target-industry
+// business directory. Kept as one table/one CRM section (not two) since
+// they share the same status pipeline, assignment, activity timeline, and
+// follow-up mechanism - see docs/active-cleaning-opportunities.md.
+export const LEAD_CATEGORIES = ["Active Opportunity", "Qualified Prospect"] as const;
+export type LeadCategory = (typeof LEAD_CATEGORIES)[number];
+
+export const LEAD_CATEGORY_STYLES: Record<LeadCategory, string> = {
+  "Active Opportunity": "bg-rose-50 text-rose-700 border border-rose-200",
+  "Qualified Prospect": "bg-sky-50 text-sky-700 border border-sky-200",
+};
+
+export const TARGET_INDUSTRIES = [
+  "Property management",
+  "Office building management",
+  "Medical clinic",
+  "Dental office",
+  "Daycare",
+  "Private school",
+  "Warehouse",
+  "Distribution centre",
+  "Restaurant",
+  "Gym",
+  "Car dealership",
+  "Retail store",
+  "Professional office",
+  "Condominium / strata management",
+  "Retirement residence",
+  "Church / community centre",
+] as const;
+export type TargetIndustry = (typeof TARGET_INDUSTRIES)[number];
 
 // Full status list. 'Reviewing' and 'Assigned' are admin/system stages (an
 // admin triaging a new record, or the system marking it Assigned the
@@ -68,12 +106,20 @@ export const OPPORTUNITY_STATUS_STYLES: Record<OpportunityStatus, string> = {
   Expired: "bg-rose-100 text-rose-800",
 };
 
-export type IntentLevel = "Hot" | "Warm" | "Research";
+// 'Research' was renamed 'Prospect' (migration 0016) once this became a
+// shared field between Active Opportunities (a weak-signal tender still
+// lands here) and Qualified Prospects (the default tier: strong-fit
+// business, valid contact info, no confirmed cleaning request yet). A
+// Qualified Prospect can reach 'Warm' if a buying signal is detected (new
+// location, hiring multiple cleaners, recent relocation) but never 'Hot' -
+// 'Hot' requires a confirmed cleaning request, which by definition makes
+// it an Active Opportunity instead. See scoring.ts.
+export type IntentLevel = "Hot" | "Warm" | "Prospect";
 
 export const INTENT_LEVEL_STYLES: Record<IntentLevel, string> = {
   Hot: "bg-rose-100 text-rose-800",
   Warm: "bg-amber-100 text-amber-800",
-  Research: "bg-slate-100 text-slate-600",
+  Prospect: "bg-slate-100 text-slate-600",
 };
 
 export type Province = "BC" | "ON";
@@ -82,11 +128,13 @@ export type Province = "BC" | "ON";
 // supabase/migrations/0012_active_cleaning_opportunities.sql.
 export type ActiveCleaningOpportunityRow = {
   id: string;
+  lead_category: LeadCategory;
   organization_name: string | null;
   opportunity_title: string;
   description: string | null;
   opportunity_type: OpportunityType;
   service_needed: string | null;
+  industry: string | null;
   city: string | null;
   province: Province | null;
   contact_name: string | null;
@@ -174,11 +222,13 @@ export type OpportunityAuditLogRow = {
 // scoring and the dashboard both treat a missing field as "unknown", never
 // as a false negative signal.
 export type OpportunityCandidate = {
+  lead_category: LeadCategory;
   organization_name?: string | null;
   opportunity_title: string;
   description?: string | null;
   opportunity_type: OpportunityType;
   service_needed?: string | null;
+  industry?: string | null;
   city?: string | null;
   province?: Province | null;
   contact_name?: string | null;
@@ -189,10 +239,13 @@ export type OpportunityCandidate = {
   source_url: string;
   date_posted?: string | null; // ISO date (yyyy-mm-dd)
   deadline?: string | null; // ISO date (yyyy-mm-dd)
-  // Set by every connector via evaluateCleaningRelevance() before a
-  // candidate is ever returned - a candidate that didn't pass that check
-  // is never included in a connector's `candidates` array in the first
-  // place (see `rejected` on ConnectorResult instead).
+  // Set by every Active Opportunity connector via evaluateCleaningRelevance()
+  // before a candidate is ever returned - a candidate that didn't pass that
+  // check is never included in a connector's `candidates` array in the
+  // first place (see `rejected` on ConnectorResult instead). Qualified
+  // Prospect candidates have no cleaning phrase to match (that's the
+  // point - no confirmed request), so these are empty/a fit-reason string
+  // instead - see the qualified-prospects connector.
   matched_cleaning_terms: string[];
   accepted_reason: string;
 };

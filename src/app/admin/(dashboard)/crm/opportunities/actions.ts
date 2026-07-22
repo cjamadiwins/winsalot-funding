@@ -31,6 +31,7 @@ export async function updateOpportunityFieldsAction(id: string, formData: FormDa
       opportunity_title: opportunityTitle,
       description: textOrNull(formData, "description"),
       service_needed: textOrNull(formData, "service_needed"),
+      industry: textOrNull(formData, "industry"),
       city: textOrNull(formData, "city"),
       province: textOrNull(formData, "province"),
       contact_name: textOrNull(formData, "contact_name"),

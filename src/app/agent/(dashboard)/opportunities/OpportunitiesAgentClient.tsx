@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   OPPORTUNITY_STATUS_STYLES,
   INTENT_LEVEL_STYLES,
+  LEAD_CATEGORY_STYLES,
   type ActiveCleaningOpportunityRow,
 } from "@/lib/opportunities/types";
 
@@ -49,10 +50,14 @@ export default function OpportunitiesAgentClient({
                   {o.organization_name || o.opportunity_title}
                 </div>
                 <div className="mt-0.5 text-[13px] text-[var(--color-text-muted)]">
-                  {o.service_needed || o.opportunity_title} · {[o.city, o.province].filter(Boolean).join(", ")}
+                  {o.service_needed || o.industry || o.opportunity_title} ·{" "}
+                  {[o.city, o.province].filter(Boolean).join(", ")}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${LEAD_CATEGORY_STYLES[o.lead_category]}`}>
+                  {o.lead_category}
+                </span>
                 <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${INTENT_LEVEL_STYLES[o.intent_level]}`}>
                   {o.intent_level}
                 </span>

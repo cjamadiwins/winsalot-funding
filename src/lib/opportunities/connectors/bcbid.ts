@@ -89,6 +89,7 @@ export async function runBcBidConnector(): Promise<ConnectorResult> {
       }
 
       candidates.push({
+        lead_category: "Active Opportunity",
         opportunity_title: title,
         description: row.text.slice(0, 2000),
         opportunity_type: "rfp_tender",

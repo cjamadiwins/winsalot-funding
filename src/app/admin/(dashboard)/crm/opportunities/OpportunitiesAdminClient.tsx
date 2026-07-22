@@ -8,8 +8,11 @@ import {
   OPPORTUNITY_TYPES,
   OPPORTUNITY_TYPE_LABELS,
   INTENT_LEVEL_STYLES,
+  LEAD_CATEGORIES,
+  LEAD_CATEGORY_STYLES,
   type ActiveCleaningOpportunityRow,
   type IntentLevel,
+  type LeadCategory,
   type OpportunityStatus,
   type OpportunityType,
 } from "@/lib/opportunities/types";
@@ -28,7 +31,7 @@ import {
   updateOpportunityStatusAction,
 } from "./actions";
 
-const INTENT_LEVELS: IntentLevel[] = ["Hot", "Warm", "Research"];
+const INTENT_LEVELS: IntentLevel[] = ["Hot", "Warm", "Prospect"];
 
 function daysUntil(dateStr: string): number {
   const ms = new Date(dateStr).getTime() - new Date().setHours(0, 0, 0, 0);
@@ -65,6 +68,7 @@ export default function OpportunitiesAdminClient({
   agents: CrmUserRow[];
 }) {
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<LeadCategory | "all">("all");
   const [cityFilter, setCityFilter] = useState("");
   const [regionFilter, setRegionFilter] = useState("all");
   const [provinceFilter, setProvinceFilter] = useState<"all" | "BC" | "ON">("all");
@@ -86,14 +90,50 @@ export default function OpportunitiesAdminClient({
   const agentById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
   const activeOpportunities = useMemo(() => opportunities.filter((o) => !o.archived_at), [opportunities]);
 
+  // Computed from currently-loaded records' current state, not an event
+  // log - "assigned"/"contacted"/"quote requested" reflect each record's
+  // status *right now*, not necessarily an action that happened today.
+  // Duplicates-skipped and rejected-records figures aren't derivable here
+  // at all (a rejected/duplicate candidate is never persisted - see
+  // run.ts) - those only ever appear in the Collection Run panel above,
+  // for whichever run produced them.
+  const todayStats = useMemo(() => {
+    const today = new Date();
+    const isToday = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return (
+        d.getFullYear() === today.getFullYear() &&
+        d.getMonth() === today.getMonth() &&
+        d.getDate() === today.getDate()
+      );
+    };
+    const discoveredToday = opportunities.filter((o) => isToday(o.date_discovered));
+    const workedStatuses: OpportunityStatus[] = ["Contacted", "Follow-up required", "Quote requested", "Converted"];
+    return {
+      total: discoveredToday.length,
+      newHot: discoveredToday.filter((o) => o.intent_level === "Hot").length,
+      newWarm: discoveredToday.filter((o) => o.intent_level === "Warm").length,
+      newProspects: discoveredToday.filter((o) => o.lead_category === "Qualified Prospect").length,
+      withPhone: discoveredToday.filter((o) => o.public_phone).length,
+      withEmail: discoveredToday.filter((o) => o.public_email).length,
+      assigned: discoveredToday.filter((o) => o.assigned_agent).length,
+      contacted: discoveredToday.filter((o) => workedStatuses.includes(o.status)).length,
+      quoteRequested: discoveredToday.filter((o) => o.status === "Quote requested").length,
+    };
+  }, [opportunities]);
+
   const stats = [
     { label: "New Opportunities", value: activeOpportunities.filter((o) => o.status === "New").length },
     {
-      label: "Hot Opportunities",
+      label: "Hot",
       value: activeOpportunities.filter((o) => o.intent_level === "Hot").length,
       danger: true,
     },
-    { label: "Warm Opportunities", value: activeOpportunities.filter((o) => o.intent_level === "Warm").length, warn: true },
+    { label: "Warm", value: activeOpportunities.filter((o) => o.intent_level === "Warm").length, warn: true },
+    {
+      label: "Qualified Prospects",
+      value: activeOpportunities.filter((o) => o.lead_category === "Qualified Prospect").length,
+    },
     { label: "Expiring Soon", value: activeOpportunities.filter(isExpiringSoon).length, warn: true },
     { label: "Assigned", value: activeOpportunities.filter((o) => o.status === "Assigned").length },
   ];
@@ -103,6 +143,7 @@ export default function OpportunitiesAdminClient({
     return opportunities.filter((o) => {
       if (archiveView === "active" && o.archived_at) return false;
       if (archiveView === "archived" && !o.archived_at) return false;
+      if (categoryFilter !== "all" && o.lead_category !== categoryFilter) return false;
       if (cityFilter && (o.city ?? "").toLowerCase() !== cityFilter.toLowerCase()) return false;
       if (regionFilter !== "all" && regionForCity(o.city) !== regionFilter) return false;
       if (provinceFilter !== "all" && o.province !== provinceFilter) return false;
@@ -137,6 +178,7 @@ export default function OpportunitiesAdminClient({
     opportunities,
     query,
     archiveView,
+    categoryFilter,
     cityFilter,
     regionFilter,
     provinceFilter,
@@ -233,6 +275,8 @@ export default function OpportunitiesAdminClient({
 
   function handleExportCsv() {
     const header = [
+      "Category",
+      "Industry",
       "Organization",
       "Opportunity Title",
       "City",
@@ -257,6 +301,8 @@ export default function OpportunitiesAdminClient({
     const rows = filtered.map((o) => {
       const agent = o.assigned_agent ? agentById.get(o.assigned_agent) : null;
       return [
+        o.lead_category,
+        o.industry,
         o.organization_name,
         o.opportunity_title,
         o.city,
@@ -284,7 +330,7 @@ export default function OpportunitiesAdminClient({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -309,6 +355,8 @@ export default function OpportunitiesAdminClient({
           </div>
         ))}
       </div>
+
+      <DailySummaryPanel stats={todayStats} />
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
@@ -355,6 +403,18 @@ export default function OpportunitiesAdminClient({
           <option value="active">Active</option>
           <option value="archived">Archived</option>
           <option value="all">All</option>
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value as LeadCategory | "all")}
+          className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm"
+        >
+          <option value="all">All categories</option>
+          {LEAD_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
         </select>
         <select
           value={cityFilter}
@@ -527,9 +587,10 @@ export default function OpportunitiesAdminClient({
                   onChange={toggleSelectAll}
                 />
               </th>
+              <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Organization</th>
               <th className="px-4 py-3">City</th>
-              <th className="px-4 py-3">Service Needed</th>
+              <th className="px-4 py-3">Service Needed / Industry</th>
               <th className="px-4 py-3">Contact</th>
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Email</th>
@@ -556,6 +617,13 @@ export default function OpportunitiesAdminClient({
                       onChange={() => toggleSelected(o.id)}
                     />
                   </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${LEAD_CATEGORY_STYLES[o.lead_category]}`}
+                    >
+                      {o.lead_category}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 font-medium text-slate-900">
                     <Link href={`/admin/crm/opportunities/${o.id}`} className="hover:text-sky-600">
                       {o.organization_name || o.opportunity_title}
@@ -563,7 +631,7 @@ export default function OpportunitiesAdminClient({
                     {o.archived_at && <span className="ml-2 text-xs text-slate-400">(archived)</span>}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{o.city || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{o.service_needed || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{o.service_needed || o.industry || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{o.contact_name || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{o.public_phone || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{o.public_email || "—"}</td>
@@ -663,7 +731,7 @@ export default function OpportunitiesAdminClient({
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={14} className="px-4 py-8 text-center text-slate-500">
                   No opportunities match your filters.
                 </td>
               </tr>
@@ -681,9 +749,10 @@ type RunCollectionSummary = NonNullable<
 
 // Shown after every "Run Collection Now" click - the exact breakdown the
 // brief asks for: total candidates found (accepted + rejected, after
-// in-run dedup), accepted vs. rejected, Hot/Warm/Research/duplicate/
-// expired counts, and a sample of rejected records with the reason each
-// one didn't pass the strict cleaning-relevance filter.
+// in-run dedup), accepted vs. rejected, Active Opportunity vs. Qualified
+// Prospect counts, Hot/Warm/Prospect/duplicate/expired counts, contact-info
+// coverage, and a sample of rejected records with the reason each one
+// didn't pass its connector's accept checks.
 function RunSummaryPanel({ summary }: { summary: RunCollectionSummary }) {
   const acceptedCount = summary.newRecordsInserted + summary.duplicatesWithinRun + summary.duplicatesAlreadyStored;
 
@@ -698,13 +767,17 @@ function RunSummaryPanel({ summary }: { summary: RunCollectionSummary }) {
         <SummaryStat label="Accepted" value={acceptedCount} />
         <SummaryStat label="Rejected" value={summary.rejectedCount} />
         <SummaryStat label="New Records Added" value={summary.newRecordsInserted} />
+        <SummaryStat label="New Active Opportunities" value={summary.newActiveOpportunities} />
+        <SummaryStat label="New Qualified Prospects" value={summary.newQualifiedProspects} />
         <SummaryStat label="Hot" value={summary.hotCount} />
         <SummaryStat label="Warm" value={summary.warmCount} />
-        <SummaryStat label="Research" value={summary.researchCount} />
+        <SummaryStat label="Prospect" value={summary.prospectCount} />
         <SummaryStat
-          label="Duplicates"
+          label="Duplicates Skipped"
           value={summary.duplicatesWithinRun + summary.duplicatesAlreadyStored}
         />
+        <SummaryStat label="With Phone" value={summary.withPhone} />
+        <SummaryStat label="With Email" value={summary.withEmail} />
         <SummaryStat label="Expired at Discovery" value={summary.expiredAtDiscovery} />
         <SummaryStat label="Existing Records Expired" value={summary.expiredSwept} />
         <SummaryStat
@@ -758,6 +831,50 @@ function SummaryStat({ label, value }: { label: string; value: string | number }
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
       <div className="mt-0.5 text-base font-bold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+type TodayStats = {
+  total: number;
+  newHot: number;
+  newWarm: number;
+  newProspects: number;
+  withPhone: number;
+  withEmail: number;
+  assigned: number;
+  contacted: number;
+  quoteRequested: number;
+};
+
+// A persistent, always-visible daily digest (unlike the Collection Run
+// panel above, which only appears right after a manual Run Collection Now
+// click) - computed from today's discovered records' *current* state.
+// Duplicates-skipped and rejected-records aren't included here since
+// neither is ever persisted to the database (see run.ts) - those two
+// figures only ever appear in the Collection Run panel for whichever run
+// produced them.
+function DailySummaryPanel({ stats }: { stats: TodayStats }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Today&apos;s Summary — {stats.total} record{stats.total === 1 ? "" : "s"} discovered
+      </h3>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <SummaryStat label="New Hot" value={stats.newHot} />
+        <SummaryStat label="New Warm" value={stats.newWarm} />
+        <SummaryStat label="New Qualified Prospects" value={stats.newProspects} />
+        <SummaryStat label="With Phone" value={stats.withPhone} />
+        <SummaryStat label="With Email" value={stats.withEmail} />
+        <SummaryStat label="Assigned" value={stats.assigned} />
+        <SummaryStat label="Contacted" value={stats.contacted} />
+        <SummaryStat label="Quote Requests Generated" value={stats.quoteRequested} />
+      </div>
+      <p className="mt-3 text-xs text-slate-400">
+        Duplicates skipped and rejected records for today&apos;s collection run(s) are shown in the
+        Collection Run panel above, right after each Run Collection Now click - they&apos;re never
+        stored, so they can&apos;t be tallied retroactively here.
+      </p>
     </div>
   );
 }
