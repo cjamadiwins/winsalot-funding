@@ -34,6 +34,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             >
               Agents
             </Link>
+            <Link
+              href="/admin/opportunities"
+              className="text-sm font-medium text-slate-600 hover:text-sky-600"
+            >
+              Opportunities
+            </Link>
           </nav>
 
           <div className="flex items-center gap-4">
