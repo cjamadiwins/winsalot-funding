@@ -343,10 +343,12 @@ export async function completeOpportunityFollowUpAction(
 
 // Manual trigger for the same daily collection job the (currently
 // disabled) cron route runs.
-export async function runCollectionNowAction(): Promise<ActionResult & { summary?: CollectionSummary }> {
+export async function runCollectionNowAction(
+  skipHotAlertEmails: boolean
+): Promise<ActionResult & { summary?: CollectionSummary }> {
   await requireCrmAdmin();
   try {
-    const summary = await runOpportunityCollection();
+    const summary = await runOpportunityCollection({ skipHotAlertEmails });
     revalidatePath("/admin/crm/opportunities");
     return { summary };
   } catch (error) {

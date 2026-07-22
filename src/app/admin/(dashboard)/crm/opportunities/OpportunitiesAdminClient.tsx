@@ -78,6 +78,7 @@ export default function OpportunitiesAdminClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [mergePrimaryId, setMergePrimaryId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<string | null>(null);
+  const [skipEmailForRun, setSkipEmailForRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, startRunTransition] = useTransition();
   const [isPending, startTransition] = useTransition();
@@ -176,11 +177,16 @@ export default function OpportunitiesAdminClient({
   function handleRunNow() {
     setRunResult(null);
     startRunTransition(async () => {
-      const result = await runCollectionNowAction();
-      if (result.error) setRunResult(`Failed: ${result.error}`);
-      else if (result.summary) {
+      const result = await runCollectionNowAction(skipEmailForRun);
+      if (result.error) {
+        setRunResult(`Failed: ${result.error}`);
+      } else if (result.summary) {
+        const s = result.summary;
         setRunResult(
-          `Found ${result.summary.candidatesFound} candidates, added ${result.summary.newRecordsInserted} new (${result.summary.hotAlertsSent} Hot alerts sent).`
+          `Candidates found: ${s.candidatesFound} (${s.duplicatesWithinRun} duplicate within this run, ${s.duplicatesAlreadyStored} already on file). ` +
+            `New records added: ${s.newRecordsInserted} — Hot: ${s.hotCount}, Warm: ${s.warmCount}, Research: ${s.researchCount}. ` +
+            `Expired at discovery: ${s.expiredAtDiscovery}. Existing records swept to Expired: ${s.expiredSwept}. ` +
+            `Hot alert emails — sent: ${s.hotAlertsSent}, skipped: ${s.hotAlertsSkipped}, failed: ${s.hotAlertErrors}.`
         );
       }
     });
@@ -319,6 +325,15 @@ export default function OpportunitiesAdminClient({
         >
           {isRunning ? "Running collection..." : "Run Collection Now"}
         </button>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={skipEmailForRun}
+            onChange={(e) => setSkipEmailForRun(e.target.checked)}
+            disabled={isRunning}
+          />
+          Skip Hot-alert email for this run
+        </label>
         <button
           type="button"
           onClick={handleExportCsv}
@@ -326,8 +341,8 @@ export default function OpportunitiesAdminClient({
         >
           Export CSV ({filtered.length})
         </button>
-        {runResult && <span className="text-sm text-slate-600">{runResult}</span>}
       </div>
+      {runResult && <p className="mt-2 text-sm text-slate-600">{runResult}</p>}
 
       <div className="mt-4 flex flex-wrap gap-3">
         <input

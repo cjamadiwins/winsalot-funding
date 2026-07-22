@@ -11,11 +11,27 @@ import type { ActiveCleaningOpportunityRow, ConnectorResult, OpportunityStatus }
 export type CollectionSummary = {
   ranAt: string;
   connectors: { source_name: string; found: number; error?: string }[];
-  candidatesFound: number;
+  candidatesFound: number; // after in-run dedup, before the existing-database check
+  duplicatesWithinRun: number; // filtered out because they matched another candidate found in this same run
+  duplicatesAlreadyStored: number; // filtered out because they matched a row already in the database
   newRecordsInserted: number;
+  hotCount: number;
+  warmCount: number;
+  researchCount: number;
+  expiredAtDiscovery: number; // of the newly-inserted rows, how many already had a past deadline
+  expiredSwept: number; // pre-existing rows whose deadline has since passed, flipped to Expired
   hotAlertsSent: number;
+  hotAlertsSkipped: number;
   hotAlertErrors: number;
-  expiredSwept: number;
+};
+
+export type CollectionOptions = {
+  // Off by default so the daily cron and every future ordinary manual run
+  // keep emailing info@winsalotcorp.com on a new Hot opportunity, per the
+  // brief. Set true for a one-off review run where no email side effect is
+  // wanted - see the "Skip Hot-alert email" checkbox on the admin
+  // dashboard's Run Collection Now control.
+  skipHotAlertEmails?: boolean;
 };
 
 // Existing DB rows that could conflict with a new candidate, fetched by
@@ -50,8 +66,13 @@ async function fetchPotentialDuplicates(
 // and persist the genuinely new ones, sweep past-deadline records to
 // Expired, and alert on any newly-discovered Hot opportunity. Every step
 // that can partially fail (a connector, an individual alert email) is
-// isolated so it doesn't take down the rest of the run.
-export async function runOpportunityCollection(): Promise<CollectionSummary> {
+// isolated so it doesn't take down the rest of the run. Note there is no
+// separate "rejected" step beyond duplicate filtering and a connector
+// failing outright - every candidate a connector returns (already
+// filtered to the target markets/keywords inside the connector itself)
+// gets scored and inserted, however low its score, so a low-intent
+// candidate shows up as Research rather than being silently dropped.
+export async function runOpportunityCollection(options: CollectionOptions = {}): Promise<CollectionSummary> {
   const now = new Date();
   const admin = getSupabaseAdmin();
 
@@ -64,6 +85,7 @@ export async function runOpportunityCollection(): Promise<CollectionSummary> {
 
   const allCandidates = results.flatMap((r) => r.candidates);
   const deduped = dedupeCandidates(allCandidates);
+  const duplicatesWithinRun = allCandidates.length - deduped.length;
 
   const sourceUrls = Array.from(new Set(deduped.map((c) => c.source_url)));
   const titles = Array.from(new Set(deduped.map((c) => c.opportunity_title)));
@@ -72,6 +94,7 @@ export async function runOpportunityCollection(): Promise<CollectionSummary> {
   const newCandidates = deduped.filter(
     (candidate) => !existingRows.some((existing) => isDuplicateOpportunity(existing, candidate))
   );
+  const duplicatesAlreadyStored = deduped.length - newCandidates.length;
 
   const rowsToInsert = newCandidates.map((candidate) => {
     const { score, level } = scoreOpportunity(candidate, now);
@@ -122,15 +145,22 @@ export async function runOpportunityCollection(): Promise<CollectionSummary> {
     console.error("Failed to sweep expired opportunities:", expireError.message);
   }
 
+  const hotRecords = inserted.filter((r) => r.intent_level === "Hot");
   let hotAlertsSent = 0;
   let hotAlertErrors = 0;
-  for (const record of inserted.filter((r) => r.intent_level === "Hot")) {
-    try {
-      await sendHotOpportunityAlert(record);
-      hotAlertsSent += 1;
-    } catch (error) {
-      hotAlertErrors += 1;
-      console.error("Failed to send Hot opportunity alert:", error);
+  let hotAlertsSkipped = 0;
+
+  if (options.skipHotAlertEmails) {
+    hotAlertsSkipped = hotRecords.length;
+  } else {
+    for (const record of hotRecords) {
+      try {
+        await sendHotOpportunityAlert(record);
+        hotAlertsSent += 1;
+      } catch (error) {
+        hotAlertErrors += 1;
+        console.error("Failed to send Hot opportunity alert:", error);
+      }
     }
   }
 
@@ -138,9 +168,16 @@ export async function runOpportunityCollection(): Promise<CollectionSummary> {
     ranAt: now.toISOString(),
     connectors: results.map((r) => ({ source_name: r.source_name, found: r.candidates.length, error: r.error })),
     candidatesFound: deduped.length,
+    duplicatesWithinRun,
+    duplicatesAlreadyStored,
     newRecordsInserted: inserted.length,
-    hotAlertsSent,
-    hotAlertErrors,
+    hotCount: hotRecords.length,
+    warmCount: inserted.filter((r) => r.intent_level === "Warm").length,
+    researchCount: inserted.filter((r) => r.intent_level === "Research").length,
+    expiredAtDiscovery: inserted.filter((r) => r.status === "Expired").length,
     expiredSwept: expiredRows?.length ?? 0,
+    hotAlertsSent,
+    hotAlertsSkipped,
+    hotAlertErrors,
   };
 }
