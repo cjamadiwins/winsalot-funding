@@ -3,8 +3,13 @@
 -- screen so it doesn't clutter the day-to-day working view. Agents can
 -- view and copy training content; only admins can add, edit, or remove
 -- it - same admin-authors/agent-consumes split already used elsewhere in
--- the CRM (e.g. crm_users role). NOT applied to the live project yet -
--- pending approval, per the established pattern for this feature.
+-- the CRM (e.g. crm_users role).
+--
+-- Applied directly to the live Supabase project and verified there
+-- (select/insert/update/delete tested against the crm_users_select_self-
+-- style role simulation, same approach used to verify migration 0007's
+-- policies): an active agent can select but is blocked on insert/update/
+-- delete (42501), an active admin can do all four.
 
 create table if not exists public.crm_training_materials (
   id uuid primary key default gen_random_uuid(),
