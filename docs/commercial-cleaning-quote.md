@@ -195,3 +195,85 @@ lines if something fails server-side.
 - Error responses sent to the browser are generic ("Something went wrong. Please try again
   later.") — the real error, including anything from Supabase/Twilio/Resend, is only ever
   written to server-side logs, and those log lines never include the secret values above.
+
+## 11. Google Ads "Request quote" conversion tracking
+
+- **Base tag**: `src/components/GoogleAdsTag.tsx` renders Google's `gtag.js` (`AW-18338307179`)
+  sitewide on `cleaning.winsalotcorp.com` / `www.cleaning.winsalotcorp.com` only (checked
+  against the request's `Host` header via `CLEANING_QUOTE_HOSTS` in `src/lib/hosts.ts`) — it's
+  mounted in `src/app/commercial-cleaning-quote/layout.tsx`, which also covers `/` on that host
+  since `src/proxy.ts` rewrites `/` to `/commercial-cleaning-quote` there. It deliberately does
+  not load on any other host (admin/agent CRM, funding page, preview deployments, etc.) so test
+  and internal traffic never pollutes real ad-spend attribution.
+- **Conversion event**: `gtag_report_conversion()` (`src/lib/google-ads.ts`) matches the exact
+  event snippet Google Ads generates for this conversion action — `send_to:
+  'AW-18338307179/g7jVCJfE69McEOu4sahE'`, `value: 1.0`, `currency: 'CAD'`. It's called from
+  exactly one place, `QuoteForm.tsx`'s submit handler, only after `POST
+  /api/commercial-cleaning-quote` responds `201` (i.e. only once the request has been validated
+  *and saved* — never on page visit, never on click, never on a validation or API/DB failure).
+- **One form, both property types**: residential ("home cleaning") and commercial quote
+  requests go through the exact same `QuoteForm` component and the same `/api/commercial-
+  cleaning-quote` endpoint — `propertyType` is just a field on the same payload — so the
+  conversion event fires identically for both; there's no separate "home cleaning" form or flow
+  to keep in sync.
+- **Duplicate-conversion prevention**:
+  - A `useRef` lock (`submittingRef`) plus a disabled submit button close the race where two
+    clicks (or a fast double-click) dispatched in the same tick could both pass the `status`
+    check before either `setStatus("submitting")` call commits — the second attempt is dropped
+    before it ever calls the API or fires the event.
+  - There is no separate "confirmation page" or URL — success is shown by swapping in a
+    thank-you message from local React component state, with no `history.pushState` and no
+    route change. Reloading the page returns to a blank form; there is nothing to replay, so a
+    refresh can never re-fire the event.
+
+**Verified end-to-end** against a production build (`next build && next start`), driving a real
+Chromium browser (Playwright) at the `cleaning.winsalotcorp.com` host (spoofed via a local hosts
+entry) and instrumenting `window.dataLayer` to record every `gtag()` call, with the API mocked
+so no real Supabase writes or real Google Ads conversions were involved in the automated checks:
+
+- Visiting the page fires only the base `gtag('config', 'AW-18338307179')` call — never a
+  `conversion` event.
+- A successful (mocked `201`) submission fires **exactly one** conversion event, with a payload
+  matching the snippet above exactly.
+- Rapid double-clicking the submit button still produces exactly one API call and exactly one
+  conversion event.
+- Reloading the page after a successful submission fires **zero** additional conversion events.
+- A failed (mocked `500`) submission fires **zero** conversion events.
+- Both the "Residential" and "Commercial" property-type paths were exercised and behave
+  identically, confirming the single shared code path claim above.
+
+### Testing this with Google Tag Assistant
+
+The tag is intentionally host-gated to `cleaning.winsalotcorp.com`, so a Vercel **preview**
+deployment's own URL (`https://winsalot-funding-git-<branch>-<team>.vercel.app`) will **not**
+show the tag at all — that's by design, not a bug, so test traffic on preview builds never
+counts as a real ad conversion. To validate an exact build with Tag Assistant before it reaches
+production:
+
+1. Pull the branch locally and run `npm run build && npm run start` (production mode — the
+   inline base-tag script can be unreliable under `npm run dev` in sandboxed environments where
+   the Fast Refresh websocket is blocked; it is unaffected in normal local development or in any
+   real Vercel deployment).
+2. Add a temporary line to your local hosts file (`/etc/hosts` on Mac/Linux,
+   `C:\Windows\System32\drivers\etc\hosts` on Windows):
+   ```
+   127.0.0.1 cleaning.winsalotcorp.com
+   ```
+3. Install the [Tag Assistant](https://tagassistant.google.com/) Chrome extension.
+4. Visit `http://cleaning.winsalotcorp.com:3000/` in Chrome, open Tag Assistant, click
+   **Connect**/**Enable**, then reload the page.
+5. Confirm Tag Assistant shows the `AW-18338307179` base tag loaded, and that **no** conversion
+   event has fired yet from just loading the page.
+6. Scroll to **Request a Quote**, fill in the form (try either "Residential" or "Commercial"),
+   and submit.
+7. Once the "Thank you for your request" message appears, confirm Tag Assistant shows exactly
+   **one** Conversion event for `AW-18338307179/g7jVCJfE69McEOu4sahE` with value `1.0 CAD`.
+8. Refresh the page and confirm no additional conversion event fires — the form is back to
+   blank, not showing a replayable "confirmation" state.
+9. Click submit twice in quick succession on a fresh submission and confirm only one conversion
+   event is recorded.
+10. Remove the hosts file line when finished testing.
+
+One real test submission through this flow **will** register as a small ($1.00 CAD) conversion
+in the live Google Ads account — that's expected of any true end-to-end tag validation and can
+be safely ignored, or excluded from reporting in the Google Ads UI if desired.
