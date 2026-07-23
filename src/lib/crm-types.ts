@@ -197,6 +197,19 @@ export function isFollowUpUpcoming(followUp: Pick<CrmFollowUpRow, "scheduled_at"
   return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
 }
 
+// Sales Training & Call Scripts: read-only reference content for agents.
+// Kept as its own top-level section rather than part of the lead-management
+// screen so it doesn't compete for space there.
+export type CrmTrainingMaterialRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  content: string;
+  sort_order: number;
+  created_by: string | null;
+};
+
 // Formats an ISO timestamp for a <input type="datetime-local"> defaultValue
 // (which needs "YYYY-MM-DDTHH:mm" in local time, not an ISO string).
 export function toDatetimeLocal(iso: string): string {
