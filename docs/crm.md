@@ -81,6 +81,11 @@ Only admins can manage the content, from **`/admin/crm/training`**.
   renamed it from its original "Property Management Cleaning Call Script" title and generalized
   its industry-specific sentence so it reads as suitable for agents calling businesses in any
   industry, not just property management.
+- Migration
+  [`0021_followup_call_script.sql`](../supabase/migrations/0021_followup_call_script.sql) adds a
+  second entry, the **Cleaning Quote Request Follow-Up Script**, for agents calling a client who
+  was already sent a quote-request link but hasn't completed it — covers the live-answer flow
+  (confirming receipt, offering to resend, handling questions) and a separate voicemail version.
 
 ## User roles
 
