@@ -10,9 +10,21 @@ const GOOGLE_ADS_ID = "AW-18338307179";
 // generation) from the same deployment, so gating on the host - the same
 // check src/proxy.ts uses to route cleaning.winsalotcorp.com - is what
 // keeps Ads conversion tracking off everything else.
+//
+// Also renders on this project's own Vercel Preview deployments
+// (VERCEL_ENV, a server-only build-time value Vercel sets itself - not
+// something a visitor's request can spoof) so a reviewer can validate the
+// tag/conversion wiring with Google Tag Assistant directly on a PR's
+// preview URL, no local hosts-file override needed. Real ad traffic only
+// ever lands on the production domain (ad campaigns don't link to preview
+// URLs), so this doesn't put real ad-spend attribution at risk - same
+// "scoped to this project's own deployments, not any arbitrary host"
+// rationale as the Preview Redirect URL wildcard documented in
+// docs/crm.md.
 export default async function GoogleAdsTag() {
   const host = (await headers()).get("host")?.split(":")[0] ?? "";
-  if (!CLEANING_QUOTE_HOSTS.has(host)) return null;
+  const isPreviewDeployment = process.env.VERCEL_ENV === "preview";
+  if (!CLEANING_QUOTE_HOSTS.has(host) && !isPreviewDeployment) return null;
 
   return (
     <>
