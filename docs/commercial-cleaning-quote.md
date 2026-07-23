@@ -221,6 +221,13 @@ lines if something fails server-side.
   cleaning-quote` endpoint — `propertyType` is just a field on the same payload — so the
   conversion event fires identically for both; there's no separate "home cleaning" form or flow
   to keep in sync.
+- **Confirmation scrolls into view**: `QuoteForm.tsx` scrolls the "Thank you for your request"
+  box into view (`successRef.current?.scrollIntoView(...)`) the moment the success state
+  renders. Without this, a visitor who scrolled well down the ~15-field form before submitting
+  would have their scroll position stay put while the form collapses into a much shorter
+  confirmation box — leaving whatever section now occupies that same screen position (e.g.
+  Contact, which sits right after this one) visible instead, making a successful submission look
+  like nothing happened at all.
 - **Duplicate-conversion prevention**:
   - A `useRef` lock (`submittingRef`) plus a disabled submit button close the race where two
     clicks (or a fast double-click) dispatched in the same tick could both pass the `status`
@@ -263,8 +270,11 @@ a PR's preview URL in Chrome — no local build, no hosts-file edit:
    event has fired yet from just loading the page.
 4. Scroll to **Request a Quote**, fill in the form (try either "Residential" or "Commercial"),
    and submit.
-5. Once the "Thank you for your request" message appears, confirm Tag Assistant shows exactly
-   **one** Conversion event for `AW-18338307179/g7jVCJfE69McEOu4sahE` with value `1.0 CAD`.
+5. The page automatically scrolls the "Thank you for your request" box into view the moment it
+   appears — if you don't see it immediately after submitting, give the smooth-scroll animation
+   a second to finish before assuming something's wrong. Once it's visible, confirm Tag Assistant
+   shows exactly **one** Conversion event for `AW-18338307179/g7jVCJfE69McEOu4sahE` with value
+   `1.0 CAD`.
 6. Refresh the page and confirm no additional conversion event fires — the form is back to
    blank, not showing a replayable "confirmation" state.
 7. Click submit twice in quick succession on a fresh submission and confirm only one conversion
