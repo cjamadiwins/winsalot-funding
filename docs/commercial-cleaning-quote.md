@@ -273,3 +273,32 @@ a PR's preview URL in Chrome — no local build, no hosts-file edit:
 One real test submission through this flow **will** register as a small ($1.00 CAD) conversion
 in the live Google Ads account — that's expected of any true end-to-end tag validation and can
 be safely ignored, or excluded from reporting in the Google Ads UI if desired.
+
+### Troubleshooting: form submits successfully but no conversion appears
+
+If Tag Assistant shows the base tag loaded, the form shows "Thank you for your request," but no
+Conversion event shows up (in Tag Assistant or in `dataLayer` itself), the most common cause is
+a **browser extension silently intercepting `gtag`** — many ad blockers and privacy tools (e.g.
+uBlock Origin's default filter lists) don't just block the `googletagmanager.com/gtag/js`
+request outright; they redirect it to a local no-op "surrogate" script that defines a harmless,
+do-nothing `window.gtag`. That satisfies code that merely checks `typeof window.gtag ===
+"function"`, and can still make some tag-detection tools report the base tag as "present," while
+every event call silently goes nowhere.
+
+`gtag_report_conversion()` (`src/lib/google-ads.ts`) now specifically detects this: it records
+`dataLayer`'s length immediately before and after calling `window.gtag(...)`, and logs a
+`console.warn` prefixed `[google-ads]` if the array didn't grow (or doesn't exist at all — some
+surrogate scripts also prevent the page's own `dataLayer` initialization from ever running). It
+also retries for up to 2 seconds if `window.gtag` isn't defined yet at all, in case the base
+tag's own script is just slow, logging a different warning if it never shows up.
+
+To confirm this is (or isn't) what's happening:
+
+1. Open DevTools → Console **before** submitting the form.
+2. Submit the form as usual.
+3. Look for a `[google-ads]` warning in the console.
+   - If you see one, an extension is very likely intercepting the tag — retest in an
+     **Incognito window with extensions disabled** (Chrome menu → New Incognito Window; by
+     default extensions don't run there unless explicitly allowed for Incognito).
+   - If you see no warning and still no conversion, that's a genuine bug — report the full
+     `JSON.stringify(dataLayer, null, 2)` output from the console at that point.
