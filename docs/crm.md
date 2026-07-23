@@ -75,8 +75,12 @@ Only admins can manage the content, from **`/admin/crm/training`**.
   (`crm_training_materials_select_members`); only `role = 'admin'` can `insert`/`update`/`delete`
   (`crm_training_materials_admin_all`) — enforced at the database level, not just by hiding the
   admin-only UI from agents.
-- The migration seeds one initial entry, the **Property Management Cleaning Call Script**, so the
-  section isn't empty on first deploy.
+- The migration seeds one initial entry, the **General Commercial Cleaning Call Script**, so the
+  section isn't empty on first deploy. Migration
+  [`0019_rename_commercial_cleaning_script.sql`](../supabase/migrations/0019_rename_commercial_cleaning_script.sql)
+  renamed it from its original "Property Management Cleaning Call Script" title and generalized
+  its industry-specific sentence so it reads as suitable for agents calling businesses in any
+  industry, not just property management.
 
 ## User roles
 
@@ -427,7 +431,7 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
 - [ ] The existing `/commercial-cleaning-quote`, `/customer-quote/[token]`,
       `/provider-quote/[token]`, and `/sales-tracker` pages are all unaffected
 - [ ] An agent can view and copy every entry on `/agent/training`, including the seeded
-      "Property Management Cleaning Call Script", but has no add/edit/remove controls there
+      "General Commercial Cleaning Call Script", but has no add/edit/remove controls there
 - [ ] An admin can add, edit, and remove training materials from `/admin/crm/training`, and
       changes show up on `/agent/training` immediately
 - [ ] An agent cannot add, edit, or delete a training material by calling the admin actions
