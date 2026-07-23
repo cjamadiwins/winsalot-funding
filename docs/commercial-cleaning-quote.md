@@ -115,7 +115,7 @@ With `npm run dev` running and at least Supabase configured:
 1. Go to `http://localhost:3000/commercial-cleaning-quote#quote`.
 2. Fill in the required fields (Full name, Phone, City, Property type, Cleaning type,
    Description, Consent checkbox) and submit.
-3. You should see: *"Thank you for your request. Your quote request has been received..."*
+3. You should see: *"Thank you for requesting a quote! Your request has been received..."*
    and the form should disappear (refreshing the page brings it back, by design).
 4. Check the `quote_requests` table in Supabase for the new row.
 5. If Twilio is configured, check the destination phone for a text starting with
@@ -221,7 +221,7 @@ lines if something fails server-side.
   cleaning-quote` endpoint — `propertyType` is just a field on the same payload — so the
   conversion event fires identically for both; there's no separate "home cleaning" form or flow
   to keep in sync.
-- **Confirmation scrolls into view**: `QuoteForm.tsx` scrolls the "Thank you for your request"
+- **Confirmation scrolls into view**: `QuoteForm.tsx` scrolls the "Thank you for requesting a quote!"
   box into view (`successRef.current?.scrollIntoView(...)`) the moment the success state
   renders. Without this, a visitor who scrolled well down the ~15-field form before submitting
   would have their scroll position stay put while the form collapses into a much shorter
@@ -270,7 +270,7 @@ a PR's preview URL in Chrome — no local build, no hosts-file edit:
    event has fired yet from just loading the page.
 4. Scroll to **Request a Quote**, fill in the form (try either "Residential" or "Commercial"),
    and submit.
-5. The page automatically scrolls the "Thank you for your request" box into view the moment it
+5. The page automatically scrolls the "Thank you for requesting a quote!" box into view the moment it
    appears — if you don't see it immediately after submitting, give the smooth-scroll animation
    a second to finish before assuming something's wrong. Once it's visible, confirm Tag Assistant
    shows exactly **one** Conversion event for `AW-18338307179/g7jVCJfE69McEOu4sahE` with value
@@ -286,7 +286,7 @@ be safely ignored, or excluded from reporting in the Google Ads UI if desired.
 
 ### Troubleshooting: form submits successfully but no conversion appears
 
-If Tag Assistant shows the base tag loaded, the form shows "Thank you for your request," but no
+If Tag Assistant shows the base tag loaded, the form shows "Thank you for requesting a quote!", but no
 Conversion event shows up (in Tag Assistant or in `dataLayer` itself), the most common cause is
 a **browser extension silently intercepting `gtag`** — many ad blockers and privacy tools (e.g.
 uBlock Origin's default filter lists) don't just block the `googletagmanager.com/gtag/js`
