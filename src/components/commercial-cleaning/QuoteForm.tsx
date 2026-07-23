@@ -85,6 +85,14 @@ export default function QuoteForm() {
   // check alone doesn't close that race. This ref is mutated immediately,
   // so the second call always sees the first call's lock.
   const submittingRef = useRef(false);
+  // The success confirmation replaces the ~15-field form with a much
+  // shorter box - without an explicit scroll, whatever the visitor had
+  // scrolled to while filling out the form (often past the fold) stays
+  // put, and the page's now-shorter layout can leave a completely
+  // different section (e.g. Contact, which sits right after this one)
+  // occupying that same scroll position, making a successful submission
+  // look like nothing happened or the page "jumped" elsewhere.
+  const successRef = useRef<HTMLDivElement>(null);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -108,6 +116,15 @@ export default function QuoteForm() {
     window.addEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
     return () => window.removeEventListener(QUICK_QUOTE_EVENT, handleQuickQuote);
   }, []);
+
+  // Brings the confirmation into view the moment it appears, so a
+  // successful submission is never mistaken for nothing happening (or
+  // for landing on an unrelated section further down the page).
+  useEffect(() => {
+    if (status === "success") {
+      successRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [status]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -155,11 +172,16 @@ export default function QuoteForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-        <h3 className="text-xl font-semibold text-emerald-900">Thank you for your request.</h3>
+      <div
+        ref={successRef}
+        className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center"
+      >
+        <h3 className="text-xl font-semibold text-emerald-900">
+          Thank you for requesting a quote!
+        </h3>
         <p className="mt-3 text-emerald-800">
-          Your quote request has been received. We will contact you shortly to discuss your
-          cleaning needs.
+          Your request has been received. A member of our team will contact you shortly with the
+          next steps.
         </p>
       </div>
     );

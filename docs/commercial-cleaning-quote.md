@@ -115,7 +115,7 @@ With `npm run dev` running and at least Supabase configured:
 1. Go to `http://localhost:3000/commercial-cleaning-quote#quote`.
 2. Fill in the required fields (Full name, Phone, City, Property type, Cleaning type,
    Description, Consent checkbox) and submit.
-3. You should see: *"Thank you for your request. Your quote request has been received..."*
+3. You should see: *"Thank you for requesting a quote! Your request has been received..."*
    and the form should disappear (refreshing the page brings it back, by design).
 4. Check the `quote_requests` table in Supabase for the new row.
 5. If Twilio is configured, check the destination phone for a text starting with
@@ -195,3 +195,120 @@ lines if something fails server-side.
 - Error responses sent to the browser are generic ("Something went wrong. Please try again
   later.") — the real error, including anything from Supabase/Twilio/Resend, is only ever
   written to server-side logs, and those log lines never include the secret values above.
+
+## 11. Google Ads "Request quote" conversion tracking
+
+- **Base tag**: `src/components/GoogleAdsTag.tsx` renders Google's `gtag.js` (`AW-18338307179`)
+  on `cleaning.winsalotcorp.com` / `www.cleaning.winsalotcorp.com` (checked against the
+  request's `Host` header via `CLEANING_QUOTE_HOSTS` in `src/lib/hosts.ts`) — it's mounted in
+  `src/app/commercial-cleaning-quote/layout.tsx`, which also covers `/` on that host since
+  `src/proxy.ts` rewrites `/` to `/commercial-cleaning-quote` there. It also renders on this
+  project's own Vercel **Preview** deployments (`process.env.VERCEL_ENV === "preview"`, a
+  server-only value Vercel sets itself — not spoofable by a visitor's request), regardless of
+  hostname, so a reviewer can validate the tag directly on a PR's preview URL with no local
+  setup. It deliberately does not load on any other host or environment (admin/agent CRM,
+  funding page, local dev, production domains other than the two above) so real ad-spend
+  attribution is never at risk — and real ad campaigns never link to preview URLs in the first
+  place, so this doesn't expose the tag to real traffic either.
+- **Conversion event**: `gtag_report_conversion()` (`src/lib/google-ads.ts`) matches the exact
+  event snippet Google Ads generates for this conversion action — `send_to:
+  'AW-18338307179/g7jVCJfE69McEOu4sahE'`, `value: 1.0`, `currency: 'CAD'`. It's called from
+  exactly one place, `QuoteForm.tsx`'s submit handler, only after `POST
+  /api/commercial-cleaning-quote` responds `201` (i.e. only once the request has been validated
+  *and saved* — never on page visit, never on click, never on a validation or API/DB failure).
+- **One form, both property types**: residential ("home cleaning") and commercial quote
+  requests go through the exact same `QuoteForm` component and the same `/api/commercial-
+  cleaning-quote` endpoint — `propertyType` is just a field on the same payload — so the
+  conversion event fires identically for both; there's no separate "home cleaning" form or flow
+  to keep in sync.
+- **Confirmation scrolls into view**: `QuoteForm.tsx` scrolls the "Thank you for requesting a quote!"
+  box into view (`successRef.current?.scrollIntoView(...)`) the moment the success state
+  renders. Without this, a visitor who scrolled well down the ~15-field form before submitting
+  would have their scroll position stay put while the form collapses into a much shorter
+  confirmation box — leaving whatever section now occupies that same screen position (e.g.
+  Contact, which sits right after this one) visible instead, making a successful submission look
+  like nothing happened at all.
+- **Duplicate-conversion prevention**:
+  - A `useRef` lock (`submittingRef`) plus a disabled submit button close the race where two
+    clicks (or a fast double-click) dispatched in the same tick could both pass the `status`
+    check before either `setStatus("submitting")` call commits — the second attempt is dropped
+    before it ever calls the API or fires the event.
+  - There is no separate "confirmation page" or URL — success is shown by swapping in a
+    thank-you message from local React component state, with no `history.pushState` and no
+    route change. Reloading the page returns to a blank form; there is nothing to replay, so a
+    refresh can never re-fire the event.
+
+**Verified end-to-end** against a production build (`next build && next start`), driving a real
+Chromium browser (Playwright) and instrumenting `window.dataLayer` to record every `gtag()`
+call, with the API mocked so no real Supabase writes or real Google Ads conversions were
+involved in the automated checks. Checked against both the real `cleaning.winsalotcorp.com`
+host (confirming production behavior is unchanged) and a plain host with `VERCEL_ENV=preview`
+set (confirming the preview-testing path works with no hosts-file override):
+
+- Visiting the page fires only the base `gtag('config', 'AW-18338307179')` call — never a
+  `conversion` event.
+- A successful (mocked `201`) submission fires **exactly one** conversion event, with a payload
+  matching the snippet above exactly.
+- Rapid double-clicking the submit button still produces exactly one API call and exactly one
+  conversion event.
+- Reloading the page after a successful submission fires **zero** additional conversion events.
+- A failed (mocked `500`) submission fires **zero** conversion events.
+- Both the "Residential" and "Commercial" property-type paths were exercised and behave
+  identically, confirming the single shared code path claim above.
+
+### Testing this with Google Tag Assistant
+
+Since the base tag also renders on this project's Preview deployments, you can test directly on
+a PR's preview URL in Chrome — no local build, no hosts-file edit:
+
+1. Open the PR's preview URL directly, at the `/commercial-cleaning-quote` path specifically
+   (the bare `/` root only gets the production→`/commercial-cleaning-quote` rewrite on the real
+   `cleaning.winsalotcorp.com` domain, not on a preview URL).
+2. Install the [Tag Assistant](https://tagassistant.google.com/) Chrome extension, click
+   **Connect**/**Enable** on that tab, then reload the page.
+3. Confirm Tag Assistant shows the `AW-18338307179` base tag loaded, and that **no** conversion
+   event has fired yet from just loading the page.
+4. Scroll to **Request a Quote**, fill in the form (try either "Residential" or "Commercial"),
+   and submit.
+5. The page automatically scrolls the "Thank you for requesting a quote!" box into view the moment it
+   appears — if you don't see it immediately after submitting, give the smooth-scroll animation
+   a second to finish before assuming something's wrong. Once it's visible, confirm Tag Assistant
+   shows exactly **one** Conversion event for `AW-18338307179/g7jVCJfE69McEOu4sahE` with value
+   `1.0 CAD`.
+6. Refresh the page and confirm no additional conversion event fires — the form is back to
+   blank, not showing a replayable "confirmation" state.
+7. Click submit twice in quick succession on a fresh submission and confirm only one conversion
+   event is recorded.
+
+One real test submission through this flow **will** register as a small ($1.00 CAD) conversion
+in the live Google Ads account — that's expected of any true end-to-end tag validation and can
+be safely ignored, or excluded from reporting in the Google Ads UI if desired.
+
+### Troubleshooting: form submits successfully but no conversion appears
+
+If Tag Assistant shows the base tag loaded, the form shows "Thank you for requesting a quote!", but no
+Conversion event shows up (in Tag Assistant or in `dataLayer` itself), the most common cause is
+a **browser extension silently intercepting `gtag`** — many ad blockers and privacy tools (e.g.
+uBlock Origin's default filter lists) don't just block the `googletagmanager.com/gtag/js`
+request outright; they redirect it to a local no-op "surrogate" script that defines a harmless,
+do-nothing `window.gtag`. That satisfies code that merely checks `typeof window.gtag ===
+"function"`, and can still make some tag-detection tools report the base tag as "present," while
+every event call silently goes nowhere.
+
+`gtag_report_conversion()` (`src/lib/google-ads.ts`) now specifically detects this: it records
+`dataLayer`'s length immediately before and after calling `window.gtag(...)`, and logs a
+`console.warn` prefixed `[google-ads]` if the array didn't grow (or doesn't exist at all — some
+surrogate scripts also prevent the page's own `dataLayer` initialization from ever running). It
+also retries for up to 2 seconds if `window.gtag` isn't defined yet at all, in case the base
+tag's own script is just slow, logging a different warning if it never shows up.
+
+To confirm this is (or isn't) what's happening:
+
+1. Open DevTools → Console **before** submitting the form.
+2. Submit the form as usual.
+3. Look for a `[google-ads]` warning in the console.
+   - If you see one, an extension is very likely intercepting the tag — retest in an
+     **Incognito window with extensions disabled** (Chrome menu → New Incognito Window; by
+     default extensions don't run there unless explicitly allowed for Incognito).
+   - If you see no warning and still no conversion, that's a genuine bug — report the full
+     `JSON.stringify(dataLayer, null, 2)` output from the console at that point.
