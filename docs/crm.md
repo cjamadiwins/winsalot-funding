@@ -57,16 +57,41 @@ needs multiple independent, reschedulable, completable entries per lead, which a
   **`/admin/crm`**. This view is read-only by design — day-to-day callback management belongs to
   the assigned agent; admin's job here is oversight.
 
+## Sales Training & Call Scripts
+
+A read-only reference section for agents, reachable at **`/agent/training`** — deliberately its
+own top-level nav item, separate from `/agent/dashboard`, so training content never competes for
+space with the lead-management screen. Agents can view and copy any script or training material
+there (a **Copy** button on each entry copies its full text to the clipboard) but cannot add,
+edit, or remove anything themselves.
+
+Only admins can manage the content, from **`/admin/crm/training`**.
+
+- **`crm_training_materials`** (migration
+  [`0018_crm_training_materials.sql`](../supabase/migrations/0018_crm_training_materials.sql)) —
+  `title`, `content`, `sort_order`, `created_by` (→ `crm_users`), `updated_at` (kept current by a
+  trigger, same pattern as `active_cleaning_opportunities`).
+- **RLS**: any active CRM member (agent or admin) can `select` every row
+  (`crm_training_materials_select_members`); only `role = 'admin'` can `insert`/`update`/`delete`
+  (`crm_training_materials_admin_all`) — enforced at the database level, not just by hiding the
+  admin-only UI from agents.
+- The migration seeds one initial entry, the **General Commercial Cleaning Call Script**, so the
+  section isn't empty on first deploy. Migration
+  [`0019_rename_commercial_cleaning_script.sql`](../supabase/migrations/0019_rename_commercial_cleaning_script.sql)
+  renamed it from its original "Property Management Cleaning Call Script" title and generalized
+  its industry-specific sentence so it reads as suitable for agents calling businesses in any
+  industry, not just property management.
+
 ## User roles
 
 - **Admin** — every account that already exists today (see "Roles and the existing /admin
   dashboard" below). Full access to every lead, agent management, reassignment, deletion, and
-  the quote-request link. Reachable at `/admin/crm`, `/admin/crm/leads/[id]`, and
-  `/admin/crm/agents`.
+  the quote-request link. Reachable at `/admin/crm`, `/admin/crm/leads/[id]`,
+  `/admin/crm/agents`, and `/admin/crm/training`.
 - **Agent** — a new account type, created from `/admin/crm/agents`. Can only see and edit
   leads assigned to them, cannot delete a lead, cannot reassign a lead to someone else, and
   never sees `/admin/*`. Reachable at `/agent/login`, `/agent/dashboard`, `/agent/leads/new`,
-  and `/agent/leads/[id]`.
+  `/agent/leads/[id]`, and `/agent/training` (view/copy only).
 
 ## Roles and the existing /admin dashboard
 
@@ -405,3 +430,9 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       by agent, and has no action buttons (view-only)
 - [ ] The existing `/commercial-cleaning-quote`, `/customer-quote/[token]`,
       `/provider-quote/[token]`, and `/sales-tracker` pages are all unaffected
+- [ ] An agent can view and copy every entry on `/agent/training`, including the seeded
+      "General Commercial Cleaning Call Script", but has no add/edit/remove controls there
+- [ ] An admin can add, edit, and remove training materials from `/admin/crm/training`, and
+      changes show up on `/agent/training` immediately
+- [ ] An agent cannot add, edit, or delete a training material by calling the admin actions
+      directly (blocked by `requireCrmAdmin()` and by RLS even if that check were bypassed)
