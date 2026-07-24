@@ -4,17 +4,18 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   isFollowUpDueToday,
-  isFollowUpOverdue,
   isFollowUpUpcoming,
-  overdueDurationLabel,
   type CrmFollowUpWithLead,
   type CrmUserRow,
 } from "@/lib/crm-types";
 
 // Read-only by design: admins can view every agent's scheduled callbacks
 // here, but managing an individual callback (complete/reschedule) happens
-// from that agent's own workflow or the lead's own page - this view is
-// for oversight, not day-to-day callback management.
+// from that agent's own workflow, the lead's own page, or - for an
+// overdue one - AdminOverdueLeadsPanel above (Called — Reschedule /
+// Completed / Close Lead). Overdue callbacks aren't repeated here, same
+// reasoning as the agent dashboard's Follow-Up Calendar: one overdue
+// surface instead of two showing the same items with different controls.
 export default function AdminFollowUps({
   followUps,
   agents,
@@ -31,7 +32,6 @@ export default function AdminFollowUps({
     return followUps.filter((f) => f.crm_leads?.assigned_agent_id === agentFilter);
   }, [followUps, agentFilter]);
 
-  const overdue = filtered.filter(isFollowUpOverdue);
   const today = filtered.filter(isFollowUpDueToday);
   const upcoming = filtered.filter(isFollowUpUpcoming);
 
@@ -50,7 +50,6 @@ export default function AdminFollowUps({
         ))}
       </select>
 
-      <Group title="Overdue" items={overdue} emphasis="danger" agentById={agentById} />
       <Group title="Today" items={today} emphasis="warn" agentById={agentById} />
       <Group title="Upcoming" items={upcoming} emphasis="none" agentById={agentById} />
 
@@ -69,7 +68,7 @@ function Group({
 }: {
   title: string;
   items: CrmFollowUpWithLead[];
-  emphasis: "danger" | "warn" | "none";
+  emphasis: "warn" | "none";
   agentById: Map<string, CrmUserRow>;
 }) {
   if (items.length === 0) return null;
@@ -78,7 +77,7 @@ function Group({
     <div className="mt-5">
       <h3
         className={`text-xs font-semibold uppercase tracking-wide ${
-          emphasis === "danger" ? "text-rose-700" : emphasis === "warn" ? "text-amber-700" : "text-slate-500"
+          emphasis === "warn" ? "text-amber-700" : "text-slate-500"
         }`}
       >
         {title} ({items.length})
@@ -99,17 +98,9 @@ function Group({
                 ? agentById.get(followUp.crm_leads.assigned_agent_id)
                 : null;
               return (
-                <tr
-                  key={followUp.id}
-                  className={`border-b border-slate-100 last:border-0 ${
-                    emphasis === "danger" ? "bg-rose-50" : ""
-                  }`}
-                >
-                  <td className={`px-4 py-3 ${emphasis === "danger" ? "font-semibold text-rose-700" : "text-slate-600"}`}>
+                <tr key={followUp.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-3 text-slate-600">
                     {new Date(followUp.scheduled_at).toLocaleString()}
-                    {emphasis === "danger" && (
-                      <div className="text-xs font-normal">{overdueDurationLabel(followUp.scheduled_at)}</div>
-                    )}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-900">
                     {followUp.crm_leads ? (

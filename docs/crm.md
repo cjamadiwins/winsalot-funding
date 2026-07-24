@@ -93,13 +93,27 @@ time hasn't passed yet), so the two are mutually exclusive.
 - **Lead detail pages** still work exactly as before for anyone who does open them: a red
   "Overdue — N [days/hours] overdue" banner under the header, and the same complete/reschedule
   (Scheduled Callbacks), add-note (Log Activity), and Close Lead controls.
-- **Admin (`/admin/crm`)**: the **Overdue** stat tile toggles an "overdue only" filter over the
-  whole leads table (same effect as the **Overdue only** checkbox next to the other filters); the
-  **Closed – Won** and **Closed – Lost** tiles are one-click stage filters the same way. The
-  **Leads by Agent** section is now **Leads by Agent — Overdue by Agent**: each agent's card
-  shows their total lead count and, if nonzero, how many of those are currently overdue. Admin
-  doesn't have its own quick-action panel — this first pass is scoped to the agent dashboard,
-  where the "too difficult" complaint was specifically about.
+- **Admin (`/admin/crm`)** — `AdminOverdueLeadsPanel.tsx`: the same three quick actions as the
+  agent dashboard's panel, at the top of `/admin/crm` above the leads table, covering overdue
+  leads across every agent (not just one). Each card also shows which agent the lead is assigned
+  to. It reuses the same shared `Modal`/`CloseLeadPanel` components and the same
+  reschedule/complete/close-lead server actions in spirit — admin-scoped versions
+  (`src/app/admin/(dashboard)/crm/followup-actions.ts`, `closeLeadAction` in
+  `crm/leads/[id]/actions.ts`) that call `requireCrmAdmin()` and revalidate `/admin/crm` routes
+  instead of `/agent/*`, since RLS (`crm_followups_admin_all`) lets an admin touch any lead's
+  callbacks, not just ones assigned to them. Same required-reason rules, same
+  old-date/new-date/note/admin-name/timestamp record on the activity timeline either way.
+  - The **Overdue** stat tile still toggles an "overdue only" filter over the whole leads table
+    (same effect as the **Overdue only** checkbox next to the other filters); the **Closed – Won**
+    and **Closed – Lost** tiles are one-click stage filters the same way. The **Leads by Agent**
+    section is now **Leads by Agent — Overdue by Agent**: each agent's card shows their total
+    lead count and, if nonzero, how many of those are currently overdue.
+  - "All Agents' Follow-Ups" further down the page (`AdminFollowUps.tsx`) no longer has its own
+    Overdue group, for the same reason the agent dashboard's Follow-Up Calendar doesn't — it
+    still shows Today/Upcoming, read-only.
+  - The full `/admin/crm/leads/[id]` page is unchanged for detailed work (editing lead fields,
+    linking a quote request, sending emails, full activity history) — the quick-action panel only
+    covers the three routine overdue actions.
 
 ## Follow-Up Calendar
 
@@ -717,3 +731,14 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       the lead's own page
 - [ ] All three quick-action buttons are large enough to comfortably tap on a phone screen, and
       the Reschedule/Close Lead modals render as a reachable bottom sheet on a narrow viewport
+- [ ] `/admin/crm` shows `AdminOverdueLeadsPanel` at the top of the page, above the leads table,
+      whenever any agent has an overdue lead — each card shows which agent it's assigned to
+- [ ] From `/admin/crm`, **Called — Reschedule** on an overdue lead assigned to a *different*
+      agent still works (admin isn't restricted to their own leads) and logs the admin's own name
+      as who rescheduled it
+- [ ] **Completed** and **Close Lead** from `/admin/crm` behave the same way — immediate update,
+      required reason for closing, and an activity-timeline entry naming the admin
+- [ ] `/admin/crm`'s "All Agents' Follow-Ups" section no longer has its own Overdue group (Today
+      and Upcoming only)
+- [ ] `/admin/crm/leads/[id]` (the full lead page) is unchanged — still has Lead Details, Quote
+      Request Email/Link, Log Activity, and the existing Close Lead panel for detailed work
