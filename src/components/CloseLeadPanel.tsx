@@ -16,12 +16,18 @@ export default function CloseLeadPanel({
   isPending,
   closeAction,
   onClosed,
+  embedded = false,
 }: {
   leadId: string;
   lead: ClosableLead;
   isPending: boolean;
   closeAction: (leadId: string, outcome: string, reason: string) => Promise<void>;
   onClosed?: () => void;
+  // True when rendered inside another container that already provides its
+  // own card chrome (e.g. the Modal used by the dashboard's quick-action
+  // panel) - drops this component's own outer margin/border/background so
+  // it doesn't nest a second card inside the first.
+  embedded?: boolean;
 }) {
   const [choosing, setChoosing] = useState<CloseOutcome | null>(null);
   const [reason, setReason] = useState("");
@@ -34,7 +40,7 @@ export default function CloseLeadPanel({
     const won = lead.stage === "Closed – Won";
     return (
       <div
-        className={`mt-6 rounded-2xl border p-5 ${
+        className={`rounded-2xl border p-5 ${embedded ? "" : "mt-6"} ${
           won ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"
         }`}
       >
@@ -79,15 +85,19 @@ export default function CloseLeadPanel({
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Close Lead</h2>
-      <p className="mt-2 text-sm text-slate-600">
-        Closing a lead requires a short reason or note, recorded on its activity timeline for
-        reporting.
-      </p>
+    <div className={embedded ? "" : "mt-6 rounded-2xl border border-slate-200 bg-white p-5"}>
+      {!embedded && (
+        <>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Close Lead</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Closing a lead requires a short reason or note, recorded on its activity timeline for
+            reporting.
+          </p>
+        </>
+      )}
 
       {!choosing ? (
-        <div className="mt-3 flex flex-wrap gap-3">
+        <div className={embedded ? "grid grid-cols-1 gap-2.5" : "mt-3 flex flex-wrap gap-3"}>
           <button
             type="button"
             disabled={isPending}
@@ -95,7 +105,11 @@ export default function CloseLeadPanel({
               setChoosing("won");
               setError(null);
             }}
-            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className={
+              embedded
+                ? "min-h-[48px] rounded-xl bg-emerald-600 px-4 py-3 text-[15px] font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                : "rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            }
           >
             Mark Closed – Won
           </button>
@@ -106,13 +120,17 @@ export default function CloseLeadPanel({
               setChoosing("lost");
               setError(null);
             }}
-            className="rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className={
+              embedded
+                ? "min-h-[48px] rounded-xl bg-rose-600 px-4 py-3 text-[15px] font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                : "rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            }
           >
             Mark Closed – Lost
           </button>
         </div>
       ) : (
-        <div className="mt-3 space-y-2.5">
+        <div className={embedded ? "space-y-3" : "mt-3 space-y-2.5"}>
           <p className="text-sm font-medium text-slate-800">
             {choosing === "won" ? "Mark Closed – Won" : "Mark Closed – Lost"}
           </p>
@@ -121,18 +139,25 @@ export default function CloseLeadPanel({
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why is this lead closing? (required)"
             required
+            autoFocus
             className="w-full min-h-[80px] resize-y rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
           />
-          <div className="flex flex-wrap gap-3">
+          <div className={embedded ? "grid grid-cols-1 gap-2.5" : "flex flex-wrap gap-3"}>
             <button
               type="button"
               disabled={submitting || isPending || !reason.trim()}
               onClick={handleConfirm}
-              className={`rounded-full px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                choosing === "won" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
-              }`}
+              className={
+                embedded
+                  ? `min-h-[48px] rounded-xl px-4 py-3 text-[15px] font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      choosing === "won" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                    }`
+                  : `rounded-full px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      choosing === "won" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                    }`
+              }
             >
-              Confirm
+              Save
             </button>
             <button
               type="button"

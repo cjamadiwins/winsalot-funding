@@ -4,6 +4,7 @@ import { requireCrmUser } from "@/lib/crm-auth";
 import type { CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
+import OverdueLeadsPanel from "./OverdueLeadsPanel";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -43,6 +44,12 @@ export default async function AgentDashboardPage() {
           + Add Lead
         </Link>
       </div>
+
+      {!leadsError && !followUpsError && (
+        <div className="mt-8">
+          <OverdueLeadsPanel leads={leads} followUps={followUps} />
+        </div>
+      )}
 
       <h2 className="mt-8 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
         Follow-Up Calendar

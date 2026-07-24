@@ -67,21 +67,39 @@ is a real-time flag, not a once-a-day calendar-date check, so a 2pm follow-up is
 2:01pm, not just "the next day." `isDueToday()` covers the complementary case (scheduled today,
 time hasn't passed yet), so the two are mutually exclusive.
 
-- **Agent dashboard** (`/agent/dashboard`): a dedicated **Overdue** panel lists every overdue
-  lead at the very top of the page, above the stats grid, each showing exactly how overdue it is
-  (`overdueDurationLabel()` — "3 days overdue" / "5 hours overdue" / "12 minutes overdue") and
-  linking straight to the lead. The Follow-Up Calendar's own Overdue group (per-callback, not
-  per-lead) and the "My Leads" list also show the same duration label on any overdue item.
-- **Lead detail pages**: opening an overdue lead (either role) shows a red "Overdue — N
-  [days/hours] overdue" banner right under the header. From there an agent (or admin) can
-  complete or reschedule the follow-up (Scheduled Callbacks section), add an activity note (Log
-  Activity section), or close the lead Won/Lost (Close Lead panel) — all without leaving the
-  page.
+- **Agent dashboard** (`/agent/dashboard`) — `OverdueLeadsPanel.tsx`: the very first thing on the
+  page, above both the Follow-Up Calendar and My Leads sections, so an agent's first look at
+  their day is exactly what's late and what to do about it. Every overdue lead gets a card with
+  its duration (`overdueDurationLabel()` — "3 days overdue" / "5 hours overdue" / "12 minutes
+  overdue") and three large, thumb-friendly action buttons — no need to open the lead page for
+  routine handling:
+  - **Called — Reschedule** opens a small modal (bottom sheet on mobile, centered dialog on
+    larger screens) asking only for an outcome/note and a new date/time, then a Save button. It
+    calls the same `rescheduleFollowUpAction` as the lead page's own Scheduled Callbacks section
+    (see below) — same required-reason rule, same old-date/new-date/reason/agent/timestamp record
+    on the activity timeline, same immediate `refresh()` so the card disappears from the panel
+    (and every overdue count on the page updates) the instant it's saved.
+  - **Completed** marks the driving callback completed in one tap (the earliest pending one for
+    that lead — the same one `next_follow_up_at` is derived from) and now also logs who completed
+    it and when to `crm_activities`, which it didn't before this button existed.
+  - **Close Lead** opens a modal with the same Won/Lost + required-reason flow as the lead page's
+    Close Lead panel (it's the same `CloseLeadPanel` component, in a mode that fits inside a
+    modal instead of a standalone card).
+  - The lead's business name still links to the full lead page for anything these three actions
+    don't cover (editing details, quote emails, full activity history, etc.).
+  - The Follow-Up Calendar further down the page no longer has its own Overdue group — showing
+    the same overdue items in two places with two different sets of controls was exactly the
+    "too difficult" problem this panel replaces. It still shows Today/Upcoming.
+- **Lead detail pages** still work exactly as before for anyone who does open them: a red
+  "Overdue — N [days/hours] overdue" banner under the header, and the same complete/reschedule
+  (Scheduled Callbacks), add-note (Log Activity), and Close Lead controls.
 - **Admin (`/admin/crm`)**: the **Overdue** stat tile toggles an "overdue only" filter over the
   whole leads table (same effect as the **Overdue only** checkbox next to the other filters); the
   **Closed – Won** and **Closed – Lost** tiles are one-click stage filters the same way. The
   **Leads by Agent** section is now **Leads by Agent — Overdue by Agent**: each agent's card
-  shows their total lead count and, if nonzero, how many of those are currently overdue.
+  shows their total lead count and, if nonzero, how many of those are currently overdue. Admin
+  doesn't have its own quick-action panel — this first pass is scoped to the agent dashboard,
+  where the "too difficult" complaint was specifically about.
 
 ## Follow-Up Calendar
 
@@ -95,12 +113,13 @@ needs multiple independent, reschedulable, completable entries per lead, which a
   **Scheduled Callbacks** section on a lead's own page. Logging an activity with a follow-up
   date (the pre-existing mechanism) also creates a `crm_followups` entry now, so every
   follow-up — however it was scheduled — shows up in one place.
-- **`/agent/dashboard`** shows three grouped lists — **Overdue**, **Today**, **Upcoming** — of
-  the signed-in agent's own pending callbacks, each with **Mark Completed**, **Reschedule**
-  (inline date/time + reason editor), and **Add Note** (logs a `crm_activities` note against the
-  lead, reusing the existing timeline rather than a second notes field). The same three controls
-  are also available inline on a lead's own **Scheduled Callbacks** section
-  (`/agent/leads/[id]`), which is how an overdue lead gets rescheduled without leaving the page.
+- **`/agent/dashboard`** shows two grouped lists — **Today** and **Upcoming** — of the signed-in
+  agent's own pending callbacks, each with **Mark Completed**, **Reschedule** (inline date/time +
+  reason editor), and **Add Note** (logs a `crm_activities` note against the lead, reusing the
+  existing timeline rather than a second notes field). Overdue callbacks aren't shown here — see
+  `OverdueLeadsPanel` under "Overdue leads" above, which is where those are actioned instead. The
+  same Mark Completed/Reschedule/Add Note controls are also available inline on a lead's own
+  **Scheduled Callbacks** section (`/agent/leads/[id]`).
 - **Rescheduling always requires a reason**, unlike the initial "+ Schedule Callback" note
   (optional). `rescheduleFollowUpAction` (`src/app/agent/(dashboard)/followup-actions.ts`) reads
   the callback's *current* `scheduled_at` before overwriting it, then logs a `crm_activities`
@@ -675,8 +694,6 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       blocked; entering a new date/time and a reason and saving updates the callback, clears the
       lead's Overdue banner, and adds an activity entry recording the old due date, new due date,
       reason, agent name, and timestamp
-- [ ] The same reschedule behavior works from the `/agent/dashboard` Follow-Up Calendar's Overdue
-      group
 - [ ] After rescheduling, "Mark Completed" and the Close Lead panel (Won/Lost) are both still
       available on the lead
 - [ ] Rescheduling an overdue follow-up to a future date/time clears the lead's red Overdue
@@ -684,3 +701,19 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
 - [ ] Marking an overdue lead's follow-up completed, or closing the lead Won/Lost, also updates
       the page immediately (no stale Overdue banner or stage badge left over from before the
       action)
+- [ ] `/agent/dashboard` shows `OverdueLeadsPanel` at the very top of the page (above Follow-Up
+      Calendar and My Leads) whenever the signed-in agent has an overdue lead, with **Called —
+      Reschedule**, **Completed**, and **Close Lead** buttons on each one
+- [ ] **Called — Reschedule** opens a modal asking only for an outcome/note and a new date/time;
+      saving updates the callback, removes the lead from the Overdue panel immediately, updates
+      the Overdue stat tile and count, and logs the old date/new date/reason/agent/timestamp to
+      the activity timeline — same as rescheduling from the lead page
+- [ ] **Completed** clears the lead's overdue status in one tap and logs a "Follow-up completed
+      by [agent]" entry to the activity timeline
+- [ ] **Close Lead** opens a modal offering Closed – Won / Closed – Lost, blocks saving without a
+      reason, and removes the lead from the Overdue panel immediately once saved
+- [ ] The Follow-Up Calendar on `/agent/dashboard` no longer has its own Overdue group (Today and
+      Upcoming only) — overdue callbacks only ever need to be handled from `OverdueLeadsPanel` or
+      the lead's own page
+- [ ] All three quick-action buttons are large enough to comfortably tap on a phone screen, and
+      the Reschedule/Close Lead modals render as a reachable bottom sheet on a narrow viewport

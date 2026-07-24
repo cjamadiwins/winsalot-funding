@@ -4,9 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   isFollowUpDueToday,
-  isFollowUpOverdue,
   isFollowUpUpcoming,
-  overdueDurationLabel,
   toDatetimeLocal,
   type CrmFollowUpWithLead,
   type CrmLeadRow,
@@ -21,6 +19,10 @@ import {
 const inputClass =
   "w-full rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]";
 
+// Today/Upcoming callbacks only - overdue ones have their own dedicated,
+// action-oriented surface (OverdueLeadsPanel, at the very top of
+// /agent/dashboard) so an overdue callback isn't shown in two different
+// places with two different sets of controls.
 export default function FollowUpCalendar({
   followUps,
   leads,
@@ -35,7 +37,6 @@ export default function FollowUpCalendar({
   const [notingId, setNotingId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
 
-  const overdue = useMemo(() => followUps.filter(isFollowUpOverdue), [followUps]);
   const today = useMemo(() => followUps.filter(isFollowUpDueToday), [followUps]);
   const upcoming = useMemo(() => followUps.filter(isFollowUpUpcoming), [followUps]);
 
@@ -113,19 +114,6 @@ export default function FollowUpCalendar({
       )}
 
       <CalendarGroup
-        title="Overdue"
-        items={overdue}
-        emphasis="danger"
-        isPending={isPending}
-        reschedulingId={reschedulingId}
-        notingId={notingId}
-        noteDraft={noteDraft}
-        setNoteDraft={setNoteDraft}
-        setReschedulingId={setReschedulingId}
-        setNotingId={setNotingId}
-        runAction={runAction}
-      />
-      <CalendarGroup
         title="Today"
         items={today}
         emphasis="warn"
@@ -161,7 +149,7 @@ export default function FollowUpCalendar({
   );
 }
 
-type Emphasis = "danger" | "warn" | "none";
+type Emphasis = "warn" | "none";
 
 function CalendarGroup({
   title,
@@ -194,11 +182,7 @@ function CalendarGroup({
     <div className="mt-5">
       <h3
         className={`text-[12px] font-semibold uppercase tracking-wide ${
-          emphasis === "danger"
-            ? "text-red-700"
-            : emphasis === "warn"
-              ? "text-amber-700"
-              : "text-[var(--color-text-muted)]"
+          emphasis === "warn" ? "text-amber-700" : "text-[var(--color-text-muted)]"
         }`}
       >
         {title} ({items.length})
@@ -208,11 +192,9 @@ function CalendarGroup({
           <div
             key={followUp.id}
             className={`rounded-xl border p-4 ${
-              emphasis === "danger"
-                ? "border-red-200 bg-red-50"
-                : emphasis === "warn"
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
+              emphasis === "warn"
+                ? "border-amber-200 bg-amber-50"
+                : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -222,11 +204,8 @@ function CalendarGroup({
               >
                 {followUp.crm_leads?.business_name ?? "Lead"}
               </Link>
-              <span
-                className={`text-[12.5px] font-medium ${emphasis === "danger" ? "text-red-700" : "text-[var(--color-text-muted)]"}`}
-              >
+              <span className="text-[12.5px] font-medium text-[var(--color-text-muted)]">
                 {new Date(followUp.scheduled_at).toLocaleString()}
-                {emphasis === "danger" && ` — ${overdueDurationLabel(followUp.scheduled_at)}`}
               </span>
             </div>
             {followUp.crm_leads?.phone && (

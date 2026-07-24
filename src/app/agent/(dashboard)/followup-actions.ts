@@ -113,6 +113,9 @@ export async function rescheduleFollowUpAction(
   refresh();
 }
 
+// Marking a callback completed also leaves a record on the activity
+// timeline (who completed it and when) - previously this only updated
+// crm_followups with nothing visible in the lead's history.
 export async function completeFollowUpAction(followUpId: string, leadId: string) {
   const crmUser = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
@@ -127,6 +130,18 @@ export async function completeFollowUpAction(followUpId: string, leadId: string)
     .eq("id", followUpId);
 
   if (error) throw new Error("Failed to mark the callback completed.");
+
+  const agentName = crmUser.full_name || crmUser.email;
+  const { error: activityError } = await supabase.from("crm_activities").insert({
+    lead_id: leadId,
+    agent_id: crmUser.id,
+    activity_type: "outcome",
+    notes: `Follow-up completed by ${agentName}.`,
+  });
+
+  if (activityError) {
+    throw new Error("Callback marked completed, but failed to log it on the activity timeline.");
+  }
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);
