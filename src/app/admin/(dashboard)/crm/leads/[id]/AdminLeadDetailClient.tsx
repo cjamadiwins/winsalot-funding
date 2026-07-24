@@ -5,6 +5,9 @@ import Link from "next/link";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
+  EMAIL_TYPE_LABELS,
   LEAD_STAGES,
   type CrmActivityRow,
   type CrmLeadRow,
@@ -23,6 +26,7 @@ import {
   finalApproveLeadAction,
   linkQuoteAction,
   searchQuoteRequestsAction,
+  sendFollowUpEmailAction,
   sendQuoteRequestEmailAction,
   unlinkQuoteAction,
   updateLeadAction,
@@ -57,6 +61,7 @@ export default function AdminLeadDetailClient({
   const [quoteResults, setQuoteResults] = useState<QuoteRequestSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [quoteEmailSuccess, setQuoteEmailSuccess] = useState<string | null>(null);
+  const [followUpEmailSuccess, setFollowUpEmailSuccess] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -88,6 +93,18 @@ export default function AdminLeadDetailClient({
     runAction(async () => {
       const result = await sendQuoteRequestEmailAction(lead.id);
       setQuoteEmailSuccess(`Quote request email sent to ${result.email}.`);
+    });
+  }
+
+  function handleSendFollowUpEmail() {
+    if (!lead.email) return;
+    const confirmed = confirm(`Send a follow-up email to ${lead.email}?`);
+    if (!confirmed) return;
+
+    setFollowUpEmailSuccess(null);
+    runAction(async () => {
+      const result = await sendFollowUpEmailAction(lead.id);
+      setFollowUpEmailSuccess(`Follow-up email sent to ${result.email}.`);
     });
   }
 
@@ -278,6 +295,75 @@ export default function AdminLeadDetailClient({
             )}
             {quoteEmailSuccess && (
               <p className="mt-2 text-sm font-medium text-emerald-700">{quoteEmailSuccess}</p>
+            )}
+          </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Follow-Up Email
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Sends a reminder email to{" "}
+              {lead.email ? <span className="font-medium text-slate-900">{lead.email}</span> : "this lead"}{" "}
+              for a quote request that hasn&apos;t been completed yet.
+            </p>
+            <button
+              type="button"
+              disabled={isPending || !lead.email}
+              onClick={handleSendFollowUpEmail}
+              className={`${buttonClasses} mt-3`}
+            >
+              Send Follow-Up Email
+            </button>
+            {!lead.email && (
+              <p className="mt-2 text-xs text-rose-600">
+                Add an email address for this lead before sending.
+              </p>
+            )}
+            {followUpEmailSuccess && (
+              <p className="mt-2 text-sm font-medium text-emerald-700">{followUpEmailSuccess}</p>
+            )}
+          </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Email Status
+            </h2>
+            {lead.last_email_status ? (
+              <div className="mt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
+                  >
+                    {EMAIL_STATUS_LABELS[lead.last_email_status]}
+                  </span>
+                  {lead.last_email_type && (
+                    <span className="text-xs text-slate-500">
+                      {EMAIL_TYPE_LABELS[lead.last_email_type]} email
+                      {lead.last_email_to ? ` to ${lead.last_email_to}` : ""}
+                    </span>
+                  )}
+                </div>
+                {lead.last_email_status_at && (
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {new Date(lead.last_email_status_at).toLocaleString()}
+                  </p>
+                )}
+                {lead.last_email_status === "bounced" && (
+                  <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
+                    This email bounced — verify or correct this lead&apos;s email address before
+                    sending again.
+                  </p>
+                )}
+                {lead.last_email_status === "complained" && (
+                  <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
+                    This recipient marked an email as spam — consider not emailing this lead
+                    again.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">No email sent to this lead yet.</p>
             )}
           </div>
 

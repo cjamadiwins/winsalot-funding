@@ -5,6 +5,9 @@ import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
   AGENT_SETTABLE_STAGES,
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
+  EMAIL_TYPE_LABELS,
   LEAD_STAGE_STYLES,
   toDatetimeLocal,
   type CrmActivityRow,
@@ -15,6 +18,7 @@ import {
 import type { QuoteRequestRow } from "@/lib/admin-types";
 import {
   addActivityAction,
+  sendFollowUpEmailAction,
   sendQuoteRequestEmailAction,
   updateLeadDetailsAction,
   updateLeadStageAction,
@@ -58,6 +62,7 @@ export default function LeadDetailClient({
   const [showSchedule, setShowSchedule] = useState(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [quoteEmailSuccess, setQuoteEmailSuccess] = useState<string | null>(null);
+  const [followUpEmailSuccess, setFollowUpEmailSuccess] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -89,6 +94,18 @@ export default function LeadDetailClient({
     runAction(async () => {
       const result = await sendQuoteRequestEmailAction(lead.id);
       setQuoteEmailSuccess(`Quote request email sent to ${result.email}.`);
+    });
+  }
+
+  function handleSendFollowUpEmail() {
+    if (!lead.email) return;
+    const confirmed = confirm(`Send a follow-up email to ${lead.email}?`);
+    if (!confirmed) return;
+
+    setFollowUpEmailSuccess(null);
+    runAction(async () => {
+      const result = await sendFollowUpEmailAction(lead.id);
+      setFollowUpEmailSuccess(`Follow-up email sent to ${result.email}.`);
     });
   }
 
@@ -323,6 +340,81 @@ export default function LeadDetailClient({
             )}
             {quoteEmailSuccess && (
               <p className="mt-2 text-[13px] font-medium text-emerald-700">{quoteEmailSuccess}</p>
+            )}
+          </div>
+
+          <div className="mt-5 border-t border-[var(--color-border-soft)] pt-5">
+            <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              Follow-Up Email
+            </h3>
+            <p className="mt-2 text-[13.5px] text-[var(--color-text-muted)]">
+              Sends a reminder email to{" "}
+              {lead.email ? (
+                <span className="font-medium text-[var(--color-ink-strong)]">{lead.email}</span>
+              ) : (
+                "this lead"
+              )}{" "}
+              for a quote request that hasn&apos;t been completed yet.
+            </p>
+            <button
+              type="button"
+              disabled={isPending || !lead.email}
+              onClick={handleSendFollowUpEmail}
+              className="mt-3 rounded-full bg-[var(--color-accent)] px-5 py-2 text-[13.5px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Send Follow-Up Email
+            </button>
+            {!lead.email && (
+              <p className="mt-2 text-[12px] text-red-600">
+                Add an email address for this lead before sending.
+              </p>
+            )}
+            {followUpEmailSuccess && (
+              <p className="mt-2 text-[13px] font-medium text-emerald-700">{followUpEmailSuccess}</p>
+            )}
+          </div>
+
+          <div className="mt-5 border-t border-[var(--color-border-soft)] pt-5">
+            <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              Email Status
+            </h3>
+            {lead.last_email_status ? (
+              <div className="mt-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-[12.5px] font-semibold ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
+                  >
+                    {EMAIL_STATUS_LABELS[lead.last_email_status]}
+                  </span>
+                  {lead.last_email_type && (
+                    <span className="text-[12.5px] text-[var(--color-text-muted)]">
+                      {EMAIL_TYPE_LABELS[lead.last_email_type]} email
+                      {lead.last_email_to ? ` to ${lead.last_email_to}` : ""}
+                    </span>
+                  )}
+                </div>
+                {lead.last_email_status_at && (
+                  <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">
+                    {new Date(lead.last_email_status_at).toLocaleString()}
+                  </p>
+                )}
+                {lead.last_email_status === "bounced" && (
+                  <p className="mt-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-medium text-red-700">
+                    This email bounced — verify or correct this lead&apos;s email address before
+                    sending again.
+                  </p>
+                )}
+                {lead.last_email_status === "complained" && (
+                  <p className="mt-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-medium text-red-700">
+                    This recipient marked an email as spam — consider not emailing this lead
+                    again.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-[13.5px] text-[var(--color-text-muted)]">
+                No email sent to this lead yet.
+              </p>
             )}
           </div>
 
