@@ -5,11 +5,15 @@ import Link from "next/link";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
+  CLOSED_STAGES,
   LEAD_STAGES,
+  isOverdue,
+  overdueDurationLabel,
   type CrmActivityRow,
   type CrmLeadRow,
   type CrmUserRow,
   type LatestCrmLeadEmail,
+  type LeadStage,
 } from "@/lib/crm-types";
 import type {
   ProviderQuoteSubmissionRow,
@@ -19,8 +23,10 @@ import type {
 } from "@/lib/admin-types";
 import RequestWorkflowPanel from "@/app/admin/(dashboard)/requests/[id]/RequestWorkflowPanel";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
+import CloseLeadPanel from "@/components/CloseLeadPanel";
 import {
   addActivityAction,
+  closeLeadAction,
   deleteLeadAction,
   finalApproveLeadAction,
   linkQuoteAction,
@@ -109,7 +115,10 @@ export default function AdminLeadDetailClient({
     });
   }
 
+  const isClosed = CLOSED_STAGES.includes(lead.stage as LeadStage);
+
   function handleDelete() {
+    if (isClosed) return;
     if (!confirm(`Permanently delete the lead "${lead.business_name}"? This cannot be undone.`)) {
       return;
     }
@@ -140,13 +149,21 @@ export default function AdminLeadDetailClient({
         <h1 className="text-2xl font-bold text-slate-900">{lead.business_name}</h1>
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || isClosed}
           onClick={handleDelete}
+          title={isClosed ? "Closed leads cannot be deleted — kept for reporting." : undefined}
           className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           Delete Lead
         </button>
       </div>
+
+      {isOverdue(lead) && lead.next_follow_up_at && (
+        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          Overdue — {overdueDurationLabel(lead.next_follow_up_at)} (was due{" "}
+          {new Date(lead.next_follow_up_at).toLocaleString()})
+        </p>
+      )}
 
       {error && (
         <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -155,6 +172,8 @@ export default function AdminLeadDetailClient({
       )}
 
       <EmailStatusPanel latestEmail={latestEmail} />
+
+      <CloseLeadPanel leadId={lead.id} lead={lead} isPending={isPending} closeAction={closeLeadAction} />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -367,7 +386,7 @@ export default function AdminLeadDetailClient({
                   />
                 </div>
 
-                {linkedQuote.customer_response && lead.stage !== "Closed/completed" && (
+                {linkedQuote.customer_response && !isClosed && lead.stage !== "Closed/completed" && (
                   <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
                       Final Approval

@@ -9,6 +9,7 @@ import {
   LEAD_STAGE_STYLES,
   isOverdue,
   isDueToday,
+  overdueDurationLabel,
   type CrmLeadRow,
   type LeadStage,
 } from "@/lib/crm-types";
@@ -17,8 +18,15 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
 
+  const overdueLeads = useMemo(
+    () =>
+      leads
+        .filter(isOverdue)
+        .sort((a, b) => new Date(a.next_follow_up_at!).getTime() - new Date(b.next_follow_up_at!).getTime()),
+    [leads]
+  );
   const dueToday = leads.filter(isDueToday).length;
-  const overdue = leads.filter(isOverdue).length;
+  const overdue = overdueLeads.length;
   const newLeads = leads.filter((l) => l.stage === "New interested lead").length;
   const followUpRequired = leads.filter((l) => l.stage === "Follow-up required").length;
 
@@ -47,6 +55,31 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
 
   return (
     <div>
+      {overdueLeads.length > 0 && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
+          <h2 className="text-[13px] font-bold uppercase tracking-wide text-red-700">
+            Overdue ({overdueLeads.length})
+          </h2>
+          <ul className="mt-3 space-y-2">
+            {overdueLeads.map((lead) => (
+              <li key={lead.id}>
+                <Link
+                  href={`/agent/leads/${lead.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2.5 transition hover:border-red-400"
+                >
+                  <span className="font-semibold text-[var(--color-ink-strong)]">
+                    {lead.business_name}
+                  </span>
+                  <span className="text-[12.5px] font-semibold text-red-700">
+                    {overdueDurationLabel(lead.next_follow_up_at!)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map((stat) => (
           <div
@@ -155,6 +188,7 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
                   }`}
                 >
                   Next follow-up: {new Date(lead.next_follow_up_at).toLocaleString()}
+                  {isOverdue(lead) && ` — ${overdueDurationLabel(lead.next_follow_up_at)}`}
                 </div>
               )}
             </Link>

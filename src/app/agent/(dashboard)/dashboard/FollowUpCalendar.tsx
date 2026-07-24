@@ -6,6 +6,7 @@ import {
   isFollowUpDueToday,
   isFollowUpOverdue,
   isFollowUpUpcoming,
+  overdueDurationLabel,
   toDatetimeLocal,
   type CrmFollowUpWithLead,
   type CrmLeadRow,
@@ -225,6 +226,7 @@ function CalendarGroup({
                 className={`text-[12.5px] font-medium ${emphasis === "danger" ? "text-red-700" : "text-[var(--color-text-muted)]"}`}
               >
                 {new Date(followUp.scheduled_at).toLocaleString()}
+                {emphasis === "danger" && ` — ${overdueDurationLabel(followUp.scheduled_at)}`}
               </span>
             </div>
             {followUp.crm_leads?.phone && (

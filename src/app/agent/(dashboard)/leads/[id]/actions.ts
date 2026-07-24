@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
 import { sendFollowUpEmailForLead } from "@/lib/send-follow-up-email";
+import { closeLeadForLead } from "@/lib/close-lead";
 import {
   ACTIVITY_TYPES,
   AGENT_SETTABLE_STAGES,
@@ -155,4 +156,15 @@ export async function sendFollowUpEmailAction(leadId: string): Promise<{ email: 
   revalidatePath("/agent/dashboard");
 
   return result;
+}
+
+// The only way an agent can mark a lead Closed – Won or Closed – Lost -
+// always requires a reason (closeLeadForLead throws otherwise), unlike the
+// freeform stage dropdown above which never offers these two stages.
+export async function closeLeadAction(leadId: string, outcome: string, reason: string) {
+  const crmUser = await requireCrmUser();
+  await closeLeadForLead(leadId, crmUser, outcome, reason);
+
+  revalidatePath(`/agent/leads/${leadId}`);
+  revalidatePath("/agent/dashboard");
 }

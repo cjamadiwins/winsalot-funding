@@ -6,6 +6,7 @@ import {
   isFollowUpDueToday,
   isFollowUpOverdue,
   isFollowUpUpcoming,
+  overdueDurationLabel,
   type CrmFollowUpWithLead,
   type CrmUserRow,
 } from "@/lib/crm-types";
@@ -106,6 +107,9 @@ function Group({
                 >
                   <td className={`px-4 py-3 ${emphasis === "danger" ? "font-semibold text-rose-700" : "text-slate-600"}`}>
                     {new Date(followUp.scheduled_at).toLocaleString()}
+                    {emphasis === "danger" && (
+                      <div className="text-xs font-normal">{overdueDurationLabel(followUp.scheduled_at)}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-900">
                     {followUp.crm_leads ? (

@@ -20,22 +20,32 @@ export const LEAD_STAGES = [
   "Customer declined",
   "No response",
   "Closed/completed",
+  "Closed – Won",
+  "Closed – Lost",
 ] as const;
 
 export type LeadStage = (typeof LEAD_STAGES)[number];
 
-export const CLOSED_STAGES: LeadStage[] = [
-  "Customer accepted",
-  "Customer declined",
-  "No response",
-  "Closed/completed",
-];
+// The only two stages that mean "this lead is done" for overdue-flagging
+// and admin reporting purposes. Deliberately narrower than "every
+// terminal-ish stage" (e.g. the legacy "No response"/"Closed/completed"
+// aren't included) - a lead only stops being eligible for an Overdue flag
+// once it's been deliberately closed Won or Lost, with a reason recorded
+// (see crm_leads_closed_reason_required, migration 0024).
+export const CLOSED_STAGES: LeadStage[] = ["Closed – Won", "Closed – Lost"];
 
-// Stages an agent may set themselves. The remaining stages ("Customer
-// accepted", "Customer declined", "Closed/completed") are system/admin
-// controlled - accept/decline sync automatically from the customer's
-// response, and closing an opportunity is a dedicated admin-only action.
-// Enforced in the database too (see migration 0009), not just this list.
+// Stages an agent may set themselves via the plain stage dropdown. The
+// remaining stages ("Customer accepted", "Customer declined",
+// "Closed/completed") are system/admin controlled - accept/decline sync
+// automatically from the customer's response, and "Closed/completed" is a
+// dedicated admin-only action. Enforced in the database too (see migration
+// 0009/0024), not just this list.
+//
+// "Closed – Won"/"Closed – Lost" are deliberately *not* in this list even
+// though an agent is allowed to set them (migration 0024's trigger permits
+// it) - closing a lead always requires a reason, so it only ever happens
+// through closeLeadAction (the dedicated Close Lead panel), never through
+// this freeform dropdown.
 export const AGENT_SETTABLE_STAGES: LeadStage[] = [
   "New interested lead",
   "Waiting for cleaning details",
@@ -62,7 +72,16 @@ export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
   "Customer declined": "bg-rose-100 text-rose-800",
   "No response": "bg-rose-100 text-rose-800",
   "Closed/completed": "bg-indigo-100 text-indigo-800",
+  "Closed – Won": "bg-emerald-100 text-emerald-800",
+  "Closed – Lost": "bg-rose-100 text-rose-800",
 };
+
+export const CLOSE_OUTCOMES = ["won", "lost"] as const;
+export type CloseOutcome = (typeof CLOSE_OUTCOMES)[number];
+
+export function stageForCloseOutcome(outcome: CloseOutcome): LeadStage {
+  return outcome === "won" ? "Closed – Won" : "Closed – Lost";
+}
 
 // Every status a Resend delivery event can put an email in. Deliberately
 // distinct from one another - "delivered" never implies "opened" and
@@ -139,6 +158,9 @@ export type CrmLeadRow = {
   last_email_status_at: string | null;
   last_email_type: EmailType | null;
   last_email_to: string | null;
+  closed_reason: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
 };
 
 // A single tracked send (crm_lead_emails) - the Resend email id plus a
@@ -242,19 +264,41 @@ function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-// Compares calendar days (in the server's local time zone), not exact
-// timestamps, so a 2pm follow-up checked at 4pm the same day is "due
-// today", not "overdue" - it only becomes overdue the next calendar day.
+// Overdue is judged against the exact scheduled date *and time* - a
+// follow-up scheduled for 2pm is overdue the moment 2pm passes, not at
+// midnight. A lead stops being eligible the moment it's Closed – Won or
+// Closed – Lost (see CLOSED_STAGES above), regardless of any other stage.
 export function isOverdue(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">): boolean {
   if (!lead.next_follow_up_at) return false;
   if (CLOSED_STAGES.includes(lead.stage)) return false;
-  return startOfDay(new Date(lead.next_follow_up_at)) < startOfDay(new Date());
+  return new Date(lead.next_follow_up_at).getTime() < Date.now();
 }
 
+// "Due today" means scheduled for today but not yet overdue - once the
+// scheduled time passes it moves into isOverdue() instead, so the two are
+// mutually exclusive rather than both being true for the rest of the day.
 export function isDueToday(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">): boolean {
   if (!lead.next_follow_up_at) return false;
   if (CLOSED_STAGES.includes(lead.stage)) return false;
+  if (isOverdue(lead)) return false;
   return startOfDay(new Date(lead.next_follow_up_at)) === startOfDay(new Date());
+}
+
+// "3 days overdue" / "5 hours overdue" / "12 minutes overdue" - used
+// anywhere an overdue lead or follow-up is shown so agents/admins see how
+// late it is at a glance, not just that it's late.
+export function overdueDurationLabel(scheduledIso: string): string {
+  const elapsedMs = Date.now() - new Date(scheduledIso).getTime();
+  if (elapsedMs <= 0) return "";
+
+  const minutes = Math.floor(elapsedMs / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days === 1 ? "" : "s"} overdue`;
+  if (hours > 0) return `${hours} hour${hours === 1 ? "" : "s"} overdue`;
+  if (minutes > 0) return `${minutes} minute${minutes === 1 ? "" : "s"} overdue`;
+  return "Just now overdue";
 }
 
 // Follow-Up Calendar: dedicated scheduled callbacks (crm_followups),
@@ -283,18 +327,22 @@ export type CrmFollowUpWithLead = CrmFollowUpRow & {
   crm_leads: Pick<CrmLeadRow, "id" | "business_name" | "phone" | "city" | "assigned_agent_id"> | null;
 };
 
+// Same exact-timestamp rule as isOverdue() above, applied to an individual
+// scheduled callback rather than the lead as a whole.
 export function isFollowUpOverdue(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
-  return startOfDay(new Date(followUp.scheduled_at)) < startOfDay(new Date());
+  return new Date(followUp.scheduled_at).getTime() < Date.now();
 }
 
 export function isFollowUpDueToday(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
+  if (isFollowUpOverdue(followUp)) return false;
   return startOfDay(new Date(followUp.scheduled_at)) === startOfDay(new Date());
 }
 
 export function isFollowUpUpcoming(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
+  if (isFollowUpOverdue(followUp)) return false;
   return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
 }
 

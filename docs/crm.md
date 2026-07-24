@@ -11,9 +11,11 @@ and Vercel deployment.
 1. An agent signs in at **`/agent/login`** and adds a new interested lead from
    **`/agent/dashboard`** with the customer's cleaning details.
 2. The agent works the lead through its stages (`New interested lead` → `Waiting for cleaning
-   details` → `Quote requested from provider` → ... → `Closed/completed`), logging calls,
-   emails, texts, voicemails, and notes on the lead's activity timeline, and scheduling a next
-   follow-up date/time as they go.
+   details` → `Quote requested from provider` → `Provider quote received` → `Quote sent to
+   customer` → `Follow-up required` → `Closed – Won` / `Closed – Lost`), logging calls, emails,
+   texts, voicemails, and notes on the lead's activity timeline, and scheduling a next follow-up
+   date/time as they go. A lead automatically shows as **Overdue** once its follow-up date/time
+   passes without being closed — see "Overdue leads" below.
 3. An admin connects the lead to an existing quote request from **`/admin/crm/leads/[id]`**
    (search by name, phone, or email) once one exists. That page embeds the same review/approve/
    send workflow as the standalone quote dashboard, so the admin can review the provider's
@@ -25,6 +27,61 @@ and Vercel deployment.
    follows up from there.
 5. Once the admin is done, they click **Final Approval — Close Opportunity** on the lead page,
    which marks it `Closed/completed` and logs it in the activity history.
+
+## Closing a lead: Closed – Won / Closed – Lost
+
+Every lead detail page (`/agent/leads/[id]` and `/admin/crm/leads/[id]`) has a **Close Lead**
+panel with two buttons, **Mark Closed – Won** and **Mark Closed – Lost**. Either one requires a
+short reason/note before it submits — there's no way to close a lead without one, in the UI or
+the database:
+
+- `closeLeadForLead` (`src/lib/close-lead.ts`), shared by the agent's `closeLeadAction`
+  (`src/app/agent/(dashboard)/leads/[id]/actions.ts`) and the admin's `closeLeadAction`
+  (`src/app/admin/(dashboard)/crm/leads/[id]/actions.ts`), sets `stage` to `Closed – Won` /
+  `Closed – Lost`, stamps `closed_reason`/`closed_at`/`closed_by`, and logs an `outcome`
+  `crm_activities` entry with the reason.
+- The database backs this up independently (migration
+  [`0024_crm_lead_closing_workflow.sql`](../supabase/migrations/0024_crm_lead_closing_workflow.sql)):
+  a check constraint (`crm_leads_closed_reason_required`) rejects any row in one of the two
+  closing stages with a null `closed_reason`, regardless of which client wrote it.
+- Unlike the plain stage dropdown, an agent *can* set a lead directly to `Closed – Won`/
+  `Closed – Lost` (migration 0024 extends the agent-stage-restriction trigger to allow it) — but
+  only ever through this panel, since the dropdown never lists these two stages as an option.
+  This is why closing has its own dedicated action instead of reusing `updateLeadStageAction`.
+- **Closed leads are never deleted.** `deleteLeadAction` rejects a closed lead with a clear
+  error, and `crm_leads_prevent_closed_delete_trigger` (also migration 0024) enforces the same
+  thing at the database level. They stay fully searchable/filterable on `/admin/crm` (see below)
+  for reporting — nothing about a closed lead's data or activity history is hidden or purged.
+- The pre-existing **Final Approval — Close Opportunity** admin action (see "Automatic
+  quote-status sync" below) is unchanged and still marks a lead `Closed/completed` — a third,
+  legacy closed-ish stage kept for backward compatibility with leads already in that state. It's
+  no longer treated as "closed" for overdue-suppression or the admin Closed-Won/Lost reporting
+  views; use the Close Lead panel going forward for anything that should count as a won or lost
+  opportunity.
+
+## Overdue leads
+
+A lead is **Overdue** the moment its `next_follow_up_at` date *and time* passes, as long as it
+isn't already `Closed – Won` or `Closed – Lost` (`isOverdue()` in `src/lib/crm-types.ts`) — this
+is a real-time flag, not a once-a-day calendar-date check, so a 2pm follow-up is overdue at
+2:01pm, not just "the next day." `isDueToday()` covers the complementary case (scheduled today,
+time hasn't passed yet), so the two are mutually exclusive.
+
+- **Agent dashboard** (`/agent/dashboard`): a dedicated **Overdue** panel lists every overdue
+  lead at the very top of the page, above the stats grid, each showing exactly how overdue it is
+  (`overdueDurationLabel()` — "3 days overdue" / "5 hours overdue" / "12 minutes overdue") and
+  linking straight to the lead. The Follow-Up Calendar's own Overdue group (per-callback, not
+  per-lead) and the "My Leads" list also show the same duration label on any overdue item.
+- **Lead detail pages**: opening an overdue lead (either role) shows a red "Overdue — N
+  [days/hours] overdue" banner right under the header. From there an agent (or admin) can
+  complete or reschedule the follow-up (Scheduled Callbacks section), add an activity note (Log
+  Activity section), or close the lead Won/Lost (Close Lead panel) — all without leaving the
+  page.
+- **Admin (`/admin/crm`)**: the **Overdue** stat tile toggles an "overdue only" filter over the
+  whole leads table (same effect as the **Overdue only** checkbox next to the other filters); the
+  **Closed – Won** and **Closed – Lost** tiles are one-click stage filters the same way. The
+  **Leads by Agent** section is now **Leads by Agent — Overdue by Agent**: each agent's card
+  shows their total lead count and, if nonzero, how many of those are currently overdue.
 
 ## Follow-Up Calendar
 
@@ -257,16 +314,22 @@ log entry.
 
 `Customer accepted`, `Customer declined`, and `Closed/completed` only ever come from the sync
 above or the Final Approval action — never from an agent manually editing the stage dropdown.
-This is enforced at the database level (migration `0009_crm_agent_stage_restriction.sql`): a
-`BEFORE UPDATE` trigger on `crm_leads` raises an exception if the caller is a `role = 'agent'`
-account and the stage is *changing* to a value outside the six agent-settable stages (`New
-interested lead`, `Waiting for cleaning details`, `Quote requested from provider`, `Provider
-quote received`, `Follow-up required`, `No response`). It only fires when the stage actually
-changes, so an agent can still freely edit notes, contact info, or the follow-up date on a
-lead that's already in a system-only stage. Admins, and the service-role client used by the
-public customer-quote sync, are unaffected. The agent-facing UI also only offers the six
-allowed stages in its dropdown, showing a read-only badge instead once a lead reaches a
-system-only stage.
+This is enforced at the database level (migration `0009_crm_agent_stage_restriction.sql`,
+extended by `0024_crm_lead_closing_workflow.sql`): a `BEFORE UPDATE` trigger on `crm_leads`
+raises an exception if the caller is a `role = 'agent'` account and the stage is *changing* to a
+value outside the eight agent-reachable stages (`New interested lead`, `Waiting for cleaning
+details`, `Quote requested from provider`, `Provider quote received`, `Follow-up required`, `No
+response`, `Closed – Won`, `Closed – Lost`). It only fires when the stage actually changes, so an
+agent can still freely edit notes, contact info, or the follow-up date on a lead that's already
+in a system-only stage. Admins, and the service-role client used by the public customer-quote
+sync, are unaffected.
+
+Of those eight, the agent-facing stage *dropdown* only ever offers six (`AGENT_SETTABLE_STAGES`
+in `src/lib/crm-types.ts`) — `Closed – Won`/`Closed – Lost` are deliberately left out of it, even
+though the database permits an agent to set them, because closing always requires a reason (see
+"Closing a lead" above) and the dropdown has no way to collect one. The only UI path to either
+closing stage, for either role, is the dedicated Close Lead panel. A lead already in a
+system-only stage (including a closed one) shows a read-only badge next to the dropdown instead.
 
 ## Database
 
@@ -276,18 +339,23 @@ New migrations: [`0007_crm_leads.sql`](../supabase/migrations/0007_crm_leads.sql
 [`0009_crm_agent_stage_restriction.sql`](../supabase/migrations/0009_crm_agent_stage_restriction.sql)
 (the agent stage-restriction trigger above),
 [`0010_crm_agent_isolation.sql`](../supabase/migrations/0010_crm_agent_isolation.sql) (roster
-visibility + deactivation-gap fixes, see below), and
+visibility + deactivation-gap fixes, see below),
 [`0011_crm_followups.sql`](../supabase/migrations/0011_crm_followups.sql) (the Follow-Up
-Calendar table, RLS, and sync trigger, see above). Purely additive — no existing table, column,
-or row is touched.
+Calendar table, RLS, and sync trigger, see above), and
+[`0024_crm_lead_closing_workflow.sql`](../supabase/migrations/0024_crm_lead_closing_workflow.sql)
+(the `Closed – Won`/`Closed – Lost` stages, `closed_reason`/`closed_at`/`closed_by`, the
+reason-required check constraint, and the closed-lead delete guard — see "Closing a lead"
+above). Purely additive — no existing table, column, or row is touched.
 
 - **`crm_users`** — one row per Supabase Auth user who's part of the CRM: `full_name`, `email`,
   `role` (`admin` | `agent`), `active`.
-- **`crm_leads`** — the lead itself: all the fields from the lead form, `stage` (the 10-stage
-  pipeline), `assigned_agent_id` / `created_by` (→ `crm_users`), `next_follow_up_at`,
-  `last_contacted_at`, and a nullable `quote_request_id` → `quote_requests` for the link to the
-  existing quote workflow (a direct FK rather than a separate join table, since a lead maps to
-  at most one active quote request).
+- **`crm_leads`** — the lead itself: all the fields from the lead form, `stage` (the 12-stage
+  pipeline, see migration `0024_crm_lead_closing_workflow.sql` for the two closing stages),
+  `assigned_agent_id` / `created_by` (→ `crm_users`), `next_follow_up_at`, `last_contacted_at`,
+  `closed_reason` / `closed_at` / `closed_by` (→ `crm_users`, set when a lead is closed Won or
+  Lost — see "Closing a lead" above), and a nullable `quote_request_id` → `quote_requests` for
+  the link to the existing quote workflow (a direct FK rather than a separate join table, since a
+  lead maps to at most one active quote request).
 - **`crm_activities`** — the append-only timeline: `activity_type` (call/email/text/voicemail/
   note/outcome), `notes`, `occurred_at`, and an optional `next_follow_up_at` that's copied onto
   the lead's current follow-up date when set.
@@ -559,3 +627,26 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       updating any lead
 - [ ] A Resend email unrelated to the CRM (e.g. an agent invite) produces no `crm_lead_emails`
       match and is silently ignored by the webhook handler
+- [ ] Clicking **Mark Closed – Won**/**Mark Closed – Lost** without entering a reason is blocked
+      client-side; entering one and confirming sets the lead's stage, records `closed_reason`/
+      `closed_at`/`closed_by`, and logs an activity entry — from both `/agent/leads/[id]` and
+      `/admin/crm/leads/[id]`
+- [ ] Calling the close action directly with an empty reason (bypassing the UI) is rejected, and
+      a raw database update into a closing stage with a null `closed_reason` is rejected by
+      `crm_leads_closed_reason_required`
+- [ ] A lead scheduled for later today shows as "Due Today," not "Overdue," until the exact
+      scheduled time passes, at which point it flips to "Overdue" with a "N minutes/hours/days
+      overdue" label — not just at midnight
+- [ ] `/agent/dashboard` shows an Overdue panel above the stats grid whenever the signed-in agent
+      has an overdue lead, each with its overdue duration and a link to the lead
+- [ ] Opening an overdue lead shows a red "Overdue" banner and lets the agent complete/reschedule
+      the follow-up, add a note, or close the lead Won/Lost, all from that one page
+- [ ] `/admin/crm`'s Overdue/Closed – Won/Closed – Lost stat tiles each toggle the leads table to
+      that filtered view; the "Overdue only" checkbox does the same
+- [ ] `/admin/crm`'s "Leads by Agent — Overdue by Agent" section shows each agent's overdue count
+      alongside their total lead count
+- [ ] Attempting to delete a `Closed – Won`/`Closed – Lost` lead from `/admin/crm/leads/[id]` is
+      blocked (button disabled) and rejected server-side/at the database level if attempted
+      directly; the lead remains visible and searchable on `/admin/crm`
+- [ ] An agent can set their own lead directly to `Closed – Won`/`Closed – Lost` through the Close
+      Lead panel, but the plain stage dropdown never offers either as an option
