@@ -132,13 +132,13 @@ just fire-and-forget:
   email sent to…" / "Follow-up email sent to…" entry exactly as before.
 - **Receiving events** — `POST /api/webhooks/resend` (`src/app/api/webhooks/resend/route.ts`)
   verifies the incoming request's signature with Resend's own bundled verifier
-  (`resend.webhooks.verify()`, keyed by `RESEND_WEBHOOK_SECRET`) and handles all seven delivery
+  (`resend.webhooks.verify()`, keyed by `RESEND_WEBHOOK_SECRET`) and handles all eight delivery
   events: `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`,
-  `email.complained`, `email.opened`, `email.clicked`. Each event:
+  `email.complained`, `email.opened`, `email.clicked`, `email.failed`. Each event:
   1. Is recorded once in `crm_email_webhook_events` (a Standard-Webhooks id dedupe table) so a
      retried delivery never double-logs.
   2. Updates the matching `crm_lead_emails` row's per-event timestamp column
-     (`sent_at`/`delivered_at`/.../`clicked_at`) and, only if the event isn't older than what's
+     (`sent_at`/`delivered_at`/.../`failed_at`) and, only if the event isn't older than what's
      already recorded, its `status`/`status_at`.
   3. Mirrors that status onto `crm_leads.last_email_status` / `last_email_status_at` — but only
      when this is the lead's most recently sent tracked email, so a late webhook for an older
@@ -151,22 +151,37 @@ just fire-and-forget:
     per-lead tracked sends.
   - **`email.delivered` never implies `email.opened`** — each status is only ever set by its own
     matching event; a delivered email is never shown as read.
-- **Display** — a lead's `last_email_status` shows on `/admin/crm/leads/[id]` and
-  `/agent/leads/[id]` (badge, type, recipient, and timestamp) and as a badge in the `/admin/crm`
-  table and `/agent/dashboard` lead cards. A `bounced` (or `complained`) status also highlights
-  the lead row/card and shows a banner telling the agent to verify/correct the client's email
-  address (bounced) or reconsider emailing them again (complained).
+  - Every branch logs to console (`[resend-webhook] ...`), visible in Vercel's Logs tab or via
+    the Vercel MCP `get_runtime_logs`/`get_runtime_errors` tools — the fastest way to confirm
+    whether Resend is calling this endpoint at all versus a match/processing problem inside it
+    (see Troubleshooting below).
+- **Display** — `EmailStatusPanel` (`src/components/EmailStatusPanel.tsx`) renders prominently at
+  the top of both `/admin/crm/leads/[id]` and `/agent/leads/[id]`, right under the page header:
+  four labeled milestones (**Sent**, **Delivered**, **Bounced**, **Failed**) each with their own
+  timestamp if that event happened for the lead's most recently sent tracked email, plus a
+  "Latest status change" line covering the full lifecycle (also Delayed/Complaint/Opened/Link
+  clicked, whichever happened most recently). It's fed by a service-role read of that lead's
+  newest `crm_lead_emails` row (same access pattern as the linked-quote lookup on the same page —
+  only reached once RLS has already confirmed the caller can see the lead). The same
+  `last_email_status` also still shows as a compact badge in the `/admin/crm` table and
+  `/agent/dashboard` lead cards. A bounced or failed email highlights the panel with a banner
+  telling the agent to verify/correct the address (bounced) or check the reason before retrying
+  (failed); a complaint tells them to consider not emailing that lead again.
 
 ### Setting up the Resend webhook
 
 1. In the [Resend dashboard](https://resend.com/webhooks), click **Add Webhook**.
 2. **Endpoint URL**: `https://<your-deployment-domain>/api/webhooks/resend` — for production,
-   `https://cleaning.winsalotcorp.com/api/webhooks/resend`; for a Preview deployment, that
-   deployment's own Vercel URL (Preview and Production currently share the same Supabase
-   project, so either endpoint updates the same `crm_lead_emails`/`crm_leads` rows — point the
-   webhook at whichever deployment you want events attributed to).
+   `https://cleaning.winsalotcorp.com/api/webhooks/resend`; for a Preview deployment, use that
+   branch's stable Vercel alias (e.g. `https://<project>-git-<branch>-<team>.vercel.app/api/webhooks/resend`,
+   shown on the PR's Vercel comment/preview URL) rather than a one-off deployment URL, since the
+   alias keeps pointing at the latest deployment on that branch as you push more commits.
+   Preview and Production currently share the same Supabase project, so either endpoint updates
+   the same `crm_lead_emails`/`crm_leads` rows — point the webhook at whichever deployment you
+   want events attributed to, and remember to add a second webhook (or update this one) once you
+   promote to production.
 3. **Events to send**: `email.sent`, `email.delivered`, `email.delivery_delayed`,
-   `email.bounced`, `email.complained`, `email.opened`, `email.clicked`.
+   `email.bounced`, `email.complained`, `email.opened`, `email.clicked`, `email.failed`.
 4. Save, then copy the endpoint's **Signing Secret** and set it as `RESEND_WEBHOOK_SECRET` in
    Vercel (Project Settings → Environment Variables) for the environment(s) that should verify
    it. Without this set, `/api/webhooks/resend` rejects every request with a 500 rather than
@@ -174,6 +189,31 @@ just fire-and-forget:
 5. Send a test quote-request/follow-up email from a lead and confirm its status updates on the
    lead page as Resend delivers/opens/clicks it (Resend's webhook dashboard also shows recent
    deliveries and response codes for debugging).
+
+### Troubleshooting: status isn't updating
+
+Work through these in order — each one rules out a specific layer:
+
+1. **Was the webhook ever configured?** Resend → Webhooks → your endpoint → recent deliveries.
+   If it shows nothing at all for the email you just sent, the endpoint was never registered (or
+   was registered against a different/stale deployment URL) — fix it in the Resend dashboard,
+   not in this app's code.
+2. **Did the request reach this endpoint?** Check Vercel → your project → Logs (or
+   `get_runtime_logs`/`get_runtime_errors` for the project) for `[resend-webhook]` lines. No
+   lines at all for a period where you sent a test email means Resend isn't calling this
+   deployment — re-check step 1's endpoint URL, and confirm you're looking at logs for the same
+   deployment/branch the webhook points at.
+3. **Was the signature rejected?** A `[resend-webhook] Signature verification failed` or
+   `RESEND_WEBHOOK_SECRET is not configured` log line means the endpoint received the request but
+   couldn't verify it — re-copy the Signing Secret from the Resend dashboard into
+   `RESEND_WEBHOOK_SECRET` on Vercel (it's per-endpoint; regenerating or recreating the webhook
+   gives you a new one) and redeploy.
+4. **Was the email matched?** A `no crm_lead_emails row matches Resend email id …` log line means
+   the webhook verified fine but the email it's reporting on wasn't one sent through "Send Quote
+   Request Email"/"Send Follow-Up Email" (e.g. a manually-sent test from the Resend dashboard
+   itself, which has no corresponding CRM lead). Send the test from an actual lead's page instead.
+5. If none of the above show a problem, query `crm_lead_emails`/`crm_activities` for the lead
+   directly to see exactly which events landed and when.
 
 ## Quote email control
 
@@ -510,6 +550,11 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       correct the client's email address
 - [ ] A `delivered` event never causes the lead to show as "Opened" — only an actual
       `email.opened` event does
+- [ ] The `EmailStatusPanel` at the top of `/admin/crm/leads/[id]` and `/agent/leads/[id]` shows
+      Sent/Delivered/Bounced/Failed timestamps (each "—" until its event happens) plus the
+      latest status change, for the lead's most recently sent tracked email
+- [ ] An `email.failed` event sets the Failed milestone/timestamp and shows the "check the reason
+      before retrying" banner
 - [ ] An unsigned or badly-signed request to `/api/webhooks/resend` is rejected (401) rather than
       updating any lead
 - [ ] A Resend email unrelated to the CRM (e.g. an agent invite) produces no `crm_lead_emails`

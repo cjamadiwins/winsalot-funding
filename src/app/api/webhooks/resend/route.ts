@@ -17,6 +17,14 @@ export const runtime = "nodejs";
 // (["/", "/admin/:path*", "/agent/:path*"]) — Resend calls it directly
 // with no Supabase session, so it authenticates the request itself via
 // the webhook signature instead.
+//
+// Every branch below logs to console so a delivery can be traced in
+// Vercel's runtime logs (Project → Logs, or the Vercel MCP
+// get_runtime_logs tool) - useful for confirming Resend is actually
+// calling this endpoint at all, which is the first thing to check if a
+// lead's status isn't updating (a delivery that never reaches this route
+// produces zero log lines here and needs to be fixed in the Resend
+// dashboard's Webhooks config, not in this code).
 const STATUS_COLUMN: Record<EmailEventStatus, string> = {
   sent: "sent_at",
   delivered: "delivered_at",
@@ -25,12 +33,13 @@ const STATUS_COLUMN: Record<EmailEventStatus, string> = {
   complained: "complained_at",
   opened: "opened_at",
   clicked: "clicked_at",
+  failed: "failed_at",
 };
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.error("RESEND_WEBHOOK_SECRET is not configured; rejecting Resend webhook.");
+    console.error("[resend-webhook] RESEND_WEBHOOK_SECRET is not configured; rejecting request.");
     return NextResponse.json({ error: "Webhook not configured." }, { status: 500 });
   }
 
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("webhook-signature") ?? request.headers.get("svix-signature");
 
   if (!id || !timestamp || !signature) {
+    console.error("[resend-webhook] Missing signature headers on incoming request.");
     return NextResponse.json({ error: "Missing webhook signature headers." }, { status: 400 });
   }
 
@@ -50,9 +60,12 @@ export async function POST(request: NextRequest) {
       headers: { id, timestamp, signature },
       webhookSecret,
     });
-  } catch {
+  } catch (err) {
+    console.error("[resend-webhook] Signature verification failed:", err);
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
+
+  console.log(`[resend-webhook] received ${event.type} (webhook id ${id})`);
 
   let status: EmailEventStatus;
   switch (event.type) {
@@ -80,8 +93,12 @@ export async function POST(request: NextRequest) {
     case "email.clicked":
       status = "clicked";
       break;
+    case "email.failed":
+      status = "failed";
+      break;
     default:
       // Not a delivery event we track (e.g. contact.*, domain.*, email.received).
+      console.log(`[resend-webhook] ignoring untracked event type ${event.type}`);
       return NextResponse.json({ received: true });
   }
 
@@ -92,6 +109,7 @@ export async function POST(request: NextRequest) {
   // a duplicate means a retry never double-logs the same event.
   const { error: dedupeError } = await admin.from("crm_email_webhook_events").insert({ id });
   if (dedupeError) {
+    console.log(`[resend-webhook] duplicate delivery of webhook id ${id}, skipping.`);
     return NextResponse.json({ received: true, duplicate: true });
   }
 
@@ -105,8 +123,11 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!tracked) {
+    console.log(`[resend-webhook] no crm_lead_emails row matches Resend email id ${emailId} — ignoring.`);
     return NextResponse.json({ received: true, tracked: false });
   }
+
+  console.log(`[resend-webhook] matched email ${emailId} to crm_lead_emails ${tracked.id} (lead ${tracked.lead_id})`);
 
   // Only advance the row's "latest status" if this event isn't older than
   // what's already recorded — guards against an out-of-order retry (e.g.
@@ -120,7 +141,10 @@ export async function POST(request: NextRequest) {
     updates.status_at = eventAt;
   }
 
-  await admin.from("crm_lead_emails").update(updates).eq("id", tracked.id);
+  const { error: updateError } = await admin.from("crm_lead_emails").update(updates).eq("id", tracked.id);
+  if (updateError) {
+    console.error(`[resend-webhook] failed to update crm_lead_emails ${tracked.id}:`, updateError);
+  }
 
   // Only mirror onto crm_leads if this row is that lead's most recently
   // sent tracked email — an older email's late-arriving webhook should
@@ -134,10 +158,15 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (isNewer && latestForLead?.id === tracked.id) {
-    await admin
+    const { error: leadUpdateError } = await admin
       .from("crm_leads")
       .update({ last_email_status: status, last_email_status_at: eventAt })
       .eq("id", tracked.lead_id);
+    if (leadUpdateError) {
+      console.error(`[resend-webhook] failed to update crm_leads ${tracked.lead_id}:`, leadUpdateError);
+    } else {
+      console.log(`[resend-webhook] lead ${tracked.lead_id} last_email_status -> ${status}`);
+    }
   }
 
   const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
@@ -150,15 +179,20 @@ export async function POST(request: NextRequest) {
     notes = `Client clicked the link in the email (to ${toEmail}).`;
   } else if (event.type === "email.opened") {
     notes = `Client opened the email (to ${toEmail}).`;
+  } else if (event.type === "email.failed") {
+    notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
   }
 
-  await admin.from("crm_activities").insert({
+  const { error: activityError } = await admin.from("crm_activities").insert({
     lead_id: tracked.lead_id,
     agent_id: null,
     activity_type: "email",
     notes,
     occurred_at: eventAt,
   });
+  if (activityError) {
+    console.error(`[resend-webhook] failed to log activity for lead ${tracked.lead_id}:`, activityError);
+  }
 
   return NextResponse.json({ received: true });
 }

@@ -76,6 +76,7 @@ export const EMAIL_EVENT_STATUSES = [
   "complained",
   "opened",
   "clicked",
+  "failed",
 ] as const;
 
 export type EmailEventStatus = (typeof EMAIL_EVENT_STATUSES)[number];
@@ -88,6 +89,7 @@ export const EMAIL_STATUS_LABELS: Record<EmailEventStatus, string> = {
   complained: "Complaint",
   opened: "Opened",
   clicked: "Link clicked",
+  failed: "Failed",
 };
 
 export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
@@ -98,6 +100,7 @@ export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
   complained: "bg-rose-100 text-rose-800",
   opened: "bg-emerald-100 text-emerald-800",
   clicked: "bg-purple-100 text-purple-800",
+  failed: "bg-rose-100 text-rose-800",
 };
 
 export const EMAIL_TYPES = ["quote_request", "follow_up"] as const;
@@ -162,7 +165,30 @@ export type CrmLeadEmailRow = {
   complained_at: string | null;
   opened_at: string | null;
   clicked_at: string | null;
+  failed_at: string | null;
 };
+
+// Display-safe subset of CrmLeadEmailRow for a lead's most recently sent
+// tracked email, fetched via the service-role client only after RLS has
+// already confirmed the caller can see that lead (same pattern as the
+// linkedQuote lookup on this page) - crm_lead_emails has no RLS policies
+// of its own (see migration 0022).
+export type LatestCrmLeadEmail = Pick<
+  CrmLeadEmailRow,
+  | "email_type"
+  | "to_email"
+  | "subject"
+  | "status"
+  | "status_at"
+  | "sent_at"
+  | "delivered_at"
+  | "delayed_at"
+  | "bounced_at"
+  | "complained_at"
+  | "opened_at"
+  | "clicked_at"
+  | "failed_at"
+>;
 
 export type NewCrmLeadInput = {
   business_name: string;

@@ -5,13 +5,11 @@ import Link from "next/link";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
-  EMAIL_STATUS_LABELS,
-  EMAIL_STATUS_STYLES,
-  EMAIL_TYPE_LABELS,
   LEAD_STAGES,
   type CrmActivityRow,
   type CrmLeadRow,
   type CrmUserRow,
+  type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
 import type {
   ProviderQuoteSubmissionRow,
@@ -20,6 +18,7 @@ import type {
   QuoteRequestRow,
 } from "@/lib/admin-types";
 import RequestWorkflowPanel from "@/app/admin/(dashboard)/requests/[id]/RequestWorkflowPanel";
+import EmailStatusPanel from "@/components/EmailStatusPanel";
 import {
   addActivityAction,
   deleteLeadAction,
@@ -46,6 +45,7 @@ export default function AdminLeadDetailClient({
   providers,
   tokens,
   submissions,
+  latestEmail,
 }: {
   lead: CrmLeadRow;
   activities: CrmActivityRow[];
@@ -54,6 +54,7 @@ export default function AdminLeadDetailClient({
   providers: ProviderRow[];
   tokens: ProviderQuoteTokenRow[];
   submissions: ProviderQuoteSubmissionRow[];
+  latestEmail: LatestCrmLeadEmail | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +153,8 @@ export default function AdminLeadDetailClient({
           {error}
         </div>
       )}
+
+      <EmailStatusPanel latestEmail={latestEmail} />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -325,47 +328,6 @@ export default function AdminLeadDetailClient({
             )}
           </div>
 
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Email Status
-            </h2>
-            {lead.last_email_status ? (
-              <div className="mt-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
-                  >
-                    {EMAIL_STATUS_LABELS[lead.last_email_status]}
-                  </span>
-                  {lead.last_email_type && (
-                    <span className="text-xs text-slate-500">
-                      {EMAIL_TYPE_LABELS[lead.last_email_type]} email
-                      {lead.last_email_to ? ` to ${lead.last_email_to}` : ""}
-                    </span>
-                  )}
-                </div>
-                {lead.last_email_status_at && (
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    {new Date(lead.last_email_status_at).toLocaleString()}
-                  </p>
-                )}
-                {lead.last_email_status === "bounced" && (
-                  <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
-                    This email bounced — verify or correct this lead&apos;s email address before
-                    sending again.
-                  </p>
-                )}
-                {lead.last_email_status === "complained" && (
-                  <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
-                    This recipient marked an email as spam — consider not emailing this lead
-                    again.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-500">No email sent to this lead yet.</p>
-            )}
-          </div>
 
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
