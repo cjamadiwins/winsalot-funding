@@ -3,6 +3,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmFollowUpWithLead, CrmLeadRow, CrmUserRow } from "@/lib/crm-types";
 import AdminCrmClient from "./AdminCrmClient";
 import AdminFollowUps from "./AdminFollowUps";
+import AdminOverdueLeadsPanel from "./AdminOverdueLeadsPanel";
 
 export default async function AdminCrmPage() {
   await requireCrmAdmin();
@@ -36,6 +37,16 @@ export default async function AdminCrmPage() {
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           Failed to load CRM data: {(leadsError ?? agentsError)?.message}
         </p>
+      )}
+
+      {!leadsError && !agentsError && !followUpsError && (
+        <div className="mt-6">
+          <AdminOverdueLeadsPanel
+            leads={(leads ?? []) as CrmLeadRow[]}
+            followUps={(followUps ?? []) as CrmFollowUpWithLead[]}
+            agents={(agents ?? []) as CrmUserRow[]}
+          />
+        </div>
       )}
 
       {!leadsError && !agentsError && (

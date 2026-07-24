@@ -9,6 +9,7 @@ import {
   LEAD_STAGE_STYLES,
   isOverdue,
   isDueToday,
+  overdueDurationLabel,
   type CrmLeadRow,
   type LeadStage,
 } from "@/lib/crm-types";
@@ -17,8 +18,15 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
 
+  const overdueLeads = useMemo(
+    () =>
+      leads
+        .filter(isOverdue)
+        .sort((a, b) => new Date(a.next_follow_up_at!).getTime() - new Date(b.next_follow_up_at!).getTime()),
+    [leads]
+  );
   const dueToday = leads.filter(isDueToday).length;
-  const overdue = leads.filter(isOverdue).length;
+  const overdue = overdueLeads.length;
   const newLeads = leads.filter((l) => l.stage === "New interested lead").length;
   const followUpRequired = leads.filter((l) => l.stage === "Follow-up required").length;
 
@@ -155,6 +163,7 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
                   }`}
                 >
                   Next follow-up: {new Date(lead.next_follow_up_at).toLocaleString()}
+                  {isOverdue(lead) && ` — ${overdueDurationLabel(lead.next_follow_up_at)}`}
                 </div>
               )}
             </Link>

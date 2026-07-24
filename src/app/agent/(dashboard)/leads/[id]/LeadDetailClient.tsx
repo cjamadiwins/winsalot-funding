@@ -6,6 +6,8 @@ import {
   ACTIVITY_TYPE_LABELS,
   AGENT_SETTABLE_STAGES,
   LEAD_STAGE_STYLES,
+  isOverdue,
+  overdueDurationLabel,
   toDatetimeLocal,
   type CrmActivityRow,
   type CrmFollowUpRow,
@@ -15,8 +17,10 @@ import {
 } from "@/lib/crm-types";
 import type { QuoteRequestRow } from "@/lib/admin-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
+import CloseLeadPanel from "@/components/CloseLeadPanel";
 import {
   addActivityAction,
+  closeLeadAction,
   sendFollowUpEmailAction,
   sendQuoteRequestEmailAction,
   updateLeadDetailsAction,
@@ -156,6 +160,13 @@ export default function LeadDetailClient({
         </p>
       )}
 
+      {isOverdue(lead) && lead.next_follow_up_at && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          Overdue — {overdueDurationLabel(lead.next_follow_up_at)} (was due{" "}
+          {new Date(lead.next_follow_up_at).toLocaleString()})
+        </p>
+      )}
+
       {error && (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -163,6 +174,8 @@ export default function LeadDetailClient({
       )}
 
       <EmailStatusPanel latestEmail={latestEmail} />
+
+      <CloseLeadPanel leadId={lead.id} lead={lead} isPending={isPending} closeAction={closeLeadAction} />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-5">
@@ -468,8 +481,8 @@ export default function LeadDetailClient({
                         />
                         <input
                           name="note"
-                          defaultValue={followUp.note ?? ""}
-                          placeholder="Note (optional)"
+                          required
+                          placeholder="Reason for rescheduling (required)"
                           className={inputClass}
                         />
                         <button

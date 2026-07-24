@@ -1,12 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
 import { sendFollowUpEmailForLead } from "@/lib/send-follow-up-email";
-import { ACTIVITY_TYPES, LEAD_STAGES, type ActivityType, type LeadStage } from "@/lib/crm-types";
+import { closeLeadForLead } from "@/lib/close-lead";
+import { ACTIVITY_TYPES, CLOSED_STAGES, LEAD_STAGES, type ActivityType, type LeadStage } from "@/lib/crm-types";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -59,10 +60,25 @@ export async function updateLeadAction(leadId: string, formData: FormData) {
   revalidatePath("/admin/crm");
 }
 
+// Closed leads are never deleted (kept searchable/visible for reporting) -
+// this check gives a clear message before the attempt is even made; the
+// database enforces it too regardless (crm_leads_prevent_closed_delete_trigger,
+// migration 0024), so this can't be bypassed by calling the action directly.
 export async function deleteLeadAction(leadId: string) {
   await requireCrmAdmin();
 
   const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase
+    .from("crm_leads")
+    .select("stage")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (lead && CLOSED_STAGES.includes(lead.stage as LeadStage)) {
+    throw new Error("Closed leads cannot be deleted. They're kept for reporting.");
+  }
+
   const { error } = await supabase.from("crm_leads").delete().eq("id", leadId);
 
   if (error) throw new Error("Failed to delete the lead.");
@@ -145,6 +161,18 @@ export async function sendFollowUpEmailAction(leadId: string): Promise<{ email: 
   revalidatePath("/admin/crm");
 
   return result;
+}
+
+// Admin equivalent of the agent's Close Lead panel - same reason
+// requirement, same shared helper, so both roles produce identical
+// activity/reporting records regardless of who closes the lead.
+export async function closeLeadAction(leadId: string, outcome: string, reason: string) {
+  const crmUser = await requireCrmAdmin();
+  await closeLeadForLead(leadId, crmUser, outcome, reason);
+
+  revalidatePath(`/admin/crm/leads/${leadId}`);
+  revalidatePath("/admin/crm");
+  refresh();
 }
 
 export type QuoteRequestSearchResult = {

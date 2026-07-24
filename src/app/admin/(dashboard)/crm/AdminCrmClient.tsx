@@ -9,6 +9,7 @@ import {
   LEAD_STAGE_STYLES,
   isOverdue,
   isDueToday,
+  overdueDurationLabel,
   type CrmLeadRow,
   type CrmUserRow,
   type LeadStage,
@@ -25,24 +26,39 @@ export default function AdminCrmClient({
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   const agentById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
-  const stats = [
-    { label: "New Leads", value: leads.filter((l) => l.stage === "New interested lead").length },
+  const overdueLeads = useMemo(() => leads.filter(isOverdue), [leads]);
+
+  // Each tile is a one-click filter view (requirement: dedicated admin
+  // views/filters for all overdue leads and for each closing stage) -
+  // clicking one sets stageFilter/overdueOnly directly rather than
+  // requiring the admin to hunt for the right dropdown option.
+  const stats: {
+    label: string;
+    value: number;
+    warn?: boolean;
+    danger?: boolean;
+    stageValue?: LeadStage;
+    isOverdueTile?: boolean;
+  }[] = [
+    { label: "New Leads", value: leads.filter((l) => l.stage === "New interested lead").length, stageValue: "New interested lead" },
     { label: "Due Today", value: leads.filter(isDueToday).length, warn: true },
-    { label: "Overdue", value: leads.filter(isOverdue).length, danger: true },
+    { label: "Overdue", value: overdueLeads.length, danger: true, isOverdueTile: true },
     {
       label: "Waiting on Provider",
       value: leads.filter((l) => l.stage === "Quote requested from provider").length,
+      stageValue: "Quote requested from provider",
     },
     {
       label: "Waiting on Customer",
       value: leads.filter((l) => l.stage === "Quote sent to customer").length,
+      stageValue: "Quote sent to customer",
     },
-    { label: "Accepted", value: leads.filter((l) => l.stage === "Customer accepted").length },
-    { label: "Declined", value: leads.filter((l) => l.stage === "Customer declined").length },
-    { label: "Closed", value: leads.filter((l) => l.stage === "Closed/completed").length },
+    { label: "Closed – Won", value: leads.filter((l) => l.stage === "Closed – Won").length, stageValue: "Closed – Won" },
+    { label: "Closed – Lost", value: leads.filter((l) => l.stage === "Closed – Lost").length, stageValue: "Closed – Lost" },
   ];
 
   const byAgent = useMemo(() => {
@@ -56,9 +72,21 @@ export default function AdminCrmClient({
     return groups;
   }, [leads]);
 
+  const overdueByAgent = useMemo(() => {
+    const groups = new Map<string, CrmLeadRow[]>();
+    for (const lead of overdueLeads) {
+      const key = lead.assigned_agent_id ?? "unassigned";
+      const list = groups.get(key) ?? [];
+      list.push(lead);
+      groups.set(key, list);
+    }
+    return groups;
+  }, [overdueLeads]);
+
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
     return leads.filter((lead) => {
+      if (overdueOnly && !isOverdue(lead)) return false;
       if (stageFilter !== "all" && lead.stage !== stageFilter) return false;
       if (agentFilter !== "all" && (lead.assigned_agent_id ?? "unassigned") !== agentFilter) {
         return false;
@@ -72,37 +100,61 @@ export default function AdminCrmClient({
         (lead.email ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, query, stageFilter, agentFilter, cityFilter]);
+  }, [leads, query, stageFilter, agentFilter, cityFilter, overdueOnly]);
 
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className={`rounded-xl border p-4 ${
-              stat.danger && stat.value > 0
-                ? "border-rose-200 bg-rose-50"
-                : stat.warn && stat.value > 0
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-slate-200 bg-white"
-            }`}
-          >
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
-              {stat.label}
-            </div>
-            <div
-              className={`mt-1 text-xl font-bold ${
-                stat.danger && stat.value > 0 ? "text-rose-700" : "text-slate-900"
+        {stats.map((stat) => {
+          const clickable = Boolean(stat.stageValue || stat.isOverdueTile);
+          const isActive = stat.isOverdueTile
+            ? overdueOnly
+            : stat.stageValue
+              ? stageFilter === stat.stageValue
+              : false;
+
+          function handleClick() {
+            if (stat.isOverdueTile) {
+              setStageFilter("all");
+              setOverdueOnly((v) => !v);
+            } else if (stat.stageValue) {
+              setOverdueOnly(false);
+              setStageFilter((current) => (current === stat.stageValue ? "all" : stat.stageValue!));
+            }
+          }
+
+          const Tag = clickable ? "button" : "div";
+          return (
+            <Tag
+              key={stat.label}
+              type={clickable ? "button" : undefined}
+              onClick={clickable ? handleClick : undefined}
+              className={`rounded-xl border p-4 text-left ${clickable ? "cursor-pointer transition hover:border-sky-400" : ""} ${
+                isActive
+                  ? "border-sky-400 bg-sky-50 ring-2 ring-sky-200"
+                  : stat.danger && stat.value > 0
+                    ? "border-rose-200 bg-rose-50"
+                    : stat.warn && stat.value > 0
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-slate-200 bg-white"
               }`}
             >
-              {stat.value}
-            </div>
-          </div>
-        ))}
+              <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                {stat.label}
+              </div>
+              <div
+                className={`mt-1 text-xl font-bold ${
+                  stat.danger && stat.value > 0 ? "text-rose-700" : "text-slate-900"
+                }`}
+              >
+                {stat.value}
+              </div>
+            </Tag>
+          );
+        })}
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={search}
@@ -142,6 +194,14 @@ export default function AdminCrmClient({
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-1.5 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={overdueOnly}
+            onChange={(e) => setOverdueOnly(e.target.checked)}
+          />
+          Overdue only
+        </label>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
@@ -198,6 +258,11 @@ export default function AdminCrmClient({
                   </td>
                   <td className={`px-4 py-3 ${isOverdue(lead) ? "font-semibold text-rose-700" : "text-slate-600"}`}>
                     {lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : "—"}
+                    {isOverdue(lead) && lead.next_follow_up_at && (
+                      <div className="text-xs font-normal">
+                        {overdueDurationLabel(lead.next_follow_up_at)}
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
@@ -215,18 +280,31 @@ export default function AdminCrmClient({
       </div>
 
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Leads by Agent
+        Leads by Agent — Overdue by Agent
       </h2>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {agents.map((agent) => (
-          <div key={agent.id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="font-medium text-slate-900">{agent.full_name || agent.email}</div>
-            <div className="text-sm text-slate-500">
-              {(byAgent.get(agent.id) ?? []).length} lead
-              {(byAgent.get(agent.id) ?? []).length === 1 ? "" : "s"}
+        {agents.map((agent) => {
+          const overdueCount = (overdueByAgent.get(agent.id) ?? []).length;
+          return (
+            <div
+              key={agent.id}
+              className={`rounded-xl border p-4 ${
+                overdueCount > 0 ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="font-medium text-slate-900">{agent.full_name || agent.email}</div>
+              <div className="text-sm text-slate-500">
+                {(byAgent.get(agent.id) ?? []).length} lead
+                {(byAgent.get(agent.id) ?? []).length === 1 ? "" : "s"}
+                {overdueCount > 0 && (
+                  <span className="ml-1.5 font-semibold text-rose-700">
+                    · {overdueCount} overdue
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {(byAgent.get("unassigned") ?? []).length > 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="font-medium text-slate-900">Unassigned</div>
