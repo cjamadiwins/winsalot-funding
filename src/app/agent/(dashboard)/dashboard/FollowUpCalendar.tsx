@@ -290,8 +290,8 @@ function CalendarGroup({
                 />
                 <input
                   name="note"
-                  placeholder="Note (optional)"
-                  defaultValue={followUp.note ?? ""}
+                  required
+                  placeholder="Reason for rescheduling (required)"
                   className={`${inputClass} max-w-[200px]`}
                 />
                 <button

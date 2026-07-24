@@ -44,22 +44,39 @@ export async function scheduleFollowUpAction(leadId: string, formData: FormData)
   revalidatePath(`/agent/leads/${leadId}`);
 }
 
+// A reschedule (unlike the initial "+ Schedule Callback") always requires
+// a reason, and always leaves a permanent record of what changed - the
+// old due date, the new one, who did it, and why - on the crm_activities
+// timeline before crm_followups.scheduled_at (the "current" due date) is
+// overwritten. This is what lets an overdue follow-up be pushed forward
+// without silently losing when it was originally due.
 export async function rescheduleFollowUpAction(
   followUpId: string,
   leadId: string,
   formData: FormData
 ) {
-  await requireCrmUser();
+  const crmUser = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
 
   const scheduledAt = parseScheduledAt(formData);
-  const note = textOrNull(formData, "note");
+  const reason = textOrNull(formData, "note");
+  if (!reason) {
+    throw new Error("A reason for rescheduling is required.");
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("crm_followups")
+    .select("scheduled_at")
+    .eq("id", followUpId)
+    .maybeSingle();
+
+  if (fetchError || !existing) throw new Error("Follow-up not found.");
 
   const { error } = await supabase
     .from("crm_followups")
     .update({
       scheduled_at: scheduledAt,
-      note,
+      note: reason,
       status: "pending",
       completed_at: null,
       completed_by: null,
@@ -67,6 +84,21 @@ export async function rescheduleFollowUpAction(
     .eq("id", followUpId);
 
   if (error) throw new Error("Failed to reschedule the callback.");
+
+  const agentName = crmUser.full_name || crmUser.email;
+  const { error: activityError } = await supabase.from("crm_activities").insert({
+    lead_id: leadId,
+    agent_id: crmUser.id,
+    activity_type: "outcome",
+    notes: `Follow-up rescheduled by ${agentName}. Was due ${new Date(
+      existing.scheduled_at
+    ).toLocaleString()}, now due ${new Date(scheduledAt).toLocaleString()}. Reason: ${reason}`,
+    next_follow_up_at: scheduledAt,
+  });
+
+  if (activityError) {
+    throw new Error("Callback rescheduled, but failed to log it on the activity timeline.");
+  }
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);

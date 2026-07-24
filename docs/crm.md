@@ -97,8 +97,19 @@ needs multiple independent, reschedulable, completable entries per lead, which a
   follow-up — however it was scheduled — shows up in one place.
 - **`/agent/dashboard`** shows three grouped lists — **Overdue**, **Today**, **Upcoming** — of
   the signed-in agent's own pending callbacks, each with **Mark Completed**, **Reschedule**
-  (inline date/time + note editor), and **Add Note** (logs a `crm_activities` note against the
-  lead, reusing the existing timeline rather than a second notes field).
+  (inline date/time + reason editor), and **Add Note** (logs a `crm_activities` note against the
+  lead, reusing the existing timeline rather than a second notes field). The same three controls
+  are also available inline on a lead's own **Scheduled Callbacks** section
+  (`/agent/leads/[id]`), which is how an overdue lead gets rescheduled without leaving the page.
+- **Rescheduling always requires a reason**, unlike the initial "+ Schedule Callback" note
+  (optional). `rescheduleFollowUpAction` (`src/app/agent/(dashboard)/followup-actions.ts`) reads
+  the callback's *current* `scheduled_at` before overwriting it, then logs a `crm_activities`
+  entry — activity type `outcome` — recording who rescheduled it, the old due date, the new due
+  date, and the reason, all before `crm_followups.scheduled_at` is updated. Nothing about the
+  original due date is lost; it's just no longer the *current* one. `crm_leads.next_follow_up_at`
+  (and therefore `isOverdue()`) picks up the new date immediately via the same sync trigger as
+  any other reschedule, so an overdue lead's Overdue banner clears the moment it's rescheduled to
+  a future time — it only comes back if that new date/time also passes.
 - **`crm_leads.next_follow_up_at`** is now a *derived* column: a database trigger
   (`crm_followups_sync_lead_next_follow_up`) recomputes it as the earliest pending callback for
   that lead on every insert/update/delete to `crm_followups`, so it stays correct automatically
@@ -650,3 +661,11 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       directly; the lead remains visible and searchable on `/admin/crm`
 - [ ] An agent can set their own lead directly to `Closed – Won`/`Closed – Lost` through the Close
       Lead panel, but the plain stage dropdown never offers either as an option
+- [ ] Rescheduling an overdue follow-up from `/agent/leads/[id]` without entering a reason is
+      blocked; entering a new date/time and a reason and saving updates the callback, clears the
+      lead's Overdue banner, and adds an activity entry recording the old due date, new due date,
+      reason, agent name, and timestamp
+- [ ] The same reschedule behavior works from the `/agent/dashboard` Follow-Up Calendar's Overdue
+      group
+- [ ] After rescheduling, "Mark Completed" and the Close Lead panel (Won/Lost) are both still
+      available on the lead

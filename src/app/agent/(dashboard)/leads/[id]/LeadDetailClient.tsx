@@ -481,8 +481,8 @@ export default function LeadDetailClient({
                         />
                         <input
                           name="note"
-                          defaultValue={followUp.note ?? ""}
-                          placeholder="Note (optional)"
+                          required
+                          placeholder="Reason for rescheduling (required)"
                           className={inputClass}
                         />
                         <button
