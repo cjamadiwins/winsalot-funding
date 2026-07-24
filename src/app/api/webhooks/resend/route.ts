@@ -39,7 +39,19 @@ const STATUS_COLUMN: Record<EmailEventStatus, string> = {
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.error("[resend-webhook] RESEND_WEBHOOK_SECRET is not configured; rejecting request.");
+    // Vercel scopes env vars per environment (Production/Preview/Development
+    // independently) and only injects the current value into *new*
+    // deployments - adding or fixing the var in Project Settings never
+    // updates an already-running deployment, so this can still fire after
+    // the var has been "set" if it was scoped to the wrong environment or
+    // no redeploy happened since. process.env is read fresh on every
+    // request (this route runs on the Node.js runtime, not Edge), so once
+    // a deployment actually has the var, no further redeploy is needed.
+    console.error(
+      "[resend-webhook] RESEND_WEBHOOK_SECRET is not set on this deployment - " +
+        "check it's defined for the Preview environment (not just Production) " +
+        "in Vercel Project Settings -> Environment Variables, then redeploy. Rejecting request."
+    );
     return NextResponse.json({ error: "Webhook not configured." }, { status: 500 });
   }
 
