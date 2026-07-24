@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
@@ -167,4 +167,5 @@ export async function closeLeadAction(leadId: string, outcome: string, reason: s
 
   revalidatePath(`/agent/leads/${leadId}`);
   revalidatePath("/agent/dashboard");
+  refresh();
 }

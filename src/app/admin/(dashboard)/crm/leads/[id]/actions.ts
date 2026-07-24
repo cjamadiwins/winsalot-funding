@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
@@ -172,6 +172,7 @@ export async function closeLeadAction(leadId: string, outcome: string, reason: s
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  refresh();
 }
 
 export type QuoteRequestSearchResult = {

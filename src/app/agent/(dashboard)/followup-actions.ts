@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 
@@ -42,6 +42,7 @@ export async function scheduleFollowUpAction(leadId: string, formData: FormData)
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);
+  refresh();
 }
 
 // A reschedule (unlike the initial "+ Schedule Callback") always requires
@@ -102,6 +103,14 @@ export async function rescheduleFollowUpAction(
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);
+  // revalidatePath alone isn't enough here: this page is already rendered
+  // dynamically (it reads the session via cookies() before any data
+  // fetch), so there's no route-cache entry for it to purge - the lead's
+  // isOverdue() badge would keep showing the pre-reschedule state until
+  // the next unrelated navigation. refresh() explicitly tells the client
+  // router to re-render with what the server just wrote, so the Overdue
+  // banner clears the instant a follow-up is pushed to a future date.
+  refresh();
 }
 
 export async function completeFollowUpAction(followUpId: string, leadId: string) {
@@ -121,6 +130,7 @@ export async function completeFollowUpAction(followUpId: string, leadId: string)
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);
+  refresh();
 }
 
 // The "add a new note" action on a callback - reuses the same
@@ -144,4 +154,5 @@ export async function addFollowUpNoteAction(leadId: string, note: string) {
 
   revalidatePath("/agent/dashboard");
   revalidatePath(`/agent/leads/${leadId}`);
+  refresh();
 }

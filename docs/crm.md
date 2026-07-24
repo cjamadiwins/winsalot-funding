@@ -110,6 +110,16 @@ needs multiple independent, reschedulable, completable entries per lead, which a
   (and therefore `isOverdue()`) picks up the new date immediately via the same sync trigger as
   any other reschedule, so an overdue lead's Overdue banner clears the moment it's rescheduled to
   a future time — it only comes back if that new date/time also passes.
+- **Why the banner needs `refresh()`, not just `revalidatePath`**: `/agent/leads/[id]` (and
+  `/agent/dashboard`) already read the signed-in user's session via `cookies()` before fetching
+  any lead data, which makes the route dynamic on every request — there's no route-cache entry
+  for `revalidatePath` to purge, so calling it alone doesn't force the already-rendered page to
+  pick up what a Server Action just wrote. `rescheduleFollowUpAction`, `completeFollowUpAction`,
+  `addFollowUpNoteAction`, and `closeLeadForLead`'s callers all call
+  [`refresh()`](https://nextjs.org/docs/app/api-reference/functions/refresh) (from `next/cache`)
+  after their `revalidatePath` calls to explicitly tell the client router to re-render with the
+  latest server state — this is what makes the Overdue banner, and the lead's stage badge on a
+  close, update the instant the action completes rather than on the next unrelated navigation.
 - **`crm_leads.next_follow_up_at`** is now a *derived* column: a database trigger
   (`crm_followups_sync_lead_next_follow_up`) recomputes it as the earliest pending callback for
   that lead on every insert/update/delete to `crm_followups`, so it stays correct automatically
@@ -669,3 +679,8 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       group
 - [ ] After rescheduling, "Mark Completed" and the Close Lead panel (Won/Lost) are both still
       available on the lead
+- [ ] Rescheduling an overdue follow-up to a future date/time clears the lead's red Overdue
+      banner **immediately**, without a manual page reload or re-navigation
+- [ ] Marking an overdue lead's follow-up completed, or closing the lead Won/Lost, also updates
+      the page immediately (no stale Overdue banner or stage badge left over from before the
+      action)
