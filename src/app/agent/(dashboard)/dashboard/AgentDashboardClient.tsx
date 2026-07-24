@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
   LEAD_STAGES,
   LEAD_STAGE_STYLES,
   isOverdue,
@@ -107,27 +109,40 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
         </div>
       ) : (
         <div className="mt-6 space-y-3">
-          {filtered.map((lead) => (
+          {filtered.map((lead) => {
+            const bounced = lead.last_email_status === "bounced" || lead.last_email_status === "complained";
+            return (
             <Link
               key={lead.id}
               href={`/agent/leads/${lead.id}`}
               className={`block rounded-xl border p-4 transition hover:border-[var(--color-accent)] ${
-                isOverdue(lead)
+                bounced
                   ? "border-red-200 bg-red-50"
-                  : isDueToday(lead)
-                    ? "border-amber-200 bg-amber-50"
-                    : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
+                  : isOverdue(lead)
+                    ? "border-red-200 bg-red-50"
+                    : isDueToday(lead)
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-semibold text-[var(--color-ink-strong)]">
                   {lead.business_name}
                 </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEAD_STAGE_STYLES[lead.stage]}`}
-                >
-                  {lead.stage}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {lead.last_email_status && (
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
+                    >
+                      {EMAIL_STATUS_LABELS[lead.last_email_status]}
+                    </span>
+                  )}
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEAD_STAGE_STYLES[lead.stage]}`}
+                  >
+                    {lead.stage}
+                  </span>
+                </div>
               </div>
               <div className="mt-1 text-sm text-[var(--color-text-muted)]">
                 {lead.contact_name ? `${lead.contact_name} · ` : ""}
@@ -143,7 +158,8 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
                 </div>
               )}
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

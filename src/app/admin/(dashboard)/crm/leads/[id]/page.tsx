@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { CrmActivityRow, CrmLeadRow, CrmUserRow } from "@/lib/crm-types";
+import type { CrmActivityRow, CrmLeadRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type {
   ProviderQuoteSubmissionRow,
   ProviderQuoteTokenRow,
@@ -68,6 +68,20 @@ export default async function AdminCrmLeadDetailPage({
     submissions = (submissionRows ?? []) as ProviderQuoteSubmissionRow[];
   }
 
+  // Admin already has full access to this page (requireCrmAdmin above),
+  // same service-role read as everything else here — crm_lead_emails has
+  // no RLS policies of its own (see migration 0022).
+  const admin = getSupabaseAdmin();
+  const { data: latestEmail } = await admin
+    .from("crm_lead_emails")
+    .select(
+      "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+    )
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <AdminLeadDetailClient
       lead={leadRow}
@@ -77,6 +91,7 @@ export default async function AdminCrmLeadDetailPage({
       providers={providers}
       tokens={tokens}
       submissions={submissions}
+      latestEmail={latestEmail as LatestCrmLeadEmail | null}
     />
   );
 }

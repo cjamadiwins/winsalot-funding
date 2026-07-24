@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { CrmActivityRow, CrmFollowUpRow, CrmLeadRow } from "@/lib/crm-types";
+import type { CrmActivityRow, CrmFollowUpRow, CrmLeadRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { QuoteRequestRow } from "@/lib/admin-types";
 import LeadDetailClient from "./LeadDetailClient";
 
@@ -71,12 +71,29 @@ export default async function AgentLeadDetailPage({
     linkedQuote = data;
   }
 
+  // Same access pattern as linkedQuote above: only reached once RLS has
+  // already confirmed this agent owns the lead, so it's safe to read the
+  // per-event delivery timestamps for their most recently sent tracked
+  // email with the service-role client (crm_lead_emails has no RLS
+  // policies of its own - see migration 0022).
+  const admin = getSupabaseAdmin();
+  const { data: latestEmail } = await admin
+    .from("crm_lead_emails")
+    .select(
+      "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+    )
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <LeadDetailClient
       lead={leadRow}
       activities={(activities ?? []) as CrmActivityRow[]}
       followUps={(followUps ?? []) as CrmFollowUpRow[]}
       linkedQuote={linkedQuote}
+      latestEmail={latestEmail as LatestCrmLeadEmail | null}
       justAdded={added === "1"}
     />
   );

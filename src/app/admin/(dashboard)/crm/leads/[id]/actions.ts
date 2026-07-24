@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { sendQuoteRequestEmailForLead } from "@/lib/send-quote-request-email";
+import { sendFollowUpEmailForLead } from "@/lib/send-follow-up-email";
 import { ACTIVITY_TYPES, LEAD_STAGES, type ActivityType, type LeadStage } from "@/lib/crm-types";
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -126,6 +127,19 @@ export async function addActivityAction(leadId: string, formData: FormData) {
 export async function sendQuoteRequestEmailAction(leadId: string): Promise<{ email: string }> {
   const crmUser = await requireCrmAdmin();
   const result = await sendQuoteRequestEmailForLead(leadId, crmUser);
+
+  revalidatePath(`/admin/crm/leads/${leadId}`);
+  revalidatePath("/admin/crm");
+
+  return result;
+}
+
+// Sends the follow-up nudge email to a lead who was already sent a quote
+// request but hasn't completed it, and logs it on the activity timeline —
+// same tracking/RLS scoping as sendQuoteRequestEmailAction above.
+export async function sendFollowUpEmailAction(leadId: string): Promise<{ email: string }> {
+  const crmUser = await requireCrmAdmin();
+  const result = await sendFollowUpEmailForLead(leadId, crmUser);
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");

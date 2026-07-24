@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
   LEAD_STAGES,
   LEAD_STAGE_STYLES,
   isOverdue,
@@ -151,17 +153,19 @@ export default function AdminCrmClient({
               <th className="px-4 py-3">City</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Stage</th>
+              <th className="px-4 py-3">Email Status</th>
               <th className="px-4 py-3">Next Follow-up</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((lead) => {
               const agent = lead.assigned_agent_id ? agentById.get(lead.assigned_agent_id) : null;
+              const bounced = lead.last_email_status === "bounced" || lead.last_email_status === "complained";
               return (
                 <tr
                   key={lead.id}
                   className={`border-b border-slate-100 last:border-0 ${
-                    isOverdue(lead) ? "bg-rose-50" : ""
+                    bounced ? "bg-rose-50" : isOverdue(lead) ? "bg-rose-50" : ""
                   }`}
                 >
                   <td className="px-4 py-3 text-slate-500">
@@ -181,6 +185,17 @@ export default function AdminCrmClient({
                       {lead.stage}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    {lead.last_email_status ? (
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
+                      >
+                        {EMAIL_STATUS_LABELS[lead.last_email_status]}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className={`px-4 py-3 ${isOverdue(lead) ? "font-semibold text-rose-700" : "text-slate-600"}`}>
                     {lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : "—"}
                   </td>
@@ -190,7 +205,7 @@ export default function AdminCrmClient({
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No leads match your filters.
                 </td>
               </tr>

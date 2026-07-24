@@ -1,7 +1,7 @@
 import "server-only";
 import { createSupabaseServerClient } from "./supabase-server";
-import { getResendClient } from "./resend";
 import { buildQuoteRequestEmailHtml, buildQuoteRequestEmailText } from "./quote-request-email";
+import { sendTrackedCrmEmail } from "./send-crm-email";
 import type { CrmUserRow } from "./crm-types";
 
 // Shared by both the admin (/admin/crm/leads/[id]) and agent
@@ -18,21 +18,6 @@ export async function sendQuoteRequestEmailForLead(
 ): Promise<{ email: string }> {
   const supabase = await createSupabaseServerClient();
 
-  const { data: lead, error: fetchError } = await supabase
-    .from("crm_leads")
-    .select("email, contact_name, business_name")
-    .eq("id", leadId)
-    .maybeSingle();
-
-  if (fetchError || !lead) {
-    throw new Error("Lead not found.");
-  }
-  if (!lead.email) {
-    throw new Error(
-      "This lead has no email address on file — the quote request email can't be sent."
-    );
-  }
-
   // Dedicated override (falling back to the general EMAIL_FROM, then a
   // hardcoded default) so this customer-facing email always reads as
   // Winsalot Corp's own address out of the box, the same layering used
@@ -43,33 +28,17 @@ export async function sendQuoteRequestEmailForLead(
     "Winsalot Corp <info@winsalotcorp.com>";
   const replyToEmail = process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
 
-  const resend = getResendClient();
-  const { error: emailError } = await resend.emails.send({
-    from: fromEmail,
-    to: lead.email,
-    replyTo: replyToEmail,
+  return sendTrackedCrmEmail(supabase, {
+    leadId,
+    crmUser,
+    emailType: "quote_request",
+    fromEmail,
+    replyToEmail,
     subject: "Request Your Free Cleaning Quote",
-    text: buildQuoteRequestEmailText(lead.contact_name || lead.business_name),
-    html: buildQuoteRequestEmailHtml(lead.contact_name || lead.business_name),
+    buildText: buildQuoteRequestEmailText,
+    buildHtml: buildQuoteRequestEmailHtml,
+    activityNotePrefix: "Quote request email",
+    noEmailMessage:
+      "This lead has no email address on file — the quote request email can't be sent.",
   });
-
-  if (emailError) {
-    throw new Error(
-      `Failed to send the quote request email: ${emailError.message ?? "Unknown Resend error."}`
-    );
-  }
-
-  const senderName = crmUser.full_name || crmUser.email;
-  const { error: activityError } = await supabase.from("crm_activities").insert({
-    lead_id: leadId,
-    agent_id: crmUser.id,
-    activity_type: "email",
-    notes: `Quote request email sent to ${lead.email} by ${senderName}.`,
-  });
-
-  if (activityError) {
-    throw new Error("The email was sent, but recording it in the activity history failed.");
-  }
-
-  return { email: lead.email };
 }

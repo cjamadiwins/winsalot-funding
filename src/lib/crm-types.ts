@@ -64,6 +64,54 @@ export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
   "Closed/completed": "bg-indigo-100 text-indigo-800",
 };
 
+// Every status a Resend delivery event can put an email in. Deliberately
+// distinct from one another - "delivered" never implies "opened" and
+// never sets it; each only changes when its own matching webhook event
+// arrives (see src/app/api/webhooks/resend/route.ts).
+export const EMAIL_EVENT_STATUSES = [
+  "sent",
+  "delivered",
+  "delayed",
+  "bounced",
+  "complained",
+  "opened",
+  "clicked",
+  "failed",
+] as const;
+
+export type EmailEventStatus = (typeof EMAIL_EVENT_STATUSES)[number];
+
+export const EMAIL_STATUS_LABELS: Record<EmailEventStatus, string> = {
+  sent: "Sent",
+  delivered: "Delivered",
+  delayed: "Delayed",
+  bounced: "Bounced",
+  complained: "Complaint",
+  opened: "Opened",
+  clicked: "Link clicked",
+  failed: "Failed",
+};
+
+export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
+  sent: "bg-slate-100 text-slate-700",
+  delivered: "bg-sky-100 text-sky-800",
+  delayed: "bg-amber-100 text-amber-800",
+  bounced: "bg-rose-100 text-rose-800",
+  complained: "bg-rose-100 text-rose-800",
+  opened: "bg-emerald-100 text-emerald-800",
+  clicked: "bg-purple-100 text-purple-800",
+  failed: "bg-rose-100 text-rose-800",
+};
+
+export const EMAIL_TYPES = ["quote_request", "follow_up"] as const;
+
+export type EmailType = (typeof EMAIL_TYPES)[number];
+
+export const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
+  quote_request: "Quote request",
+  follow_up: "Follow-up",
+};
+
 export type CrmLeadRow = {
   id: string;
   created_at: string;
@@ -87,7 +135,60 @@ export type CrmLeadRow = {
   next_follow_up_at: string | null;
   last_contacted_at: string | null;
   quote_request_id: string | null;
+  last_email_status: EmailEventStatus | null;
+  last_email_status_at: string | null;
+  last_email_type: EmailType | null;
+  last_email_to: string | null;
 };
+
+// A single tracked send (crm_lead_emails) - the Resend email id plus a
+// timestamp per delivery event. Not read directly by any UI today (every
+// event is also mirrored onto crm_activities, and the "latest status" is
+// mirrored onto crm_leads), but kept as a typed row shape for the webhook
+// handler and any future per-email drill-down.
+export type CrmLeadEmailRow = {
+  id: string;
+  created_at: string;
+  lead_id: string;
+  agent_id: string | null;
+  activity_id: string | null;
+  resend_email_id: string;
+  email_type: EmailType;
+  to_email: string;
+  subject: string;
+  status: EmailEventStatus;
+  status_at: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+  delayed_at: string | null;
+  bounced_at: string | null;
+  complained_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  failed_at: string | null;
+};
+
+// Display-safe subset of CrmLeadEmailRow for a lead's most recently sent
+// tracked email, fetched via the service-role client only after RLS has
+// already confirmed the caller can see that lead (same pattern as the
+// linkedQuote lookup on this page) - crm_lead_emails has no RLS policies
+// of its own (see migration 0022).
+export type LatestCrmLeadEmail = Pick<
+  CrmLeadEmailRow,
+  | "email_type"
+  | "to_email"
+  | "subject"
+  | "status"
+  | "status_at"
+  | "sent_at"
+  | "delivered_at"
+  | "delayed_at"
+  | "bounced_at"
+  | "complained_at"
+  | "opened_at"
+  | "clicked_at"
+  | "failed_at"
+>;
 
 export type NewCrmLeadInput = {
   business_name: string;

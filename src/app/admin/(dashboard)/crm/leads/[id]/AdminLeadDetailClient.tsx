@@ -9,6 +9,7 @@ import {
   type CrmActivityRow,
   type CrmLeadRow,
   type CrmUserRow,
+  type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
 import type {
   ProviderQuoteSubmissionRow,
@@ -17,12 +18,14 @@ import type {
   QuoteRequestRow,
 } from "@/lib/admin-types";
 import RequestWorkflowPanel from "@/app/admin/(dashboard)/requests/[id]/RequestWorkflowPanel";
+import EmailStatusPanel from "@/components/EmailStatusPanel";
 import {
   addActivityAction,
   deleteLeadAction,
   finalApproveLeadAction,
   linkQuoteAction,
   searchQuoteRequestsAction,
+  sendFollowUpEmailAction,
   sendQuoteRequestEmailAction,
   unlinkQuoteAction,
   updateLeadAction,
@@ -42,6 +45,7 @@ export default function AdminLeadDetailClient({
   providers,
   tokens,
   submissions,
+  latestEmail,
 }: {
   lead: CrmLeadRow;
   activities: CrmActivityRow[];
@@ -50,6 +54,7 @@ export default function AdminLeadDetailClient({
   providers: ProviderRow[];
   tokens: ProviderQuoteTokenRow[];
   submissions: ProviderQuoteSubmissionRow[];
+  latestEmail: LatestCrmLeadEmail | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +62,7 @@ export default function AdminLeadDetailClient({
   const [quoteResults, setQuoteResults] = useState<QuoteRequestSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [quoteEmailSuccess, setQuoteEmailSuccess] = useState<string | null>(null);
+  const [followUpEmailSuccess, setFollowUpEmailSuccess] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -88,6 +94,18 @@ export default function AdminLeadDetailClient({
     runAction(async () => {
       const result = await sendQuoteRequestEmailAction(lead.id);
       setQuoteEmailSuccess(`Quote request email sent to ${result.email}.`);
+    });
+  }
+
+  function handleSendFollowUpEmail() {
+    if (!lead.email) return;
+    const confirmed = confirm(`Send a follow-up email to ${lead.email}?`);
+    if (!confirmed) return;
+
+    setFollowUpEmailSuccess(null);
+    runAction(async () => {
+      const result = await sendFollowUpEmailAction(lead.id);
+      setFollowUpEmailSuccess(`Follow-up email sent to ${result.email}.`);
     });
   }
 
@@ -135,6 +153,8 @@ export default function AdminLeadDetailClient({
           {error}
         </div>
       )}
+
+      <EmailStatusPanel latestEmail={latestEmail} />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -280,6 +300,34 @@ export default function AdminLeadDetailClient({
               <p className="mt-2 text-sm font-medium text-emerald-700">{quoteEmailSuccess}</p>
             )}
           </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Follow-Up Email
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Sends a reminder email to{" "}
+              {lead.email ? <span className="font-medium text-slate-900">{lead.email}</span> : "this lead"}{" "}
+              for a quote request that hasn&apos;t been completed yet.
+            </p>
+            <button
+              type="button"
+              disabled={isPending || !lead.email}
+              onClick={handleSendFollowUpEmail}
+              className={`${buttonClasses} mt-3`}
+            >
+              Send Follow-Up Email
+            </button>
+            {!lead.email && (
+              <p className="mt-2 text-xs text-rose-600">
+                Add an email address for this lead before sending.
+              </p>
+            )}
+            {followUpEmailSuccess && (
+              <p className="mt-2 text-sm font-medium text-emerald-700">{followUpEmailSuccess}</p>
+            )}
+          </div>
+
 
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
