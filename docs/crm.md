@@ -181,7 +181,11 @@ Only admins can manage the content, from **`/admin/crm/training`**.
 - **`crm_training_materials`** (migration
   [`0018_crm_training_materials.sql`](../supabase/migrations/0018_crm_training_materials.sql)) —
   `title`, `content`, `sort_order`, `created_by` (→ `crm_users`), `updated_at` (kept current by a
-  trigger, same pattern as `active_cleaning_opportunities`).
+  trigger, same pattern as `active_cleaning_opportunities`). Migration
+  [`0025_quote_conversion_training_card.sql`](../supabase/migrations/0025_quote_conversion_training_card.sql)
+  added optional `link_url`/`link_label` columns — when set, both `/agent/training` and
+  `/admin/crm/training` render a button below the card's content that opens `link_url` in a new
+  tab.
 - **RLS**: any active CRM member (agent or admin) can `select` every row
   (`crm_training_materials_select_members`); only `role = 'admin'` can `insert`/`update`/`delete`
   (`crm_training_materials_admin_all`) — enforced at the database level, not just by hiding the
@@ -197,6 +201,13 @@ Only admins can manage the content, from **`/admin/crm/training`**.
   second entry, the **Cleaning Quote Request Follow-Up Script**, for agents calling a client who
   was already sent a quote-request link but hasn't completed it — covers the live-answer flow
   (confirming receipt, offering to resend, handling questions) and a separate voicemail version.
+- Migration
+  [`0025_quote_conversion_training_card.sql`](../supabase/migrations/0025_quote_conversion_training_card.sql)
+  adds a third entry, **How to Convert an Interested Lead Into a Quote Request** — the call-to
+  submitted-quote-request playbook (same-day call, ask for commitment, send the link on the call,
+  offer to complete it together, the three-step follow-up cadence). It's the first card to use
+  `link_url`/`link_label`, showing an **Open Quote Request Form** button that opens the live
+  quote-request form (`QUOTE_REQUEST_URL` from `src/lib/quote-request-email.ts`) in a new tab.
 
 ## User roles
 
@@ -657,6 +668,9 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       `/provider-quote/[token]`, and `/sales-tracker` pages are all unaffected
 - [ ] An agent can view and copy every entry on `/agent/training`, including the seeded
       "General Commercial Cleaning Call Script", but has no add/edit/remove controls there
+- [ ] The "How to Convert an Interested Lead Into a Quote Request" card shows an "Open Quote
+      Request Form" button that opens the live quote-request form in a new tab, on both
+      `/agent/training` and `/admin/crm/training`
 - [ ] An admin can add, edit, and remove training materials from `/admin/crm/training`, and
       changes show up on `/agent/training` immediately
 - [ ] An agent cannot add, edit, or delete a training material by calling the admin actions

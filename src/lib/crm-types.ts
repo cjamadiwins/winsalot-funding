@@ -357,6 +357,8 @@ export type CrmTrainingMaterialRow = {
   content: string;
   sort_order: number;
   created_by: string | null;
+  link_url: string | null;
+  link_label: string | null;
 };
 
 // Formats an ISO timestamp for a <input type="datetime-local"> defaultValue

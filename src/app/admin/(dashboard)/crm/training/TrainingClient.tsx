@@ -138,6 +138,16 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
                 <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
                   {material.content}
                 </p>
+                {material.link_url && (
+                  <a
+                    href={material.link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 block w-full rounded-full bg-sky-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-sky-700 sm:inline-block sm:w-auto"
+                  >
+                    {material.link_label || "Open Link"}
+                  </a>
+                )}
               </>
             )}
           </div>
