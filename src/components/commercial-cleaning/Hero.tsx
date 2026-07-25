@@ -53,18 +53,17 @@ export default function Hero() {
         <p className="text-sm font-semibold uppercase tracking-widest text-sky-600">
           Professional Commercial &amp; Home Cleaning Services
         </p>
-        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-          Request a Commercial or Home Cleaning Quote
+        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold uppercase tracking-tight text-slate-900 sm:text-5xl">
+          Request a Free Commercial or Home Cleaning Quote
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
-          Tell us about your commercial or residential cleaning needs and receive a customized
-          quote from a professional cleaning provider.
+        <p className="mx-auto mt-6 inline-block rounded-full bg-sky-50 px-5 py-2.5 text-lg font-extrabold uppercase tracking-wide text-sky-700 sm:mt-8 sm:text-xl">
+          It&apos;s Totally Free — No Obligation.
         </p>
 
         <form
           onSubmit={handleQuickSubmit}
           noValidate
-          className="mx-auto mt-10 max-w-4xl rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-xl shadow-slate-200/60 sm:p-6"
+          className="mx-auto mt-8 max-w-4xl rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-xl shadow-slate-200/60 sm:mt-10 sm:p-6"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
@@ -137,8 +136,10 @@ export default function Hero() {
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-slate-500">
-          No obligation • Fast response • Serving homes and businesses in your area
+        <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-500">
+          Tell us about your commercial or residential cleaning needs and receive a customized
+          quote from a professional cleaning provider — no obligation, fast response, serving
+          homes and businesses in your area.
         </p>
         <a
           href={`tel:${businessConfig.phone.href}`}
