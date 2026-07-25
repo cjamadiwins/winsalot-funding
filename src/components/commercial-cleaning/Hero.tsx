@@ -53,9 +53,12 @@ export default function Hero() {
         <p className="text-sm font-semibold uppercase tracking-widest text-sky-600">
           Professional Commercial &amp; Home Cleaning Services
         </p>
-        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-          Request a Commercial or Home Cleaning Quote
+        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold uppercase tracking-tight text-slate-900 sm:text-5xl">
+          Request a Free Commercial or Home Cleaning Quote
         </h1>
+        <p className="mx-auto mt-3 max-w-2xl text-xl font-extrabold uppercase tracking-wide text-sky-600 sm:text-2xl">
+          It&apos;s Totally Free.
+        </p>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
           Tell us about your commercial or residential cleaning needs and receive a customized
           quote from a professional cleaning provider.
