@@ -208,6 +208,12 @@ Only admins can manage the content, from **`/admin/crm/training`**.
   offer to complete it together, the three-step follow-up cadence). It's the first card to use
   `link_url`/`link_label`, showing an **Open Quote Request Form** button that opens the live
   quote-request form (`QUOTE_REQUEST_URL` from `src/lib/quote-request-email.ts`) in a new tab.
+- Migration
+  [`0026_cleaners_objection_training_card.sql`](../supabase/migrations/0026_cleaners_objection_training_card.sql)
+  adds a fourth entry, **Handling the "We Already Have Cleaners" Objection** — reframes the call
+  away from asking whether a business needs cleaning (most already have a provider) toward
+  positioning Winsalot Corp as a reliable backup and offering a free, no-obligation comparison
+  quote, plus a short list of agent tips for keeping the tone consultative rather than argumentative.
 
 ## User roles
 
