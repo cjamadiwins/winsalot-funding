@@ -232,7 +232,15 @@ export type LeadgenAppointmentRow = {
   status: LeadgenAppointmentStatus;
   client_feedback: string | null;
   created_by: string | null;
+  admin_notified_at: string | null;
 };
+
+// Shared literal button text for the consultation booking button, used
+// both when rendering the plain-text {{booking_section}} placeholder
+// (see leadgenBookingInviteSection below) and when the send actions
+// swap that exact marker for a real HTML <a> button - see
+// LEADGEN_BOOKING_BUTTON_LABEL usage in lib/leadgen-email.ts.
+export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
 
 export type LeadgenEmailTemplateRow = {
   id: string;
@@ -247,7 +255,7 @@ export type LeadgenEmailTemplateRow = {
   created_by: string | null;
 };
 
-export const LEADGEN_EMAIL_STATUSES = ["draft", "sending", "sent", "delivered", "bounced", "failed"] as const;
+export const LEADGEN_EMAIL_STATUSES = ["draft", "sending", "sent", "delivered", "delayed", "bounced", "complained", "failed"] as const;
 export type LeadgenEmailStatus = (typeof LEADGEN_EMAIL_STATUSES)[number];
 
 export const LEADGEN_EMAIL_STATUS_STYLES: Record<LeadgenEmailStatus, string> = {
@@ -255,8 +263,24 @@ export const LEADGEN_EMAIL_STATUS_STYLES: Record<LeadgenEmailStatus, string> = {
   sending: "bg-amber-100 text-amber-800",
   sent: "bg-sky-100 text-sky-800",
   delivered: "bg-emerald-100 text-emerald-800",
+  delayed: "bg-amber-100 text-amber-800",
   bounced: "bg-rose-100 text-rose-800",
+  complained: "bg-rose-200 text-rose-900",
   failed: "bg-rose-200 text-rose-900",
+};
+
+// Display label shown in the UI - distinct from the raw DB value for
+// 'complained', which reads as "Marked as spam" to a non-technical admin
+// or agent rather than the Resend event-name jargon.
+export const LEADGEN_EMAIL_STATUS_LABELS: Record<LeadgenEmailStatus, string> = {
+  draft: "Draft",
+  sending: "Sending",
+  sent: "Sent",
+  delivered: "Delivered",
+  delayed: "Delayed",
+  bounced: "Bounced",
+  complained: "Marked as spam",
+  failed: "Failed",
 };
 
 export type LeadgenEmailRow = {
@@ -277,11 +301,38 @@ export type LeadgenEmailRow = {
   resend_message_id: string | null;
   sent_at: string | null;
   delivered_at: string | null;
+  delayed_at: string | null;
   bounced_at: string | null;
   bounce_reason: string | null;
+  complained_at: string | null;
   failed_at: string | null;
   failure_reason: string | null;
   client_visible: boolean;
+};
+
+// The single most recent status-change timestamp across every possible
+// status column - used to show "Last updated" in the Communications UI
+// without a dedicated status_at column (leadgen_emails deliberately keeps
+// one timestamp column per event type, mirroring the cleaning CRM's
+// crm_lead_emails).
+export function leadgenEmailStatusAt(email: LeadgenEmailRow): string {
+  return (
+    email.failed_at ??
+    email.complained_at ??
+    email.bounced_at ??
+    email.delayed_at ??
+    email.delivered_at ??
+    email.sent_at ??
+    email.created_at
+  );
+}
+
+export type LeadgenBouncedEmailRow = {
+  email: string;
+  bounce_reason: string | null;
+  bounced_at: string;
+  cleared_at: string | null;
+  cleared_by: string | null;
 };
 
 // Small, self-contained province list (deliberately not shared with the

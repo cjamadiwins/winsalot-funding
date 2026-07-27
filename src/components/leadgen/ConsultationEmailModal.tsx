@@ -19,6 +19,7 @@ export default function ConsultationEmailModal({
   title = "Send Consultation Email",
   defaultSubject,
   defaultBody,
+  bookingUrl,
   onClose,
   onSend,
   onSent,
@@ -29,6 +30,12 @@ export default function ConsultationEmailModal({
   title?: string;
   defaultSubject: string;
   defaultBody: string;
+  // Set only by the "Send Follow-Up Email" call site - lets the server
+  // action swap the plain-text booking marker in `body` for a real HTML
+  // button (see leadgenButtonHtml in lib/leadgen-email.ts). If the user
+  // edits the marker text out of the body below, the action just falls
+  // back to a plain (no-button) HTML rendering - never an error.
+  bookingUrl?: string;
   onClose: () => void;
   onSend: (formData: FormData) => Promise<SendConsultationEmailResult>;
   onSent: () => void;
@@ -51,6 +58,7 @@ export default function ConsultationEmailModal({
     formData.set("to_email", toEmail);
     formData.set("subject", subject);
     formData.set("body", body);
+    if (bookingUrl) formData.set("booking_url", bookingUrl);
 
     const result = await onSend(formData);
     setSubmitting(false);

@@ -9,7 +9,7 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
   const { id } = await params;
   const admin = getSupabaseAdmin();
 
-  const [{ data: client }, { data: campaigns }, { data: emails }, { data: templates }, { data: leads }] = await Promise.all([
+  const [{ data: client }, { data: campaigns }, { data: emails }, { data: templates }, { data: leads }, { data: bouncedRows }] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", id).maybeSingle(),
     admin.from("leadgen_campaigns").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     admin
@@ -20,6 +20,7 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
       .order("created_at", { ascending: false }),
     admin.from("leadgen_email_templates").select("*").eq("active", true).order("name"),
     admin.from("leadgen_leads").select("id, campaign_id, status").eq("client_id", id),
+    admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null),
   ]);
 
   if (!client) notFound();
@@ -38,6 +39,7 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
       templates={(templates ?? []) as LeadgenEmailTemplateRow[]}
       leadCountByCampaign={Object.fromEntries(leadCountByCampaign)}
       totalLeads={(leads ?? []).length}
+      bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}
     />
   );
 }

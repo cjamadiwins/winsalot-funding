@@ -259,3 +259,29 @@ export async function resendLeadgenEmailAction(emailId: string): Promise<ActionR
   if (original.lead_id) revalidatePath(`/leadgen/admin/leads/${original.lead_id}`);
   return {};
 }
+
+// ---------------------------------------------------------------------
+// Clears a permanently-bounced address so it can be emailed again -
+// brief: "Prevent agents from repeatedly emailing a permanently bounced
+// address unless an admin corrects or approves the email address."
+// Approving in place (the address itself was fine, e.g. a transient
+// mailbox-full bounce) and "correcting" it (editing the lead's email to
+// a different address, then never touching this one again) both end up
+// here: sendLeadgenEmail() (lib/leadgen-email.ts) only blocks a send
+// while an uncleared row exists for that exact address.
+// ---------------------------------------------------------------------
+export async function clearBouncedEmailAction(email: string): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("leadgen_bounced_emails")
+    .update({ cleared_at: new Date().toISOString(), cleared_by: adminUser.id })
+    .eq("email", email.trim().toLowerCase());
+
+  if (error) return { error: "Failed to clear this address." };
+
+  revalidatePath("/leadgen/admin/leads");
+  revalidatePath("/leadgen/admin/clients");
+  return {};
+}

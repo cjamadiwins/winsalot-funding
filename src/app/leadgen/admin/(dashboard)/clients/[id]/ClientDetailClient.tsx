@@ -3,14 +3,17 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  LEADGEN_EMAIL_STATUS_LABELS,
   LEADGEN_EMAIL_STATUS_STYLES,
+  leadgenEmailStatusAt,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
   type LeadgenEmailRow,
   type LeadgenEmailTemplateRow,
 } from "@/lib/leadgen-types";
-import { updateClientAction, createCampaignAction, resendLeadgenEmailAction } from "../../actions";
+import { clearBouncedEmailAction, updateClientAction, createCampaignAction, resendLeadgenEmailAction } from "../../actions";
 import { sendClientCommunicationAction } from "./actions";
+import RefreshOnFocus from "@/components/leadgen/RefreshOnFocus";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -21,6 +24,7 @@ export default function ClientDetailClient({
   templates,
   leadCountByCampaign,
   totalLeads,
+  bouncedEmails,
 }: {
   client: LeadgenClientRow;
   campaigns: LeadgenCampaignRow[];
@@ -28,7 +32,10 @@ export default function ClientDetailClient({
   templates: LeadgenEmailTemplateRow[];
   leadCountByCampaign: Record<string, number>;
   totalLeads: number;
+  bouncedEmails: string[];
 }) {
+  const bouncedSet = new Set(bouncedEmails);
+  const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editingClient, setEditingClient] = useState(false);
@@ -46,6 +53,7 @@ export default function ClientDetailClient({
 
   return (
     <div>
+      <RefreshOnFocus />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
@@ -120,7 +128,27 @@ export default function ClientDetailClient({
           ) : (
             <dl className="mt-4 space-y-2 text-[14px]">
               <Row label="Contact" value={client.contact_name} />
-              <Row label="Email" value={client.contact_email} />
+              {client.contact_email && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Email</dt>
+                  <dd className="text-right font-medium text-slate-900">
+                    {client.contact_email}
+                    {isBounced(client.contact_email) && (
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">⚠ Bounced</span>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => runAction(() => clearBouncedEmailAction(client.contact_email!))}
+                          className="text-[11px] font-semibold text-sky-600 hover:text-sky-700"
+                        >
+                          Clear &amp; Approve
+                        </button>
+                      </div>
+                    )}
+                  </dd>
+                </div>
+              )}
               <Row label="Phone" value={client.contact_phone} />
               <Row label="Consultation Booking Link" value={client.booking_link} />
               {client.notes && (
@@ -191,6 +219,7 @@ export default function ClientDetailClient({
           setShowComposer={setShowComposer}
           isPending={isPending}
           runAction={runAction}
+          isBounced={isBounced}
         />
       </div>
     </div>
@@ -206,6 +235,7 @@ function CommunicationsSection({
   setShowComposer,
   isPending,
   runAction,
+  isBounced,
 }: {
   client: LeadgenClientRow;
   campaigns: LeadgenCampaignRow[];
@@ -215,6 +245,7 @@ function CommunicationsSection({
   setShowComposer: (v: boolean) => void;
   isPending: boolean;
   runAction: (fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) => void;
+  isBounced: (email: string | null | undefined) => boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [campaignFilter, setCampaignFilter] = useState("all");
@@ -318,9 +349,9 @@ function CommunicationsSection({
       <div className="mt-4 flex flex-wrap gap-3">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${inputClass} w-auto`}>
           <option value="all">All statuses</option>
-          {(["draft", "sending", "sent", "delivered", "bounced", "failed"] as const).map((s) => (
+          {(["draft", "sending", "sent", "delivered", "delayed", "bounced", "complained", "failed"] as const).map((s) => (
             <option key={s} value={s}>
-              {s}
+              {LEADGEN_EMAIL_STATUS_LABELS[s]}
             </option>
           ))}
         </select>
@@ -345,34 +376,43 @@ function CommunicationsSection({
                 <th className="py-2 pr-3">To</th>
                 <th className="py-2 pr-3">Subject</th>
                 <th className="py-2 pr-3">Status</th>
+                <th className="py-2 pr-3">Last Updated</th>
                 <th className="py-2 pr-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((email) => (
-                <tr key={email.id} className="border-b border-slate-100">
-                  <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
-                  <td className="py-2 pr-3">{email.to_email}</td>
-                  <td className="py-2 pr-3 max-w-[220px] truncate">{email.subject}</td>
-                  <td className="py-2 pr-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
-                      {email.status}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3">
-                    {(email.status === "failed" || email.status === "bounced") && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => runAction(() => resendLeadgenEmailAction(email.id))}
-                        className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
-                      >
-                        Resend
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((email) => {
+                const reason = email.status === "bounced" ? email.bounce_reason : email.status === "failed" ? email.failure_reason : null;
+                return (
+                  <tr key={email.id} className="border-b border-slate-100">
+                    <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
+                    <td className="py-2 pr-3">
+                      {email.to_email}
+                      {isBounced(email.to_email) && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠</span>}
+                    </td>
+                    <td className="py-2 pr-3 max-w-[220px] truncate">{email.subject}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
+                        {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
+                      </span>
+                      {reason && <div className="mt-1 max-w-[220px] text-[11px] text-slate-500">{reason}</div>}
+                    </td>
+                    <td className="py-2 pr-3 text-slate-500">{new Date(leadgenEmailStatusAt(email)).toLocaleString()}</td>
+                    <td className="py-2 pr-3">
+                      {(email.status === "failed" || email.status === "bounced") && (
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => runAction(() => resendLeadgenEmailAction(email.id))}
+                          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+                        >
+                          Resend
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
+import { buildLeadgenBookingEmailHtml, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import { isValidEmail, LEADGEN_LEAD_STATUSES, LEADGEN_PROVINCES, type LeadgenLeadStatus } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -225,6 +225,7 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -239,6 +240,7 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     toEmail,
     subject,
     body,
+    html: buildLeadgenBookingEmailHtml(body, bookingUrl),
     sentBy: adminUser.id,
     clientVisible: false,
   });
@@ -277,6 +279,7 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -291,6 +294,7 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     toEmail,
     subject,
     body,
+    html: buildLeadgenBookingEmailHtml(body, bookingUrl),
     sentBy: adminUser.id,
     clientVisible: false,
   });

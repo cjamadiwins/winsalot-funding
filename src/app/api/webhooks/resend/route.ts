@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
     // neither table is ever written to based on a match in the other.
     const { data: leadgenEmail } = await admin
       .from("leadgen_emails")
-      .select("id, lead_id, status")
+      .select("id, lead_id, to_email, status")
       .eq("resend_message_id", emailId)
       .maybeSingle();
 
@@ -153,11 +153,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`[resend-webhook] matched email ${emailId} to leadgen_emails ${leadgenEmail.id}`);
 
-    // leadgen_emails only has columns for the delivery-outcome events
-    // that matter to that CRM (sent/delivered/bounced/failed) - a paid
-    // client-visible-comms/prospect-consultation-email log doesn't need
-    // the cleaning CRM's fuller open/click/delay/complaint tracking, so
-    // any other event type is acknowledged and ignored here.
+    // Every event Resend can send for a tracked leadgen_emails row -
+    // brief: "Do not mark an email as 'Delivered' merely because the
+    // Resend send request succeeded. Only mark it delivered after
+    // receiving the official email.delivered webhook" (sendLeadgenEmail
+    // in lib/leadgen-email.ts only ever sets 'sent' on a successful send
+    // - 'delivered' is set here, and only here).
     const leadgenUpdates: Record<string, unknown> = {};
     switch (event.type) {
       case "email.sent":
@@ -168,10 +169,18 @@ export async function POST(request: NextRequest) {
         leadgenUpdates.status = "delivered";
         leadgenUpdates.delivered_at = eventAt;
         break;
+      case "email.delivery_delayed":
+        leadgenUpdates.status = "delayed";
+        leadgenUpdates.delayed_at = eventAt;
+        break;
       case "email.bounced":
         leadgenUpdates.status = "bounced";
         leadgenUpdates.bounced_at = eventAt;
         leadgenUpdates.bounce_reason = event.data.bounce.message;
+        break;
+      case "email.complained":
+        leadgenUpdates.status = "complained";
+        leadgenUpdates.complained_at = eventAt;
         break;
       case "email.failed":
         leadgenUpdates.status = "failed";
@@ -187,11 +196,35 @@ export async function POST(request: NextRequest) {
       console.error(`[resend-webhook] failed to update leadgen_emails ${leadgenEmail.id}:`, leadgenUpdateError);
     }
 
+    // A hard bounce (re-)blocks this exact address from further agent
+    // sends until an admin corrects or approves it - see
+    // leadgen_bounced_emails and the check in sendLeadgenEmail() (lib/
+    // leadgen-email.ts). cleared_at is reset to null on every fresh
+    // bounce, even one an admin previously cleared: a repeat bounce means
+    // whatever correction was made didn't fix it, so it needs another look.
+    if (event.type === "email.bounced") {
+      const { error: bounceUpsertError } = await admin.from("leadgen_bounced_emails").upsert(
+        {
+          email: leadgenEmail.to_email.trim().toLowerCase(),
+          bounce_reason: event.data.bounce.message,
+          bounced_at: eventAt,
+          cleared_at: null,
+          cleared_by: null,
+        },
+        { onConflict: "email" }
+      );
+      if (bounceUpsertError) {
+        console.error(`[resend-webhook] failed to record bounced address for ${leadgenEmail.to_email}:`, bounceUpsertError);
+      }
+    }
+
     if (leadgenEmail.lead_id) {
       const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
       let notes = `Email ${leadgenUpdates.status} (to ${toEmail}) — "${event.data.subject}".`;
       if (event.type === "email.bounced") {
-        notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. Verify or correct this lead's email address.`;
+        notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. This address is now blocked from further agent sends until an admin corrects or approves it.`;
+      } else if (event.type === "email.complained") {
+        notes = `Recipient marked this email as spam (to ${toEmail}). Consider not emailing this lead again.`;
       } else if (event.type === "email.failed") {
         notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
       }

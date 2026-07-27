@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
+import { escapeHtml } from "./html";
+import { LEADGEN_BOOKING_BUTTON_LABEL } from "./leadgen-types";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -18,12 +20,46 @@ export function getLeadgenReplyToEmail(): string {
   return process.env.LEADGEN_EMAIL_REPLY_TO || "info@winsalotcorp.com";
 }
 
-function textToSimpleHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+// Exported so the consultation-invitation/follow-up send actions can
+// build a custom HTML body that swaps the plain-text booking marker for
+// a real, styled <a> button (see leadgenButtonHtml below) while still
+// rendering everything else exactly like every other leadgen email.
+export function textToSimpleHtml(text: string): string {
+  const escaped = escapeHtml(text);
   return `<div style="font-family: sans-serif; font-size: 15px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${escaped}</div>`;
+}
+
+// A real, styled HTML button (not just a plain link) for the
+// consultation booking link - renders as a clickable button in every
+// major desktop and mobile email client, with the raw URL underneath as
+// a plain-text fallback for clients that strip inline styles.
+export function leadgenButtonHtml(url: string, label: string): string {
+  const safeUrl = escapeHtml(url);
+  const safeLabel = escapeHtml(label);
+  return `<div style="margin: 20px 0; font-family: sans-serif;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#059669;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:9999px;">${safeLabel}</a>
+  <div style="margin-top:10px;font-size:12px;color:#64748b;">Or copy and paste this link into your browser: <a href="${safeUrl}" style="color:#0284c7;">${safeUrl}</a></div>
+</div>`;
+}
+
+// Builds the HTML body for the consultation invitation/follow-up emails:
+// everything renders exactly like a normal leadgen email EXCEPT the
+// literal "[BOOK YOUR FREE 15-MINUTE CONSULTATION]\n\n<url>" marker
+// (produced by leadgenBookingInviteSection() in lib/leadgen-types.ts),
+// which is swapped for a real HTML button. If bookingUrl is missing or
+// the marker isn't found in `body` (e.g. an agent edited it out in the
+// Send Follow-Up Email editor), this degrades gracefully to the normal
+// plain-HTML rendering - never an error.
+export function buildLeadgenBookingEmailHtml(body: string, bookingUrl: string | null | undefined): string {
+  if (!bookingUrl) return textToSimpleHtml(body);
+
+  const marker = `[${LEADGEN_BOOKING_BUTTON_LABEL}]\n\n${bookingUrl}`;
+  const markerIndex = body.indexOf(marker);
+  if (markerIndex === -1) return textToSimpleHtml(body);
+
+  const before = body.slice(0, markerIndex);
+  const after = body.slice(markerIndex + marker.length);
+  return textToSimpleHtml(before) + leadgenButtonHtml(bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL) + textToSimpleHtml(after);
 }
 
 export type SendLeadgenEmailInput = {
@@ -36,7 +72,15 @@ export type SendLeadgenEmailInput = {
   toName?: string | null;
   subject: string;
   body: string;
-  sentBy: string;
+  // Custom HTML for the email body (e.g. a real button rendered in place
+  // of a plain-text marker - see leadgenButtonHtml). Falls back to
+  // textToSimpleHtml(body) when omitted, unchanged from before this
+  // field existed.
+  html?: string;
+  // null for a system-generated send with no human sender (e.g. the
+  // public consultation booking page's confirmation/admin-notification
+  // emails, which have no signed-in leadgen_users account behind them).
+  sentBy: string | null;
   // Whether the client login may see this in their Communications view.
   // Always true for a client-facing send; a prospect email (e.g. the
   // consultation email) defaults to false unless the caller explicitly
@@ -66,6 +110,22 @@ export async function sendLeadgenEmail(
   input: SendLeadgenEmailInput
 ): Promise<SendLeadgenEmailResult> {
   const senderEmail = getLeadgenSenderEmail();
+
+  // Brief: "Prevent agents from repeatedly emailing a permanently
+  // bounced address unless an admin corrects or approves the email
+  // address." Checked here (shared by every caller) rather than left to
+  // the RLS policy alone, so a blocked send fails with a clear message
+  // instead of a generic "row-level security" error - the RLS policy on
+  // leadgen_emails (agent insert) still independently enforces the same
+  // rule as a backstop.
+  const { data: bounced } = await supabase
+    .from("leadgen_bounced_emails")
+    .select("cleared_at")
+    .eq("email", input.toEmail.trim().toLowerCase())
+    .maybeSingle();
+  if (bounced && !bounced.cleared_at) {
+    return { emailId: "", error: "This email address has permanently bounced. An admin must correct or approve it before sending again." };
+  }
 
   const { data: inserted, error: insertError } = await supabase
     .from("leadgen_emails")
@@ -101,7 +161,7 @@ export async function sendLeadgenEmail(
       replyTo: getLeadgenReplyToEmail(),
       subject: input.subject,
       text: input.body,
-      html: textToSimpleHtml(input.body),
+      html: input.html ?? textToSimpleHtml(input.body),
     });
 
     if (sendError || !sendResult) {

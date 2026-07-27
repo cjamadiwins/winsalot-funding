@@ -37,6 +37,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/leadgen")) {
+    // Public, unauthenticated pages within /leadgen: the consultation
+    // booking page (linked from the invitation/follow-up emails) and its
+    // reschedule/cancel management page. Checked by pattern, not just
+    // exact-match publicPaths below, since both are nested under a
+    // per-client slug / per-appointment token that can't be listed as
+    // fixed strings. Same reasoning as the cleaning CRM's
+    // /customer-quote/[token] and /provider-quote/[token], which are
+    // public pages outside this matcher entirely - these two live under
+    // /leadgen instead (so they can share its layout/branding), so they
+    // need this explicit bypass rather than just being unmatched.
+    if (/^\/leadgen\/client\/[^/]+\/book-consultation(\/|$)/.test(pathname) || pathname.startsWith("/leadgen/appointment/")) {
+      return NextResponse.next();
+    }
+
     // The Lead Generation CRM - a separate application from the cleaning
     // CRM above, with its own login/session (still Supabase Auth, just a
     // different leadgen_users role table - see src/lib/leadgen-auth.ts).

@@ -158,6 +158,7 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
       appointment_date: String(formData.get("appointment_date") ?? "").trim() || undefined,
       appointment_time: String(formData.get("appointment_time") ?? "").trim() || undefined,
       meeting_link: textOrNull(formData, "meeting_link"),
+      assigned_specialist_id: textOrNull(formData, "assigned_specialist_id"),
       appointment_notes: textOrNull(formData, "appointment_notes"),
       client_feedback: textOrNull(formData, "client_feedback"),
       confirmation_sent: formData.get("confirmation_sent") === "true",

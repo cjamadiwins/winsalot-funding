@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getSiteUrl } from "@/lib/site-url";
 import {
   getEffectiveBookingLink,
   type LeadgenAppointmentRow,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/leadgen-types";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { assignLeadAction } from "../actions";
-import { resendLeadgenEmailAction } from "../../actions";
+import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
   completeFollowUpAction,
@@ -38,6 +39,7 @@ const actions: LeadDetailActions = {
   sendConsultationFollowUp: sendConsultationFollowUpAction,
   resendEmail: resendLeadgenEmailAction,
   assignAgent: assignLeadAction,
+  clearBouncedEmail: clearBouncedEmailAction,
 };
 
 export default async function LeadgenAdminLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -74,8 +76,11 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
   ]);
 
+  const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
+
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
   const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
+  const bookingPageUrl = `${getSiteUrl()}/leadgen/client/${(client as LeadgenClientRow)?.slug}/book-consultation`;
 
   return (
     <LeadDetailClient
@@ -94,6 +99,8 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
       bookingLink={bookingLink}
+      bookingPageUrl={bookingPageUrl}
+      bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}
       isAdmin
       actions={actions}
       listPath="/leadgen/admin/leads"

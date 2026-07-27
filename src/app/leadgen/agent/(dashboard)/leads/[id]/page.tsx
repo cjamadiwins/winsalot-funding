@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSiteUrl } from "@/lib/site-url";
 import {
   getEffectiveBookingLink,
   type LeadgenAppointmentRow,
@@ -71,7 +72,15 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
   ]);
 
+  // Agents have read-only access to leadgen_bounced_emails (RLS:
+  // leadgen_bounced_emails_agent_select) - enough to show the warning
+  // badge, but only an admin can clear one (LeadDetailActions.
+  // clearBouncedEmail is intentionally left unset in this file's
+  // `actions`, same pattern as resendEmail/assignAgent above).
+  const { data: bouncedRows } = await supabase.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
+
   const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
+  const bookingPageUrl = `${getSiteUrl()}/leadgen/client/${(client as LeadgenClientRow)?.slug}/book-consultation`;
 
   return (
     <LeadDetailClient
@@ -90,6 +99,8 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
       bookingLink={bookingLink}
+      bookingPageUrl={bookingPageUrl}
+      bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}
       isAdmin={false}
       actions={actions}
       listPath="/leadgen/agent/leads"

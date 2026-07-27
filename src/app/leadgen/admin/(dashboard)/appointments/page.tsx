@@ -3,9 +3,10 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenUserRow } from "@/lib/leadgen-types";
 import AppointmentsListClient from "./AppointmentsListClient";
 
-export default async function LeadgenAppointmentsPage() {
+export default async function LeadgenAppointmentsPage({ searchParams }: { searchParams: Promise<{ highlight?: string }> }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
+  const { highlight } = await searchParams;
 
   const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }] = await Promise.all([
     admin.from("leadgen_appointments").select("*").order("appointment_date", { ascending: false }),
@@ -26,6 +27,7 @@ export default async function LeadgenAppointmentsPage() {
         campaigns={(campaigns ?? []) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         leads={(leads ?? []) as Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">[]}
+        highlightId={highlight}
       />
     </div>
   );

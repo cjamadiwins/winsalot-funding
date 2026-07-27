@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import {
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
@@ -23,18 +23,29 @@ export default function AppointmentsListClient({
   campaigns,
   agents,
   leads,
+  highlightId,
 }: {
   appointments: LeadgenAppointmentRow[];
   clients: LeadgenClientRow[];
   campaigns: LeadgenCampaignRow[];
   agents: LeadgenUserRow[];
   leads: LeadOption[];
+  highlightId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const highlightRef = useRef<HTMLTableRowElement>(null);
+
+  // "A direct link to open the appointment in the CRM" (brief, admin
+  // booking-notification email) - the admin notification links here with
+  // ?highlight=<id>, which auto-expands that row's Manage panel and
+  // scrolls it into view on load.
+  useEffect(() => {
+    if (highlightId) highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId]);
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const leadById = new Map(leads.map((l) => [l.id, l]));
@@ -202,7 +213,10 @@ export default function AppointmentsListClient({
             <tbody>
               {appointments.map((appt) => (
                 <Fragment key={appt.id}>
-                  <tr className="border-b border-slate-100">
+                  <tr
+                    ref={appt.id === highlightId ? highlightRef : undefined}
+                    className={`border-b border-slate-100 ${appt.id === highlightId ? "bg-amber-50" : ""}`}
+                  >
                     <td className="p-3 font-semibold text-slate-900">{appt.business_name}</td>
                     <td className="p-3 text-slate-600">{clientById.get(appt.client_id)?.name ?? "—"}</td>
                     <td className="p-3 text-slate-600">
@@ -244,6 +258,17 @@ export default function AppointmentsListClient({
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
                             <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
+                            <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
+                              <option value="">Unassigned</option>
+                              {agents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.full_name}
+                                </option>
+                              ))}
+                            </select>
                           </label>
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>

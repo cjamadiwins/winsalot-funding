@@ -5,7 +5,10 @@ import Link from "next/link";
 import {
   LEADGEN_ACTIVITY_TYPE_LABELS,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_BOOKING_BUTTON_LABEL,
+  LEADGEN_EMAIL_STATUS_LABELS,
   LEADGEN_EMAIL_STATUS_STYLES,
+  leadgenEmailStatusAt,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
   LEADGEN_MEETING_TYPES,
@@ -26,6 +29,7 @@ import {
 import ConsultationEmailModal, { type SendConsultationEmailResult } from "./ConsultationEmailModal";
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import FollowUpPrompt from "./FollowUpPrompt";
+import RefreshOnFocus from "./RefreshOnFocus";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -40,6 +44,7 @@ export type LeadDetailActions = {
   sendConsultationFollowUp: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
+  clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
 };
 
 // Shared Lead Generation CRM lead profile - identical between
@@ -63,6 +68,8 @@ export default function LeadDetailClient({
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
   bookingLink,
+  bookingPageUrl,
+  bouncedEmails,
   isAdmin,
   actions,
   listPath,
@@ -82,6 +89,17 @@ export default function LeadDetailClient({
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
   consultationFollowUpTemplate: LeadgenEmailTemplateRow | null;
   bookingLink: string | null;
+  // The CRM's own public consultation-booking page for this lead's
+  // client (e.g. https://leads.winsalotcorp.com/client/BrentsEssentials/
+  // book-consultation) - used only by the invitation/follow-up
+  // templates' {{booking_section}}. Distinct from `bookingLink` above,
+  // which the original "Send Consultation Email" template still uses.
+  bookingPageUrl: string;
+  // Lowercased addresses with an uncleared permanent bounce - used to
+  // show a warning badge next to any matching email address on this
+  // page (brief: "Show a visible warning beside the client's email
+  // address when an email permanently bounces").
+  bouncedEmails: string[];
   isAdmin: boolean;
   actions: LeadDetailActions;
   listPath: string;
@@ -110,6 +128,9 @@ export default function LeadDetailClient({
     });
   }
 
+  const bouncedSet = new Set(bouncedEmails);
+  const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
+
   const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
   const defaultSubject = consultationTemplate?.subject ?? "Your FREE 15-Minute AI Business Growth Consultation";
   const defaultBody = consultationTemplate
@@ -119,28 +140,23 @@ export default function LeadDetailClient({
       })
     : "";
 
-  const invitationVars = {
-    first_name: firstName,
-    client_business_name: client.name,
-    agent_name: currentUserName,
-    client_phone: client.contact_phone ?? "",
-    client_email: client.contact_email ?? "",
-    booking_section: leadgenBookingInviteSection(bookingLink, "BOOK YOUR FREE 15-MINUTE CONSULTATION"),
-  };
+  // Both templates now link to the CRM's own booking page - always
+  // present (derived from the client's slug, never null), so
+  // leadgenBookingInviteSection never falls back to the "please reply"
+  // sentence in practice; the brief's "never leave the link blank" rule
+  // is satisfied structurally rather than by a runtime fallback branch.
+  const bookingSection = leadgenBookingInviteSection(bookingPageUrl, LEADGEN_BOOKING_BUTTON_LABEL);
+  const invitationVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection };
   const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
 
-  const followUpVars = {
-    first_name: firstName,
-    client_business_name: client.name,
-    agent_name: currentUserName,
-    booking_section: leadgenBookingInviteSection(bookingLink),
-  };
+  const followUpVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
   const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
 
   return (
     <div>
+      <RefreshOnFocus />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-bold text-slate-900">{lead.business_name}</h1>
@@ -215,6 +231,7 @@ export default function LeadDetailClient({
           agentName={currentUserName}
           subject={invitationSubject}
           body={invitationBody}
+          bookingUrl={bookingPageUrl}
           onClose={() => setShowInvitationModal(false)}
           onSend={(formData) => actions.sendConsultationInvitation(lead.id, formData)}
           onSent={() => {
@@ -233,6 +250,7 @@ export default function LeadDetailClient({
           title="Send Follow-Up Email"
           defaultSubject={followUpSubject}
           defaultBody={followUpBody}
+          bookingUrl={bookingPageUrl}
           onClose={() => setShowInvitationFollowUpModal(false)}
           onSend={(formData) => actions.sendConsultationFollowUp(lead.id, formData)}
           onSent={() => {
@@ -322,7 +340,29 @@ export default function LeadDetailClient({
               <Row label="Contact" value={lead.contact_name} />
               <Row label="Owner / Decision-Maker" value={lead.decision_maker_name} />
               <Row label="Phone" value={lead.phone} />
-              <Row label="Email" value={lead.email} />
+              {lead.email && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Email</dt>
+                  <dd className="text-right font-medium text-slate-900">
+                    {lead.email}
+                    {isBounced(lead.email) && (
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">⚠ Bounced</span>
+                        {isAdmin && actions.clearBouncedEmail && (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => runAction(() => actions.clearBouncedEmail!(lead.email!))}
+                            className="text-[11px] font-semibold text-sky-600 hover:text-sky-700"
+                          >
+                            Clear &amp; Approve
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </dd>
+                </div>
+              )}
               <Row label="Website" value={lead.website} />
               <Row label="Lead Source" value={lead.lead_source} />
               <Row label="Date Added" value={new Date(lead.created_at).toLocaleString()} />
@@ -468,35 +508,46 @@ export default function LeadDetailClient({
                     <th className="py-2 pr-3">Subject</th>
                     <th className="py-2 pr-3">Template</th>
                     <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Last Updated</th>
                     {isAdmin && actions.resendEmail && <th className="py-2 pr-3">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {emails.map((email) => (
-                    <tr key={email.id} className="border-b border-slate-100">
-                      <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
-                      <td className="py-2 pr-3">{email.to_email}</td>
-                      <td className="py-2 pr-3 max-w-[200px] truncate">{email.subject}</td>
-                      <td className="py-2 pr-3 text-slate-500">{email.template_key ?? "—"}</td>
-                      <td className="py-2 pr-3">
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>{email.status}</span>
-                      </td>
-                      {isAdmin && actions.resendEmail && (
+                  {emails.map((email) => {
+                    const reason = email.status === "bounced" ? email.bounce_reason : email.status === "failed" ? email.failure_reason : null;
+                    return (
+                      <tr key={email.id} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
                         <td className="py-2 pr-3">
-                          {(email.status === "failed" || email.status === "bounced") && (
-                            <button
-                              type="button"
-                              disabled={isPending}
-                              onClick={() => runAction(() => actions.resendEmail!(email.id))}
-                              className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
-                            >
-                              Resend
-                            </button>
-                          )}
+                          {email.to_email}
+                          {isBounced(email.to_email) && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠</span>}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="py-2 pr-3 max-w-[200px] truncate">{email.subject}</td>
+                        <td className="py-2 pr-3 text-slate-500">{email.template_key ?? "—"}</td>
+                        <td className="py-2 pr-3">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
+                            {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
+                          </span>
+                          {reason && <div className="mt-1 max-w-[220px] text-[11px] text-slate-500">{reason}</div>}
+                        </td>
+                        <td className="py-2 pr-3 text-slate-500">{new Date(leadgenEmailStatusAt(email)).toLocaleString()}</td>
+                        {isAdmin && actions.resendEmail && (
+                          <td className="py-2 pr-3">
+                            {(email.status === "failed" || email.status === "bounced") && (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => runAction(() => actions.resendEmail!(email.id))}
+                                className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+                              >
+                                Resend
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

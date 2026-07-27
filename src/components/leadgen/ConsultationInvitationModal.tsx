@@ -19,6 +19,7 @@ export default function ConsultationInvitationModal({
   agentName,
   subject,
   body,
+  bookingUrl,
   onClose,
   onSend,
   onSent,
@@ -27,6 +28,12 @@ export default function ConsultationInvitationModal({
   agentName: string;
   subject: string;
   body: string;
+  // The exact booking-page URL rendered into `body`'s {{booking_section}}
+  // - passed through so the server action can swap the plain-text
+  // "[BUTTON LABEL]\n\nurl" marker for a real HTML button when actually
+  // sending (see leadgenButtonHtml in lib/leadgen-email.ts). The preview
+  // here stays plain text either way.
+  bookingUrl: string;
   onClose: () => void;
   onSend: (formData: FormData) => Promise<SendConsultationInvitationResult>;
   onSent: () => void;
@@ -46,6 +53,7 @@ export default function ConsultationInvitationModal({
     formData.set("to_email", toEmail);
     formData.set("subject", subject);
     formData.set("body", body);
+    formData.set("booking_url", bookingUrl);
 
     const result = await onSend(formData);
     setSubmitting(false);

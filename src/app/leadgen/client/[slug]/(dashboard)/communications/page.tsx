@@ -1,6 +1,6 @@
 import { requireLeadgenClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailRow } from "@/lib/leadgen-types";
+import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailRow } from "@/lib/leadgen-types";
 
 export default async function LeadgenClientCommunicationsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -34,7 +34,9 @@ export default async function LeadgenClientCommunicationsPage({ params }: { para
             <div key={email.id} className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-slate-900">{email.subject}</h3>
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>{email.status}</span>
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
+                  {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
+                </span>
               </div>
               <p className="mt-1 text-[12px] text-slate-500">{new Date(email.created_at).toLocaleString()}</p>
               <p className="mt-3 whitespace-pre-wrap text-[13.5px] text-slate-700">{email.body}</p>
