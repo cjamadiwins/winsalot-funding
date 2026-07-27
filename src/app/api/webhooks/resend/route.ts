@@ -135,8 +135,76 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!tracked) {
-    console.log(`[resend-webhook] no crm_lead_emails row matches Resend email id ${emailId} — ignoring.`);
-    return NextResponse.json({ received: true, tracked: false });
+    // Not a cleaning-CRM-tracked email - check the Lead Generation CRM's
+    // completely separate email log (leadgen_emails) before giving up.
+    // This is the only place the two CRMs' email tracking ever touch the
+    // same code path, and only ever as an independent fallback lookup -
+    // neither table is ever written to based on a match in the other.
+    const { data: leadgenEmail } = await admin
+      .from("leadgen_emails")
+      .select("id, lead_id, status")
+      .eq("resend_message_id", emailId)
+      .maybeSingle();
+
+    if (!leadgenEmail) {
+      console.log(`[resend-webhook] no crm_lead_emails or leadgen_emails row matches Resend email id ${emailId} — ignoring.`);
+      return NextResponse.json({ received: true, tracked: false });
+    }
+
+    console.log(`[resend-webhook] matched email ${emailId} to leadgen_emails ${leadgenEmail.id}`);
+
+    // leadgen_emails only has columns for the delivery-outcome events
+    // that matter to that CRM (sent/delivered/bounced/failed) - a paid
+    // client-visible-comms/prospect-consultation-email log doesn't need
+    // the cleaning CRM's fuller open/click/delay/complaint tracking, so
+    // any other event type is acknowledged and ignored here.
+    const leadgenUpdates: Record<string, unknown> = {};
+    switch (event.type) {
+      case "email.sent":
+        leadgenUpdates.status = "sent";
+        leadgenUpdates.sent_at = eventAt;
+        break;
+      case "email.delivered":
+        leadgenUpdates.status = "delivered";
+        leadgenUpdates.delivered_at = eventAt;
+        break;
+      case "email.bounced":
+        leadgenUpdates.status = "bounced";
+        leadgenUpdates.bounced_at = eventAt;
+        leadgenUpdates.bounce_reason = event.data.bounce.message;
+        break;
+      case "email.failed":
+        leadgenUpdates.status = "failed";
+        leadgenUpdates.failed_at = eventAt;
+        leadgenUpdates.failure_reason = event.data.failed.reason;
+        break;
+      default:
+        return NextResponse.json({ received: true, tracked: true, ignored: true });
+    }
+
+    const { error: leadgenUpdateError } = await admin.from("leadgen_emails").update(leadgenUpdates).eq("id", leadgenEmail.id);
+    if (leadgenUpdateError) {
+      console.error(`[resend-webhook] failed to update leadgen_emails ${leadgenEmail.id}:`, leadgenUpdateError);
+    }
+
+    if (leadgenEmail.lead_id) {
+      const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+      let notes = `Email ${leadgenUpdates.status} (to ${toEmail}) — "${event.data.subject}".`;
+      if (event.type === "email.bounced") {
+        notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. Verify or correct this lead's email address.`;
+      } else if (event.type === "email.failed") {
+        notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
+      }
+      await admin.from("leadgen_lead_activities").insert({
+        lead_id: leadgenEmail.lead_id,
+        agent_id: null,
+        activity_type: "email",
+        notes,
+        occurred_at: eventAt,
+      });
+    }
+
+    return NextResponse.json({ received: true, tracked: true });
   }
 
   console.log(
