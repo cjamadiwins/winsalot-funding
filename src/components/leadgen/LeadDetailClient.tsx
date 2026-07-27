@@ -24,6 +24,7 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import ConsultationEmailModal, { type SendConsultationEmailResult } from "./ConsultationEmailModal";
+import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import FollowUpPrompt from "./FollowUpPrompt";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -122,12 +123,21 @@ export default function LeadDetailClient({
     first_name: firstName,
     client_business_name: client.name,
     agent_name: currentUserName,
-    booking_section: leadgenBookingInviteSection(bookingLink),
+    client_phone: client.contact_phone ?? "",
+    client_email: client.contact_email ?? "",
+    booking_section: leadgenBookingInviteSection(bookingLink, "BOOK YOUR FREE 15-MINUTE CONSULTATION"),
   };
   const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
+
+  const followUpVars = {
+    first_name: firstName,
+    client_business_name: client.name,
+    agent_name: currentUserName,
+    booking_section: leadgenBookingInviteSection(bookingLink),
+  };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
-  const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, invitationVars) : "";
+  const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
 
   return (
     <div>
@@ -200,13 +210,11 @@ export default function LeadDetailClient({
       )}
 
       {showInvitationModal && (
-        <ConsultationEmailModal
+        <ConsultationInvitationModal
           lead={lead}
           agentName={currentUserName}
-          campaignName={campaign?.name ?? null}
-          title="Send 15-Minute Consultation Invitation"
-          defaultSubject={invitationSubject}
-          defaultBody={invitationBody}
+          subject={invitationSubject}
+          body={invitationBody}
           onClose={() => setShowInvitationModal(false)}
           onSend={(formData) => actions.sendConsultationInvitation(lead.id, formData)}
           onSent={() => {

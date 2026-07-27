@@ -385,12 +385,13 @@ export function leadgenBookingParagraph(bookingLink: string | null): string {
 
 // Same never-show-a-broken-link rule as leadgenBookingParagraph() above,
 // for the "15-Minute Consultation Invitation" / follow-up templates'
-// {{booking_section}} placeholder, which keeps the "[BOOK YOUR
-// 15-MINUTE CONSULTATION]" call-to-action line separate from the raw
-// link underneath it.
-export function leadgenBookingInviteSection(bookingLink: string | null): string {
+// {{booking_section}} placeholder, which keeps the call-to-action button
+// line separate from the raw link underneath it. buttonLabel defaults to
+// the follow-up template's wording; the invitation template passes its
+// own ("BOOK YOUR FREE 15-MINUTE CONSULTATION") explicitly.
+export function leadgenBookingInviteSection(bookingLink: string | null, buttonLabel = "BOOK YOUR 15-MINUTE CONSULTATION"): string {
   if (!bookingLink) return "Please reply to this email with a suitable day and time.";
-  return `[BOOK YOUR 15-MINUTE CONSULTATION]\n\n${bookingLink}`;
+  return `[${buttonLabel}]\n\n${bookingLink}`;
 }
 
 // Basic but real email validation - deliberately not a full RFC5322
