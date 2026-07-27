@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
-import { isValidEmail, LEADGEN_LEAD_STATUSES, LEADGEN_PROVINCES, type LeadgenLeadStatus } from "@/lib/leadgen-types";
+import {
+  isValidEmail,
+  LEADGEN_BOOKING_BUTTON_LABEL,
+  LEADGEN_LEAD_STATUSES,
+  LEADGEN_PROVINCES,
+  leadgenServicesButtonLabel,
+  type LeadgenLeadStatus,
+} from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
 
@@ -233,13 +240,20 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
-  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  const { data: lead } = await supabase
+    .from("leadgen_leads")
+    .select("client_id, campaign_id, leadgen_clients(name)")
+    .eq("id", leadId)
+    .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
 
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  const servicesUrl = String(formData.get("services_url") ?? "").trim() || null;
+  const clientNameEmbed = lead.leadgen_clients as unknown as { name: string } | { name: string }[] | null;
+  const clientName = (Array.isArray(clientNameEmbed) ? clientNameEmbed[0]?.name : clientNameEmbed?.name) ?? "us";
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -254,7 +268,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     toEmail,
     subject,
     body,
-    html: buildLeadgenBookingEmailHtml(body, bookingUrl),
+    html: buildLeadgenBookingEmailHtml(body, [
+      { url: bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
+      { url: servicesUrl, label: leadgenServicesButtonLabel(clientName) },
+    ]),
     sentBy: agent.id,
     clientVisible: false,
   });
@@ -284,13 +301,20 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
-  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  const { data: lead } = await supabase
+    .from("leadgen_leads")
+    .select("client_id, campaign_id, leadgen_clients(name)")
+    .eq("id", leadId)
+    .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
 
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  const servicesUrl = String(formData.get("services_url") ?? "").trim() || null;
+  const clientNameEmbed = lead.leadgen_clients as unknown as { name: string } | { name: string }[] | null;
+  const clientName = (Array.isArray(clientNameEmbed) ? clientNameEmbed[0]?.name : clientNameEmbed?.name) ?? "us";
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -305,7 +329,10 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     toEmail,
     subject,
     body,
-    html: buildLeadgenBookingEmailHtml(body, bookingUrl),
+    html: buildLeadgenBookingEmailHtml(body, [
+      { url: bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
+      { url: servicesUrl, label: leadgenServicesButtonLabel(clientName) },
+    ]),
     sentBy: agent.id,
     clientVisible: false,
   });

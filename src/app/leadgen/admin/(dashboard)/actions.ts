@@ -44,6 +44,8 @@ export async function createClientAction(formData: FormData): Promise<ActionResu
       contact_email: textOrNull(formData, "contact_email"),
       contact_phone: textOrNull(formData, "contact_phone"),
       booking_link: textOrNull(formData, "booking_link"),
+      services_info_link: textOrNull(formData, "services_info_link"),
+      calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
       created_by: admin.id,
     })
@@ -78,6 +80,8 @@ export async function updateClientAction(clientId: string, formData: FormData): 
       contact_email: textOrNull(formData, "contact_email"),
       contact_phone: textOrNull(formData, "contact_phone"),
       booking_link: textOrNull(formData, "booking_link"),
+      services_info_link: textOrNull(formData, "services_info_link"),
+      calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
       active: formData.get("active") !== "false",
       updated_at: new Date().toISOString(),

@@ -29,6 +29,8 @@ export type LeadgenClientRow = {
   contact_email: string | null;
   contact_phone: string | null;
   booking_link: string | null;
+  services_info_link: string | null;
+  calendly_event_type_uri: string | null;
   notes: string | null;
   active: boolean;
   created_by: string | null;
@@ -233,6 +235,7 @@ export type LeadgenAppointmentRow = {
   client_feedback: string | null;
   created_by: string | null;
   admin_notified_at: string | null;
+  calendly_invitee_uri: string | null;
 };
 
 // Shared literal button text for the consultation booking button, used
@@ -443,6 +446,20 @@ export function leadgenBookingParagraph(bookingLink: string | null): string {
 export function leadgenBookingInviteSection(bookingLink: string | null, buttonLabel = "BOOK YOUR 15-MINUTE CONSULTATION"): string {
   if (!bookingLink) return "Please reply to this email with a suitable day and time.";
   return `[${buttonLabel}]\n\n${bookingLink}`;
+}
+
+// The second "learn more about our services" button. Unlike the booking
+// button, there's no safe fallback text for a missing link - it simply
+// isn't shown at all (the {{services_section}} placeholder renders as
+// an empty string), since "no services link configured" isn't something
+// a prospect needs prompted about the way "no booking link" is.
+export function leadgenServicesButtonLabel(clientName: string): string {
+  return `LEARN MORE ABOUT ${clientName.toUpperCase()} SERVICES`;
+}
+
+export function leadgenServicesInviteSection(servicesLink: string | null, clientName: string): string {
+  if (!servicesLink) return "";
+  return `Want to learn more first?\n\n[${leadgenServicesButtonLabel(clientName)}]\n\n${servicesLink}`;
 }
 
 // Basic but real email validation - deliberately not a full RFC5322

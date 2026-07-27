@@ -1,38 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { randomBytes, createHash } from "crypto";
 import { sendLeadgenEmail } from "./leadgen-email";
 import { sendSmsToNumber } from "./twilio";
 import { getSiteUrl } from "./site-url";
 import type { LeadgenAppointmentRow, LeadgenClientRow } from "./leadgen-types";
-
-// Reuses the exact hashing scheme already used for the cleaning CRM's
-// provider/customer quote links (src/lib/tokens.ts) - only the raw token
-// is ever sent to a prospect (in the confirmation email); only its hash
-// is stored, in the new leadgen_appointment_tokens table.
-export function generateLeadgenAppointmentToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
-export function hashLeadgenAppointmentToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-// Creates a reschedule/cancel link for a freshly booked appointment,
-// valid for 90 days - generous enough to cover rescheduling well after
-// the original date if needed.
-export async function createLeadgenAppointmentManageLink(supabase: SupabaseClient, appointmentId: string): Promise<string> {
-  const token = generateLeadgenAppointmentToken();
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
-
-  await supabase.from("leadgen_appointment_tokens").insert({
-    appointment_id: appointmentId,
-    token_hash: hashLeadgenAppointmentToken(token),
-    expires_at: expiresAt,
-  });
-
-  return `${getSiteUrl()}/leadgen/appointment/${token}`;
-}
 
 function appointmentSummaryLines(
   appt: Pick<LeadgenAppointmentRow, "id" | "contact_name" | "business_name" | "email" | "phone" | "appointment_date" | "appointment_time" | "timezone">,
@@ -57,7 +28,11 @@ function appointmentSummaryLines(
 // existing Twilio integration (src/lib/twilio.ts). Uses
 // Promise.allSettled so a failure in one channel never blocks the
 // other, same pattern as the cleaning CRM's notifyAdminOfCustomerResponse
-// (src/app/customer-quote/[token]/actions.ts).
+// (src/app/customer-quote/[token]/actions.ts). Shared by every source
+// that can create a leadgen_appointments row (staff-booked, and now the
+// Calendly webhook at src/app/api/webhooks/calendly/route.ts) - the
+// caller is responsible for its own duplicate-notification guard
+// (admin_notified_at on the appointment row).
 export async function notifyAdminOfNewLeadgenAppointment(
   supabase: SupabaseClient,
   appt: LeadgenAppointmentRow,
@@ -95,50 +70,5 @@ export async function notifyAdminOfNewLeadgenAppointment(
     if (result.status === "rejected") {
       console.error("[leadgen] Failed to send admin appointment notification:", result.reason);
     }
-  });
-}
-
-// Prospect-facing confirmation - includes the reschedule/cancel link.
-// Silently does nothing if the appointment has no email on file (the
-// booking form requires one, but this stays defensive for the
-// staff-booked path, where email is optional).
-export async function sendLeadgenBookingConfirmation(
-  supabase: SupabaseClient,
-  appt: LeadgenAppointmentRow,
-  client: Pick<LeadgenClientRow, "id" | "name">,
-  manageUrl: string
-): Promise<void> {
-  if (!appt.email) return;
-
-  const firstName = (appt.contact_name || appt.business_name).split(" ")[0];
-  const body = [
-    `Hi ${firstName},`,
-    "",
-    `Your free 15-minute consultation with ${client.name} is confirmed for:`,
-    "",
-    `${appt.appointment_date} at ${appt.appointment_time} (${appt.timezone})`,
-    "",
-    "Need to make a change? You can reschedule or cancel here:",
-    manageUrl,
-    "",
-    "We look forward to speaking with you.",
-    "",
-    "Best regards,",
-    "",
-    "Winsalot Corp",
-    `on behalf of ${client.name}`,
-  ].join("\n");
-
-  await sendLeadgenEmail(supabase, {
-    clientId: client.id,
-    leadId: appt.lead_id,
-    appointmentId: appt.id,
-    templateKey: null,
-    toEmail: appt.email,
-    toName: appt.contact_name,
-    subject: `Your Consultation is Confirmed - ${client.name}`,
-    body,
-    sentBy: null,
-    clientVisible: false,
   });
 }

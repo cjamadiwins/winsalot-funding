@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getSiteUrl } from "@/lib/site-url";
 import {
   getEffectiveBookingLink,
   type LeadgenAppointmentRow,
@@ -80,7 +79,6 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
 
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
   const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
-  const bookingPageUrl = `${getSiteUrl()}/leadgen/client/${(client as LeadgenClientRow)?.slug}/book-consultation`;
 
   return (
     <LeadDetailClient
@@ -99,7 +97,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
       bookingLink={bookingLink}
-      bookingPageUrl={bookingPageUrl}
+      servicesInfoLink={(client as LeadgenClientRow)?.services_info_link ?? null}
       bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}
       isAdmin
       actions={actions}

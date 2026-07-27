@@ -107,10 +107,38 @@ export default function ClientDetailClient({
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Consultation Booking Link</span>
-                <input name="booking_link" type="url" placeholder="https://…" defaultValue={client.booking_link ?? ""} className={inputClass} />
+                <input name="booking_link" type="url" placeholder="https://calendly.com/…" defaultValue={client.booking_link ?? ""} className={inputClass} />
                 <span className="text-[12px] text-slate-500">
-                  Used by every consultation email sent to this client&rsquo;s leads. Leave blank to have those emails ask the prospect to reply
-                  instead of showing a link.
+                  The &ldquo;BOOK YOUR FREE 15-MINUTE CONSULTATION&rdquo; button in every consultation email opens this link directly (e.g. a
+                  Calendly page) in a new tab. Leave blank to have those emails ask the prospect to reply instead of showing a broken link.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Services Information Link</span>
+                <input
+                  name="services_info_link"
+                  type="url"
+                  placeholder="https://…"
+                  defaultValue={client.services_info_link ?? ""}
+                  className={inputClass}
+                />
+                <span className="text-[12px] text-slate-500">
+                  Optional second button (&ldquo;LEARN MORE ABOUT {client.name.toUpperCase()} SERVICES&rdquo;) in consultation emails. Left out
+                  of the email entirely when blank.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Calendly Event Type URI (optional)</span>
+                <input
+                  name="calendly_event_type_uri"
+                  type="url"
+                  placeholder="https://api.calendly.com/event_types/…"
+                  defaultValue={client.calendly_event_type_uri ?? ""}
+                  className={inputClass}
+                />
+                <span className="text-[12px] text-slate-500">
+                  Matches an incoming Calendly booking webhook to this client. Only needed once more than one client uses Calendly - find it in
+                  the payload of a test booking, under <code>payload.scheduled_event.event_type</code>.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
@@ -151,6 +179,8 @@ export default function ClientDetailClient({
               )}
               <Row label="Phone" value={client.contact_phone} />
               <Row label="Consultation Booking Link" value={client.booking_link} />
+              <Row label="Services Information Link" value={client.services_info_link} />
+              <Row label="Calendly Event Type URI" value={client.calendly_event_type_uri} />
               {client.notes && (
                 <div className="border-t border-slate-100 pt-2">
                   <dt className="text-slate-500">Notes</dt>

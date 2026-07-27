@@ -16,6 +16,7 @@ import {
   renderLeadgenTemplate,
   leadgenBookingParagraph,
   leadgenBookingInviteSection,
+  leadgenServicesInviteSection,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -68,7 +69,7 @@ export default function LeadDetailClient({
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
   bookingLink,
-  bookingPageUrl,
+  servicesInfoLink,
   bouncedEmails,
   isAdmin,
   actions,
@@ -88,13 +89,15 @@ export default function LeadDetailClient({
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
   consultationFollowUpTemplate: LeadgenEmailTemplateRow | null;
+  // The client's (or campaign's) configured booking link - shared by all
+  // three consultation email types now (the original "Send Consultation
+  // Email", the invitation, and the follow-up).
   bookingLink: string | null;
-  // The CRM's own public consultation-booking page for this lead's
-  // client (e.g. https://leads.winsalotcorp.com/client/BrentsEssentials/
-  // book-consultation) - used only by the invitation/follow-up
-  // templates' {{booking_section}}. Distinct from `bookingLink` above,
-  // which the original "Send Consultation Email" template still uses.
-  bookingPageUrl: string;
+  // The client's "learn more about our services" link - only the
+  // invitation/follow-up templates' {{services_section}} use this; omitted
+  // entirely from the rendered email when null (see
+  // leadgenServicesInviteSection in lib/leadgen-types.ts).
+  servicesInfoLink: string | null;
   // Lowercased addresses with an uncleared permanent bounce - used to
   // show a warning badge next to any matching email address on this
   // page (brief: "Show a visible warning beside the client's email
@@ -140,17 +143,13 @@ export default function LeadDetailClient({
       })
     : "";
 
-  // Both templates now link to the CRM's own booking page - always
-  // present (derived from the client's slug, never null), so
-  // leadgenBookingInviteSection never falls back to the "please reply"
-  // sentence in practice; the brief's "never leave the link blank" rule
-  // is satisfied structurally rather than by a runtime fallback branch.
-  const bookingSection = leadgenBookingInviteSection(bookingPageUrl, LEADGEN_BOOKING_BUTTON_LABEL);
-  const invitationVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection };
+  const bookingSection = leadgenBookingInviteSection(bookingLink, LEADGEN_BOOKING_BUTTON_LABEL);
+  const servicesSection = leadgenServicesInviteSection(servicesInfoLink, client.name);
+  const invitationVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection, services_section: servicesSection };
   const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
 
-  const followUpVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection };
+  const followUpVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection, services_section: servicesSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
   const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
 
@@ -231,7 +230,8 @@ export default function LeadDetailClient({
           agentName={currentUserName}
           subject={invitationSubject}
           body={invitationBody}
-          bookingUrl={bookingPageUrl}
+          bookingUrl={bookingLink}
+          servicesUrl={servicesInfoLink}
           onClose={() => setShowInvitationModal(false)}
           onSend={(formData) => actions.sendConsultationInvitation(lead.id, formData)}
           onSent={() => {
@@ -250,7 +250,8 @@ export default function LeadDetailClient({
           title="Send Follow-Up Email"
           defaultSubject={followUpSubject}
           defaultBody={followUpBody}
-          bookingUrl={bookingPageUrl}
+          bookingUrl={bookingLink}
+          servicesUrl={servicesInfoLink}
           onClose={() => setShowInvitationFollowUpModal(false)}
           onSend={(formData) => actions.sendConsultationFollowUp(lead.id, formData)}
           onSent={() => {

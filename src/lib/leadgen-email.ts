@@ -2,7 +2,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { escapeHtml } from "./html";
-import { LEADGEN_BOOKING_BUTTON_LABEL } from "./leadgen-types";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -43,23 +42,33 @@ export function leadgenButtonHtml(url: string, label: string): string {
 }
 
 // Builds the HTML body for the consultation invitation/follow-up emails:
-// everything renders exactly like a normal leadgen email EXCEPT the
-// literal "[BOOK YOUR FREE 15-MINUTE CONSULTATION]\n\n<url>" marker
-// (produced by leadgenBookingInviteSection() in lib/leadgen-types.ts),
-// which is swapped for a real HTML button. If bookingUrl is missing or
-// the marker isn't found in `body` (e.g. an agent edited it out in the
-// Send Follow-Up Email editor), this degrades gracefully to the normal
-// plain-HTML rendering - never an error.
-export function buildLeadgenBookingEmailHtml(body: string, bookingUrl: string | null | undefined): string {
-  if (!bookingUrl) return textToSimpleHtml(body);
+// everything renders exactly like a normal leadgen email EXCEPT each
+// literal "[BUTTON LABEL]\n\n<url>" marker (produced by
+// leadgenBookingInviteSection()/leadgenServicesInviteSection() in
+// lib/leadgen-types.ts), which is swapped for a real HTML button. Any
+// marker that's missing (no URL configured) or was edited out of `body`
+// (e.g. in the Send Follow-Up Email editor) is simply skipped - this
+// never errors, it degrades to plain-HTML rendering around whatever
+// markers *are* still present.
+export function buildLeadgenBookingEmailHtml(body: string, buttons: { url: string | null | undefined; label: string }[]): string {
+  const found = buttons
+    .filter((b): b is { url: string; label: string } => !!b.url)
+    .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
+    .map((b) => ({ ...b, index: body.indexOf(b.marker) }))
+    .filter((b) => b.index !== -1)
+    .sort((a, b) => a.index - b.index);
 
-  const marker = `[${LEADGEN_BOOKING_BUTTON_LABEL}]\n\n${bookingUrl}`;
-  const markerIndex = body.indexOf(marker);
-  if (markerIndex === -1) return textToSimpleHtml(body);
+  if (found.length === 0) return textToSimpleHtml(body);
 
-  const before = body.slice(0, markerIndex);
-  const after = body.slice(markerIndex + marker.length);
-  return textToSimpleHtml(before) + leadgenButtonHtml(bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL) + textToSimpleHtml(after);
+  let html = "";
+  let cursor = 0;
+  for (const button of found) {
+    html += textToSimpleHtml(body.slice(cursor, button.index));
+    html += leadgenButtonHtml(button.url, button.label);
+    cursor = button.index + button.marker.length;
+  }
+  html += textToSimpleHtml(body.slice(cursor));
+  return html;
 }
 
 export type SendLeadgenEmailInput = {
