@@ -76,3 +76,23 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
 }
+
+/* Provider Invoices & Payments "Print / Download" action - isolates the
+   #printable-invoice element (rendered inside the invoice detail modal)
+   from the rest of the page, so a browser's print-to-PDF only captures
+   the invoice itself. See ProviderInvoicesSection.tsx. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-invoice,
+  #printable-invoice * {
+    visibility: visible;
+  }
+  #printable-invoice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -501,6 +501,14 @@ export async function deleteOperationalProviderAction(providerId: string): Promi
     return { error: "This provider has quote history and can't be deleted. Set it to Inactive instead." };
   }
 
+  const { count: invoiceCount } = await admin
+    .from("provider_invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("cleaning_provider_id", providerId);
+  if (invoiceCount && invoiceCount > 0) {
+    return { error: "This provider has invoice/payment history and can't be deleted. Set it to Inactive instead." };
+  }
+
   const { error } = await admin.from("cleaning_providers").delete().eq("id", providerId);
   if (error) return { error: "Failed to delete the provider." };
 
