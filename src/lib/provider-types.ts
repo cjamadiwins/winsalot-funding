@@ -23,21 +23,45 @@ export const CANADIAN_PROVINCES_AND_TERRITORIES = [
 
 export type CanadianProvinceOrTerritory = (typeof CANADIAN_PROVINCES_AND_TERRITORIES)[number];
 
+// Provider Profile's canonical Service Information list (brief section
+// "SERVICE INFORMATION"), followed by every legacy value that predates
+// this list so existing provider_leads.services_offered rows keep
+// rendering as badges and keep round-tripping through the edit checkboxes
+// without silently losing a selection - services_offered is an
+// unconstrained text[] (see migration 0026), so widening this list is
+// purely additive at the database level.
 export const PROVIDER_SERVICES_OFFERED = [
   "Commercial Cleaning",
   "Residential Cleaning",
-  "Commercial and Residential Cleaning",
   "Office Cleaning",
+  "Medical Clinics",
+  "Dental Offices",
+  "Daycares",
+  "Schools",
+  "Banks",
+  "Warehouses",
+  "Manufacturing Facilities",
+  "Retail Stores",
+  "Restaurants",
+  "Hotels",
+  "Gyms",
+  "Religious Facilities",
+  "Carpet Cleaning",
+  "Window Cleaning",
+  "Floor Care",
+  "Post Construction",
+  "Move In / Move Out",
+  "Other",
+  // Legacy-only values (pre-Provider Profile) - kept for backward
+  // compatibility, not shown as the primary/first options.
+  "Commercial and Residential Cleaning",
   "Medical and Dental Cleaning",
   "Daycare Cleaning",
   "Gym and Fitness Centre Cleaning",
   "Industrial Cleaning",
   "Warehouse Cleaning",
   "Post-Construction Cleaning",
-  "Carpet Cleaning",
-  "Window Cleaning",
   "Move-In and Move-Out Cleaning",
-  "Other",
 ] as const;
 
 export type ProviderServiceOffered = (typeof PROVIDER_SERVICES_OFFERED)[number];
@@ -55,6 +79,12 @@ export const PROVIDER_STATUSES = [
   "Not Interested",
   "Invalid Contact",
   "Closed",
+  // Provider Profile lifecycle statuses, added alongside the Provider
+  // Acquisition statuses above rather than replacing any of them.
+  "Active",
+  "Inactive",
+  "Suspended",
+  "Declined",
 ] as const;
 
 export type ProviderStatus = (typeof PROVIDER_STATUSES)[number];
@@ -72,7 +102,18 @@ export const PROVIDER_STATUS_STYLES: Record<ProviderStatus, string> = {
   "Not Interested": "bg-rose-100 text-rose-800",
   "Invalid Contact": "bg-rose-100 text-rose-800",
   Closed: "bg-slate-200 text-slate-600",
+  Active: "bg-emerald-100 text-emerald-800",
+  Inactive: "bg-slate-200 text-slate-600",
+  Suspended: "bg-orange-100 text-orange-800",
+  Declined: "bg-rose-100 text-rose-800",
 };
+
+// Statuses only an administrator may set (brief's "AGENT PROVIDER
+// MANAGEMENT" section: agents can mark Contacted/Intake Form
+// Sent/Completed/Follow-up Required/Active/Inactive and request review,
+// but cannot themselves approve, suspend, or permanently decline a
+// provider).
+export const ADMIN_ONLY_STATUSES: ProviderStatus[] = ["Approved Provider", "Suspended", "Declined"];
 
 export const PROVIDER_CALL_OUTCOMES = [
   "No Answer",
@@ -126,10 +167,267 @@ export type ProviderLeadRow = {
     | "failed"
     | null;
   last_email_status_at: string | null;
-  last_email_type: "provider_intake" | null;
+  last_email_type: "provider_intake" | "provider_message" | null;
   last_email_to: string | null;
   closed_at: string | null;
   closed_by: string | null;
+  intake_completed_at: string | null;
+  intake_submission: Record<string, unknown> | null;
+  // Provider Profile fields (migration 0028).
+  logo_path: string | null;
+  job_title: string | null;
+  street_address: string | null;
+  postal_code: string | null;
+  number_of_employees: string | null;
+  business_description: string | null;
+  cities_served: string[];
+  wsib_wcb_applicable: boolean;
+  // Permanent link to the operational Provider Profile (cleaning_providers),
+  // set automatically by the "Approve and Add to Providers" action - never
+  // a manual admin-picked link, and never cleared once set. The Provider
+  // Scorecard lives only on cleaning_providers (see CleaningProviderRow
+  // below), not here - an unapproved lead has no scorecard.
+  cleaning_provider_id: string | null;
+};
+
+// ---------------------------------------------------------------------
+// The operational Provider Profile - built on the pre-existing
+// cleaning_providers table (migration 0004, extended by 0028) that the
+// quote-assignment system already references. This is the *permanent*
+// provider identity: once a Provider Acquisition lead is approved, this
+// is the profile used everywhere (Providers directory, quote assignment,
+// quote history, agent-facing management) - see docs/provider-profile.md.
+// ---------------------------------------------------------------------
+export const CLEANING_PROVIDER_STATUSES = ["active", "inactive", "suspended"] as const;
+export type CleaningProviderStatus = (typeof CLEANING_PROVIDER_STATUSES)[number];
+
+export const CLEANING_PROVIDER_STATUS_STYLES: Record<CleaningProviderStatus, string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  inactive: "bg-slate-200 text-slate-600",
+  suspended: "bg-orange-100 text-orange-800",
+};
+
+export type CleaningProviderRow = {
+  id: string;
+  created_at: string;
+  company_name: string;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  service_locations: string | null;
+  pricing_notes: string | null;
+  internal_notes: string | null;
+  status: CleaningProviderStatus;
+  assigned_agent_id: string | null;
+  created_by: string | null;
+  logo_path: string | null;
+  job_title: string | null;
+  website: string | null;
+  street_address: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  cities_served: string[];
+  services_offered: string[];
+  years_in_business: string | null;
+  number_of_employees: string | null;
+  business_description: string | null;
+  wsib_wcb_applicable: boolean;
+  last_contacted_at: string | null;
+  next_follow_up_at: string | null;
+  last_email_status:
+    | "sent"
+    | "delivered"
+    | "delayed"
+    | "bounced"
+    | "complained"
+    | "opened"
+    | "clicked"
+    | "failed"
+    | null;
+  last_email_status_at: string | null;
+  last_email_type: "provider_message" | null;
+  last_email_to: string | null;
+  score: number | null;
+  score_label: string | null;
+  score_breakdown: ProviderScoreBreakdown | null;
+  score_missing_categories: string[];
+  score_is_new_provider: boolean;
+  score_calculated_at: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Provider Profile: Files
+// ---------------------------------------------------------------------
+export const PROVIDER_DOCUMENT_TYPES = [
+  "business_licence",
+  "insurance_certificate",
+  "wsib_wcb",
+  "certification",
+  "other",
+] as const;
+
+export type ProviderDocumentType = (typeof PROVIDER_DOCUMENT_TYPES)[number];
+
+export const PROVIDER_DOCUMENT_TYPE_LABELS: Record<ProviderDocumentType, string> = {
+  business_licence: "Business Licence",
+  insurance_certificate: "Insurance Certificate",
+  wsib_wcb: "WSIB / WCB",
+  certification: "Certification",
+  other: "Other Document",
+};
+
+// Dual-keyed: a document uploaded during the recruiting phase keeps its
+// provider_lead_id, and is also linked to cleaning_provider_id the moment
+// that lead is approved (backfilled by the approval action), so it
+// continues to show up on the operational profile without being
+// duplicated. A document uploaded directly against an operational
+// provider only has cleaning_provider_id set.
+export type ProviderDocumentRow = {
+  id: string;
+  created_at: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
+  uploaded_by: string | null;
+  doc_type: ProviderDocumentType;
+  file_name: string;
+  storage_path: string;
+  file_size: number | null;
+  mime_type: string | null;
+  expires_at: string | null;
+  removed_at: string | null;
+  removed_by: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Provider Profile: Internal Notes
+// ---------------------------------------------------------------------
+export type ProviderNoteRow = {
+  id: string;
+  created_at: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
+  user_id: string | null;
+  author_name: string;
+  note: string;
+};
+
+// ---------------------------------------------------------------------
+// Provider Profile: Provider Intake Form version history
+// ---------------------------------------------------------------------
+export type ProviderIntakeVersionRow = {
+  id: string;
+  created_at: string;
+  provider_lead_id: string;
+  submission: Record<string, unknown>;
+  completed_at: string;
+  completed_by_label: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Provider Profile: outbound SMS log ("Send SMS" quick action)
+// ---------------------------------------------------------------------
+export type ProviderSmsMessageRow = {
+  id: string;
+  created_at: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
+  agent_id: string | null;
+  to_phone: string;
+  body: string;
+  activity_id: string | null;
+};
+
+// ---------------------------------------------------------------------
+// Provider Scorecard
+// ---------------------------------------------------------------------
+export const PROVIDER_SCORE_CATEGORIES = [
+  "Profile Completeness",
+  "Documentation",
+  "Responsiveness",
+  "Quote Performance",
+  "Reliability and Activity",
+] as const;
+
+export type ProviderScoreCategory = (typeof PROVIDER_SCORE_CATEGORIES)[number];
+
+export type ProviderScoreCategoryBreakdown = {
+  category: ProviderScoreCategory;
+  applicable: boolean;
+  pointsEarned: number;
+  pointsAvailable: number;
+  details: string[];
+  recommendations: string[];
+};
+
+export type ProviderScoreBreakdown = {
+  categories: ProviderScoreCategoryBreakdown[];
+  rawEarned: number;
+  rawAvailable: number;
+};
+
+// Scorecards live only on the operational profile - a manual adjustment
+// always targets cleaning_provider_id, never a not-yet-approved lead.
+export type ProviderScoreAdjustmentRow = {
+  id: string;
+  created_at: string;
+  cleaning_provider_id: string;
+  admin_id: string | null;
+  amount: number;
+  reason: string;
+};
+
+export type ProviderScoreRatingLabel = "Excellent" | "Strong" | "Developing" | "Needs Attention" | "High Risk";
+
+export function providerScoreRatingLabel(score: number): ProviderScoreRatingLabel {
+  if (score >= 90) return "Excellent";
+  if (score >= 75) return "Strong";
+  if (score >= 60) return "Developing";
+  if (score >= 40) return "Needs Attention";
+  return "High Risk";
+}
+
+// Combines the automatically-calculated score with every logged manual
+// administrator adjustment for display purposes only - the stored
+// provider_leads.score/breakdown always stays the pure calculated value
+// (brief: "Show manual adjustments separately from the automatically
+// calculated score"). Kept in this client-safe module (rather than
+// lib/provider-score.ts, which is "server-only") since the Scorecard card
+// renders it directly in a Client Component.
+export function providerAdjustedScore(baseScore: number, adjustments: { amount: number }[]): number {
+  const total = adjustments.reduce((sum, a) => sum + a.amount, baseScore);
+  return Math.max(0, Math.min(100, total));
+}
+
+export const PROVIDER_SCORE_RATING_STYLES: Record<ProviderScoreRatingLabel, string> = {
+  Excellent: "bg-emerald-100 text-emerald-800",
+  Strong: "bg-sky-100 text-sky-800",
+  Developing: "bg-amber-100 text-amber-800",
+  "Needs Attention": "bg-orange-100 text-orange-800",
+  "High Risk": "bg-rose-100 text-rose-800",
+};
+
+// Activity-type labels for the Provider Profile timeline only - a
+// superset of crm-types.ts's ACTIVITY_TYPE_LABELS that also covers the
+// system-only types added by migration 0028 (status changes, agent
+// reassignment, quote invitations/decisions, score recalculations).
+// Deliberately kept separate from ACTIVITY_TYPE_LABELS so the crm_leads/
+// opportunities timeline (and their "Log Activity" dropdown) are
+// completely unaffected.
+export const PROVIDER_ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  call: "Phone call",
+  email: "Email",
+  text: "Text message",
+  voicemail: "Voicemail",
+  note: "Internal note",
+  outcome: "Follow-up outcome",
+  status_change: "Status change",
+  assignment_change: "Assigned agent change",
+  quote_invited: "Quote invitation sent",
+  quote_submitted: "Quote submitted",
+  quote_accepted: "Quote accepted",
+  quote_declined: "Quote declined",
+  score_change: "Scorecard recalculated",
 };
 
 export type NewProviderLeadInput = {
@@ -154,9 +452,10 @@ export type NewProviderLeadInput = {
 export type ProviderActivityRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   agent_id: string | null;
-  activity_type: "call" | "email" | "text" | "voicemail" | "note" | "outcome";
+  activity_type: string;
   call_outcome: ProviderCallOutcome | null;
   notes: string | null;
   occurred_at: string;
@@ -166,7 +465,8 @@ export type ProviderActivityRow = {
 export type ProviderFollowUpRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   scheduled_by: string | null;
   scheduled_at: string;
   note: string | null;
@@ -183,7 +483,7 @@ export type ProviderFollowUpWithLead = ProviderFollowUpRow & {
 };
 
 export type LatestProviderLeadEmail = {
-  email_type: "provider_intake";
+  email_type: "provider_intake" | "provider_message";
   to_email: string;
   subject: string;
   status: "sent" | "delivered" | "delayed" | "bounced" | "complained" | "opened" | "clicked" | "failed";
@@ -197,6 +497,28 @@ export type LatestProviderLeadEmail = {
   clicked_at: string | null;
   failed_at: string | null;
 };
+
+// Every tracked email for a provider (Email History section), not just
+// the most recent one - same underlying crm_lead_emails row shape as
+// LatestProviderLeadEmail, plus an id to key list rows and act on
+// individually (e.g. "Resend").
+export type ProviderEmailHistoryRow = LatestProviderLeadEmail & { id: string; created_at: string };
+
+// Free-text "Cities Served" entry, split on commas/newlines and
+// deduplicated - same pattern as services_offered (unconstrained text[]).
+export function parseCitiesServed(raw: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const part of raw.split(/[,\n]/)) {
+    const city = part.trim();
+    if (!city) continue;
+    const key = city.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(city);
+  }
+  return result;
+}
 
 // Possible-duplicate match surfaced before a new provider lead is created
 // (section 12 of the brief) - business name, phone, or email matched an

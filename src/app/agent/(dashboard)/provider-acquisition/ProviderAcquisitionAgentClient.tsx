@@ -67,7 +67,9 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
         (p.contact_person ?? "").toLowerCase().includes(query) ||
         p.phone.toLowerCase().includes(query) ||
         (p.email ?? "").toLowerCase().includes(query) ||
-        p.city.toLowerCase().includes(query)
+        p.city.toLowerCase().includes(query) ||
+        p.province.toLowerCase().includes(query) ||
+        p.services_offered.some((s) => s.toLowerCase().includes(query))
       );
     });
   }, [providers, query, statusFilter, serviceFilter, provinceFilter]);
@@ -150,12 +152,23 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <Link
-                  href={`/agent/provider-acquisition/${provider.id}`}
-                  className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
-                >
-                  {provider.business_name}
-                </Link>
+                <span className="flex items-center gap-2">
+                  <Link
+                    href={
+                      provider.cleaning_provider_id
+                        ? `/agent/providers/${provider.cleaning_provider_id}`
+                        : `/agent/provider-acquisition/${provider.id}`
+                    }
+                    className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
+                  >
+                    {provider.business_name}
+                  </Link>
+                  {provider.cleaning_provider_id && (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      Approved
+                    </span>
+                  )}
+                </span>
                 <select
                   value={provider.status}
                   disabled={isPending}
@@ -191,7 +204,11 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Link
-                  href={`/agent/provider-acquisition/${provider.id}`}
+                  href={
+                    provider.cleaning_provider_id
+                      ? `/agent/providers/${provider.cleaning_provider_id}`
+                      : `/agent/provider-acquisition/${provider.id}`
+                  }
                   className="text-[12.5px] font-semibold text-[var(--color-accent)]"
                 >
                   View Provider

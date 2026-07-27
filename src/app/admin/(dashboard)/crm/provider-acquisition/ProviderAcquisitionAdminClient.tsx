@@ -121,7 +121,9 @@ export default function ProviderAcquisitionAdminClient({
         (p.contact_person ?? "").toLowerCase().includes(query) ||
         p.phone.toLowerCase().includes(query) ||
         (p.email ?? "").toLowerCase().includes(query) ||
-        p.city.toLowerCase().includes(query)
+        p.city.toLowerCase().includes(query) ||
+        p.province.toLowerCase().includes(query) ||
+        p.services_offered.some((s) => s.toLowerCase().includes(query))
       );
     });
   }, [
@@ -262,9 +264,21 @@ export default function ProviderAcquisitionAdminClient({
                 <tr key={provider.id} className={`border-b border-slate-100 last:border-0 ${bounced || isProviderOverdue(provider) ? "bg-rose-50" : ""}`}>
                   <td className="px-4 py-3 text-slate-500">{new Date(provider.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <Link href={`/admin/crm/provider-acquisition/${provider.id}`} className="hover:text-sky-600">
+                    <Link
+                      href={
+                        provider.cleaning_provider_id
+                          ? `/admin/providers/${provider.cleaning_provider_id}`
+                          : `/admin/crm/provider-acquisition/${provider.id}`
+                      }
+                      className="hover:text-sky-600"
+                    >
                       {provider.business_name}
                     </Link>
+                    {provider.cleaning_provider_id && (
+                      <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                        Approved
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{provider.contact_person || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{provider.phone}</td>
@@ -294,7 +308,8 @@ export default function ProviderAcquisitionAdminClient({
                       onChange={(e) => runAction(() => updateProviderStatusAction(provider.id, e.target.value))}
                       className={`rounded-full border-none px-2.5 py-1 text-xs font-medium ${PROVIDER_STATUS_STYLES[provider.status]}`}
                     >
-                      {PROVIDER_STATUSES.map((status) => (
+                      {/* "Approved Provider" is reached only via "Approve and Add to Providers" on the detail page. */}
+                      {PROVIDER_STATUSES.filter((s) => s !== "Approved Provider" || s === provider.status).map((status) => (
                         <option key={status} value={status}>
                           {status}
                         </option>
@@ -315,7 +330,14 @@ export default function ProviderAcquisitionAdminClient({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Link href={`/admin/crm/provider-acquisition/${provider.id}`} className="text-xs font-medium text-sky-600 hover:text-sky-700">
+                      <Link
+                        href={
+                          provider.cleaning_provider_id
+                            ? `/admin/providers/${provider.cleaning_provider_id}`
+                            : `/admin/crm/provider-acquisition/${provider.id}`
+                        }
+                        className="text-xs font-medium text-sky-600 hover:text-sky-700"
+                      >
                         Details
                       </Link>
                       <button

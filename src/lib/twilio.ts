@@ -12,18 +12,19 @@ function toE164(rawNumber: string): string {
   return `+${digitsOnly}`;
 }
 
-export async function sendSms(body: string): Promise<void> {
+// Shared low-level sender - both the internal admin notification
+// (sendSms, unchanged below) and the Provider Profile's outbound "Send
+// SMS" quick action (sendSmsToNumber) go through this.
+async function postSms(toNumberRaw: string, body: string): Promise<void> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  const toNumberRaw = process.env.SMS_NOTIFICATION_NUMBER;
 
-  if (!accountSid || !authToken || !fromNumber || !toNumberRaw) {
+  if (!accountSid || !authToken || !fromNumber) {
     const missing = [
       !accountSid && "TWILIO_ACCOUNT_SID",
       !authToken && "TWILIO_AUTH_TOKEN",
       !fromNumber && "TWILIO_PHONE_NUMBER",
-      !toNumberRaw && "SMS_NOTIFICATION_NUMBER",
     ].filter(Boolean);
     throw new Error(`Missing environment variable(s): ${missing.join(", ")}.`);
   }
@@ -51,4 +52,21 @@ export async function sendSms(body: string): Promise<void> {
     // Twilio error bodies can include account details; don't log the raw body.
     throw new Error(`Twilio API responded with status ${response.status}.`);
   }
+}
+
+export async function sendSms(body: string): Promise<void> {
+  const toNumberRaw = process.env.SMS_NOTIFICATION_NUMBER;
+  if (!toNumberRaw) {
+    throw new Error("Missing environment variable(s): SMS_NOTIFICATION_NUMBER.");
+  }
+  await postSms(toNumberRaw, body);
+}
+
+// Sends to an arbitrary number (e.g. a provider's own phone), unlike
+// sendSms() above which always targets the fixed internal
+// SMS_NOTIFICATION_NUMBER. Used by the Provider Profile's "Send SMS"
+// quick action (src/lib/send-provider-sms.ts) - the existing internal
+// notification path is untouched.
+export async function sendSmsToNumber(toNumber: string, body: string): Promise<void> {
+  await postSms(toNumber, body);
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProviderDuplicateMatch } from "./provider-types";
+import { getSupabaseAdmin } from "./supabase-admin";
 
 // Strips characters that would otherwise be parsed as PostgREST .or()
 // filter/value delimiters instead of literal search text - same
@@ -40,4 +41,58 @@ export async function findProviderDuplicates(
   const { data, error } = await query;
   if (error) return [];
   return (data ?? []) as ProviderDuplicateMatch[];
+}
+
+// Matches an approved Provider Acquisition lead against an existing
+// operational provider (cleaning_providers) by email, then phone, then
+// business name - same precedence as findMatchingProviderLead in
+// provider-intake-submission.ts. Used by the "Approve and Add to
+// Providers" action (lib/provider-approval.ts) to decide whether to
+// update an existing cleaning_providers row or create a new one,
+// preventing a duplicate operational provider for the same real
+// business. Always uses the service-role client since matching must see
+// every cleaning_providers row (RLS scopes an agent's own session to only
+// their assigned providers).
+export async function findCleaningProviderMatch(input: {
+  businessName: string;
+  email: string | null;
+  phone: string;
+}): Promise<{ id: string } | null> {
+  const admin = getSupabaseAdmin();
+
+  const email = input.email?.trim();
+  if (email) {
+    const { data } = await admin
+      .from("cleaning_providers")
+      .select("id")
+      .ilike("email", email)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as { id: string };
+  }
+
+  const phoneDigits = input.phone.replace(/\D/g, "");
+  if (phoneDigits.length >= 7) {
+    const last10 = phoneDigits.slice(-10);
+    const { data } = await admin
+      .from("cleaning_providers")
+      .select("id")
+      .ilike("phone", `%${last10}%`)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as { id: string };
+  }
+
+  const businessName = input.businessName.trim();
+  if (businessName) {
+    const { data } = await admin
+      .from("cleaning_providers")
+      .select("id")
+      .ilike("company_name", businessName)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as { id: string };
+  }
+
+  return null;
 }
