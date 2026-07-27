@@ -22,8 +22,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <nav className="flex items-center gap-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link href="/admin" className="text-sm font-bold text-slate-900">
               Quote Dashboard
             </Link>
