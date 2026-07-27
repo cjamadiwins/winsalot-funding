@@ -15,6 +15,7 @@ export async function createTrainingMaterialAction(formData: FormData): Promise<
 
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || null;
 
   if (!title || !content) {
     return { error: "Title and content are required." };
@@ -24,6 +25,7 @@ export async function createTrainingMaterialAction(formData: FormData): Promise<
   const { error } = await supabase.from("crm_training_materials").insert({
     title,
     content,
+    category,
     created_by: admin.id,
   });
 
@@ -42,6 +44,7 @@ export async function updateTrainingMaterialAction(
 
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || null;
 
   if (!title || !content) {
     return { error: "Title and content are required." };
@@ -50,7 +53,7 @@ export async function updateTrainingMaterialAction(
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("crm_training_materials")
-    .update({ title, content })
+    .update({ title, content, category })
     .eq("id", materialId);
 
   if (error) return { error: "Failed to update the training material." };

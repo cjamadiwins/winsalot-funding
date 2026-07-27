@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { CrmTrainingMaterialRow } from "@/lib/crm-types";
+import { groupTrainingMaterialsByCategory, type CrmTrainingMaterialRow } from "@/lib/crm-types";
 import {
   createTrainingMaterialAction,
   deleteTrainingMaterialAction,
@@ -58,6 +58,7 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
           className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6"
         >
           <input name="title" placeholder="Title" required className={inputClasses} />
+          <input name="category" placeholder="Category (optional, e.g. Cleaning Provider Recruitment)" className={inputClasses} />
           <textarea
             name="content"
             placeholder="Script or training content"
@@ -71,85 +72,86 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
         </form>
       )}
 
-      <div className="mt-6 space-y-4">
-        {materials.map((material) => (
-          <div key={material.id} className="rounded-2xl border border-slate-200 bg-white p-6">
-            {editingId === material.id ? (
-              <form
-                action={(formData) =>
-                  runAction(
-                    () => updateTrainingMaterialAction(material.id, formData),
-                    () => setEditingId(null)
-                  )
-                }
-                className="space-y-3"
-              >
-                <input
-                  name="title"
-                  defaultValue={material.title}
-                  required
-                  className={inputClasses}
-                />
-                <textarea
-                  name="content"
-                  defaultValue={material.content}
-                  required
-                  rows={8}
-                  className={`${inputClasses} font-mono`}
-                />
-                <div className="flex items-center gap-3">
-                  <button type="submit" disabled={isPending} className={buttonClasses}>
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(null)}
-                    className="text-sm font-medium text-slate-500 hover:text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <>
-                <div className="flex items-start justify-between gap-4">
-                  <h3 className="font-semibold text-slate-900">{material.title}</h3>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(material.id)}
-                      className="text-xs font-semibold text-sky-600 hover:text-sky-700"
+      <div className="mt-8 space-y-8">
+        {groupTrainingMaterialsByCategory(materials).map(({ category, materials: groupMaterials }) => (
+          <div key={category}>
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">{category}</h2>
+            <div className="space-y-4">
+              {groupMaterials.map((material) => (
+                <div key={material.id} className="rounded-2xl border border-slate-200 bg-white p-6">
+                  {editingId === material.id ? (
+                    <form
+                      action={(formData) =>
+                        runAction(
+                          () => updateTrainingMaterialAction(material.id, formData),
+                          () => setEditingId(null)
+                        )
+                      }
+                      className="space-y-3"
                     >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => {
-                        if (!confirm(`Permanently remove "${material.title}"?`)) return;
-                        runAction(() => deleteTrainingMaterialAction(material.id));
-                      }}
-                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                      <input name="title" defaultValue={material.title} required className={inputClasses} />
+                      <input name="category" defaultValue={material.category ?? ""} placeholder="Category (optional)" className={inputClasses} />
+                      <textarea
+                        name="content"
+                        defaultValue={material.content}
+                        required
+                        rows={8}
+                        className={`${inputClasses} font-mono`}
+                      />
+                      <div className="flex items-center gap-3">
+                        <button type="submit" disabled={isPending} className={buttonClasses}>
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          className="text-sm font-medium text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="font-semibold text-slate-900">{material.title}</h3>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(material.id)}
+                            className="text-xs font-semibold text-sky-600 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => {
+                              if (!confirm(`Permanently remove "${material.title}"?`)) return;
+                              runAction(() => deleteTrainingMaterialAction(material.id));
+                            }}
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{material.content}</p>
+                      {material.link_url && (
+                        <a
+                          href={material.link_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-4 block w-full rounded-full bg-sky-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-sky-700 sm:inline-block sm:w-auto"
+                        >
+                          {material.link_label || "Open Link"}
+                        </a>
+                      )}
+                    </>
+                  )}
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                  {material.content}
-                </p>
-                {material.link_url && (
-                  <a
-                    href={material.link_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 block w-full rounded-full bg-sky-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-sky-700 sm:inline-block sm:w-auto"
-                  >
-                    {material.link_label || "Open Link"}
-                  </a>
-                )}
-              </>
-            )}
+              ))}
+            </div>
           </div>
         ))}
 

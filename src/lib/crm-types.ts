@@ -359,7 +359,32 @@ export type CrmTrainingMaterialRow = {
   created_by: string | null;
   link_url: string | null;
   link_label: string | null;
+  // Optional grouping label (migration 0026) - null for every entry
+  // seeded before Provider Acquisition existed, which renders under a
+  // default "General Training" heading.
+  category: string | null;
 };
+
+export const DEFAULT_TRAINING_CATEGORY = "General Training";
+
+export function groupTrainingMaterialsByCategory(
+  materials: CrmTrainingMaterialRow[]
+): { category: string; materials: CrmTrainingMaterialRow[] }[] {
+  const groups = new Map<string, CrmTrainingMaterialRow[]>();
+  for (const material of materials) {
+    const key = material.category || DEFAULT_TRAINING_CATEGORY;
+    const list = groups.get(key) ?? [];
+    list.push(material);
+    groups.set(key, list);
+  }
+  // Default/uncategorized group first (existing scripts), then every
+  // other category in the order first encountered.
+  const orderedKeys = [
+    DEFAULT_TRAINING_CATEGORY,
+    ...Array.from(groups.keys()).filter((k) => k !== DEFAULT_TRAINING_CATEGORY),
+  ];
+  return orderedKeys.filter((key) => groups.has(key)).map((category) => ({ category, materials: groups.get(category)! }));
+}
 
 // Formats an ISO timestamp for a <input type="datetime-local"> defaultValue
 // (which needs "YYYY-MM-DDTHH:mm" in local time, not an ISO string).
