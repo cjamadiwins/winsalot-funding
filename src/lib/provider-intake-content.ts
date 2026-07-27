@@ -5,7 +5,18 @@
 // section 5). Pure string formatting only - no secrets, no server-only
 // APIs.
 
-export const PROVIDER_INTAKE_URL = "https://leads.winsalotcorp.com";
+// Points at the public Provider Intake Form (src/app/provider-intake,
+// POST /api/provider-intake) on a dedicated path under the same
+// leads.winsalotcorp.com host used by the *unrelated* Lead Generation
+// Client Intake form (LEAD_GEN_HOSTS -> "/lead-generation" in
+// src/proxy.ts). This used to be the bare host root, which collided with
+// that other form - a provider following this link landed on the Lead
+// Generation Client Intake page instead, filled in fields that don't
+// describe a cleaning provider (target industry, leads per month, etc.),
+// and the submission saved to `lead_generation`, never reaching
+// provider_leads. The dedicated path fixes that without touching the Lead
+// Generation Client Intake form or its host-root mapping.
+export const PROVIDER_INTAKE_URL = "https://leads.winsalotcorp.com/provider-intake";
 
 export const PROVIDER_INTAKE_EMAIL_SUBJECT = "Complete Your Winsalot Cleaning Provider Intake Form";
 

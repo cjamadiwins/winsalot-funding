@@ -1,9 +1,23 @@
 import Link from "next/link";
 import { requireAdminUser } from "@/lib/admin-auth";
-import { signOutAction } from "./actions";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import NotificationBell from "@/components/NotificationBell";
+import type { CrmNotificationRow } from "@/lib/crm-notifications";
+import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdminUser();
+
+  // Best-effort: this admin may not have a crm_users row (e.g. an /admin
+  // account that predates the CRM) - requireCrmAdmin() inside the
+  // notification actions handles that gate; here we just render an empty
+  // bell rather than blocking the whole dashboard on it.
+  const supabase = await createSupabaseServerClient();
+  const { data: notifications } = await supabase
+    .from("crm_notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -55,6 +69,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </nav>
 
           <div className="flex items-center gap-4">
+            <NotificationBell
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
             <span className="hidden text-sm text-slate-500 sm:inline">{user.email}</span>
             <form action={signOutAction}>
               <button
