@@ -5,6 +5,7 @@ import { getResendClient } from "./resend";
 import { sendSms } from "./twilio";
 import { getSiteUrl } from "./site-url";
 import { escapeHtml } from "./html";
+import { recalculateProviderScoreSafely } from "./provider-score";
 import type { CanadianProvinceOrTerritory, ProviderLeadRow } from "./provider-types";
 
 // Handles a submission from the public Provider Intake Form
@@ -264,6 +265,32 @@ export async function submitPublicProviderIntake(
     if (activityError) {
       console.error("[provider-intake] Failed to log completion activity:", activityError);
     }
+
+    // Provider Profile intake-form version history (brief "PROVIDER
+    // INTAKE FORM": "If the provider updates the intake form later, keep
+    // version history") - the update above already overwrote
+    // provider_leads.intake_submission with the latest answers; this
+    // preserves the version being replaced *and* the new one so nothing
+    // submitted is ever lost.
+    const versionRows: { provider_lead_id: string; submission: unknown; completed_at: string; completed_by_label: string }[] = [];
+    if (existing.intake_submission && existing.intake_completed_at) {
+      versionRows.push({
+        provider_lead_id: providerId,
+        submission: existing.intake_submission,
+        completed_at: existing.intake_completed_at,
+        completed_by_label: "Provider (self-submitted)",
+      });
+    }
+    versionRows.push({
+      provider_lead_id: providerId,
+      submission: payload,
+      completed_at: now,
+      completed_by_label: "Provider (self-submitted)",
+    });
+    const { error: versionError } = await admin.from("provider_intake_versions").insert(versionRows);
+    if (versionError) {
+      console.error("[provider-intake] Failed to record intake version history:", versionError);
+    }
   } else {
     matched = false;
 
@@ -306,7 +333,19 @@ export async function submitPublicProviderIntake(
     if (activityError) {
       console.error("[provider-intake] Failed to log creation activity:", activityError);
     }
+
+    const { error: versionError } = await admin.from("provider_intake_versions").insert({
+      provider_lead_id: providerId,
+      submission: payload,
+      completed_at: now,
+      completed_by_label: "Provider (self-submitted)",
+    });
+    if (versionError) {
+      console.error("[provider-intake] Failed to record intake version history:", versionError);
+    }
   }
+
+  recalculateProviderScoreSafely(providerId, "Intake form completed");
 
   // The provider_leads write above is the critical path - it already
   // succeeded by this point. In-app CRM notifications and the email/SMS

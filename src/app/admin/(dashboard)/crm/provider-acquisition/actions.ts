@@ -5,12 +5,19 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { findProviderDuplicates } from "@/lib/provider-duplicates";
 import { sendProviderIntakeEmail } from "@/lib/send-provider-intake-email";
+import { sendProviderMessageEmail } from "@/lib/send-provider-email";
+import { sendProviderSms } from "@/lib/send-provider-sms";
+import { uploadProviderDocument, uploadProviderLogo, removeProviderDocument } from "@/lib/provider-documents";
+import { recalculateProviderScoreSafely, recalculateProviderScore } from "@/lib/provider-score";
 import {
   CALL_OUTCOMES_REQUIRING_FOLLOW_UP,
   PROVIDER_CALL_OUTCOMES,
+  PROVIDER_DOCUMENT_TYPES,
   PROVIDER_SERVICES_OFFERED,
   PROVIDER_STATUSES,
+  parseCitiesServed,
   type ProviderCallOutcome,
+  type ProviderDocumentType,
   type ProviderDuplicateMatch,
   type ProviderStatus,
 } from "@/lib/provider-types";
@@ -96,8 +103,11 @@ export async function createProviderLeadAction(
   return { id: provider.id };
 }
 
-export async function updateProviderDetailsAction(providerId: string, formData: FormData): Promise<ActionResult> {
-  await requireCrmAdmin();
+// Provider Profile's "General Information" + "Service Area" edit form -
+// administrators can edit every field on every provider (brief: "Full
+// access... Edit everything").
+export async function updateProviderProfileAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
 
   const businessName = String(formData.get("business_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -113,34 +123,117 @@ export async function updateProviderDetailsAction(providerId: string, formData: 
   }
 
   const supabase = await createSupabaseServerClient();
+
+  let logoPath: string | undefined;
+  const logoFile = formData.get("logo");
+  if (logoFile instanceof File && logoFile.size > 0) {
+    const result = await uploadProviderLogo({ providerLeadId: providerId, file: logoFile });
+    if (result.error) return { error: result.error };
+    logoPath = result.path;
+  }
+
   const { error } = await supabase
     .from("provider_leads")
     .update({
       business_name: businessName,
       contact_person: textOrNull(formData, "contact_person"),
+      job_title: textOrNull(formData, "job_title"),
       phone,
       email: textOrNull(formData, "email"),
+      website: textOrNull(formData, "website"),
+      street_address: textOrNull(formData, "street_address"),
       city,
       province,
-      website: textOrNull(formData, "website"),
+      postal_code: textOrNull(formData, "postal_code"),
+      cities_served: parseCitiesServed(String(formData.get("cities_served") ?? "")),
       services_offered: services,
       years_in_business: textOrNull(formData, "years_in_business"),
+      number_of_employees: textOrNull(formData, "number_of_employees"),
+      business_description: textOrNull(formData, "business_description"),
+      wsib_wcb_applicable: formData.get("wsib_wcb_applicable") !== "false",
       lead_source: textOrNull(formData, "lead_source"),
       notes: textOrNull(formData, "notes"),
+      ...(logoPath ? { logo_path: logoPath } : {}),
     })
     .eq("id", providerId);
 
-  if (error) return { error: "Failed to save the provider lead." };
+  if (error) return { error: "Failed to save the provider profile." };
+
+  await supabase.from("crm_activities").insert({
+    provider_lead_id: providerId,
+    agent_id: admin.id,
+    activity_type: "outcome",
+    notes: `Profile updated by ${admin.full_name || admin.email}.`,
+  });
+
+  recalculateProviderScoreSafely(providerId, "Profile edited");
 
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
   return {};
 }
 
+// Admin-only: connects this Provider Acquisition record to a company in
+// the separate, pre-existing private quote-assignment system
+// (cleaning_providers - migration 0004) so Quote History can be shown.
+// Purely additive; neither system's own tables or behavior change.
+export async function linkCleaningProviderAction(providerId: string, cleaningProviderId: string | null): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("provider_leads")
+    .update({ cleaning_provider_id: cleaningProviderId })
+    .eq("id", providerId);
+  if (error) return { error: "Failed to link the quote-system provider record." };
+
+  recalculateProviderScoreSafely(providerId, "Linked to quote-assignment system");
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
+// Administrator-only manual scorecard adjustment (brief "SCORECARD"):
+// always shown separately from the automatically calculated score, and
+// always requires a written reason.
+export async function addScoreAdjustmentAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const amount = Number(amountRaw);
+
+  if (!Number.isFinite(amount) || amount === 0) return { error: "Enter a non-zero adjustment amount." };
+  if (!reason) return { error: "A written reason is required for a manual adjustment." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("provider_score_adjustments").insert({
+    provider_lead_id: providerId,
+    admin_id: admin.id,
+    amount: Math.round(amount),
+    reason,
+  });
+  if (error) return { error: "Failed to save the adjustment." };
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
+// Administrator-only "Recalculate Score" button (brief "SCORE UPDATES").
+export async function recalculateProviderScoreAction(providerId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  try {
+    await recalculateProviderScore(providerId, "Manually recalculated by an administrator");
+  } catch {
+    return { error: "Failed to recalculate the score." };
+  }
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
 // The administrator may overwrite or correct the status at any time
 // (brief section 3).
 export async function updateProviderStatusAction(providerId: string, status: string): Promise<ActionResult> {
-  await requireCrmAdmin();
+  const crmAdmin = await requireCrmAdmin();
   if (!PROVIDER_STATUSES.includes(status as ProviderStatus)) return { error: "Invalid status." };
 
   const supabase = await createSupabaseServerClient();
@@ -153,6 +246,15 @@ export async function updateProviderStatusAction(providerId: string, status: str
   const { error } = await supabase.from("provider_leads").update(update).eq("id", providerId);
   if (error) return { error: "Failed to update the status." };
 
+  await supabase.from("crm_activities").insert({
+    provider_lead_id: providerId,
+    agent_id: crmAdmin.id,
+    activity_type: "status_change",
+    notes: `Status changed to "${status}" by ${crmAdmin.full_name || crmAdmin.email}.`,
+  });
+
+  recalculateProviderScoreSafely(providerId, `Status changed to "${status}"`);
+
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
   return {};
@@ -161,7 +263,7 @@ export async function updateProviderStatusAction(providerId: string, status: str
 // Assigning/reassigning to any agent (or unassigning) - admin-only, shown
 // as a dedicated dropdown on the detail page (brief section 4/16).
 export async function assignProviderAgentAction(providerId: string, agentId: string | null): Promise<ActionResult> {
-  await requireCrmAdmin();
+  const crmAdmin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
@@ -169,6 +271,19 @@ export async function assignProviderAgentAction(providerId: string, agentId: str
     .update({ assigned_agent_id: agentId })
     .eq("id", providerId);
   if (error) return { error: "Failed to assign the agent." };
+
+  const { data: agent } = agentId
+    ? await supabase.from("crm_users").select("full_name, email").eq("id", agentId).maybeSingle()
+    : { data: null };
+
+  await supabase.from("crm_activities").insert({
+    provider_lead_id: providerId,
+    agent_id: crmAdmin.id,
+    activity_type: "assignment_change",
+    notes: agent
+      ? `Assigned to ${agent.full_name || agent.email} by ${crmAdmin.full_name || crmAdmin.email}.`
+      : `Unassigned by ${crmAdmin.full_name || crmAdmin.email}.`,
+  });
 
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
@@ -197,7 +312,9 @@ export async function addProviderCallNoteAction(providerId: string, formData: Fo
     agent_id: crmUser.id,
     activity_type: "call",
     call_outcome: outcome,
-    notes,
+    notes: notes
+      ? `${notes}\n\n— logged by ${crmUser.full_name || crmUser.email}`
+      : `Logged by ${crmUser.full_name || crmUser.email}.`,
     next_follow_up_at: nextFollowUpAt,
   });
   if (activityError) return { error: "Failed to save the call note." };
@@ -239,7 +356,9 @@ export async function addProviderActivityAction(providerId: string, formData: Fo
     provider_lead_id: providerId,
     agent_id: crmUser.id,
     activity_type: activityType,
-    notes,
+    notes: notes
+      ? `${notes}\n\n— logged by ${crmUser.full_name || crmUser.email}`
+      : `Logged by ${crmUser.full_name || crmUser.email}.`,
     next_follow_up_at: nextFollowUpAt,
   });
   if (activityError) return { error: "Failed to save the note." };
@@ -270,12 +389,124 @@ export async function sendProviderIntakeEmailAction(providerId: string): Promise
 
   try {
     const result = await sendProviderIntakeEmail(supabase, providerId, crmUser);
+    recalculateProviderScoreSafely(providerId, "Intake form email sent");
     revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
     revalidatePath("/admin/crm/provider-acquisition");
     return result;
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to send the intake form email." };
   }
+}
+
+// Generic "Send Email" quick action (Provider Profile).
+export async function sendProviderEmailAction(
+  providerId: string,
+  formData: FormData
+): Promise<{ error?: string; email?: string }> {
+  const crmUser = await requireCrmAdmin();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const message = String(formData.get("message") ?? "").trim();
+  if (!subject || !message) return { error: "A subject and message are required." };
+
+  const supabase = await createSupabaseServerClient();
+  try {
+    const result = await sendProviderMessageEmail(supabase, providerId, crmUser, subject, message);
+    revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+    return result;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send the email." };
+  }
+}
+
+// "Send SMS" quick action.
+export async function sendProviderSmsAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const crmUser = await requireCrmAdmin();
+  const message = String(formData.get("message") ?? "").trim();
+  if (!message) return { error: "A message is required." };
+
+  const supabase = await createSupabaseServerClient();
+  try {
+    await sendProviderSms(supabase, providerId, crmUser, message);
+    revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send the SMS." };
+  }
+}
+
+// Internal Notes - administrators can view and add notes for every
+// provider (RLS: provider_notes_admin_all).
+export async function addProviderNoteAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const crmUser = await requireCrmAdmin();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!note) return { error: "Note text is required." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("provider_notes").insert({
+    provider_lead_id: providerId,
+    user_id: crmUser.id,
+    author_name: crmUser.full_name || crmUser.email,
+    note,
+  });
+  if (error) return { error: "Failed to save the note." };
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
+export async function updateProviderNoteAction(
+  noteId: string,
+  providerId: string,
+  formData: FormData
+): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!note) return { error: "Note text is required." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("provider_notes").update({ note }).eq("id", noteId);
+  if (error) return { error: "Failed to update the note." };
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
+// Files - administrators can upload and permanently remove documents.
+export async function uploadProviderDocumentAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const crmUser = await requireCrmAdmin();
+  const docType = String(formData.get("doc_type") ?? "").trim();
+  if (!PROVIDER_DOCUMENT_TYPES.includes(docType as ProviderDocumentType)) {
+    return { error: "Please select a document type." };
+  }
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Please choose a file to upload." };
+
+  const result = await uploadProviderDocument({
+    providerLeadId: providerId,
+    uploadedBy: crmUser.id,
+    docType: docType as ProviderDocumentType,
+    file,
+  });
+  if (result.error) return result;
+
+  recalculateProviderScoreSafely(providerId, `Document uploaded: ${docType}`);
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
+}
+
+// Admin-only permanent removal (brief: "Agents must not... Permanently
+// remove documents" - only an administrator can).
+export async function removeProviderDocumentAction(documentId: string, providerId: string): Promise<ActionResult> {
+  const crmUser = await requireCrmAdmin();
+
+  const result = await removeProviderDocument({ documentId, removedBy: crmUser.id });
+  if (result.error) return result;
+
+  recalculateProviderScoreSafely(providerId, "Document removed");
+
+  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+  return {};
 }
 
 async function setStatusWithActivity(
@@ -302,6 +533,8 @@ async function setStatusWithActivity(
     notes: activityNote,
   });
 
+  recalculateProviderScoreSafely(providerId, activityNote);
+
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
   refresh();
@@ -318,6 +551,27 @@ export async function markApprovedProviderAction(providerId: string): Promise<Ac
 
 export async function markNotInterestedAction(providerId: string): Promise<ActionResult> {
   return setStatusWithActivity(providerId, "Not Interested", "Provider marked not interested.");
+}
+
+// Suspending or permanently declining a provider requires administrator
+// authority (brief "AGENT PROVIDER MANAGEMENT") - these two actions exist
+// only in this admin actions file.
+export async function markSuspendedAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const reason = String(formData.get("reason") ?? "").trim();
+  return setStatusWithActivity(
+    providerId,
+    "Suspended",
+    reason ? `Provider suspended. Reason: ${reason}` : "Provider suspended."
+  );
+}
+
+export async function markDeclinedAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const reason = String(formData.get("reason") ?? "").trim();
+  return setStatusWithActivity(
+    providerId,
+    "Declined",
+    reason ? `Provider declined. Reason: ${reason}` : "Provider declined."
+  );
 }
 
 export async function closeProviderLeadAction(providerId: string): Promise<ActionResult> {
