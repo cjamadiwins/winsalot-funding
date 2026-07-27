@@ -238,12 +238,14 @@ export type LeadgenAppointmentRow = {
   calendly_invitee_uri: string | null;
 };
 
-// Shared literal button text for the consultation booking button, used
-// both when rendering the plain-text {{booking_section}} placeholder
-// (see leadgenBookingInviteSection below) and when the send actions
-// swap that exact marker for a real HTML <a> button - see
-// LEADGEN_BOOKING_BUTTON_LABEL usage in lib/leadgen-email.ts.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
+// Shared literal link text for the consultation booking link, used both
+// when rendering the plain-text {{booking_section}} placeholder (see
+// leadgenBookingInviteSection below) and when the send actions swap that
+// exact marker for a real HTML <a> element - see LEADGEN_BOOKING_BUTTON_LABEL
+// usage in lib/leadgen-email.ts. Rendered as a plain blue text link
+// (leadgenTextLinkHtml, style: "link"), not a button - the raw Calendly
+// URL is deliberately never shown as visible text in the email.
+export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a free 15-minute consultation appointment";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be
@@ -499,10 +501,11 @@ export function leadgenBookingParagraph(bookingLink: string | null): string {
 
 // Same never-show-a-broken-link rule as leadgenBookingParagraph() above,
 // for the "15-Minute Consultation Invitation" / follow-up templates'
-// {{booking_section}} placeholder, which keeps the call-to-action button
+// {{booking_section}} placeholder, which keeps the call-to-action link
 // line separate from the raw link underneath it. buttonLabel defaults to
 // the follow-up template's wording; the invitation template passes its
-// own ("BOOK YOUR FREE 15-MINUTE CONSULTATION") explicitly.
+// own (LEADGEN_BOOKING_BUTTON_LABEL, "Book a free 15-minute consultation
+// appointment") explicitly.
 export function leadgenBookingInviteSection(bookingLink: string | null, buttonLabel = "BOOK YOUR 15-MINUTE CONSULTATION"): string {
   if (!bookingLink) return "Please reply to this email with a suitable day and time.";
   return `[${buttonLabel}]\n\n${bookingLink}`;

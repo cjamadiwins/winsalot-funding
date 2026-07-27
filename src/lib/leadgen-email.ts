@@ -41,18 +41,35 @@ export function leadgenButtonHtml(url: string, label: string): string {
 </div>`;
 }
 
+// A plain blue clickable text link - no button chrome, and unlike
+// leadgenButtonHtml, no "copy and paste this link" fallback line, since
+// the whole point of this variant is that the raw URL is never shown as
+// visible text anywhere in the email.
+export function leadgenTextLinkHtml(url: string, label: string): string {
+  const safeUrl = escapeHtml(url);
+  const safeLabel = escapeHtml(label);
+  return `<div style="margin: 16px 0; font-family: sans-serif;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-size:15px;font-weight:600;text-decoration:underline;">${safeLabel}</a></div>`;
+}
+
 // Builds the HTML body for the consultation invitation/follow-up emails:
 // everything renders exactly like a normal leadgen email EXCEPT each
 // literal "[BUTTON LABEL]\n\n<url>" marker (produced by
 // leadgenBookingInviteSection()/leadgenServicesInviteSection() in
-// lib/leadgen-types.ts), which is swapped for a real HTML button. Any
-// marker that's missing (no URL configured) or was edited out of `body`
-// (e.g. in the Send Follow-Up Email editor) is simply skipped - this
-// never errors, it degrades to plain-HTML rendering around whatever
-// markers *are* still present.
-export function buildLeadgenBookingEmailHtml(body: string, buttons: { url: string | null | undefined; label: string }[]): string {
+// lib/leadgen-types.ts), which is swapped for a real HTML button or,
+// when style: "link" is set on that entry, a plain blue text link with
+// no visible raw URL (leadgenTextLinkHtml) - used for the booking link
+// per an explicit "don't show the full URL" request; the services link
+// keeps the button style unless a caller opts it in too. Any marker
+// that's missing (no URL configured) or was edited out of `body` (e.g.
+// in the Send Follow-Up Email editor) is simply skipped - this never
+// errors, it degrades to plain-HTML rendering around whatever markers
+// *are* still present.
+export function buildLeadgenBookingEmailHtml(
+  body: string,
+  buttons: { url: string | null | undefined; label: string; style?: "button" | "link" }[]
+): string {
   const found = buttons
-    .filter((b): b is { url: string; label: string } => !!b.url)
+    .filter((b): b is { url: string; label: string; style?: "button" | "link" } => !!b.url)
     .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
     .map((b) => ({ ...b, index: body.indexOf(b.marker) }))
     .filter((b) => b.index !== -1)
@@ -64,7 +81,7 @@ export function buildLeadgenBookingEmailHtml(body: string, buttons: { url: strin
   let cursor = 0;
   for (const button of found) {
     html += textToSimpleHtml(body.slice(cursor, button.index));
-    html += leadgenButtonHtml(button.url, button.label);
+    html += button.style === "link" ? leadgenTextLinkHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
     cursor = button.index + button.marker.length;
   }
   html += textToSimpleHtml(body.slice(cursor));
