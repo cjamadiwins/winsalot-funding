@@ -238,14 +238,16 @@ export type LeadgenAppointmentRow = {
   calendly_invitee_uri: string | null;
 };
 
-// Shared literal link text for the consultation booking link, used both
-// when rendering the plain-text {{booking_section}} placeholder (see
-// leadgenBookingInviteSection below) and when the send actions swap that
-// exact marker for a real HTML <a> element - see LEADGEN_BOOKING_BUTTON_LABEL
-// usage in lib/leadgen-email.ts. Rendered as a plain blue text link
-// (leadgenTextLinkHtml, style: "link"), not a button - the raw Calendly
-// URL is deliberately never shown as visible text in the email.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a free 15-minute consultation appointment";
+// Shared literal button text for the consultation booking button, used
+// both when rendering the plain-text {{booking_section}} placeholder
+// (see leadgenBookingInviteSection below) and when the send actions
+// swap that exact marker for a real HTML button - see
+// leadgenBookingButtonHtml (style: "booking") in lib/leadgen-email.ts.
+// Styled to match the cleaning-quote emails' blue CTA button; the raw
+// Calendly URL is deliberately never shown as visible text in the
+// email - only this label and the "click here to book your
+// consultation" fallback link.
+export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a Free 15-Minute Consultation";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be

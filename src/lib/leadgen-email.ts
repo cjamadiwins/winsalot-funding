@@ -41,35 +41,41 @@ export function leadgenButtonHtml(url: string, label: string): string {
 </div>`;
 }
 
-// A plain blue clickable text link - no button chrome, and unlike
-// leadgenButtonHtml, no "copy and paste this link" fallback line, since
-// the whole point of this variant is that the raw URL is never shown as
-// visible text anywhere in the email.
-export function leadgenTextLinkHtml(url: string, label: string): string {
+// The consultation booking button - matches the primary CTA button style
+// used in the cleaning-quote emails (see quote-request-email.ts /
+// customer-quote-email.ts: blue #2563eb, 6px rounded corners, bold white
+// text) per an explicit "make it look like the cleaning quote email
+// button" request. Unlike leadgenButtonHtml (the green services
+// button), the fallback line never shows the raw URL - only clickable
+// text ("click here to book your consultation"), per an explicit
+// "do not show the full Calendly URL" instruction.
+export function leadgenBookingButtonHtml(url: string, label: string): string {
   const safeUrl = escapeHtml(url);
   const safeLabel = escapeHtml(label);
-  return `<div style="margin: 16px 0; font-family: sans-serif;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-size:15px;font-weight:600;text-decoration:underline;">${safeLabel}</a></div>`;
+  return `<div style="margin: 20px 0; font-family: sans-serif; text-align:center;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:bold;text-decoration:none;padding:16px 40px;border-radius:6px;">${safeLabel}</a>
+  <div style="margin-top:10px;font-size:13px;color:#6b7280;">If the button does not work, <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">click here to book your consultation</a>.</div>
+</div>`;
 }
 
 // Builds the HTML body for the consultation invitation/follow-up emails:
 // everything renders exactly like a normal leadgen email EXCEPT each
 // literal "[BUTTON LABEL]\n\n<url>" marker (produced by
 // leadgenBookingInviteSection()/leadgenServicesInviteSection() in
-// lib/leadgen-types.ts), which is swapped for a real HTML button or,
-// when style: "link" is set on that entry, a plain blue text link with
-// no visible raw URL (leadgenTextLinkHtml) - used for the booking link
-// per an explicit "don't show the full URL" request; the services link
-// keeps the button style unless a caller opts it in too. Any marker
-// that's missing (no URL configured) or was edited out of `body` (e.g.
-// in the Send Follow-Up Email editor) is simply skipped - this never
-// errors, it degrades to plain-HTML rendering around whatever markers
-// *are* still present.
+// lib/leadgen-types.ts), which is swapped for a real HTML button - the
+// green services-button style (leadgenButtonHtml, default) or, when
+// style: "booking" is set on that entry, the blue booking-button style
+// with no visible raw URL (leadgenBookingButtonHtml). Any marker that's
+// missing (no URL configured) or was edited out of `body` (e.g. in the
+// Send Follow-Up Email editor) is simply skipped - this never errors, it
+// degrades to plain-HTML rendering around whatever markers *are* still
+// present.
 export function buildLeadgenBookingEmailHtml(
   body: string,
-  buttons: { url: string | null | undefined; label: string; style?: "button" | "link" }[]
+  buttons: { url: string | null | undefined; label: string; style?: "button" | "booking" }[]
 ): string {
   const found = buttons
-    .filter((b): b is { url: string; label: string; style?: "button" | "link" } => !!b.url)
+    .filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url)
     .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
     .map((b) => ({ ...b, index: body.indexOf(b.marker) }))
     .filter((b) => b.index !== -1)
@@ -81,7 +87,7 @@ export function buildLeadgenBookingEmailHtml(
   let cursor = 0;
   for (const button of found) {
     html += textToSimpleHtml(body.slice(cursor, button.index));
-    html += button.style === "link" ? leadgenTextLinkHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
+    html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
     cursor = button.index + button.marker.length;
   }
   html += textToSimpleHtml(body.slice(cursor));

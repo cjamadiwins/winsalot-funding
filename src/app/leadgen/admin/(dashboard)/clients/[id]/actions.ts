@@ -44,7 +44,7 @@ export async function sendClientCommunicationAction(clientId: string, formData: 
     if (clientRow) {
       const branding = resolveLeadgenEmailBranding(clientRow, submittedBookingUrl ?? clientRow.booking_link, submittedServicesUrl ?? clientRow.services_info_link);
       html = buildLeadgenBookingEmailHtml(body, [
-        { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "link" },
+        { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
         { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
       ]);
     }

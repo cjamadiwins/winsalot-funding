@@ -115,8 +115,8 @@ export default function ClientDetailClient({
                 <span className="text-[13px] font-semibold text-slate-600">Consultation Booking Link</span>
                 <input name="booking_link" type="url" placeholder="https://calendly.com/…" defaultValue={client.booking_link ?? ""} className={inputClass} />
                 <span className="text-[12px] text-slate-500">
-                  The &ldquo;Book a free 15-minute consultation appointment&rdquo; link in every consultation email opens this link directly
-                  (e.g. a Calendly page) in a new tab. Leave blank to have those emails ask the prospect to reply instead of showing a broken link.
+                  The &ldquo;Book a Free 15-Minute Consultation&rdquo; button in every consultation email opens this link directly (e.g. a
+                  Calendly page) in a new tab. Leave blank to have those emails ask the prospect to reply instead of showing a broken link.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">

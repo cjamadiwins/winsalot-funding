@@ -264,7 +264,7 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     subject,
     body,
     html: buildLeadgenBookingEmailHtml(body, [
-      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "link" },
+      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
       { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
     ]),
     sentBy: adminUser.id,
@@ -336,7 +336,7 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     subject,
     body,
     html: buildLeadgenBookingEmailHtml(body, [
-      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "link" },
+      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
       { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
     ]),
     sentBy: adminUser.id,
