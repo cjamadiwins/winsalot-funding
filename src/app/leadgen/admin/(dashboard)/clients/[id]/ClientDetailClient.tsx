@@ -98,8 +98,12 @@ export default function ClientDetailClient({
                 <input name="contact_phone" defaultValue={client.contact_phone ?? ""} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Default Booking Link</span>
-                <input name="booking_link" type="url" defaultValue={client.booking_link ?? ""} className={inputClass} />
+                <span className="text-[13px] font-semibold text-slate-600">Consultation Booking Link</span>
+                <input name="booking_link" type="url" placeholder="https://…" defaultValue={client.booking_link ?? ""} className={inputClass} />
+                <span className="text-[12px] text-slate-500">
+                  Used by every consultation email sent to this client&rsquo;s leads. Leave blank to have those emails ask the prospect to reply
+                  instead of showing a link.
+                </span>
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Internal Notes</span>
@@ -118,7 +122,7 @@ export default function ClientDetailClient({
               <Row label="Contact" value={client.contact_name} />
               <Row label="Email" value={client.contact_email} />
               <Row label="Phone" value={client.contact_phone} />
-              <Row label="Default Booking Link" value={client.booking_link} />
+              <Row label="Consultation Booking Link" value={client.booking_link} />
               {client.notes && (
                 <div className="border-t border-slate-100 pt-2">
                   <dt className="text-slate-500">Notes</dt>

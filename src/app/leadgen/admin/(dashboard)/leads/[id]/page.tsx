@@ -17,7 +17,15 @@ import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/L
 import { assignLeadAction } from "../actions";
 import { resendLeadgenEmailAction } from "../../actions";
 import { bookAppointmentAction } from "../../appointments/actions";
-import { completeFollowUpAction, recordCallOutcomeAction, scheduleFollowUpAction, sendConsultationEmailAction, updateLeadAction } from "./actions";
+import {
+  completeFollowUpAction,
+  recordCallOutcomeAction,
+  scheduleFollowUpAction,
+  sendConsultationEmailAction,
+  sendConsultationFollowUpAction,
+  sendConsultationInvitationAction,
+  updateLeadAction,
+} from "./actions";
 
 const actions: LeadDetailActions = {
   updateLead: updateLeadAction,
@@ -26,6 +34,8 @@ const actions: LeadDetailActions = {
   completeFollowUp: completeFollowUpAction,
   bookAppointment: bookAppointmentAction,
   sendConsultationEmail: sendConsultationEmailAction,
+  sendConsultationInvitation: sendConsultationInvitationAction,
+  sendConsultationFollowUp: sendConsultationFollowUpAction,
   resendEmail: resendLeadgenEmailAction,
   assignAgent: assignLeadAction,
 };
@@ -47,6 +57,8 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     { data: appointments },
     { data: emails },
     { data: consultationTemplate },
+    { data: consultationInvitationTemplate },
+    { data: consultationFollowUpTemplate },
   ] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id
@@ -58,6 +70,8 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     admin.from("leadgen_appointments").select("*").eq("lead_id", id).order("appointment_date", { ascending: false }),
     admin.from("leadgen_emails").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_information").maybeSingle(),
+    admin.from("leadgen_email_templates").select("*").eq("key", "consultation_invitation").maybeSingle(),
+    admin.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
   ]);
 
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
@@ -77,6 +91,8 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       appointments={(appointments ?? []) as LeadgenAppointmentRow[]}
       emails={(emails ?? []) as LeadgenEmailRow[]}
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
+      consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
+      consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
       bookingLink={bookingLink}
       isAdmin
       actions={actions}

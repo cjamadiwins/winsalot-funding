@@ -224,3 +224,102 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   revalidatePath("/leadgen/agent");
   return result;
 }
+
+// "Send 15-Minute Consultation Invitation" - agent-scoped mirror of the
+// admin action of the same name. RLS (leadgen_emails_agent_insert_own_lead)
+// independently enforces that this only ever succeeds for a lead
+// actually assigned to this agent.
+export async function sendConsultationInvitationAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  const agent = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: "consultation_invitation",
+    toEmail,
+    subject,
+    body,
+    sentBy: agent.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: agent.id,
+    activity_type: "consultation_invitation_sent",
+    call_outcome: "Consultation Information Sent",
+    notes: `15-Minute Consultation Invitation sent to ${toEmail} by ${agent.full_name || agent.email} (Agent).`,
+    occurred_at: now,
+  });
+
+  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/agent/leads/${leadId}`);
+  revalidatePath("/leadgen/agent");
+  return result;
+}
+
+// Manual "Send Follow-Up Email" - agent-scoped mirror; see the admin
+// action of the same name for why this never forces the lead's status.
+export async function sendConsultationFollowUpAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  const agent = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: "consultation_follow_up",
+    toEmail,
+    subject,
+    body,
+    sentBy: agent.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: agent.id,
+    activity_type: "consultation_follow_up_sent",
+    notes: `Consultation follow-up email sent to ${toEmail} by ${agent.full_name || agent.email} (Agent).`,
+    occurred_at: now,
+  });
+
+  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/agent/leads/${leadId}`);
+  revalidatePath("/leadgen/agent");
+  return result;
+}

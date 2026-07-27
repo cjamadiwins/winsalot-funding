@@ -138,6 +138,8 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "appointment_booked",
   "appointment_updated",
   "consultation_email_sent",
+  "consultation_invitation_sent",
+  "consultation_follow_up_sent",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -154,6 +156,8 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   appointment_booked: "Appointment booked",
   appointment_updated: "Appointment updated",
   consultation_email_sent: "Consultation email sent",
+  consultation_invitation_sent: "15-min consultation invitation sent",
+  consultation_follow_up_sent: "Consultation follow-up email sent",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -377,6 +381,16 @@ export function getEffectiveBookingLink(
 export function leadgenBookingParagraph(bookingLink: string | null): string {
   if (!bookingLink) return "Please reply to this email with a suitable day and time.";
   return `You can reply to this email, or use the booking link below to choose a convenient time:\n\n${bookingLink}`;
+}
+
+// Same never-show-a-broken-link rule as leadgenBookingParagraph() above,
+// for the "15-Minute Consultation Invitation" / follow-up templates'
+// {{booking_section}} placeholder, which keeps the "[BOOK YOUR
+// 15-MINUTE CONSULTATION]" call-to-action line separate from the raw
+// link underneath it.
+export function leadgenBookingInviteSection(bookingLink: string | null): string {
+  if (!bookingLink) return "Please reply to this email with a suitable day and time.";
+  return `[BOOK YOUR 15-MINUTE CONSULTATION]\n\n${bookingLink}`;
 }
 
 // Basic but real email validation - deliberately not a full RFC5322

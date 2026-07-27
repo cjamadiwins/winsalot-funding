@@ -16,6 +16,7 @@ export default function ConsultationEmailModal({
   lead,
   agentName,
   campaignName,
+  title = "Send Consultation Email",
   defaultSubject,
   defaultBody,
   onClose,
@@ -25,6 +26,7 @@ export default function ConsultationEmailModal({
   lead: LeadgenLeadRow;
   agentName: string;
   campaignName: string | null;
+  title?: string;
   defaultSubject: string;
   defaultBody: string;
   onClose: () => void;
@@ -67,12 +69,12 @@ export default function ConsultationEmailModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Send Consultation Email"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-bold text-slate-900">Send Consultation Email</h2>
+          <h2 className="text-[17px] font-bold text-slate-900">{title}</h2>
           <button
             type="button"
             onClick={onClose}

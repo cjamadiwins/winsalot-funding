@@ -14,7 +14,15 @@ import {
 } from "@/lib/leadgen-types";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { bookAppointmentAction } from "../../appointments/actions";
-import { completeFollowUpAction, recordCallOutcomeAction, scheduleFollowUpAction, sendConsultationEmailAction, updateLeadAction } from "./actions";
+import {
+  completeFollowUpAction,
+  recordCallOutcomeAction,
+  scheduleFollowUpAction,
+  sendConsultationEmailAction,
+  sendConsultationFollowUpAction,
+  sendConsultationInvitationAction,
+  updateLeadAction,
+} from "./actions";
 
 const actions: LeadDetailActions = {
   updateLead: updateLeadAction,
@@ -23,6 +31,8 @@ const actions: LeadDetailActions = {
   completeFollowUp: completeFollowUpAction,
   bookAppointment: bookAppointmentAction,
   sendConsultationEmail: sendConsultationEmailAction,
+  sendConsultationInvitation: sendConsultationInvitationAction,
+  sendConsultationFollowUp: sendConsultationFollowUpAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
   // email (admin-only per the brief) or reassign a lead.
 };
@@ -47,6 +57,8 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     { data: appointments },
     { data: emails },
     { data: consultationTemplate },
+    { data: consultationInvitationTemplate },
+    { data: consultationFollowUpTemplate },
   ] = await Promise.all([
     supabase.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id ? supabase.from("leadgen_campaigns").select("*").eq("id", lead.campaign_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -55,6 +67,8 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     supabase.from("leadgen_appointments").select("*").eq("lead_id", id).order("appointment_date", { ascending: false }),
     supabase.from("leadgen_emails").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_information").maybeSingle(),
+    supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_invitation").maybeSingle(),
+    supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
   ]);
 
   const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
@@ -73,6 +87,8 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       appointments={(appointments ?? []) as LeadgenAppointmentRow[]}
       emails={(emails ?? []) as LeadgenEmailRow[]}
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
+      consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
+      consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
       bookingLink={bookingLink}
       isAdmin={false}
       actions={actions}

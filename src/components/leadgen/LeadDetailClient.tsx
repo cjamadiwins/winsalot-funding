@@ -12,6 +12,7 @@ import {
   LEADGEN_PROVINCES,
   renderLeadgenTemplate,
   leadgenBookingParagraph,
+  leadgenBookingInviteSection,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -34,6 +35,8 @@ export type LeadDetailActions = {
   completeFollowUp: (followUpId: string, leadId: string) => Promise<{ error?: string } | void>;
   bookAppointment: (formData: FormData) => Promise<{ error?: string } | void>;
   sendConsultationEmail: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  sendConsultationInvitation: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  sendConsultationFollowUp: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
 };
@@ -56,6 +59,8 @@ export default function LeadDetailClient({
   appointments,
   emails,
   consultationTemplate,
+  consultationInvitationTemplate,
+  consultationFollowUpTemplate,
   bookingLink,
   isAdmin,
   actions,
@@ -73,6 +78,8 @@ export default function LeadDetailClient({
   appointments: LeadgenAppointmentRow[];
   emails: LeadgenEmailRow[];
   consultationTemplate: LeadgenEmailTemplateRow | null;
+  consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
+  consultationFollowUpTemplate: LeadgenEmailTemplateRow | null;
   bookingLink: string | null;
   isAdmin: boolean;
   actions: LeadDetailActions;
@@ -84,6 +91,8 @@ export default function LeadDetailClient({
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [showConsultationModal, setShowConsultationModal] = useState(false);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [showInvitationFollowUpModal, setShowInvitationFollowUpModal] = useState(false);
   const [postSendFollowUp, setPostSendFollowUp] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -108,6 +117,17 @@ export default function LeadDetailClient({
         booking_paragraph: leadgenBookingParagraph(bookingLink),
       })
     : "";
+
+  const invitationVars = {
+    first_name: firstName,
+    client_business_name: client.name,
+    agent_name: currentUserName,
+    booking_section: leadgenBookingInviteSection(bookingLink),
+  };
+  const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
+  const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
+  const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
+  const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, invitationVars) : "";
 
   return (
     <div>
@@ -175,6 +195,41 @@ export default function LeadDetailClient({
             setShowConsultationModal(false);
             setSuccessMessage("Consultation email sent.");
             setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      {showInvitationModal && (
+        <ConsultationEmailModal
+          lead={lead}
+          agentName={currentUserName}
+          campaignName={campaign?.name ?? null}
+          title="Send 15-Minute Consultation Invitation"
+          defaultSubject={invitationSubject}
+          defaultBody={invitationBody}
+          onClose={() => setShowInvitationModal(false)}
+          onSend={(formData) => actions.sendConsultationInvitation(lead.id, formData)}
+          onSent={() => {
+            setShowInvitationModal(false);
+            setSuccessMessage("Consultation invitation sent.");
+            setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      {showInvitationFollowUpModal && (
+        <ConsultationEmailModal
+          lead={lead}
+          agentName={currentUserName}
+          campaignName={campaign?.name ?? null}
+          title="Send Follow-Up Email"
+          defaultSubject={followUpSubject}
+          defaultBody={followUpBody}
+          onClose={() => setShowInvitationFollowUpModal(false)}
+          onSend={(formData) => actions.sendConsultationFollowUp(lead.id, formData)}
+          onSent={() => {
+            setShowInvitationFollowUpModal(false);
+            setSuccessMessage("Follow-up email sent.");
           }}
         />
       )}
@@ -374,7 +429,25 @@ export default function LeadDetailClient({
 
       <div className="mt-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowInvitationModal(true)}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Send 15-Minute Consultation Invitation
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInvitationFollowUpModal(true)}
+                className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-400"
+              >
+                Send Follow-Up Email
+              </button>
+            </div>
+          </div>
           {emails.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No emails sent to this prospect yet.</p>
           ) : (

@@ -210,3 +210,104 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;
 }
+
+// "Send 15-Minute Consultation Invitation" - a second, distinct
+// one-click prospect email (separate template/copy from the original
+// Send Consultation Email above, kept side-by-side so neither breaks the
+// other). Same validate -> send -> log -> advance-status shape.
+export async function sendConsultationInvitationAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: "consultation_invitation",
+    toEmail,
+    subject,
+    body,
+    sentBy: adminUser.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: adminUser.id,
+    activity_type: "consultation_invitation_sent",
+    call_outcome: "Consultation Information Sent",
+    notes: `15-Minute Consultation Invitation sent to ${toEmail} by ${adminUser.full_name || adminUser.email} (Admin).`,
+    occurred_at: now,
+  });
+
+  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/admin/leads/${leadId}`);
+  return result;
+}
+
+// Manual "Send Follow-Up Email" - unlike the invitation above, this
+// never forces the lead's status back to "Consultation Information
+// Sent": a follow-up may be sent well after the lead has already moved
+// on to a further status (e.g. "Interested" or "Appointment booked"),
+// and resetting that would be a regression, not a status update. Still
+// updates last_contacted_at and logs its own distinct activity type.
+export async function sendConsultationFollowUpAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: "consultation_follow_up",
+    toEmail,
+    subject,
+    body,
+    sentBy: adminUser.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: adminUser.id,
+    activity_type: "consultation_follow_up_sent",
+    notes: `Consultation follow-up email sent to ${toEmail} by ${adminUser.full_name || adminUser.email} (Admin).`,
+    occurred_at: now,
+  });
+
+  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/admin/leads/${leadId}`);
+  return result;
+}
