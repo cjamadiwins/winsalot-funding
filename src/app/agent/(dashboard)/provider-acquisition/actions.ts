@@ -9,7 +9,6 @@ import { sendProviderIntakeEmail } from "@/lib/send-provider-intake-email";
 import { sendProviderMessageEmail } from "@/lib/send-provider-email";
 import { sendProviderSms } from "@/lib/send-provider-sms";
 import { uploadProviderDocument, uploadProviderLogo } from "@/lib/provider-documents";
-import { recalculateProviderScoreSafely } from "@/lib/provider-score";
 import {
   ADMIN_ONLY_STATUSES,
   CALL_OUTCOMES_REQUIRING_FOLLOW_UP,
@@ -136,7 +135,7 @@ export async function updateProviderProfileAction(providerId: string, formData: 
   let logoPath: string | undefined;
   const logoFile = formData.get("logo");
   if (logoFile instanceof File && logoFile.size > 0) {
-    const result = await uploadProviderLogo({ providerLeadId: providerId, file: logoFile });
+    const result = await uploadProviderLogo({ ownerId: providerId, file: logoFile });
     if (result.error) return { error: result.error };
     logoPath = result.path;
   }
@@ -175,8 +174,6 @@ export async function updateProviderProfileAction(providerId: string, formData: 
     notes: `Profile updated by ${crmUser.full_name || crmUser.email}.`,
   });
 
-  recalculateProviderScoreSafely(providerId, "Profile edited");
-
   revalidatePath(`/agent/provider-acquisition/${providerId}`);
   revalidatePath("/agent/provider-acquisition");
   return {};
@@ -209,8 +206,6 @@ export async function updateProviderStatusAction(providerId: string, status: str
     activity_type: "status_change",
     notes: `Status changed to "${status}" by ${crmUser.full_name || crmUser.email}.`,
   });
-
-  recalculateProviderScoreSafely(providerId, `Status changed to "${status}"`);
 
   revalidatePath(`/agent/provider-acquisition/${providerId}`);
   revalidatePath("/agent/provider-acquisition");
@@ -371,7 +366,6 @@ export async function sendProviderIntakeEmailAction(providerId: string): Promise
 
   try {
     const result = await sendProviderIntakeEmail(supabase, providerId, crmUser);
-    recalculateProviderScoreSafely(providerId, "Intake form email sent");
     revalidatePath(`/agent/provider-acquisition/${providerId}`);
     revalidatePath("/agent/provider-acquisition");
     revalidatePath("/agent/dashboard");
@@ -394,7 +388,7 @@ export async function sendProviderEmailAction(
 
   const supabase = await createSupabaseServerClient();
   try {
-    const result = await sendProviderMessageEmail(supabase, providerId, crmUser, subject, message);
+    const result = await sendProviderMessageEmail(supabase, { providerLeadId: providerId }, crmUser, subject, message);
     revalidatePath(`/agent/provider-acquisition/${providerId}`);
     return result;
   } catch (err) {
@@ -410,7 +404,7 @@ export async function sendProviderSmsAction(providerId: string, formData: FormDa
 
   const supabase = await createSupabaseServerClient();
   try {
-    await sendProviderSms(supabase, providerId, crmUser, message);
+    await sendProviderSms(supabase, { providerLeadId: providerId }, crmUser, message);
     revalidatePath(`/agent/provider-acquisition/${providerId}`);
     return {};
   } catch (err) {
@@ -479,14 +473,12 @@ export async function uploadProviderDocumentAction(providerId: string, formData:
   if (!provider) return { error: "Provider not found." };
 
   const result = await uploadProviderDocument({
-    providerLeadId: providerId,
+    target: { providerLeadId: providerId },
     uploadedBy: crmUser.id,
     docType: docType as ProviderDocumentType,
     file,
   });
   if (result.error) return result;
-
-  recalculateProviderScoreSafely(providerId, `Document uploaded: ${PROVIDER_DOCUMENT_TYPES.includes(docType as ProviderDocumentType) ? docType : "other"}`);
 
   revalidatePath(`/agent/provider-acquisition/${providerId}`);
   return {};
@@ -516,8 +508,6 @@ async function setStatusWithActivity(
     notes: activityNote,
   });
 
-  recalculateProviderScoreSafely(providerId, activityNote);
-
   revalidatePath(`/agent/provider-acquisition/${providerId}`);
   revalidatePath("/agent/provider-acquisition");
   refresh();
@@ -531,10 +521,10 @@ export async function markIntakeFormCompletedAction(providerId: string): Promise
 // Agents cannot approve a provider themselves (brief "AGENT PROVIDER
 // MANAGEMENT": "Approve a provider without administrator authority" is
 // explicitly listed as something an agent must not be able to do) - unlike
-// the admin actions file, there is no markApprovedProviderAction exported
-// here at all, matching the existing convention of admin-only actions
-// (e.g. reopenProviderLeadAction/removeProviderFollowUpAction) simply not
-// existing in this file.
+// the admin actions file, there is no approveProviderAndAddToDirectoryAction
+// exported here at all, matching the existing convention of admin-only
+// actions (e.g. reopenProviderLeadAction/removeProviderFollowUpAction)
+// simply not existing in this file.
 
 export async function markNotInterestedAction(providerId: string): Promise<ActionResult> {
   return setStatusWithActivity(providerId, "Not Interested", "Provider marked not interested.");

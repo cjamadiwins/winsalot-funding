@@ -182,7 +182,72 @@ export type ProviderLeadRow = {
   business_description: string | null;
   cities_served: string[];
   wsib_wcb_applicable: boolean;
+  // Permanent link to the operational Provider Profile (cleaning_providers),
+  // set automatically by the "Approve and Add to Providers" action - never
+  // a manual admin-picked link, and never cleared once set. The Provider
+  // Scorecard lives only on cleaning_providers (see CleaningProviderRow
+  // below), not here - an unapproved lead has no scorecard.
   cleaning_provider_id: string | null;
+};
+
+// ---------------------------------------------------------------------
+// The operational Provider Profile - built on the pre-existing
+// cleaning_providers table (migration 0004, extended by 0028) that the
+// quote-assignment system already references. This is the *permanent*
+// provider identity: once a Provider Acquisition lead is approved, this
+// is the profile used everywhere (Providers directory, quote assignment,
+// quote history, agent-facing management) - see docs/provider-profile.md.
+// ---------------------------------------------------------------------
+export const CLEANING_PROVIDER_STATUSES = ["active", "inactive", "suspended"] as const;
+export type CleaningProviderStatus = (typeof CLEANING_PROVIDER_STATUSES)[number];
+
+export const CLEANING_PROVIDER_STATUS_STYLES: Record<CleaningProviderStatus, string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  inactive: "bg-slate-200 text-slate-600",
+  suspended: "bg-orange-100 text-orange-800",
+};
+
+export type CleaningProviderRow = {
+  id: string;
+  created_at: string;
+  company_name: string;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  service_locations: string | null;
+  pricing_notes: string | null;
+  internal_notes: string | null;
+  status: CleaningProviderStatus;
+  assigned_agent_id: string | null;
+  created_by: string | null;
+  logo_path: string | null;
+  job_title: string | null;
+  website: string | null;
+  street_address: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  cities_served: string[];
+  services_offered: string[];
+  years_in_business: string | null;
+  number_of_employees: string | null;
+  business_description: string | null;
+  wsib_wcb_applicable: boolean;
+  last_contacted_at: string | null;
+  next_follow_up_at: string | null;
+  last_email_status:
+    | "sent"
+    | "delivered"
+    | "delayed"
+    | "bounced"
+    | "complained"
+    | "opened"
+    | "clicked"
+    | "failed"
+    | null;
+  last_email_status_at: string | null;
+  last_email_type: "provider_message" | null;
+  last_email_to: string | null;
   score: number | null;
   score_label: string | null;
   score_breakdown: ProviderScoreBreakdown | null;
@@ -212,10 +277,17 @@ export const PROVIDER_DOCUMENT_TYPE_LABELS: Record<ProviderDocumentType, string>
   other: "Other Document",
 };
 
+// Dual-keyed: a document uploaded during the recruiting phase keeps its
+// provider_lead_id, and is also linked to cleaning_provider_id the moment
+// that lead is approved (backfilled by the approval action), so it
+// continues to show up on the operational profile without being
+// duplicated. A document uploaded directly against an operational
+// provider only has cleaning_provider_id set.
 export type ProviderDocumentRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   uploaded_by: string | null;
   doc_type: ProviderDocumentType;
   file_name: string;
@@ -233,7 +305,8 @@ export type ProviderDocumentRow = {
 export type ProviderNoteRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   user_id: string | null;
   author_name: string;
   note: string;
@@ -257,7 +330,8 @@ export type ProviderIntakeVersionRow = {
 export type ProviderSmsMessageRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   agent_id: string | null;
   to_phone: string;
   body: string;
@@ -292,10 +366,12 @@ export type ProviderScoreBreakdown = {
   rawAvailable: number;
 };
 
+// Scorecards live only on the operational profile - a manual adjustment
+// always targets cleaning_provider_id, never a not-yet-approved lead.
 export type ProviderScoreAdjustmentRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  cleaning_provider_id: string;
   admin_id: string | null;
   amount: number;
   reason: string;
@@ -376,9 +452,10 @@ export type NewProviderLeadInput = {
 export type ProviderActivityRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   agent_id: string | null;
-  activity_type: "call" | "email" | "text" | "voicemail" | "note" | "outcome";
+  activity_type: string;
   call_outcome: ProviderCallOutcome | null;
   notes: string | null;
   occurred_at: string;
@@ -388,7 +465,8 @@ export type ProviderActivityRow = {
 export type ProviderFollowUpRow = {
   id: string;
   created_at: string;
-  provider_lead_id: string;
+  provider_lead_id: string | null;
+  cleaning_provider_id: string | null;
   scheduled_by: string | null;
   scheduled_at: string;
   note: string | null;

@@ -58,11 +58,12 @@ export default function ProviderFollowUps({ followUps }: { followUps: ProviderFo
 
   function handleSendIntake(followUp: ProviderFollowUpWithLead) {
     const email = followUp.provider_leads?.email;
-    if (!email || !followUp.provider_lead_id) return;
+    const providerLeadId = followUp.provider_lead_id;
+    if (!email || !providerLeadId) return;
     if (!confirm(`Send the provider intake form email to ${email}?`)) return;
     setError(null);
     startTransition(async () => {
-      const result = await sendProviderIntakeEmailAction(followUp.provider_lead_id);
+      const result = await sendProviderIntakeEmailAction(providerLeadId);
       if (result.error) setError(result.error);
       else setSendSuccessId(followUp.id);
     });
@@ -215,7 +216,7 @@ function Group({
                   type="button"
                   disabled={isPending}
                   onClick={() =>
-                    runAction(() => completeProviderFollowUpAction(followUp.id, followUp.provider_lead_id))
+                    runAction(() => completeProviderFollowUpAction(followUp.id, followUp.provider_lead_id!))
                   }
                   className="text-[12.5px] font-semibold text-emerald-700 hover:text-emerald-800"
                 >
@@ -257,7 +258,7 @@ function Group({
                 <form
                   action={(formData) =>
                     runAction(
-                      () => rescheduleProviderFollowUpAction(followUp.id, followUp.provider_lead_id, formData),
+                      () => rescheduleProviderFollowUpAction(followUp.id, followUp.provider_lead_id!, formData),
                       () => setReschedulingId(null)
                     )
                   }
@@ -286,7 +287,7 @@ function Group({
                   action={(formData) =>
                     runAction(
                       async () => {
-                        const result = await addProviderCallNoteAction(followUp.provider_lead_id, formData);
+                        const result = await addProviderCallNoteAction(followUp.provider_lead_id!, formData);
                         if (result?.error) throw new Error(result.error);
                       },
                       () => setCallNoteId(null)

@@ -1,9 +1,11 @@
-import type { ProviderLeadRow, ProviderScoreRatingLabel } from "./provider-types";
+import type { ProviderScoreBreakdown, ProviderScoreRatingLabel } from "./provider-types";
 
-// Shared by both Provider Acquisition list pages (brief "PROVIDER LIST
+// Shared by the operational Providers list pages (brief "PROVIDER LIST
 // SCORE DISPLAY": "Allow filtering by: Score range, Rating label,
 // Providers needing attention, New providers with limited data, Missing
-// documents, Low responsiveness, Strong performers").
+// documents, Low responsiveness, Strong performers"). The Provider
+// Scorecard lives only on the operational profile (cleaning_providers) -
+// this works against any row shape carrying the same score_* columns.
 export const SCORE_FILTER_OPTIONS = [
   { value: "all", label: "Any score" },
   { value: "excellent", label: "Excellent (90-100)" },
@@ -26,7 +28,14 @@ const RATING_TO_FILTER: Record<ProviderScoreRatingLabel, ScoreFilter> = {
   "High Risk": "high_risk",
 };
 
-export function matchesScoreFilter(provider: ProviderLeadRow, filter: ScoreFilter): boolean {
+export type ScorableProvider = {
+  score: number | null;
+  score_label: string | null;
+  score_breakdown: ProviderScoreBreakdown | null;
+  score_is_new_provider: boolean;
+};
+
+export function matchesScoreFilter(provider: ScorableProvider, filter: ScoreFilter): boolean {
   if (filter === "all") return true;
   if (filter === "new_provider") return provider.score_is_new_provider;
 
@@ -48,7 +57,7 @@ export function matchesScoreFilter(provider: ProviderLeadRow, filter: ScoreFilte
   return RATING_TO_FILTER[provider.score_label as ProviderScoreRatingLabel] === filter;
 }
 
-export function sortByScore(providers: ProviderLeadRow[], direction: "score_desc" | "score_asc"): ProviderLeadRow[] {
+export function sortByScore<T extends ScorableProvider>(providers: T[], direction: "score_desc" | "score_asc"): T[] {
   const sorted = [...providers].sort((a, b) => {
     const scoreA = a.score ?? -1;
     const scoreB = b.score ?? -1;

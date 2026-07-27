@@ -2,8 +2,8 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
 import {
   providerScoreRatingLabel,
+  type CleaningProviderRow,
   type ProviderDocumentRow,
-  type ProviderLeadRow,
   type ProviderScoreBreakdown,
   type ProviderScoreCategoryBreakdown,
 } from "./provider-types";
@@ -16,6 +16,9 @@ import {
 // 100, rather than treating a missing category as zero (brief's "NEW
 // PROVIDER SCORE HANDLING").
 //
+// Lives only on the operational Provider Profile (cleaning_providers) -
+// a not-yet-approved Provider Acquisition lead has no scorecard at all.
+//
 // Recalculation is deliberately isolated behind
 // recalculateProviderScoreSafely() so a scoring bug can never block an
 // ordinary CRM action (brief: "Do not allow score recalculation failures
@@ -27,9 +30,9 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function profileCompleteness(provider: ProviderLeadRow): ProviderScoreCategoryBreakdown {
+function profileCompleteness(provider: CleaningProviderRow): ProviderScoreCategoryBreakdown {
   const items: { label: string; met: boolean; tip: string }[] = [
-    { label: "Business name", met: Boolean(provider.business_name?.trim()), tip: "Add the business name." },
+    { label: "Business name", met: Boolean(provider.company_name?.trim()), tip: "Add the business name." },
     { label: "Contact person", met: Boolean(provider.contact_person?.trim()), tip: "Add a contact person." },
     { label: "Valid phone number", met: Boolean(provider.phone?.trim()), tip: "Add a valid phone number." },
     {
@@ -69,7 +72,7 @@ function profileCompleteness(provider: ProviderLeadRow): ProviderScoreCategoryBr
 }
 
 function documentation(
-  provider: Pick<ProviderLeadRow, "wsib_wcb_applicable">,
+  provider: Pick<CleaningProviderRow, "wsib_wcb_applicable">,
   documents: ProviderDocumentRow[]
 ): ProviderScoreCategoryBreakdown {
   const active = documents.filter((d) => !d.removed_at);
@@ -200,26 +203,13 @@ function quotePerformance(input: {
 }
 
 const STATUS_RELIABILITY_SCORE: Record<string, number> = {
-  Active: 1,
-  "Approved Provider": 0.9,
-  "Intake Form Completed": 0.75,
-  "Under Review": 0.6,
-  "Intake Form Sent": 0.55,
-  Contacted: 0.5,
-  Interested: 0.5,
-  New: 0.5,
-  "Contact Attempted": 0.4,
-  "Follow-up Required": 0.45,
-  Inactive: 0.3,
-  Closed: 0.2,
-  "Not Interested": 0.1,
-  "Invalid Contact": 0,
-  Suspended: 0,
-  Declined: 0,
+  active: 1,
+  inactive: 0.3,
+  suspended: 0,
 };
 
 function reliabilityAndActivity(
-  provider: Pick<ProviderLeadRow, "status">,
+  provider: Pick<CleaningProviderRow, "status">,
   recentActivityCount: number
 ): ProviderScoreCategoryBreakdown {
   const statusScore = STATUS_RELIABILITY_SCORE[provider.status] ?? 0.5;
@@ -227,7 +217,7 @@ function reliabilityAndActivity(
   const combined = statusScore * 0.7 + activityScore * 0.3;
 
   const recommendations: string[] = [];
-  if (provider.status === "Suspended" || provider.status === "Declined") {
+  if (provider.status === "suspended") {
     recommendations.push("Resolve the concerns behind the current status.");
   }
   if (recentActivityCount === 0) {
@@ -245,7 +235,7 @@ function reliabilityAndActivity(
 }
 
 export type ProviderScoreCalculationInput = {
-  provider: ProviderLeadRow;
+  provider: CleaningProviderRow;
   documents: ProviderDocumentRow[];
   followUps: { status: string; scheduled_at: string }[];
   emails: { status: string }[];
@@ -285,30 +275,50 @@ export function calculateProviderScore(input: ProviderScoreCalculationInput): Pr
   };
 }
 
-// Fetches everything needed to score a provider and writes the result
-// back onto provider_leads, logging a `score_change` activity when the
-// score actually moved. Always uses the service-role client since scoring
-// reads across tables (quote_requests, provider_quote_submissions) an
-// agent's session may not have RLS access to directly.
-export async function recalculateProviderScore(providerLeadId: string, reason: string): Promise<ProviderScoreResult | null> {
+// Fetches everything needed to score an operational provider and writes
+// the result back onto cleaning_providers, logging a `score_change`
+// activity when the score actually moved. Activity/follow-up/email
+// history includes both this provider's own directly-logged rows
+// (cleaning_provider_id = cleaningProviderId) and its acquisition-phase
+// history from before approval (provider_lead_id belonging to any
+// provider_leads row permanently linked to it), so scoring - and the
+// timeline shown on the profile - reflect the provider's complete
+// history, not just what happened after approval. Always uses the
+// service-role client since scoring reads across tables (quote_requests,
+// provider_quote_submissions) an agent's session may not have RLS access
+// to directly.
+export async function recalculateProviderScore(cleaningProviderId: string, reason: string): Promise<ProviderScoreResult | null> {
   const admin = getSupabaseAdmin();
   const { data: provider } = await admin
-    .from("provider_leads")
+    .from("cleaning_providers")
     .select("*")
-    .eq("id", providerLeadId)
+    .eq("id", cleaningProviderId)
     .maybeSingle();
   if (!provider) return null;
 
   const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
+  const { data: linkedLeads } = await admin
+    .from("provider_leads")
+    .select("id")
+    .eq("cleaning_provider_id", cleaningProviderId);
+  const linkedLeadIds = (linkedLeads ?? []).map((l) => l.id as string);
+  const leadOrFilter = linkedLeadIds.length > 0 ? `,provider_lead_id.in.(${linkedLeadIds.join(",")})` : "";
+
   const [{ data: documents }, { data: followUps }, { data: emails }, { data: recentActivities }] = await Promise.all([
-    admin.from("provider_documents").select("*").eq("provider_lead_id", providerLeadId),
-    admin.from("crm_followups").select("status, scheduled_at").eq("provider_lead_id", providerLeadId),
-    admin.from("crm_lead_emails").select("status").eq("provider_lead_id", providerLeadId),
+    admin.from("provider_documents").select("*").eq("cleaning_provider_id", cleaningProviderId).is("removed_at", null),
+    admin
+      .from("crm_followups")
+      .select("status, scheduled_at")
+      .or(`cleaning_provider_id.eq.${cleaningProviderId}${leadOrFilter}`),
+    admin
+      .from("crm_lead_emails")
+      .select("status")
+      .or(`cleaning_provider_id.eq.${cleaningProviderId}${leadOrFilter}`),
     admin
       .from("crm_activities")
       .select("id")
-      .eq("provider_lead_id", providerLeadId)
+      .or(`cleaning_provider_id.eq.${cleaningProviderId}${leadOrFilter}`)
       .gte("occurred_at", sixtyDaysAgo),
   ]);
 
@@ -316,25 +326,23 @@ export async function recalculateProviderScore(providerLeadId: string, reason: s
   let submitted = 0;
   let accepted = 0;
 
-  if (provider.cleaning_provider_id) {
-    const { data: requests } = await admin
-      .from("quote_requests")
-      .select("id, status")
-      .eq("assigned_provider_id", provider.cleaning_provider_id);
-    opportunities = requests?.length ?? 0;
-    if (opportunities > 0) {
-      const ids = requests!.map((r) => r.id as string);
-      const { data: submissions } = await admin
-        .from("provider_quote_submissions")
-        .select("quote_request_id")
-        .in("quote_request_id", ids);
-      submitted = new Set((submissions ?? []).map((s) => s.quote_request_id)).size;
-      accepted = (requests ?? []).filter((r) => r.status === "Customer Accepted").length;
-    }
+  const { data: requests } = await admin
+    .from("quote_requests")
+    .select("id, status")
+    .eq("assigned_provider_id", cleaningProviderId);
+  opportunities = requests?.length ?? 0;
+  if (opportunities > 0) {
+    const ids = requests!.map((r) => r.id as string);
+    const { data: submissions } = await admin
+      .from("provider_quote_submissions")
+      .select("quote_request_id")
+      .in("quote_request_id", ids);
+    submitted = new Set((submissions ?? []).map((s) => s.quote_request_id)).size;
+    accepted = (requests ?? []).filter((r) => r.status === "Customer Accepted").length;
   }
 
   const result = calculateProviderScore({
-    provider: provider as ProviderLeadRow,
+    provider: provider as CleaningProviderRow,
     documents: (documents ?? []) as ProviderDocumentRow[],
     followUps: followUps ?? [],
     emails: emails ?? [],
@@ -345,7 +353,7 @@ export async function recalculateProviderScore(providerLeadId: string, reason: s
   const previousScore = provider.score as number | null;
 
   const { error: updateError } = await admin
-    .from("provider_leads")
+    .from("cleaning_providers")
     .update({
       score: result.score,
       score_label: result.label,
@@ -354,12 +362,12 @@ export async function recalculateProviderScore(providerLeadId: string, reason: s
       score_is_new_provider: result.isNewProvider,
       score_calculated_at: new Date().toISOString(),
     })
-    .eq("id", providerLeadId);
+    .eq("id", cleaningProviderId);
   if (updateError) throw updateError;
 
   if (previousScore !== result.score) {
     await admin.from("crm_activities").insert({
-      provider_lead_id: providerLeadId,
+      cleaning_provider_id: cleaningProviderId,
       agent_id: null,
       activity_type: "score_change",
       notes: `Score recalculated: ${previousScore ?? "—"} → ${result.score} (${result.label}). Reason: ${reason}.`,
@@ -372,8 +380,8 @@ export async function recalculateProviderScore(providerLeadId: string, reason: s
 // Non-blocking entry point every mutation site should use (brief: "Do not
 // allow score recalculation failures to block ordinary CRM activity") -
 // fire-and-forget, logging any failure instead of throwing.
-export function recalculateProviderScoreSafely(providerLeadId: string, reason: string): void {
-  recalculateProviderScore(providerLeadId, reason).catch((err) => {
+export function recalculateProviderScoreSafely(cleaningProviderId: string, reason: string): void {
+  recalculateProviderScore(cleaningProviderId, reason).catch((err) => {
     console.error("[provider-score] Failed to recalculate score:", err);
   });
 }

@@ -2,59 +2,40 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
-  ADMIN_ONLY_STATUSES,
   CANADIAN_PROVINCES_AND_TERRITORIES,
+  CLEANING_PROVIDER_STATUS_STYLES,
   PROVIDER_ACTIVITY_TYPE_LABELS,
-  PROVIDER_CALL_OUTCOMES,
   PROVIDER_SERVICES_OFFERED,
-  PROVIDER_STATUSES,
-  PROVIDER_STATUS_STYLES,
-  CALL_OUTCOMES_REQUIRING_FOLLOW_UP,
-  isProviderOverdue,
-  overdueProviderDurationLabel,
+  type CleaningProviderRow,
   type LatestProviderLeadEmail,
   type ProviderActivityRow,
-  type ProviderCallOutcome,
   type ProviderEmailHistoryRow,
   type ProviderFollowUpRow,
-  type ProviderIntakeVersionRow,
-  type ProviderLeadRow,
   type ProviderNoteRow,
+  type ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
 import { toDatetimeLocal, type CrmUserRow } from "@/lib/crm-types";
+import type { ProviderQuoteHistoryRow } from "@/lib/provider-quote-history";
 import ProviderEmailStatusPanel from "@/components/ProviderEmailStatusPanel";
-import SendProviderIntakeModal from "@/components/SendProviderIntakeModal";
 import SendProviderEmailModal from "@/components/SendProviderEmailModal";
 import SendProviderSmsModal from "@/components/SendProviderSmsModal";
-import CopyIntakeLinkButton from "@/components/CopyIntakeLinkButton";
-import ProviderFilesCard, { type ProviderDocumentWithUrl } from "./ProviderFilesCard";
-import ProviderNotesCard from "./ProviderNotesCard";
-import ProviderIntakeFormCard from "./ProviderIntakeFormCard";
-import ProviderEmailHistoryCard from "./ProviderEmailHistoryCard";
+import ProviderScorecardCard from "@/components/provider-acquisition/ProviderScorecardCard";
+import ProviderQuoteHistoryCard from "@/components/provider-acquisition/ProviderQuoteHistoryCard";
+import ProviderFilesCard, { type ProviderDocumentWithUrl } from "@/components/provider-acquisition/ProviderFilesCard";
+import ProviderNotesCard from "@/components/provider-acquisition/ProviderNotesCard";
+import ProviderEmailHistoryCard from "@/components/provider-acquisition/ProviderEmailHistoryCard";
 
 const inputClass =
   "w-full rounded-[10px] border border-[var(--color-input-border,#d6dbe3)] bg-white px-3.5 py-2.5 text-[14.5px] text-slate-900";
 
-export type ProviderDetailActions = {
+export type OperationalProviderDetailActions = {
   updateProfile: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
-  updateStatus: (providerId: string, status: string) => Promise<{ error?: string }>;
-  addCallNote: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
+  updateStatus?: (providerId: string, status: string) => Promise<{ error?: string }>;
   addActivity: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
-  sendIntakeEmail: (providerId: string) => Promise<{ error?: string; email?: string }>;
   sendEmail: (providerId: string, formData: FormData) => Promise<{ error?: string; email?: string }>;
   sendSms: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
-  markIntakeFormCompleted: (providerId: string) => Promise<{ error?: string }>;
-  // Admin-only: the *only* way a lead becomes the permanent operational
-  // Provider Profile (cleaning_providers) - see lib/provider-approval.ts.
-  approveAndAddToDirectory?: (providerId: string) => Promise<{ error?: string; cleaningProviderId?: string }>;
-  markNotInterested: (providerId: string) => Promise<{ error?: string }>;
-  markSuspended?: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
-  markDeclined?: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
-  flagForReview?: (providerId: string, reason: string) => Promise<{ error?: string }>;
-  closeProviderLead: (providerId: string) => Promise<{ error?: string }>;
-  reopenProviderLead?: (providerId: string) => Promise<{ error?: string }>;
-  deleteProviderLead: (providerId: string) => Promise<{ error?: string }>;
   assignAgent?: (providerId: string, agentId: string | null) => Promise<{ error?: string }>;
   scheduleFollowUp: (providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
   rescheduleFollowUp: (
@@ -68,60 +49,56 @@ export type ProviderDetailActions = {
   updateNote: (noteId: string, providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
   uploadDocument: (providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
   removeDocument?: (documentId: string, providerId: string) => Promise<{ error?: string } | void>;
+  addScoreAdjustment?: (providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
+  recalculateScore?: (providerId: string) => Promise<{ error?: string } | void>;
+  deleteProvider?: (providerId: string) => Promise<{ error?: string } | void>;
 };
 
-// Provider Acquisition detail page - the recruiting pipeline only. Once a
-// lead is approved ("Approve and Add to Providers"), the permanent
-// operational Provider Profile lives on cleaning_providers instead (see
-// src/components/providers/OperationalProviderDetailClient.tsx); the
-// page.tsx wrapping this component redirects there automatically for any
-// already-approved lead, so this view never needs to render a Scorecard,
-// Quote History, or Performance Metrics section - those are operational-
-// profile-only. Shared by both /agent/provider-acquisition/[id] and
-// /admin/crm/provider-acquisition/[id]; every action is injected as a
-// prop so this one component covers both roles' UI while each page's own
-// Server Actions stay scoped to their own requireCrmUser()/
-// requireCrmAdmin() + RLS.
-export default function ProviderDetailClient({
+// The permanent operational Provider Profile - built on cleaning_providers
+// (the pre-existing quote-assignment directory), used everywhere a
+// provider is opened: the Providers directory, an approved Provider
+// Acquisition record, quote assignment, and quote history alike. Shared
+// by /admin/providers/[id] and /agent/providers/[id]; every action is
+// injected as a prop so this one component covers both roles.
+export default function OperationalProviderDetailClient({
   provider,
   activities,
   followUps,
-  latestEmail,
-  emailHistory,
   notes,
   documents,
-  intakeVersions,
+  scoreAdjustments,
+  emailHistory,
+  latestEmail,
+  quoteHistory,
   logoUrl,
-  justAdded,
+  linkedLead,
   isAdmin,
   currentUserId,
   agents,
   actions,
   listPath,
 }: {
-  provider: ProviderLeadRow;
+  provider: CleaningProviderRow;
   activities: ProviderActivityRow[];
   followUps: ProviderFollowUpRow[];
-  latestEmail: LatestProviderLeadEmail | null;
-  emailHistory: ProviderEmailHistoryRow[];
   notes: ProviderNoteRow[];
   documents: ProviderDocumentWithUrl[];
-  intakeVersions: ProviderIntakeVersionRow[];
+  scoreAdjustments: ProviderScoreAdjustmentRow[];
+  emailHistory: ProviderEmailHistoryRow[];
+  latestEmail: LatestProviderLeadEmail | null;
+  quoteHistory: ProviderQuoteHistoryRow[];
   logoUrl: string | null;
-  justAdded: boolean;
+  linkedLead: { id: string; business_name: string } | null;
   isAdmin: boolean;
   currentUserId: string;
   agents?: CrmUserRow[];
-  actions: ProviderDetailActions;
+  actions: OperationalProviderDetailActions;
   listPath: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [addingCallNote, setAddingCallNote] = useState(false);
-  const [callOutcome, setCallOutcome] = useState<ProviderCallOutcome | "">("");
-  const [showSendModal, setShowSendModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [sendSuccess, setSendSuccess] = useState<string | null>(null);
@@ -143,35 +120,21 @@ export default function ProviderDetailClient({
   const agentById = new Map((agents ?? []).map((a) => [a.id, a]));
   const assignedAgent = provider.assigned_agent_id ? agentById.get(provider.assigned_agent_id) : null;
 
-  // "Approved Provider" is never a plain dropdown option for anyone - it's
-  // only ever reached through the dedicated "Approve and Add to
-  // Providers" action, which also creates/links the operational profile.
-  const visibleStatuses = PROVIDER_STATUSES.filter(
-    (s) => s !== "Approved Provider" && (isAdmin || !ADMIN_ONLY_STATUSES.includes(s) || s === provider.status)
-  );
-
   return (
     <div>
-      {justAdded && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Provider lead saved.
-        </div>
-      )}
-
-      {provider.cleaning_provider_id && (
-        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          This provider has already been approved and added to the Providers directory.{" "}
-          <a
-            href={`/${isAdmin ? "admin" : "agent"}/providers/${provider.cleaning_provider_id}`}
-            className="font-semibold underline"
+      {linkedLead && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Onboarded from Provider Acquisition —{" "}
+          <Link
+            href={`/${isAdmin ? "admin/crm" : "agent"}/provider-acquisition/${linkedLead.id}`}
+            className="font-semibold text-sky-600"
           >
-            Open the Provider Profile
-          </a>
+            view the original recruiting record
+          </Link>
           .
         </div>
       )}
 
-      {/* Header - business name, logo, status badge, permission indicator */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-4">
           {logoUrl ? (
@@ -179,14 +142,14 @@ export default function ProviderDetailClient({
             <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl border border-slate-200 object-contain bg-white" />
           ) : (
             <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-lg font-bold text-slate-400">
-              {provider.business_name.slice(0, 1).toUpperCase()}
+              {provider.company_name.slice(0, 1).toUpperCase()}
             </div>
           )}
           <div>
-            <h1 className="text-[22px] font-bold text-slate-900">{provider.business_name}</h1>
+            <h1 className="text-[22px] font-bold text-slate-900">{provider.company_name}</h1>
             <p className="mt-1 text-sm text-slate-500">
               {provider.contact_person ? `${provider.contact_person}${provider.job_title ? ` — ${provider.job_title}` : ""} · ` : ""}
-              {provider.phone} · {provider.city}, {provider.province}
+              {[provider.phone, provider.city, provider.province].filter(Boolean).join(" · ")}
             </p>
             {isAdmin && (
               <p className="mt-1 text-sm text-slate-500">
@@ -195,37 +158,32 @@ export default function ProviderDetailClient({
             )}
           </div>
         </div>
-        <select
-          value={provider.status}
-          disabled={isPending}
-          onChange={(e) => runAction(() => actions.updateStatus(provider.id, e.target.value))}
-          className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${PROVIDER_STATUS_STYLES[provider.status]}`}
-        >
-          {visibleStatuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
+        {actions.updateStatus ? (
+          <select
+            value={provider.status}
+            disabled={isPending}
+            onChange={(e) => runAction(() => actions.updateStatus!(provider.id, e.target.value))}
+            className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${CLEANING_PROVIDER_STATUS_STYLES[provider.status]}`}
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        ) : (
+          <span className={`rounded-full px-3.5 py-2 text-[13px] font-semibold ${CLEANING_PROVIDER_STATUS_STYLES[provider.status]}`}>
+            {provider.status}
+          </span>
+        )}
       </div>
 
       <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-[12.5px] text-slate-600">
         {isAdmin
-          ? "Administrator access — full edit, approval, and deletion rights on this recruiting record."
-          : "Agent access — you can manage this recruiting record, but approving, suspending, declining, reassigning, or deleting requires an administrator."}
+          ? "Administrator access — full edit, status, and deletion rights on this profile."
+          : "Agent access — you can manage this provider's profile, contact info, services, notes, communication, and documents. Changing the operational status, reassigning, or deleting requires an administrator."}
       </p>
 
-      {isProviderOverdue(provider) && provider.next_follow_up_at && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          Overdue — {overdueProviderDurationLabel(provider.next_follow_up_at)} (was due{" "}
-          {new Date(provider.next_follow_up_at).toLocaleString()})
-        </p>
-      )}
-
       {error && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
 
       {isAdmin && agents && actions.assignAgent && (
@@ -247,25 +205,28 @@ export default function ProviderDetailClient({
         </div>
       )}
 
+      {provider.score !== null && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => document.getElementById("scorecard")?.scrollIntoView({ behavior: "smooth" })}
+            className="flex items-center gap-2"
+          >
+            <span className="text-2xl font-bold text-slate-900">{provider.score}</span>
+            {provider.score_label && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11.5px] font-semibold text-slate-700">
+                {provider.score_label}
+              </span>
+            )}
+            <span className="text-[12.5px] font-semibold text-sky-600">View Scorecard →</span>
+          </button>
+        </div>
+      )}
+
       <ProviderEmailStatusPanel latestEmail={latestEmail} />
 
-      {/* Quick Actions (brief "QUICK ACTIONS") */}
       <div className="mt-6 flex flex-wrap gap-2.5">
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Provider"}</ActionButton>
-        <ActionButton onClick={() => setAddingCallNote((v) => !v)}>
-          {addingCallNote ? "Cancel Call Note" : "Add Call Note"}
-        </ActionButton>
-        <ActionButton
-          primary
-          disabled={!provider.email}
-          onClick={() => {
-            setSendSuccess(null);
-            setShowSendModal(true);
-          }}
-        >
-          Send Intake Form
-        </ActionButton>
-        <CopyIntakeLinkButton className="rounded-full border border-slate-300 px-3.5 py-1.5 text-[13px] font-semibold text-slate-700 hover:border-slate-400" />
         <ActionButton
           disabled={!provider.email}
           onClick={() => {
@@ -276,6 +237,7 @@ export default function ProviderDetailClient({
           Send Email
         </ActionButton>
         <ActionButton
+          disabled={!provider.phone}
           onClick={() => {
             setSendSuccess(null);
             setShowSmsModal(true);
@@ -289,103 +251,20 @@ export default function ProviderDetailClient({
         <ActionButton onClick={() => document.getElementById("files")?.scrollIntoView({ behavior: "smooth" })}>
           Upload Document
         </ActionButton>
-        {provider.status !== "Intake Form Completed" && (
+        <ActionButton onClick={() => document.getElementById("quote-history")?.scrollIntoView({ behavior: "smooth" })}>
+          View Quote History
+        </ActionButton>
+        {isAdmin && actions.deleteProvider && (
           <ActionButton
             disabled={isPending}
-            onClick={() => runAction(() => actions.markIntakeFormCompleted(provider.id))}
-          >
-            Mark Intake Form Completed
-          </ActionButton>
-        )}
-        {isAdmin && actions.approveAndAddToDirectory && !provider.cleaning_provider_id && (
-          <ActionButton
-            primary
-            disabled={isPending}
+            danger
             onClick={() => {
+              if (!confirm(`Delete "${provider.company_name}"? This cannot be undone.`)) return;
               setError(null);
               startTransition(async () => {
                 try {
-                  const result = await actions.approveAndAddToDirectory!(provider.id);
-                  if (result.error) {
-                    setError(result.error);
-                    return;
-                  }
-                  router.push(`/admin/providers/${result.cleaningProviderId}`);
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Something went wrong.");
-                }
-              });
-            }}
-          >
-            Approve and Add to Providers
-          </ActionButton>
-        )}
-        {provider.status !== "Not Interested" && (
-          <ActionButton
-            disabled={isPending}
-            onClick={() => runAction(() => actions.markNotInterested(provider.id))}
-          >
-            Mark Not Interested
-          </ActionButton>
-        )}
-        {isAdmin && actions.markDeclined && provider.status !== "Declined" && (
-          <ActionButton
-            danger
-            disabled={isPending}
-            onClick={() => {
-              const reason = window.prompt("Reason for declining this provider:");
-              if (reason === null) return;
-              const fd = new FormData();
-              fd.set("reason", reason);
-              runAction(() => actions.markDeclined!(provider.id, fd));
-            }}
-          >
-            Decline Provider
-          </ActionButton>
-        )}
-        {!isAdmin && actions.flagForReview && (
-          <ActionButton
-            disabled={isPending}
-            onClick={() => {
-              const reason = window.prompt("Why should an administrator review this provider?");
-              if (!reason) return;
-              runAction(() => actions.flagForReview!(provider.id, reason));
-            }}
-          >
-            Flag for Admin Review
-          </ActionButton>
-        )}
-        {provider.status !== "Closed" ? (
-          <ActionButton
-            disabled={isPending}
-            danger
-            onClick={() => {
-              if (confirm(`Close "${provider.business_name}"?`)) {
-                runAction(() => actions.closeProviderLead(provider.id));
-              }
-            }}
-          >
-            Close Lead
-          </ActionButton>
-        ) : (
-          isAdmin &&
-          actions.reopenProviderLead && (
-            <ActionButton disabled={isPending} onClick={() => runAction(() => actions.reopenProviderLead!(provider.id))}>
-              Reopen Provider
-            </ActionButton>
-          )
-        )}
-        {isAdmin && (
-          <ActionButton
-            disabled={isPending}
-            danger
-            onClick={() => {
-              if (!confirm(`Delete "${provider.business_name}"? This cannot be undone.`)) return;
-              setError(null);
-              startTransition(async () => {
-                try {
-                  const result = await actions.deleteProviderLead(provider.id);
-                  if (result?.error) {
+                  const result = await actions.deleteProvider!(provider.id);
+                  if (result && "error" in result && result.error) {
                     setError(result.error);
                     return;
                   }
@@ -400,19 +279,8 @@ export default function ProviderDetailClient({
           </ActionButton>
         )}
       </div>
-      {sendSuccess && (
-        <p className="mt-2 text-[13px] font-medium text-emerald-700">{sendSuccess}</p>
-      )}
+      {sendSuccess && <p className="mt-2 text-[13px] font-medium text-emerald-700">{sendSuccess}</p>}
 
-      {showSendModal && (
-        <SendProviderIntakeModal
-          provider={provider}
-          isPending={isPending}
-          sendAction={actions.sendIntakeEmail}
-          onClose={() => setShowSendModal(false)}
-          onSent={(email) => setSendSuccess(`Intake form email sent to ${email}.`)}
-        />
-      )}
       {showEmailModal && (
         <SendProviderEmailModal
           providerEmail={provider.email}
@@ -422,7 +290,7 @@ export default function ProviderDetailClient({
           onSent={(email) => setSendSuccess(`Email sent to ${email}.`)}
         />
       )}
-      {showSmsModal && (
+      {showSmsModal && provider.phone && (
         <SendProviderSmsModal
           providerPhone={provider.phone}
           isPending={isPending}
@@ -434,9 +302,7 @@ export default function ProviderDetailClient({
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
-            General Information
-          </h2>
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">General Information</h2>
 
           {editing ? (
             <form
@@ -450,19 +316,18 @@ export default function ProviderDetailClient({
                 <span className="text-[13px] font-semibold text-slate-600">Company Logo (optional)</span>
                 <input type="file" name="logo" accept="image/*" className="text-[13.5px]" />
               </label>
-              <LabeledInput name="business_name" label="Business Name" defaultValue={provider.business_name} required />
+              <LabeledInput name="company_name" label="Business Name" defaultValue={provider.company_name} required />
               <LabeledInput name="contact_person" label="Contact Person" defaultValue={provider.contact_person ?? ""} />
               <LabeledInput name="job_title" label="Job Title" defaultValue={provider.job_title ?? ""} />
-              <LabeledInput name="phone" label="Phone Number" defaultValue={provider.phone} required />
+              <LabeledInput name="phone" label="Phone Number" defaultValue={provider.phone ?? ""} />
               <LabeledInput name="email" label="Email Address" type="email" defaultValue={provider.email ?? ""} />
               <LabeledInput name="website" label="Website" type="url" defaultValue={provider.website ?? ""} />
               <LabeledInput name="street_address" label="Business Address" defaultValue={provider.street_address ?? ""} />
-              <LabeledInput name="city" label="City" defaultValue={provider.city} required />
+              <LabeledInput name="city" label="City" defaultValue={provider.city ?? ""} />
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">
-                  Province <span className="text-red-600">*</span>
-                </span>
-                <select name="province" required defaultValue={provider.province} className={inputClass}>
+                <span className="text-[13px] font-semibold text-slate-600">Province</span>
+                <select name="province" defaultValue={provider.province ?? ""} className={inputClass}>
+                  <option value="">—</option>
                   {CANADIAN_PROVINCES_AND_TERRITORIES.map((p) => (
                     <option key={p} value={p}>
                       {p}
@@ -480,11 +345,7 @@ export default function ProviderDetailClient({
                   className={`${inputClass} min-h-[60px] resize-y`}
                 />
               </label>
-              <LabeledInput
-                name="years_in_business"
-                label="Years in Business"
-                defaultValue={provider.years_in_business ?? ""}
-              />
+              <LabeledInput name="years_in_business" label="Years in Business" defaultValue={provider.years_in_business ?? ""} />
               <LabeledInput
                 name="number_of_employees"
                 label="Number of Employees (optional)"
@@ -498,7 +359,6 @@ export default function ProviderDetailClient({
                   className={`${inputClass} min-h-[70px] resize-y`}
                 />
               </label>
-              <LabeledInput name="lead_source" label="Lead Source" defaultValue={provider.lead_source ?? ""} />
 
               <div>
                 <span className="text-[13px] font-semibold text-slate-600">Services Offered</span>
@@ -522,9 +382,14 @@ export default function ProviderDetailClient({
                 WSIB / WCB documentation applies to this provider
               </label>
 
+              <LabeledInput name="service_locations" label="Service Locations (legacy free text)" defaultValue={provider.service_locations ?? ""} />
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Notes</span>
-                <textarea name="notes" defaultValue={provider.notes ?? ""} className={`${inputClass} min-h-[90px] resize-y`} />
+                <span className="text-[13px] font-semibold text-slate-600">Pricing Notes</span>
+                <textarea name="pricing_notes" defaultValue={provider.pricing_notes ?? ""} className={`${inputClass} min-h-[70px] resize-y`} />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Internal Notes (legacy free text)</span>
+                <textarea name="internal_notes" defaultValue={provider.internal_notes ?? ""} className={`${inputClass} min-h-[90px] resize-y`} />
               </label>
 
               <button
@@ -543,9 +408,7 @@ export default function ProviderDetailClient({
               <Row label="Postal Code" value={provider.postal_code} />
               <Row label="Years in Business" value={provider.years_in_business} />
               <Row label="Number of Employees" value={provider.number_of_employees} />
-              <Row label="Lead Source" value={provider.lead_source} />
               <Row label="Date Added" value={new Date(provider.created_at).toLocaleString()} />
-              <Row label="Last Updated" value={new Date(provider.updated_at).toLocaleString()} />
               <Row
                 label="Last Contact Date"
                 value={provider.last_contacted_at ? new Date(provider.last_contacted_at).toLocaleString() : null}
@@ -554,25 +417,22 @@ export default function ProviderDetailClient({
                 label="Next Follow-up Date"
                 value={provider.next_follow_up_at ? new Date(provider.next_follow_up_at).toLocaleString() : null}
               />
-              {provider.closed_at && (
-                <Row label="Closed" value={new Date(provider.closed_at).toLocaleString()} />
-              )}
+              <Row label="Pricing Notes" value={provider.pricing_notes} />
               {provider.business_description && (
                 <div className="border-t border-slate-100 pt-2.5">
                   <dt className="text-slate-500">Business Description</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-slate-900">{provider.business_description}</dd>
                 </div>
               )}
-              {provider.notes && (
+              {provider.internal_notes && (
                 <div className="border-t border-slate-100 pt-2.5">
-                  <dt className="text-slate-500">Notes</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-slate-900">{provider.notes}</dd>
+                  <dt className="text-slate-500">Internal Notes</dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-slate-900">{provider.internal_notes}</dd>
                 </div>
               )}
             </dl>
           )}
 
-          {/* Services (brief "SERVICE INFORMATION") */}
           <div className="mt-5 border-t border-slate-100 pt-5">
             <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Services Offered</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -588,10 +448,9 @@ export default function ProviderDetailClient({
             </div>
           </div>
 
-          {/* Service Area (brief "SERVICE AREA") */}
           <div className="mt-5 border-t border-slate-100 pt-5">
             <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Service Area</h3>
-            <p className="mt-2 text-[13.5px] text-slate-700">Province: {provider.province}</p>
+            <p className="mt-2 text-[13.5px] text-slate-700">Province: {provider.province || "—"}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {provider.cities_served.length === 0 ? (
                 <p className="text-[13px] text-slate-500">No cities served on file.</p>
@@ -607,9 +466,7 @@ export default function ProviderDetailClient({
 
           <div className="mt-5 border-t border-slate-100 pt-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
-                Scheduled Follow-ups
-              </h3>
+              <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Scheduled Follow-ups</h3>
               <button type="button" onClick={() => setShowSchedule((v) => !v)} className="text-[13px] font-semibold text-sky-600">
                 {showSchedule ? "Cancel" : "+ Schedule"}
               </button>
@@ -638,9 +495,7 @@ export default function ProviderDetailClient({
                 {followUps.map((followUp) => (
                   <li key={followUp.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-900">
-                        {new Date(followUp.scheduled_at).toLocaleString()}
-                      </span>
+                      <span className="font-medium text-slate-900">{new Date(followUp.scheduled_at).toLocaleString()}</span>
                     </div>
                     {followUp.note && <p className="mt-1 text-slate-700">{followUp.note}</p>}
                     <div className="mt-2 flex flex-wrap gap-3">
@@ -704,60 +559,8 @@ export default function ProviderDetailClient({
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          {addingCallNote && (
-            <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-4">
-              <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-800">Add Call Note</h2>
-              <form
-                action={(formData) => {
-                  runAction(async () => {
-                    const result = await actions.addCallNote(provider.id, formData);
-                    if (!result?.error) {
-                      setAddingCallNote(false);
-                      setCallOutcome("");
-                    }
-                    return result;
-                  });
-                }}
-                className="mt-3 space-y-3"
-              >
-                <select
-                  name="call_outcome"
-                  required
-                  value={callOutcome}
-                  onChange={(e) => setCallOutcome(e.target.value as ProviderCallOutcome)}
-                  className={inputClass}
-                >
-                  <option value="" disabled>
-                    Select a call outcome…
-                  </option>
-                  {PROVIDER_CALL_OUTCOMES.map((outcome) => (
-                    <option key={outcome} value={outcome}>
-                      {outcome}
-                    </option>
-                  ))}
-                </select>
-                <textarea name="notes" placeholder="Notes" className={`${inputClass} min-h-[70px] resize-y`} />
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-semibold text-slate-600">
-                    Next Follow-up Date
-                    {callOutcome && CALL_OUTCOMES_REQUIRING_FOLLOW_UP.includes(callOutcome) && (
-                      <span className="text-red-600"> * (required for &quot;Follow-up Requested&quot;)</span>
-                    )}
-                  </span>
-                  <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
-                </label>
-                <button type="submit" disabled={isPending} className="w-full rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700">
-                  Save Call Note
-                </button>
-              </form>
-            </div>
-          )}
-
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Log Activity</h2>
-          <form
-            action={(formData) => runAction(() => actions.addActivity(provider.id, formData))}
-            className="mt-4 space-y-3"
-          >
+          <form action={(formData) => runAction(() => actions.addActivity(provider.id, formData))} className="mt-4 space-y-3">
             <select name="activity_type" required className={inputClass} defaultValue="note">
               {(["call", "email", "text", "voicemail", "note", "outcome"] as const).map((type) => (
                 <option key={type} value={type}>
@@ -775,9 +578,7 @@ export default function ProviderDetailClient({
             </button>
           </form>
 
-          <h2 className="mt-6 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
-            Activity Timeline
-          </h2>
+          <h2 className="mt-6 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Activity Timeline</h2>
           {activities.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No activity logged yet.</p>
           ) : (
@@ -789,9 +590,7 @@ export default function ProviderDetailClient({
                       {PROVIDER_ACTIVITY_TYPE_LABELS[activity.activity_type] ?? activity.activity_type}
                       {activity.call_outcome && ` — ${activity.call_outcome}`}
                     </span>
-                    <span className="text-[12px] text-slate-500">
-                      {new Date(activity.occurred_at).toLocaleString()}
-                    </span>
+                    <span className="text-[12px] text-slate-500">{new Date(activity.occurred_at).toLocaleString()}</span>
                   </div>
                   {activity.notes && <p className="mt-1 whitespace-pre-wrap text-slate-700">{activity.notes}</p>}
                   {activity.next_follow_up_at && (
@@ -806,20 +605,31 @@ export default function ProviderDetailClient({
         </section>
       </div>
 
-      <div className="mt-6">
-        <ProviderIntakeFormCard
-          submission={provider.intake_submission}
-          completedAt={provider.intake_completed_at}
-          versions={intakeVersions}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ProviderScorecardCard
+          score={provider.score}
+          label={provider.score_label}
+          breakdown={provider.score_breakdown}
+          missingCategories={provider.score_missing_categories}
+          isNewProvider={provider.score_is_new_provider}
+          calculatedAt={provider.score_calculated_at}
+          adjustments={scoreAdjustments}
+          isAdmin={isAdmin}
+          onAddAdjustment={
+            actions.addScoreAdjustment ? (formData) => actions.addScoreAdjustment!(provider.id, formData) : undefined
+          }
+          onRecalculate={actions.recalculateScore ? () => actions.recalculateScore!(provider.id) : undefined}
         />
+
+        <PerformanceMetricsCard quoteHistory={quoteHistory} />
       </div>
 
       <div className="mt-6">
-        <ProviderEmailHistoryCard
-          emails={emailHistory}
-          isAdmin={isAdmin}
-          onResendIntake={() => actions.sendIntakeEmail(provider.id)}
-        />
+        <ProviderQuoteHistoryCard quoteHistory={quoteHistory} cleaningProviderId={provider.id} cleaningProviders={[]} isAdmin={isAdmin} />
+      </div>
+
+      <div className="mt-6">
+        <ProviderEmailHistoryCard emails={emailHistory} isAdmin={isAdmin} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -842,25 +652,54 @@ export default function ProviderDetailClient({
   );
 }
 
+function PerformanceMetricsCard({ quoteHistory }: { quoteHistory: ProviderQuoteHistoryRow[] }) {
+  const submitted = quoteHistory.filter((q) => q.finalStatus !== "Awaiting Provider Quote").length;
+  const accepted = quoteHistory.filter((q) => q.accepted).length;
+  const acceptanceRate = submitted > 0 ? Math.round((accepted / submitted) * 100) : null;
+  const values = quoteHistory.filter((q) => q.quoteValue !== null).map((q) => q.quoteValue as number);
+  const avgValue = values.length > 0 ? Math.round(values.reduce((s, v) => s + v, 0) / values.length) : null;
+  const lastSubmitted = quoteHistory[0]?.quoteRequestDate ?? null;
+
+  const stats: { label: string; value: string }[] = [
+    { label: "Total Quote Opportunities", value: String(quoteHistory.length) },
+    { label: "Quotes Submitted", value: String(submitted) },
+    { label: "Quotes Accepted", value: String(accepted) },
+    { label: "Acceptance Rate", value: acceptanceRate !== null ? `${acceptanceRate}%` : "No data yet" },
+    { label: "Average Quote Value", value: avgValue !== null ? `$${avgValue.toLocaleString()}` : "No data yet" },
+    { label: "Last Quote Submitted", value: lastSubmitted ? new Date(lastSubmitted).toLocaleDateString() : "No data yet" },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Provider Statistics</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">{stat.value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[12px] text-slate-500">
+        Average response time and active/completed jobs aren&apos;t tracked automatically yet.
+      </p>
+    </section>
+  );
+}
+
 function ActionButton({
   children,
   onClick,
   disabled,
-  primary,
   danger,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  primary?: boolean;
   danger?: boolean;
 }) {
   const base = "rounded-full px-4 py-2 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
-  const style = primary
-    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-    : danger
-      ? "border border-rose-300 text-rose-700 hover:border-rose-400"
-      : "border border-slate-300 text-slate-700 hover:border-slate-400";
+  const style = danger ? "border border-rose-300 text-rose-700 hover:border-rose-400" : "border border-slate-300 text-slate-700 hover:border-slate-400";
   return (
     <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${style}`}>
       {children}

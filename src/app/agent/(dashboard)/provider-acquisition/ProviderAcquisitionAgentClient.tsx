@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { PROVIDER_INTAKE_URL } from "@/lib/provider-intake-content";
 import {
-  PROVIDER_SCORE_RATING_STYLES,
   PROVIDER_SERVICES_OFFERED,
   PROVIDER_STATUSES,
   PROVIDER_STATUS_STYLES,
@@ -14,14 +13,11 @@ import {
   type ProviderLeadRow,
   type ProviderStatus,
 } from "@/lib/provider-types";
-import { SCORE_FILTER_OPTIONS, matchesScoreFilter, sortByScore, type ScoreFilter } from "@/lib/provider-score-filters";
 import { deleteProviderLeadAction, sendProviderIntakeEmailAction, updateProviderStatusAction } from "./actions";
 
 export default function ProviderAcquisitionAgentClient({ providers }: { providers: ProviderLeadRow[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProviderStatus | "all">("all");
-  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
-  const [sortBy, setSortBy] = useState<"none" | "score_desc" | "score_asc">("none");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [provinceFilter, setProvinceFilter] = useState<string>("all");
   const [isPending, startTransition] = useTransition();
@@ -61,11 +57,10 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const matches = providers.filter((p) => {
+    return providers.filter((p) => {
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       if (serviceFilter !== "all" && !p.services_offered.includes(serviceFilter)) return false;
       if (provinceFilter !== "all" && p.province !== provinceFilter) return false;
-      if (!matchesScoreFilter(p, scoreFilter)) return false;
       if (!query) return true;
       return (
         p.business_name.toLowerCase().includes(query) ||
@@ -77,8 +72,7 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
         p.services_offered.some((s) => s.toLowerCase().includes(query))
       );
     });
-    return sortBy === "none" ? matches : sortByScore(matches, sortBy);
-  }, [providers, query, statusFilter, serviceFilter, provinceFilter, scoreFilter, sortBy]);
+  }, [providers, query, statusFilter, serviceFilter, provinceFilter]);
 
   return (
     <div>
@@ -132,26 +126,6 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
             </option>
           ))}
         </select>
-        <select
-          value={scoreFilter}
-          onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-          className="rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
-        >
-          {SCORE_FILTER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as "none" | "score_desc" | "score_asc")}
-          className="rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
-        >
-          <option value="none">Sort: Newest first</option>
-          <option value="score_desc">Sort: Score high to low</option>
-          <option value="score_asc">Sort: Score low to high</option>
-        </select>
       </div>
 
       {providers.length === 0 ? (
@@ -180,18 +154,18 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <Link
-                    href={`/agent/provider-acquisition/${provider.id}`}
+                    href={
+                      provider.cleaning_provider_id
+                        ? `/agent/providers/${provider.cleaning_provider_id}`
+                        : `/agent/provider-acquisition/${provider.id}`
+                    }
                     className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
                   >
                     {provider.business_name}
                   </Link>
-                  {provider.score !== null && provider.score_label && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        PROVIDER_SCORE_RATING_STYLES[provider.score_label as keyof typeof PROVIDER_SCORE_RATING_STYLES]
-                      }`}
-                    >
-                      {provider.score} · {provider.score_label}
+                  {provider.cleaning_provider_id && (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      Approved
                     </span>
                   )}
                 </span>
@@ -230,7 +204,11 @@ export default function ProviderAcquisitionAgentClient({ providers }: { provider
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Link
-                  href={`/agent/provider-acquisition/${provider.id}`}
+                  href={
+                    provider.cleaning_provider_id
+                      ? `/agent/providers/${provider.cleaning_provider_id}`
+                      : `/agent/provider-acquisition/${provider.id}`
+                  }
                   className="text-[12.5px] font-semibold text-[var(--color-accent)]"
                 >
                   View Provider

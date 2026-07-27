@@ -8,7 +8,7 @@ import { sendProviderIntakeEmail } from "@/lib/send-provider-intake-email";
 import { sendProviderMessageEmail } from "@/lib/send-provider-email";
 import { sendProviderSms } from "@/lib/send-provider-sms";
 import { uploadProviderDocument, uploadProviderLogo, removeProviderDocument } from "@/lib/provider-documents";
-import { recalculateProviderScoreSafely, recalculateProviderScore } from "@/lib/provider-score";
+import { approveProviderAndAddToDirectory } from "@/lib/provider-approval";
 import {
   CALL_OUTCOMES_REQUIRING_FOLLOW_UP,
   PROVIDER_CALL_OUTCOMES,
@@ -127,7 +127,7 @@ export async function updateProviderProfileAction(providerId: string, formData: 
   let logoPath: string | undefined;
   const logoFile = formData.get("logo");
   if (logoFile instanceof File && logoFile.size > 0) {
-    const result = await uploadProviderLogo({ providerLeadId: providerId, file: logoFile });
+    const result = await uploadProviderLogo({ ownerId: providerId, file: logoFile });
     if (result.error) return { error: result.error };
     logoPath = result.path;
   }
@@ -166,75 +166,52 @@ export async function updateProviderProfileAction(providerId: string, formData: 
     notes: `Profile updated by ${admin.full_name || admin.email}.`,
   });
 
-  recalculateProviderScoreSafely(providerId, "Profile edited");
-
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
   return {};
 }
 
-// Admin-only: connects this Provider Acquisition record to a company in
-// the separate, pre-existing private quote-assignment system
-// (cleaning_providers - migration 0004) so Quote History can be shown.
-// Purely additive; neither system's own tables or behavior change.
-export async function linkCleaningProviderAction(providerId: string, cleaningProviderId: string | null): Promise<ActionResult> {
-  await requireCrmAdmin();
-  const supabase = await createSupabaseServerClient();
-
-  const { error } = await supabase
-    .from("provider_leads")
-    .update({ cleaning_provider_id: cleaningProviderId })
-    .eq("id", providerId);
-  if (error) return { error: "Failed to link the quote-system provider record." };
-
-  recalculateProviderScoreSafely(providerId, "Linked to quote-assignment system");
-
-  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
-  return {};
-}
-
-// Administrator-only manual scorecard adjustment (brief "SCORECARD"):
-// always shown separately from the automatically calculated score, and
-// always requires a written reason.
-export async function addScoreAdjustmentAction(providerId: string, formData: FormData): Promise<ActionResult> {
+// "Approve and Add to Providers" (brief: unify the provider identity on
+// cleaning_providers) - the only way a Provider Acquisition lead becomes
+// the permanent operational Provider Profile. Matches an existing
+// cleaning_providers record by email/phone/business name and updates it,
+// or creates a new one; copies contact info, services, service areas,
+// notes, and documents; links provider_leads.cleaning_provider_id
+// permanently; and marks this lead Approved Provider. Idempotent - safe
+// to call again on an already-linked lead. The UI redirects to the
+// returned operational profile afterward, since that's now the profile
+// used everywhere (brief: "opening the provider from Provider
+// Acquisition after approval must open the same operational Provider
+// Profile").
+export async function approveProviderAndAddToDirectoryAction(
+  providerId: string
+): Promise<ActionResult & { cleaningProviderId?: string }> {
   const admin = await requireCrmAdmin();
-  const amountRaw = String(formData.get("amount") ?? "").trim();
-  const reason = String(formData.get("reason") ?? "").trim();
-  const amount = Number(amountRaw);
-
-  if (!Number.isFinite(amount) || amount === 0) return { error: "Enter a non-zero adjustment amount." };
-  if (!reason) return { error: "A written reason is required for a manual adjustment." };
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("provider_score_adjustments").insert({
-    provider_lead_id: providerId,
-    admin_id: admin.id,
-    amount: Math.round(amount),
-    reason,
-  });
-  if (error) return { error: "Failed to save the adjustment." };
-
-  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
-  return {};
-}
-
-// Administrator-only "Recalculate Score" button (brief "SCORE UPDATES").
-export async function recalculateProviderScoreAction(providerId: string): Promise<ActionResult> {
-  await requireCrmAdmin();
   try {
-    await recalculateProviderScore(providerId, "Manually recalculated by an administrator");
-  } catch {
-    return { error: "Failed to recalculate the score." };
+    const { cleaningProviderId } = await approveProviderAndAddToDirectory(providerId, admin);
+    revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
+    revalidatePath("/admin/crm/provider-acquisition");
+    revalidatePath(`/admin/providers/${cleaningProviderId}`);
+    revalidatePath("/admin/providers");
+    return { cleaningProviderId };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to approve this provider." };
   }
-  revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
-  return {};
 }
 
 // The administrator may overwrite or correct the status at any time
-// (brief section 3).
+// (brief section 3) - except "Approved Provider", which is reachable
+// only through approveProviderAndAddToDirectoryAction (above). Setting it
+// directly here would leave the lead marked approved without ever
+// creating or linking the permanent operational Provider Profile, which
+// is exactly the disconnected-profile problem this action exists to
+// prevent.
 export async function updateProviderStatusAction(providerId: string, status: string): Promise<ActionResult> {
   const crmAdmin = await requireCrmAdmin();
   if (!PROVIDER_STATUSES.includes(status as ProviderStatus)) return { error: "Invalid status." };
+  if (status === "Approved Provider") {
+    return { error: 'Use "Approve and Add to Providers" to approve this provider.' };
+  }
 
   const supabase = await createSupabaseServerClient();
   const update: { status: string; closed_at?: string | null; closed_by?: string | null } = { status };
@@ -252,8 +229,6 @@ export async function updateProviderStatusAction(providerId: string, status: str
     activity_type: "status_change",
     notes: `Status changed to "${status}" by ${crmAdmin.full_name || crmAdmin.email}.`,
   });
-
-  recalculateProviderScoreSafely(providerId, `Status changed to "${status}"`);
 
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
@@ -389,7 +364,6 @@ export async function sendProviderIntakeEmailAction(providerId: string): Promise
 
   try {
     const result = await sendProviderIntakeEmail(supabase, providerId, crmUser);
-    recalculateProviderScoreSafely(providerId, "Intake form email sent");
     revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
     revalidatePath("/admin/crm/provider-acquisition");
     return result;
@@ -410,7 +384,7 @@ export async function sendProviderEmailAction(
 
   const supabase = await createSupabaseServerClient();
   try {
-    const result = await sendProviderMessageEmail(supabase, providerId, crmUser, subject, message);
+    const result = await sendProviderMessageEmail(supabase, { providerLeadId: providerId }, crmUser, subject, message);
     revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
     return result;
   } catch (err) {
@@ -426,7 +400,7 @@ export async function sendProviderSmsAction(providerId: string, formData: FormDa
 
   const supabase = await createSupabaseServerClient();
   try {
-    await sendProviderSms(supabase, providerId, crmUser, message);
+    await sendProviderSms(supabase, { providerLeadId: providerId }, crmUser, message);
     revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
     return {};
   } catch (err) {
@@ -482,14 +456,12 @@ export async function uploadProviderDocumentAction(providerId: string, formData:
   if (!(file instanceof File) || file.size === 0) return { error: "Please choose a file to upload." };
 
   const result = await uploadProviderDocument({
-    providerLeadId: providerId,
+    target: { providerLeadId: providerId },
     uploadedBy: crmUser.id,
     docType: docType as ProviderDocumentType,
     file,
   });
   if (result.error) return result;
-
-  recalculateProviderScoreSafely(providerId, `Document uploaded: ${docType}`);
 
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   return {};
@@ -502,8 +474,6 @@ export async function removeProviderDocumentAction(documentId: string, providerI
 
   const result = await removeProviderDocument({ documentId, removedBy: crmUser.id });
   if (result.error) return result;
-
-  recalculateProviderScoreSafely(providerId, "Document removed");
 
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   return {};
@@ -533,8 +503,6 @@ async function setStatusWithActivity(
     notes: activityNote,
   });
 
-  recalculateProviderScoreSafely(providerId, activityNote);
-
   revalidatePath(`/admin/crm/provider-acquisition/${providerId}`);
   revalidatePath("/admin/crm/provider-acquisition");
   refresh();
@@ -545,9 +513,10 @@ export async function markIntakeFormCompletedAction(providerId: string): Promise
   return setStatusWithActivity(providerId, "Intake Form Completed", "Intake form marked completed.");
 }
 
-export async function markApprovedProviderAction(providerId: string): Promise<ActionResult> {
-  return setStatusWithActivity(providerId, "Approved Provider", "Provider approved.");
-}
+// Superseded by approveProviderAndAddToDirectoryAction (above), which
+// both marks this status *and* creates/links the permanent operational
+// Provider Profile in one step - there is no longer a bare "mark
+// approved" action that leaves the two systems disconnected.
 
 export async function markNotInterestedAction(providerId: string): Promise<ActionResult> {
   return setStatusWithActivity(providerId, "Not Interested", "Provider marked not interested.");

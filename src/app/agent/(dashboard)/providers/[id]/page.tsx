@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { requireCrmAdmin } from "@/lib/crm-auth";
+import { requireCrmUser } from "@/lib/crm-auth";
 import { getProviderDocumentSignedUrl, getProviderLogoSignedUrl } from "@/lib/provider-documents";
 import { getProviderQuoteHistory } from "@/lib/provider-quote-history";
-import type { CrmUserRow } from "@/lib/crm-types";
 import type {
   CleaningProviderRow,
   LatestProviderLeadEmail,
@@ -15,17 +14,19 @@ import type {
   ProviderNoteRow,
   ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
-import AdminOperationalProviderDetailClient from "./AdminOperationalProviderDetailClient";
+import ProviderDetailClient from "./ProviderDetailClient";
 
-export default async function AdminProviderDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const crmAdmin = await requireCrmAdmin();
+export default async function AgentProviderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const crmUser = await requireCrmUser();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: provider }, { data: agents }, { data: notes }, { data: documents }, { data: scoreAdjustments }, { data: linkedLeads }] =
+  // RLS (cleaning_providers_agent_select_own) means this returns null both
+  // when the provider doesn't exist and when it isn't assigned to this
+  // agent - either way, a 404 is the correct response.
+  const [{ data: provider }, { data: notes }, { data: documents }, { data: scoreAdjustments }, { data: linkedLeads }] =
     await Promise.all([
       supabase.from("cleaning_providers").select("*").eq("id", id).maybeSingle(),
-      supabase.from("crm_users").select("*").order("full_name"),
       supabase.from("provider_notes").select("*").eq("cleaning_provider_id", id).order("created_at", { ascending: false }),
       supabase
         .from("provider_documents")
@@ -46,11 +47,6 @@ export default async function AdminProviderDetailPage({ params }: { params: Prom
   }
 
   const linkedLeadIds = (linkedLeads ?? []).map((l) => l.id as string);
-  // Activities/follow-ups/emails logged before approval stay attached to
-  // the originating provider_leads record rather than being retargeted -
-  // this combines that acquisition-phase history with anything logged
-  // directly against the operational profile since, so nothing from
-  // before approval is missing from this timeline.
   const leadOrFilter = linkedLeadIds.length > 0 ? `,provider_lead_id.in.(${linkedLeadIds.join(",")})` : "";
 
   const admin = getSupabaseAdmin();
@@ -95,11 +91,10 @@ export default async function AdminProviderDetailPage({ params }: { params: Prom
   );
 
   return (
-    <AdminOperationalProviderDetailClient
+    <ProviderDetailClient
       provider={provider as CleaningProviderRow}
       activities={(activities ?? []) as ProviderActivityRow[]}
       followUps={(followUps ?? []) as ProviderFollowUpRow[]}
-      agents={(agents ?? []) as CrmUserRow[]}
       notes={(notes ?? []) as ProviderNoteRow[]}
       documents={documentsWithUrls}
       scoreAdjustments={(scoreAdjustments ?? []) as ProviderScoreAdjustmentRow[]}
@@ -108,7 +103,7 @@ export default async function AdminProviderDetailPage({ params }: { params: Prom
       quoteHistory={quoteHistory}
       logoUrl={logoUrl}
       linkedLead={linkedLeadIds.length > 0 ? (linkedLeads![0] as { id: string; business_name: string }) : null}
-      currentUserId={crmAdmin.id}
+      currentUserId={crmUser.id}
     />
   );
 }

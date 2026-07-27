@@ -11,10 +11,8 @@ import type {
   ProviderIntakeVersionRow,
   ProviderLeadRow,
   ProviderNoteRow,
-  ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
 import type { ProviderDocumentWithUrl } from "@/components/provider-acquisition/ProviderFilesCard";
-import type { ProviderQuoteHistoryRow } from "@/lib/provider-quote-history";
 import {
   addProviderActivityAction,
   addProviderCallNoteAction,
@@ -67,9 +65,7 @@ export default function ProviderDetailClient({
   emailHistory,
   notes,
   documents,
-  scoreAdjustments,
   intakeVersions,
-  quoteHistory,
   logoUrl,
   currentUserId,
   justAdded,
@@ -81,9 +77,7 @@ export default function ProviderDetailClient({
   emailHistory: ProviderEmailHistoryRow[];
   notes: ProviderNoteRow[];
   documents: ProviderDocumentWithUrl[];
-  scoreAdjustments: ProviderScoreAdjustmentRow[];
   intakeVersions: ProviderIntakeVersionRow[];
-  quoteHistory: ProviderQuoteHistoryRow[];
   logoUrl: string | null;
   currentUserId: string;
   justAdded: boolean;
@@ -97,10 +91,7 @@ export default function ProviderDetailClient({
       emailHistory={emailHistory}
       notes={notes}
       documents={documents}
-      scoreAdjustments={scoreAdjustments}
       intakeVersions={intakeVersions}
-      quoteHistory={quoteHistory}
-      cleaningProviders={[]}
       logoUrl={logoUrl}
       justAdded={justAdded}
       isAdmin={false}

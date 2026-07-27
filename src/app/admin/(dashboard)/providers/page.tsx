@@ -1,31 +1,31 @@
-import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { ProviderRow } from "@/lib/admin-types";
-import { createProviderAction, setProviderStatusAction } from "./actions";
+import { requireAdminUser } from "@/lib/admin-auth";
+import type { CleaningProviderRow } from "@/lib/provider-types";
+import type { CrmUserRow } from "@/lib/crm-types";
+import { createProviderAction } from "./actions";
+import ProvidersListAdminClient from "./ProvidersListAdminClient";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 
 export default async function AdminProvidersPage() {
+  await requireAdminUser();
   const supabase = getSupabaseAdmin();
-  const { data } = await supabase
-    .from("cleaning_providers")
-    .select("*")
-    .order("company_name");
-
-  const providers = (data ?? []) as ProviderRow[];
+  const [{ data: providers }, { data: agents }] = await Promise.all([
+    supabase.from("cleaning_providers").select("*").order("company_name"),
+    supabase.from("crm_users").select("*").order("full_name"),
+  ]);
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Cleaning Providers</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Providers</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Companies you can assign quote requests to.
+        The permanent operational Provider Profile for every cleaning provider - companies you can assign quote
+        requests to. Providers approved from Provider Acquisition appear here automatically.
       </p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Add a Provider
-        </h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Add a Provider</h2>
         <form action={createProviderAction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="companyName" placeholder="Company name" required className={inputClasses} />
           <input name="contactPerson" placeholder="Contact person" className={inputClasses} />
@@ -57,66 +57,10 @@ export default async function AdminProvidersPage() {
         </form>
       </section>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Company</th>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Phone / Email</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {providers.map((provider) => (
-              <tr key={provider.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 font-medium text-slate-900">
-                  <Link href={`/admin/providers/${provider.id}`} className="hover:text-sky-600">
-                    {provider.company_name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{provider.contact_person ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {[provider.phone, provider.email].filter(Boolean).join(" · ") || "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                      provider.status === "active"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {provider.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <form
-                    action={setProviderStatusAction.bind(
-                      null,
-                      provider.id,
-                      provider.status === "active" ? "inactive" : "active"
-                    )}
-                  >
-                    <button type="submit" className="text-xs font-medium text-sky-600 hover:text-sky-700">
-                      {provider.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-
-            {providers.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  No providers yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ProvidersListAdminClient
+        providers={(providers ?? []) as CleaningProviderRow[]}
+        agents={(agents ?? []) as CrmUserRow[]}
+      />
     </div>
   );
 }

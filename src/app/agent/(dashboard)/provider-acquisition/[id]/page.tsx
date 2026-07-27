@@ -1,9 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { getProviderDocumentSignedUrl, getProviderLogoSignedUrl } from "@/lib/provider-documents";
-import { getProviderQuoteHistory } from "@/lib/provider-quote-history";
 import type {
   LatestProviderLeadEmail,
   ProviderDocumentRow,
@@ -12,7 +11,6 @@ import type {
   ProviderIntakeVersionRow,
   ProviderLeadRow,
   ProviderNoteRow,
-  ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
 import type { ProviderActivityRow } from "@/lib/provider-types";
 import ProviderDetailClient from "./ProviderDetailClient";
@@ -38,7 +36,6 @@ export default async function AgentProviderDetailPage({
     { data: followUps },
     { data: notes },
     { data: documents },
-    { data: scoreAdjustments },
     { data: intakeVersions },
   ] = await Promise.all([
     supabase.from("provider_leads").select("*").eq("id", id).maybeSingle(),
@@ -61,11 +58,6 @@ export default async function AgentProviderDetailPage({
       .is("removed_at", null)
       .order("created_at", { ascending: false }),
     supabase
-      .from("provider_score_adjustments")
-      .select("*")
-      .eq("provider_lead_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
       .from("provider_intake_versions")
       .select("*")
       .eq("provider_lead_id", id)
@@ -76,11 +68,22 @@ export default async function AgentProviderDetailPage({
     notFound();
   }
 
+  // Once approved, this record's permanent operational Provider Profile
+  // (cleaning_providers) is the profile used everywhere - clicking into
+  // an approved Provider Acquisition record opens that same profile
+  // rather than a separate recruiting-phase view (brief: "opening the
+  // provider from Provider Acquisition after approval must open the same
+  // operational Provider Profile").
+  const providerLead = provider as ProviderLeadRow;
+  if (providerLead.cleaning_provider_id) {
+    redirect(`/agent/providers/${providerLead.cleaning_provider_id}`);
+  }
+
   // Only reached once RLS has already confirmed this agent owns the
   // provider lead - crm_lead_emails has no RLS policies of its own (see
   // migration 0022/0026), same access pattern as the lead-side detail page.
   const admin = getSupabaseAdmin();
-  const [{ data: latestEmail }, { data: emailHistory }, quoteHistory, logoUrl] = await Promise.all([
+  const [{ data: latestEmail }, { data: emailHistory }, logoUrl] = await Promise.all([
     admin
       .from("crm_lead_emails")
       .select(
@@ -97,8 +100,7 @@ export default async function AgentProviderDetailPage({
       )
       .eq("provider_lead_id", id)
       .order("created_at", { ascending: false }),
-    getProviderQuoteHistory((provider as ProviderLeadRow).cleaning_provider_id),
-    getProviderLogoSignedUrl((provider as ProviderLeadRow).logo_path),
+    getProviderLogoSignedUrl(providerLead.logo_path),
   ]);
 
   const documentsWithUrls = await Promise.all(
@@ -110,16 +112,14 @@ export default async function AgentProviderDetailPage({
 
   return (
     <ProviderDetailClient
-      provider={provider as ProviderLeadRow}
+      provider={providerLead}
       activities={(activities ?? []) as ProviderActivityRow[]}
       followUps={(followUps ?? []) as ProviderFollowUpRow[]}
       latestEmail={latestEmail as LatestProviderLeadEmail | null}
       emailHistory={(emailHistory ?? []) as ProviderEmailHistoryRow[]}
       notes={(notes ?? []) as ProviderNoteRow[]}
       documents={documentsWithUrls}
-      scoreAdjustments={(scoreAdjustments ?? []) as ProviderScoreAdjustmentRow[]}
       intakeVersions={(intakeVersions ?? []) as ProviderIntakeVersionRow[]}
-      quoteHistory={quoteHistory}
       logoUrl={logoUrl}
       currentUserId={crmUser.id}
       justAdded={added === "1"}

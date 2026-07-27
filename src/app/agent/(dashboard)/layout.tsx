@@ -44,6 +44,12 @@ export default async function AgentLayout({ children }: { children: ReactNode })
               Provider Acquisition
             </Link>
             <Link
+              href="/agent/providers"
+              className="text-[14px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
+            >
+              Providers
+            </Link>
+            <Link
               href="/agent/training"
               className="text-[14px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
             >

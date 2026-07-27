@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   CANADIAN_PROVINCES_AND_TERRITORIES,
-  PROVIDER_SCORE_RATING_STYLES,
   PROVIDER_SERVICES_OFFERED,
   PROVIDER_STATUSES,
   PROVIDER_STATUS_STYLES,
@@ -15,7 +14,6 @@ import {
   type ProviderStatus,
 } from "@/lib/provider-types";
 import { EMAIL_STATUS_LABELS, EMAIL_STATUS_STYLES, type CrmUserRow, type EmailEventStatus } from "@/lib/crm-types";
-import { SCORE_FILTER_OPTIONS, matchesScoreFilter, sortByScore, type ScoreFilter } from "@/lib/provider-score-filters";
 import CopyIntakeLinkButton from "@/components/CopyIntakeLinkButton";
 import {
   assignProviderAgentAction,
@@ -40,8 +38,6 @@ export default function ProviderAcquisitionAdminClient({
   const [cityFilter, setCityFilter] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [emailStatusFilter, setEmailStatusFilter] = useState<EmailEventStatus | "all">("all");
-  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
-  const [sortBy, setSortBy] = useState<"none" | "score_desc" | "score_asc">("none");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -86,11 +82,6 @@ export default function ProviderAcquisitionAdminClient({
       value: providers.filter((p) => p.last_email_status === "bounced" || p.last_email_status === "complained").length,
       danger: true,
     },
-    {
-      label: "Providers Needing Attention",
-      value: providers.filter((p) => p.score !== null && p.score < 60).length,
-      danger: true,
-    },
   ];
 
   const byCity = useMemo(() => groupCount(providers, (p) => p.city), [providers]);
@@ -115,14 +106,13 @@ export default function ProviderAcquisitionAdminClient({
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const matches = providers.filter((p) => {
+    return providers.filter((p) => {
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       if (agentFilter !== "all" && (p.assigned_agent_id ?? "unassigned") !== agentFilter) return false;
       if (provinceFilter !== "all" && p.province !== provinceFilter) return false;
       if (cityFilter && !p.city.toLowerCase().includes(cityFilter.toLowerCase())) return false;
       if (serviceFilter !== "all" && !p.services_offered.includes(serviceFilter)) return false;
       if (emailStatusFilter !== "all" && p.last_email_status !== emailStatusFilter) return false;
-      if (!matchesScoreFilter(p, scoreFilter)) return false;
       if (dateFrom && new Date(p.created_at) < new Date(dateFrom)) return false;
       if (dateTo && new Date(p.created_at) > new Date(`${dateTo}T23:59:59`)) return false;
       if (!query) return true;
@@ -136,7 +126,6 @@ export default function ProviderAcquisitionAdminClient({
         p.services_offered.some((s) => s.toLowerCase().includes(query))
       );
     });
-    return sortBy === "none" ? matches : sortByScore(matches, sortBy);
   }, [
     providers,
     query,
@@ -146,8 +135,6 @@ export default function ProviderAcquisitionAdminClient({
     cityFilter,
     serviceFilter,
     emailStatusFilter,
-    scoreFilter,
-    sortBy,
     dateFrom,
     dateTo,
   ]);
@@ -243,26 +230,6 @@ export default function ProviderAcquisitionAdminClient({
             </option>
           ))}
         </select>
-        <select
-          value={scoreFilter}
-          onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-          className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm"
-        >
-          {SCORE_FILTER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as "none" | "score_desc" | "score_asc")}
-          className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm"
-        >
-          <option value="none">Sort: Newest first</option>
-          <option value="score_desc">Sort: Score high to low</option>
-          <option value="score_asc">Sort: Score low to high</option>
-        </select>
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
           Created from
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
@@ -284,7 +251,6 @@ export default function ProviderAcquisitionAdminClient({
               <th className="px-4 py-3">City / Province</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Score</th>
               <th className="px-4 py-3">Email Status</th>
               <th className="px-4 py-3">Next Follow-up</th>
               <th className="px-4 py-3" />
@@ -298,9 +264,21 @@ export default function ProviderAcquisitionAdminClient({
                 <tr key={provider.id} className={`border-b border-slate-100 last:border-0 ${bounced || isProviderOverdue(provider) ? "bg-rose-50" : ""}`}>
                   <td className="px-4 py-3 text-slate-500">{new Date(provider.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <Link href={`/admin/crm/provider-acquisition/${provider.id}`} className="hover:text-sky-600">
+                    <Link
+                      href={
+                        provider.cleaning_provider_id
+                          ? `/admin/providers/${provider.cleaning_provider_id}`
+                          : `/admin/crm/provider-acquisition/${provider.id}`
+                      }
+                      className="hover:text-sky-600"
+                    >
                       {provider.business_name}
                     </Link>
+                    {provider.cleaning_provider_id && (
+                      <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                        Approved
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{provider.contact_person || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{provider.phone}</td>
@@ -330,25 +308,13 @@ export default function ProviderAcquisitionAdminClient({
                       onChange={(e) => runAction(() => updateProviderStatusAction(provider.id, e.target.value))}
                       className={`rounded-full border-none px-2.5 py-1 text-xs font-medium ${PROVIDER_STATUS_STYLES[provider.status]}`}
                     >
-                      {PROVIDER_STATUSES.map((status) => (
+                      {/* "Approved Provider" is reached only via "Approve and Add to Providers" on the detail page. */}
+                      {PROVIDER_STATUSES.filter((s) => s !== "Approved Provider" || s === provider.status).map((status) => (
                         <option key={status} value={status}>
                           {status}
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    {provider.score !== null && provider.score_label ? (
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          PROVIDER_SCORE_RATING_STYLES[provider.score_label as keyof typeof PROVIDER_SCORE_RATING_STYLES]
-                        }`}
-                      >
-                        {provider.score} · {provider.score_label}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
                   </td>
                   <td className="px-4 py-3">
                     {provider.last_email_status ? (
@@ -364,7 +330,14 @@ export default function ProviderAcquisitionAdminClient({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Link href={`/admin/crm/provider-acquisition/${provider.id}`} className="text-xs font-medium text-sky-600 hover:text-sky-700">
+                      <Link
+                        href={
+                          provider.cleaning_provider_id
+                            ? `/admin/providers/${provider.cleaning_provider_id}`
+                            : `/admin/crm/provider-acquisition/${provider.id}`
+                        }
+                        className="text-xs font-medium text-sky-600 hover:text-sky-700"
+                      >
                         Details
                       </Link>
                       <button
@@ -395,7 +368,7 @@ export default function ProviderAcquisitionAdminClient({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                   No provider leads match your filters.
                 </td>
               </tr>

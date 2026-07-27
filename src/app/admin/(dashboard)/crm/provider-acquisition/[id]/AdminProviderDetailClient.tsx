@@ -11,27 +11,21 @@ import type {
   ProviderIntakeVersionRow,
   ProviderLeadRow,
   ProviderNoteRow,
-  ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
 import type { ProviderDocumentWithUrl } from "@/components/provider-acquisition/ProviderFilesCard";
-import type { ProviderQuoteHistoryRow } from "@/lib/provider-quote-history";
 import type { CrmUserRow } from "@/lib/crm-types";
 import {
   addProviderActivityAction,
   addProviderCallNoteAction,
   addProviderNoteAction,
-  addScoreAdjustmentAction,
+  approveProviderAndAddToDirectoryAction,
   assignProviderAgentAction,
   closeProviderLeadAction,
   completeProviderFollowUpAction,
   deleteProviderLeadAction,
-  linkCleaningProviderAction,
-  markApprovedProviderAction,
   markDeclinedAction,
   markIntakeFormCompletedAction,
   markNotInterestedAction,
-  markSuspendedAction,
-  recalculateProviderScoreAction,
   removeProviderDocumentAction,
   removeProviderFollowUpAction,
   reopenProviderLeadAction,
@@ -55,9 +49,8 @@ const actions: ProviderDetailActions = {
   sendEmail: sendProviderEmailAction,
   sendSms: sendProviderSmsAction,
   markIntakeFormCompleted: markIntakeFormCompletedAction,
-  markApprovedProvider: markApprovedProviderAction,
+  approveAndAddToDirectory: approveProviderAndAddToDirectoryAction,
   markNotInterested: markNotInterestedAction,
-  markSuspended: markSuspendedAction,
   markDeclined: markDeclinedAction,
   closeProviderLead: closeProviderLeadAction,
   reopenProviderLead: reopenProviderLeadAction,
@@ -71,9 +64,6 @@ const actions: ProviderDetailActions = {
   updateNote: updateProviderNoteAction,
   uploadDocument: uploadProviderDocumentAction,
   removeDocument: removeProviderDocumentAction,
-  addScoreAdjustment: addScoreAdjustmentAction,
-  recalculateScore: recalculateProviderScoreAction,
-  linkCleaningProvider: linkCleaningProviderAction,
 };
 
 export default function AdminProviderDetailClient({
@@ -85,10 +75,7 @@ export default function AdminProviderDetailClient({
   emailHistory,
   notes,
   documents,
-  scoreAdjustments,
   intakeVersions,
-  quoteHistory,
-  cleaningProviders,
   logoUrl,
   currentUserId,
   justAdded,
@@ -101,10 +88,7 @@ export default function AdminProviderDetailClient({
   emailHistory: ProviderEmailHistoryRow[];
   notes: ProviderNoteRow[];
   documents: ProviderDocumentWithUrl[];
-  scoreAdjustments: ProviderScoreAdjustmentRow[];
   intakeVersions: ProviderIntakeVersionRow[];
-  quoteHistory: ProviderQuoteHistoryRow[];
-  cleaningProviders: { id: string; company_name: string }[];
   logoUrl: string | null;
   currentUserId: string;
   justAdded: boolean;
@@ -118,10 +102,7 @@ export default function AdminProviderDetailClient({
       emailHistory={emailHistory}
       notes={notes}
       documents={documents}
-      scoreAdjustments={scoreAdjustments}
       intakeVersions={intakeVersions}
-      quoteHistory={quoteHistory}
-      cleaningProviders={cleaningProviders}
       logoUrl={logoUrl}
       justAdded={justAdded}
       isAdmin

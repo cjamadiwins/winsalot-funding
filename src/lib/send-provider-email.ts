@@ -3,29 +3,35 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { escapeHtml } from "./html";
-import { recalculateProviderScoreSafely } from "./provider-score";
 import type { CrmUserRow } from "./crm-types";
 
+export type ProviderEmailTarget = { providerLeadId: string } | { cleaningProviderId: string };
+
 // Provider Profile's generic "Send Email" quick action - a free-form
-// subject/message to the provider, distinct from the templated
-// 'provider_intake' email (src/lib/send-provider-intake-email.ts), which
-// is unchanged. Uses the same crm_lead_emails tracking table via
-// provider_lead_id and the same 'sent' activity-logging pattern.
+// subject/message to either a Provider Acquisition lead (pre-approval) or
+// an operational provider (cleaning_providers), distinct from the
+// templated 'provider_intake' email (src/lib/send-provider-intake-email.ts),
+// which is unchanged. Uses the same crm_lead_emails tracking table, keyed
+// by whichever target this call is for.
 export async function sendProviderMessageEmail(
   supabase: SupabaseClient,
-  providerLeadId: string,
+  target: ProviderEmailTarget,
   crmUser: CrmUserRow,
   subject: string,
   message: string
 ): Promise<{ email: string }> {
+  const table = "providerLeadId" in target ? "provider_leads" : "cleaning_providers";
+  const nameField = "providerLeadId" in target ? "business_name" : "company_name";
+  const id = "providerLeadId" in target ? target.providerLeadId : target.cleaningProviderId;
+
   const { data: provider, error: fetchError } = await supabase
-    .from("provider_leads")
-    .select("email, contact_person, business_name")
-    .eq("id", providerLeadId)
+    .from(table)
+    .select(`email, contact_person, ${nameField}`)
+    .eq("id", id)
     .maybeSingle();
 
   if (fetchError || !provider) {
-    throw new Error("Provider lead not found.");
+    throw new Error("Provider not found.");
   }
   if (!provider.email) {
     throw new Error("This provider has no email address on file.");
@@ -33,7 +39,7 @@ export async function sendProviderMessageEmail(
 
   const fromEmail = process.env.EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
   const replyToEmail = process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
-  const name = provider.contact_person || provider.business_name;
+  const name = provider.contact_person || (provider as Record<string, unknown>)[nameField];
 
   const resend = getResendClient();
   const { data: sendResult, error: emailError } = await resend.emails.send({
@@ -42,7 +48,7 @@ export async function sendProviderMessageEmail(
     replyTo: replyToEmail,
     subject,
     text: `Hi ${name},\n\n${message}\n\nThank you,\nWinsalot Corp`,
-    html: `<p>Hi ${escapeHtml(name)},</p><p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p><p>Thank you,<br/>Winsalot Corp</p>`,
+    html: `<p>Hi ${escapeHtml(String(name))},</p><p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p><p>Thank you,<br/>Winsalot Corp</p>`,
   });
 
   if (emailError || !sendResult) {
@@ -51,11 +57,12 @@ export async function sendProviderMessageEmail(
 
   const senderName = crmUser.full_name || crmUser.email;
   const sentAt = new Date().toISOString();
+  const targetColumn = "providerLeadId" in target ? "provider_lead_id" : "cleaning_provider_id";
 
   const { data: activity, error: activityError } = await supabase
     .from("crm_activities")
     .insert({
-      provider_lead_id: providerLeadId,
+      [targetColumn]: id,
       agent_id: crmUser.id,
       activity_type: "email",
       notes: `"${subject}" sent to ${provider.email} by ${senderName}.`,
@@ -69,7 +76,7 @@ export async function sendProviderMessageEmail(
 
   const admin = getSupabaseAdmin();
   const { error: trackingError } = await admin.from("crm_lead_emails").insert({
-    provider_lead_id: providerLeadId,
+    [targetColumn]: id,
     agent_id: crmUser.id,
     activity_id: activity?.id ?? null,
     resend_email_id: sendResult.id,
@@ -86,7 +93,7 @@ export async function sendProviderMessageEmail(
   }
 
   const { error: providerUpdateError } = await supabase
-    .from("provider_leads")
+    .from(table)
     .update({
       last_email_status: "sent",
       last_email_status_at: sentAt,
@@ -94,12 +101,11 @@ export async function sendProviderMessageEmail(
       last_email_to: provider.email,
       last_contacted_at: sentAt,
     })
-    .eq("id", providerLeadId);
+    .eq("id", id);
 
   if (providerUpdateError) {
     throw new Error("The email was sent, but updating the provider's email status failed.");
   }
 
-  recalculateProviderScoreSafely(providerLeadId, "Email sent to provider");
   return { email: provider.email };
 }

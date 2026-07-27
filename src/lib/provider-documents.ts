@@ -16,8 +16,14 @@ function safeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-140);
 }
 
+export type ProviderDocumentTarget = { providerLeadId: string } | { cleaningProviderId: string };
+
+// Dual-keyed the same way as the provider_documents table itself: a
+// document uploaded pre-approval carries provider_lead_id and, once the
+// lead is approved, is also linked to cleaning_provider_id (backfilled by
+// the approval action) rather than being duplicated.
 export async function uploadProviderDocument(input: {
-  providerLeadId: string;
+  target: ProviderDocumentTarget;
   uploadedBy: string;
   docType: ProviderDocumentType;
   file: File;
@@ -25,8 +31,11 @@ export async function uploadProviderDocument(input: {
   if (input.file.size === 0) return { error: "The selected file is empty." };
   if (input.file.size > MAX_FILE_BYTES) return { error: "Files must be 15MB or smaller." };
 
+  const targetColumn = "providerLeadId" in input.target ? "provider_lead_id" : "cleaning_provider_id";
+  const ownerId = "providerLeadId" in input.target ? input.target.providerLeadId : input.target.cleaningProviderId;
+
   const admin = getSupabaseAdmin();
-  const path = `documents/${input.providerLeadId}/${Date.now()}-${safeFileName(input.file.name)}`;
+  const path = `documents/${ownerId}/${Date.now()}-${safeFileName(input.file.name)}`;
   const buffer = await input.file.arrayBuffer();
 
   const { error: uploadError } = await admin.storage.from(BUCKET).upload(path, buffer, {
@@ -36,7 +45,7 @@ export async function uploadProviderDocument(input: {
   if (uploadError) return { error: "Failed to upload the document." };
 
   const { error: insertError } = await admin.from("provider_documents").insert({
-    provider_lead_id: input.providerLeadId,
+    [targetColumn]: ownerId,
     uploaded_by: input.uploadedBy,
     doc_type: input.docType,
     file_name: input.file.name,
@@ -86,7 +95,7 @@ export async function removeProviderDocument(input: {
 }
 
 export async function uploadProviderLogo(input: {
-  providerLeadId: string;
+  ownerId: string;
   file: File;
 }): Promise<{ path?: string; error?: string }> {
   if (input.file.size === 0) return { error: "The selected file is empty." };
@@ -94,7 +103,7 @@ export async function uploadProviderLogo(input: {
   if (!input.file.type.startsWith("image/")) return { error: "The logo must be an image file." };
 
   const admin = getSupabaseAdmin();
-  const path = `logos/${input.providerLeadId}/${Date.now()}-${safeFileName(input.file.name)}`;
+  const path = `logos/${input.ownerId}/${Date.now()}-${safeFileName(input.file.name)}`;
   const buffer = await input.file.arrayBuffer();
 
   const { error } = await admin.storage.from(BUCKET).upload(path, buffer, {

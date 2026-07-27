@@ -1,9 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getProviderDocumentSignedUrl, getProviderLogoSignedUrl } from "@/lib/provider-documents";
-import { getProviderQuoteHistory } from "@/lib/provider-quote-history";
 import type { CrmUserRow } from "@/lib/crm-types";
 import type {
   LatestProviderLeadEmail,
@@ -14,7 +13,6 @@ import type {
   ProviderIntakeVersionRow,
   ProviderLeadRow,
   ProviderNoteRow,
-  ProviderScoreAdjustmentRow,
 } from "@/lib/provider-types";
 import AdminProviderDetailClient from "./AdminProviderDetailClient";
 
@@ -37,7 +35,6 @@ export default async function AdminProviderDetailPage({
     { data: followUps },
     { data: notes },
     { data: documents },
-    { data: scoreAdjustments },
     { data: intakeVersions },
   ] = await Promise.all([
     supabase.from("provider_leads").select("*").eq("id", id).maybeSingle(),
@@ -61,11 +58,6 @@ export default async function AdminProviderDetailPage({
       .is("removed_at", null)
       .order("created_at", { ascending: false }),
     supabase
-      .from("provider_score_adjustments")
-      .select("*")
-      .eq("provider_lead_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
       .from("provider_intake_versions")
       .select("*")
       .eq("provider_lead_id", id)
@@ -76,33 +68,35 @@ export default async function AdminProviderDetailPage({
     notFound();
   }
 
+  // Once approved, this record's permanent operational Provider Profile
+  // (cleaning_providers) is the profile used everywhere - see
+  // src/app/agent/(dashboard)/provider-acquisition/[id]/page.tsx for the
+  // agent-side equivalent of this redirect.
+  const providerLead = provider as ProviderLeadRow;
+  if (providerLead.cleaning_provider_id) {
+    redirect(`/admin/providers/${providerLead.cleaning_provider_id}`);
+  }
+
   const admin = getSupabaseAdmin();
-  // cleaning_providers has no RLS policies at all (migration 0004 -
-  // service-role only, not even for an authenticated admin session), so
-  // this - like the quote-history lookup - must go through the
-  // service-role client.
-  const [{ data: latestEmail }, { data: emailHistory }, { data: cleaningProviders }, quoteHistory, logoUrl] =
-    await Promise.all([
-      admin
-        .from("crm_lead_emails")
-        .select(
-          "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
-        )
-        .eq("provider_lead_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      admin
-        .from("crm_lead_emails")
-        .select(
-          "id, created_at, email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
-        )
-        .eq("provider_lead_id", id)
-        .order("created_at", { ascending: false }),
-      admin.from("cleaning_providers").select("id, company_name").eq("status", "active").order("company_name"),
-      getProviderQuoteHistory((provider as ProviderLeadRow).cleaning_provider_id),
-      getProviderLogoSignedUrl((provider as ProviderLeadRow).logo_path),
-    ]);
+  const [{ data: latestEmail }, { data: emailHistory }, logoUrl] = await Promise.all([
+    admin
+      .from("crm_lead_emails")
+      .select(
+        "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+      )
+      .eq("provider_lead_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("crm_lead_emails")
+      .select(
+        "id, created_at, email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+      )
+      .eq("provider_lead_id", id)
+      .order("created_at", { ascending: false }),
+    getProviderLogoSignedUrl(providerLead.logo_path),
+  ]);
 
   const documentsWithUrls = await Promise.all(
     ((documents ?? []) as ProviderDocumentRow[]).map(async (document) => ({
@@ -113,7 +107,7 @@ export default async function AdminProviderDetailPage({
 
   return (
     <AdminProviderDetailClient
-      provider={provider as ProviderLeadRow}
+      provider={providerLead}
       activities={(activities ?? []) as ProviderActivityRow[]}
       followUps={(followUps ?? []) as ProviderFollowUpRow[]}
       agents={(agents ?? []) as CrmUserRow[]}
@@ -121,10 +115,7 @@ export default async function AdminProviderDetailPage({
       emailHistory={(emailHistory ?? []) as ProviderEmailHistoryRow[]}
       notes={(notes ?? []) as ProviderNoteRow[]}
       documents={documentsWithUrls}
-      scoreAdjustments={(scoreAdjustments ?? []) as ProviderScoreAdjustmentRow[]}
       intakeVersions={(intakeVersions ?? []) as ProviderIntakeVersionRow[]}
-      quoteHistory={quoteHistory}
-      cleaningProviders={(cleaningProviders ?? []) as { id: string; company_name: string }[]}
       logoUrl={logoUrl}
       currentUserId={crmAdmin.id}
       justAdded={added === "1"}

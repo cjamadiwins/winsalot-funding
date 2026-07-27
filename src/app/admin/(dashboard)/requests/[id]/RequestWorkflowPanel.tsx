@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   assignProviderAction,
   createProviderAndAssignAction,
@@ -164,7 +165,10 @@ Winsalot Corp`;
 
         {assignedProvider ? (
           <p className="mt-3 text-sm text-slate-700">
-            Assigned to <span className="font-semibold">{assignedProvider.company_name}</span>
+            Assigned to{" "}
+            <Link href={`/admin/providers/${assignedProvider.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
+              {assignedProvider.company_name}
+            </Link>
             {assignedProvider.status === "inactive" && (
               <span className="ml-2 text-xs text-amber-600">(now inactive)</span>
             )}
