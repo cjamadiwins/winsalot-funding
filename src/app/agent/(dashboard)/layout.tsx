@@ -1,10 +1,24 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { agentSignOutAction } from "./actions";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import NotificationBell from "@/components/NotificationBell";
+import type { CrmNotificationRow } from "@/lib/crm-notifications";
+import {
+  agentSignOutAction,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "./actions";
 
 export default async function AgentLayout({ children }: { children: ReactNode }) {
   const crmUser = await requireCrmUser();
+
+  const supabase = await createSupabaseServerClient();
+  const { data: notifications } = await supabase
+    .from("crm_notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
@@ -37,6 +51,11 @@ export default async function AgentLayout({ children }: { children: ReactNode })
             </Link>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationBell
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
             <span className="hidden text-sm text-[var(--color-text-muted)] sm:inline">
               {crmUser.full_name || crmUser.email}
             </span>
