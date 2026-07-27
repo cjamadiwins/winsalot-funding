@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getProviderDocumentSignedUrl, getProviderLogoSignedUrl } from "@/lib/provider-documents";
 import { getProviderQuoteHistory } from "@/lib/provider-quote-history";
+import { getProviderFinancialSummary, getProviderInvoicesWithRelations } from "@/lib/provider-invoices";
 import type { CrmUserRow } from "@/lib/crm-types";
 import type {
   CleaningProviderRow,
@@ -87,6 +88,11 @@ export default async function AdminProviderDetailPage({ params }: { params: Prom
       getProviderLogoSignedUrl((provider as CleaningProviderRow).logo_path),
     ]);
 
+  const [financialSummary, invoices] = await Promise.all([
+    getProviderFinancialSummary(supabase, id),
+    getProviderInvoicesWithRelations(supabase, id),
+  ]);
+
   const documentsWithUrls = await Promise.all(
     ((documents ?? []) as ProviderDocumentRow[]).map(async (document) => ({
       document,
@@ -109,6 +115,8 @@ export default async function AdminProviderDetailPage({ params }: { params: Prom
       logoUrl={logoUrl}
       linkedLead={linkedLeadIds.length > 0 ? (linkedLeads![0] as { id: string; business_name: string }) : null}
       currentUserId={crmAdmin.id}
+      financialSummary={financialSummary}
+      invoices={invoices}
     />
   );
 }
