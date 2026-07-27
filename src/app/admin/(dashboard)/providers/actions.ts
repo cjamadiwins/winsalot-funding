@@ -12,10 +12,15 @@ import { uploadProviderDocument, uploadProviderLogo, removeProviderDocument } fr
 import { recalculateProviderScore, recalculateProviderScoreSafely } from "@/lib/provider-score";
 import {
   CLEANING_PROVIDER_STATUSES,
+  MANUAL_SCORECARD_COUNTER_FIELDS,
+  MANUAL_SCORECARD_RATING_CATEGORIES,
   PROVIDER_DOCUMENT_TYPES,
   PROVIDER_SERVICES_OFFERED,
+  computeManualScorecardScore,
+  manualScorecardStatusLabel,
   parseCitiesServed,
   type CleaningProviderStatus,
+  type ManualScorecardRatings,
   type ProviderDocumentType,
 } from "@/lib/provider-types";
 import { ACTIVITY_TYPES, type ActivityType } from "@/lib/crm-types";
@@ -406,6 +411,74 @@ export async function recalculateOperationalScoreAction(providerId: string): Pro
     return { error: "Failed to recalculate the score." };
   }
   revalidatePath(`/admin/providers/${providerId}`);
+  return {};
+}
+
+// Provider Scorecard - manual ratings/counters/notes, merged into the
+// same card as the automatic score above (never a second scorecard).
+// Admin-only: this action doesn't exist in the agent providers
+// actions.ts file at all, matching the established convention for every
+// other admin-only operation on this table (status, assignment,
+// deletion) - an agent viewing an assigned provider's profile simply
+// never receives an onUpdateScorecard prop, so the card renders
+// read-only for them.
+function ratingFromFormData(formData: FormData, key: string): number | null {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
+
+function counterFromFormData(formData: FormData, key: string): number {
+  const raw = String(formData.get(key) ?? "").trim();
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
+export async function updateOperationalScorecardAction(providerId: string, formData: FormData): Promise<ActionResult> {
+  const crmAdmin = await requireCrmAdmin();
+
+  const ratings = Object.fromEntries(
+    MANUAL_SCORECARD_RATING_CATEGORIES.map((category) => [category, ratingFromFormData(formData, `${category}_rating`)])
+  ) as ManualScorecardRatings;
+
+  const counters = Object.fromEntries(
+    MANUAL_SCORECARD_COUNTER_FIELDS.map((field) => [field, counterFromFormData(formData, field)])
+  ) as Record<(typeof MANUAL_SCORECARD_COUNTER_FIELDS)[number], number>;
+
+  const manualScore = computeManualScorecardScore(ratings);
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("cleaning_providers")
+    .update({
+      quote_response_speed_rating: ratings.quote_response_speed,
+      pricing_competitiveness_rating: ratings.pricing_competitiveness,
+      service_quality_rating: ratings.service_quality,
+      reliability_rating: ratings.reliability,
+      communication_rating: ratings.communication,
+      customer_satisfaction_rating: ratings.customer_satisfaction,
+      ...counters,
+      scorecard_notes: textOrNull(formData, "scorecard_notes"),
+      manual_score: manualScore,
+      manual_score_label: manualScore !== null ? manualScorecardStatusLabel(manualScore) : null,
+      manual_score_updated_at: new Date().toISOString(),
+      manual_score_updated_by: crmAdmin.id,
+    })
+    .eq("id", providerId);
+  if (error) return { error: "Failed to save the scorecard." };
+
+  await supabase.from("crm_activities").insert({
+    cleaning_provider_id: providerId,
+    agent_id: crmAdmin.id,
+    activity_type: "score_change",
+    notes: `Performance scorecard updated by ${crmAdmin.full_name || crmAdmin.email}. Overall score: ${
+      manualScore !== null ? `${manualScore}/100` : "not yet rated"
+    }.`,
+  });
+
+  revalidatePath(`/admin/providers/${providerId}`);
+  revalidatePath("/admin/providers");
   return {};
 }
 
