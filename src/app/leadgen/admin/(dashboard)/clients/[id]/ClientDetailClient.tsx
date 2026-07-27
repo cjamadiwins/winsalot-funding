@@ -3,10 +3,15 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_EMAIL_STATUS_LABELS,
   LEADGEN_EMAIL_STATUS_STYLES,
   LEADGEN_LEAD_ONLY_TEMPLATE_KEYS,
+  leadgenBookingInviteSection,
   leadgenEmailStatusAt,
+  leadgenServicesInviteSection,
+  renderLeadgenTemplate,
+  resolveLeadgenEmailBranding,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
   type LeadgenEmailRow,
@@ -283,12 +288,16 @@ function CommunicationsSection({
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [bookingUrl, setBookingUrl] = useState("");
+  const [servicesUrl, setServicesUrl] = useState("");
 
   // These templates use {{first_name}}/{{client_business_name}}/booking &
   // services sections that only get filled in from a lead's profile page.
   // This composer has no lead in scope, so offering them here produced the
   // "Thank you for your interest in ." bug (blank vars, no buttons, no
   // client name in the signature) - excluded so it can't happen again.
+  // "consultation_invitation" is deliberately not excluded - see
+  // applyTemplate below, which renders it correctly here instead.
   const composerTemplates = useMemo(() => templates.filter((t) => !LEADGEN_LEAD_ONLY_TEMPLATE_KEYS.includes(t.key)), [templates]);
 
   const filtered = useMemo(
@@ -304,10 +313,27 @@ function CommunicationsSection({
   function applyTemplate(key: string) {
     setSelectedTemplate(key);
     const template = composerTemplates.find((t) => t.key === key);
-    if (template) {
+    if (!template) return;
+
+    if (key === "consultation_invitation") {
+      // No lead in scope here, so there's no real first name - "there" is
+      // a generic but never-broken greeting. Everything else (client
+      // name, booking/services links, signature) comes from real client
+      // data via the same Brent's Essentials fallback used on lead pages.
+      const branding = resolveLeadgenEmailBranding(client, client.booking_link, client.services_info_link);
+      const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
+      const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
       setSubject(template.subject);
-      setBody(template.body.replace(/\{\{\w+\}\}/g, "").trim());
+      setBody(renderLeadgenTemplate(template.body, { first_name: "there", client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection }));
+      setBookingUrl(branding.bookingUrl ?? "");
+      setServicesUrl(branding.servicesUrl ?? "");
+      return;
     }
+
+    setSubject(template.subject);
+    setBody(template.body.replace(/\{\{\w+\}\}/g, "").trim());
+    setBookingUrl("");
+    setServicesUrl("");
   }
 
   return (
@@ -331,6 +357,8 @@ function CommunicationsSection({
               setSubject("");
               setBody("");
               setSelectedTemplate("");
+              setBookingUrl("");
+              setServicesUrl("");
             })
           }
           className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4"
@@ -347,6 +375,8 @@ function CommunicationsSection({
             </select>
           </label>
           <input type="hidden" name="template_key" value={selectedTemplate} />
+          <input type="hidden" name="booking_url" value={bookingUrl} />
+          <input type="hidden" name="services_url" value={servicesUrl} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-slate-600">To</span>

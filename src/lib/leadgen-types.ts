@@ -246,18 +246,26 @@ export type LeadgenAppointmentRow = {
 export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
-// three template keys require a specific lead (first name) and are
-// meant to be sent only through a lead profile's "Send 15-Minute
-// Consultation Invitation" / "Send Follow-Up Email" / "Send Consultation
-// Email" buttons, where every {{placeholder}} is filled from real data.
-// The Client Communications composer (src/app/leadgen/admin/(dashboard)/
-// clients/[id]/ClientDetailClient.tsx) has no lead in scope - if offered
-// one of these templates there, its "start from a template" step just
-// strips every {{...}} to nothing, producing exactly the broken email
-// reported ("Thank you for your interest in .", no booking button, no
-// services link, a bare "on behalf of"). Excluded from that composer's
-// template dropdown entirely so this can't happen again.
-export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "consultation_invitation", "consultation_follow_up"];
+// template keys require a specific lead (first name) and are meant to be
+// sent only through a lead profile's "Send Follow-Up Email" / "Send
+// Consultation Email" buttons, where every {{placeholder}} is filled
+// from real data. The Client Communications composer (src/app/leadgen/
+// admin/(dashboard)/clients/[id]/ClientDetailClient.tsx) has no lead in
+// scope - if offered one of these templates there, its "start from a
+// template" step just strips every {{...}} to nothing, producing exactly
+// the broken email reported ("Thank you for your interest in .", no
+// booking button, no services link, a bare "on behalf of"). Excluded
+// from that composer's template dropdown entirely so this can't happen
+// again.
+//
+// "consultation_invitation" is deliberately NOT in this list:
+// ClientDetailClient.tsx's applyTemplate() special-cases that one key to
+// render it correctly with a generic "there" greeting (no lead name
+// available) plus the real client_business_name/booking/services values
+// via resolveLeadgenEmailBranding below, instead of stripping it - see
+// that component for the render logic and sendClientCommunicationAction
+// for the matching server-side HTML-button build.
+export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "consultation_follow_up"];
 
 // Brent's Essentials is currently the only real Lead Generation CRM
 // client, and the brief asked for these exact values as a hard-coded
