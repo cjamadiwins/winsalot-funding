@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 
   const { data: tracked } = await admin
     .from("crm_lead_emails")
-    .select("id, lead_id, status_at")
+    .select("id, lead_id, provider_lead_id, status_at")
     .eq("resend_email_id", emailId)
     .maybeSingle();
 
@@ -139,7 +139,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, tracked: false });
   }
 
-  console.log(`[resend-webhook] matched email ${emailId} to crm_lead_emails ${tracked.id} (lead ${tracked.lead_id})`);
+  console.log(
+    `[resend-webhook] matched email ${emailId} to crm_lead_emails ${tracked.id} ` +
+      (tracked.lead_id ? `(lead ${tracked.lead_id})` : `(provider lead ${tracked.provider_lead_id})`)
+  );
 
   // Only advance the row's "latest status" if this event isn't older than
   // what's already recorded — guards against an out-of-order retry (e.g.
@@ -158,35 +161,44 @@ export async function POST(request: NextRequest) {
     console.error(`[resend-webhook] failed to update crm_lead_emails ${tracked.id}:`, updateError);
   }
 
-  // Only mirror onto crm_leads if this row is that lead's most recently
-  // sent tracked email — an older email's late-arriving webhook should
-  // never overwrite what a newer email already reported for the lead.
-  const { data: latestForLead } = await admin
+  // Only mirror onto the target record (a crm_leads lead or a
+  // provider_leads provider) if this row is its most recently sent tracked
+  // email — an older email's late-arriving webhook should never overwrite
+  // what a newer email already reported. Exactly one of lead_id/
+  // provider_lead_id is ever set on a crm_lead_emails row (see migration
+  // 0026), so this branches once and reuses the same isNewer/eventAt logic
+  // for either target.
+  const targetTable = tracked.lead_id ? "crm_leads" : "provider_leads";
+  const targetColumn = tracked.lead_id ? "lead_id" : "provider_lead_id";
+  const targetId = tracked.lead_id ?? tracked.provider_lead_id;
+
+  const { data: latestForTarget } = await admin
     .from("crm_lead_emails")
     .select("id")
-    .eq("lead_id", tracked.lead_id)
+    .eq(targetColumn, targetId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (isNewer && latestForLead?.id === tracked.id) {
-    const { error: leadUpdateError } = await admin
-      .from("crm_leads")
+  if (isNewer && latestForTarget?.id === tracked.id) {
+    const { error: targetUpdateError } = await admin
+      .from(targetTable)
       .update({ last_email_status: status, last_email_status_at: eventAt })
-      .eq("id", tracked.lead_id);
-    if (leadUpdateError) {
-      console.error(`[resend-webhook] failed to update crm_leads ${tracked.lead_id}:`, leadUpdateError);
+      .eq("id", targetId);
+    if (targetUpdateError) {
+      console.error(`[resend-webhook] failed to update ${targetTable} ${targetId}:`, targetUpdateError);
     } else {
-      console.log(`[resend-webhook] lead ${tracked.lead_id} last_email_status -> ${status}`);
+      console.log(`[resend-webhook] ${targetTable} ${targetId} last_email_status -> ${status}`);
     }
   }
 
   const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+  const recordLabel = tracked.lead_id ? "lead" : "provider";
   let notes = `Email ${EMAIL_STATUS_LABELS[status].toLowerCase()} (to ${toEmail}) — "${event.data.subject}".`;
   if (event.type === "email.bounced") {
-    notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. Verify or correct this lead's email address.`;
+    notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. Verify or correct this ${recordLabel}'s email address.`;
   } else if (event.type === "email.complained") {
-    notes = `Recipient marked this email as spam (to ${toEmail}). Consider not emailing this lead again.`;
+    notes = `Recipient marked this email as spam (to ${toEmail}). Consider not emailing this ${recordLabel} again.`;
   } else if (event.type === "email.clicked") {
     notes = `Client clicked the link in the email (to ${toEmail}).`;
   } else if (event.type === "email.opened") {
@@ -197,13 +209,14 @@ export async function POST(request: NextRequest) {
 
   const { error: activityError } = await admin.from("crm_activities").insert({
     lead_id: tracked.lead_id,
+    provider_lead_id: tracked.provider_lead_id,
     agent_id: null,
     activity_type: "email",
     notes,
     occurred_at: eventAt,
   });
   if (activityError) {
-    console.error(`[resend-webhook] failed to log activity for lead ${tracked.lead_id}:`, activityError);
+    console.error(`[resend-webhook] failed to log activity for ${targetTable} ${targetId}:`, activityError);
   }
 
   return NextResponse.json({ received: true });

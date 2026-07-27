@@ -41,6 +41,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Cleaning Opportunities
             </Link>
             <Link
+              href="/admin/crm/provider-acquisition"
+              className="text-sm font-medium text-slate-600 hover:text-sky-600"
+            >
+              Provider Acquisition
+            </Link>
+            <Link
               href="/admin/crm/training"
               className="text-sm font-medium text-slate-600 hover:text-sky-600"
             >

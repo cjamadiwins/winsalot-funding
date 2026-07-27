@@ -23,6 +23,11 @@ export default async function AdminCrmPage() {
       .from("crm_followups")
       .select("*, crm_leads(id, business_name, phone, city, assigned_agent_id)")
       .eq("status", "pending")
+      // crm_followups also holds opportunity- and provider-lead-targeted
+      // rows (migrations 0013/0026) - this page's lead follow-ups are
+      // lead-only, so exclude those explicitly rather than relying on RLS
+      // alone (which permits all three target types).
+      .not("lead_id", "is", null)
       .order("scheduled_at", { ascending: true }),
   ]);
 

@@ -2,9 +2,11 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import type { CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
+import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueLeadsPanel from "./OverdueLeadsPanel";
+import ProviderFollowUps from "./ProviderFollowUps";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -13,18 +15,36 @@ export default async function AgentDashboardPage() {
   // RLS (crm_leads_agent_select_own / crm_followups_agent_select_own_lead)
   // already restricts both of these to leads assigned to the signed-in
   // agent, so no extra filtering is needed here.
-  const [{ data: leadsData, error: leadsError }, { data: followUpsData, error: followUpsError }] =
-    await Promise.all([
-      supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("crm_followups")
-        .select("*, crm_leads(id, business_name, phone, city, assigned_agent_id)")
-        .eq("status", "pending")
-        .order("scheduled_at", { ascending: true }),
-    ]);
+  const [
+    { data: leadsData, error: leadsError },
+    { data: followUpsData, error: followUpsError },
+    { data: providerFollowUpsData, error: providerFollowUpsError },
+  ] = await Promise.all([
+    supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("crm_followups")
+      .select("*, crm_leads(id, business_name, phone, city, assigned_agent_id)")
+      .eq("status", "pending")
+      // crm_followups also holds opportunity- and provider-lead-targeted
+      // rows (migrations 0013/0026) - this dashboard's Follow-Up Calendar
+      // is lead-only, so exclude those explicitly rather than relying on
+      // RLS alone (which permits all three target types).
+      .not("lead_id", "is", null)
+      .order("scheduled_at", { ascending: true }),
+    // Provider Acquisition's own "Provider Follow-ups" section (brief
+    // section 9) - deliberately a separate query/section from the
+    // Follow-Up Calendar above, never mixed with customer-lead callbacks.
+    supabase
+      .from("crm_followups")
+      .select("*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id)")
+      .eq("status", "pending")
+      .not("provider_lead_id", "is", null)
+      .order("scheduled_at", { ascending: true }),
+  ]);
 
   const leads = (leadsData ?? []) as CrmLeadRow[];
   const followUps = (followUpsData ?? []) as CrmFollowUpWithLead[];
+  const providerFollowUps = (providerFollowUpsData ?? []) as ProviderFollowUpWithLead[];
 
   return (
     <div>
@@ -62,6 +82,20 @@ export default async function AgentDashboardPage() {
       {!followUpsError && (
         <div className="mt-3">
           <FollowUpCalendar followUps={followUps} leads={leads} />
+        </div>
+      )}
+
+      <h2 className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
+        Provider Follow-ups
+      </h2>
+      {providerFollowUpsError && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load provider follow-ups: {providerFollowUpsError.message}
+        </p>
+      )}
+      {!providerFollowUpsError && (
+        <div className="mt-3">
+          <ProviderFollowUps followUps={providerFollowUps} />
         </div>
       )}
 
