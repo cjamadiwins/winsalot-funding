@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   LEADGEN_EMAIL_STATUS_LABELS,
   LEADGEN_EMAIL_STATUS_STYLES,
+  LEADGEN_LEAD_ONLY_TEMPLATE_KEYS,
   leadgenEmailStatusAt,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -283,6 +284,13 @@ function CommunicationsSection({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
 
+  // These templates use {{first_name}}/{{client_business_name}}/booking &
+  // services sections that only get filled in from a lead's profile page.
+  // This composer has no lead in scope, so offering them here produced the
+  // "Thank you for your interest in ." bug (blank vars, no buttons, no
+  // client name in the signature) - excluded so it can't happen again.
+  const composerTemplates = useMemo(() => templates.filter((t) => !LEADGEN_LEAD_ONLY_TEMPLATE_KEYS.includes(t.key)), [templates]);
+
   const filtered = useMemo(
     () =>
       emails.filter((e) => {
@@ -295,7 +303,7 @@ function CommunicationsSection({
 
   function applyTemplate(key: string) {
     setSelectedTemplate(key);
-    const template = templates.find((t) => t.key === key);
+    const template = composerTemplates.find((t) => t.key === key);
     if (template) {
       setSubject(template.subject);
       setBody(template.body.replace(/\{\{\w+\}\}/g, "").trim());
@@ -331,7 +339,7 @@ function CommunicationsSection({
             <span className="text-[13px] font-semibold text-slate-600">Start from a Template (optional)</span>
             <select value={selectedTemplate} onChange={(e) => applyTemplate(e.target.value)} className={inputClass}>
               <option value="">Blank email</option>
-              {templates.map((t) => (
+              {composerTemplates.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.name}
                 </option>

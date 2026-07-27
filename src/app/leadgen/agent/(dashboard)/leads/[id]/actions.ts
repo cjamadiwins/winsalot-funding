@@ -10,6 +10,7 @@ import {
   LEADGEN_LEAD_STATUSES,
   LEADGEN_PROVINCES,
   leadgenServicesButtonLabel,
+  resolveLeadgenEmailBranding,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
 
@@ -242,7 +243,7 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
 
   const { data: lead } = await supabase
     .from("leadgen_leads")
-    .select("client_id, campaign_id, leadgen_clients(name)")
+    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link, services_info_link)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
@@ -250,10 +251,18 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
-  const servicesUrl = String(formData.get("services_url") ?? "").trim() || null;
-  const clientNameEmbed = lead.leadgen_clients as unknown as { name: string } | { name: string }[] | null;
-  const clientName = (Array.isArray(clientNameEmbed) ? clientNameEmbed[0]?.name : clientNameEmbed?.name) ?? "us";
+  const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  const submittedServicesUrl = String(formData.get("services_url") ?? "").trim() || null;
+  type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
+  const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
+  const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  // Server-side safety net mirroring resolveLeadgenEmailBranding on the
+  // client: re-validates against the DB row even if the submitted form
+  // values were somehow blank, so a Brent's Essentials email can never go
+  // out with an empty name or missing booking/services button.
+  const branding = embeddedClient
+    ? resolveLeadgenEmailBranding(embeddedClient, submittedBookingUrl ?? embeddedClient.booking_link, submittedServicesUrl ?? embeddedClient.services_info_link)
+    : { clientName: "us", bookingUrl: submittedBookingUrl, servicesUrl: submittedServicesUrl };
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -269,8 +278,8 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     subject,
     body,
     html: buildLeadgenBookingEmailHtml(body, [
-      { url: bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
-      { url: servicesUrl, label: leadgenServicesButtonLabel(clientName) },
+      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
+      { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
     ]),
     sentBy: agent.id,
     clientVisible: false,
@@ -303,7 +312,7 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
 
   const { data: lead } = await supabase
     .from("leadgen_leads")
-    .select("client_id, campaign_id, leadgen_clients(name)")
+    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link, services_info_link)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
@@ -311,10 +320,18 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const bookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
-  const servicesUrl = String(formData.get("services_url") ?? "").trim() || null;
-  const clientNameEmbed = lead.leadgen_clients as unknown as { name: string } | { name: string }[] | null;
-  const clientName = (Array.isArray(clientNameEmbed) ? clientNameEmbed[0]?.name : clientNameEmbed?.name) ?? "us";
+  const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  const submittedServicesUrl = String(formData.get("services_url") ?? "").trim() || null;
+  type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
+  const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
+  const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  // Server-side safety net mirroring resolveLeadgenEmailBranding on the
+  // client: re-validates against the DB row even if the submitted form
+  // values were somehow blank, so a Brent's Essentials email can never go
+  // out with an empty name or missing booking/services button.
+  const branding = embeddedClient
+    ? resolveLeadgenEmailBranding(embeddedClient, submittedBookingUrl ?? embeddedClient.booking_link, submittedServicesUrl ?? embeddedClient.services_info_link)
+    : { clientName: "us", bookingUrl: submittedBookingUrl, servicesUrl: submittedServicesUrl };
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -330,8 +347,8 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     subject,
     body,
     html: buildLeadgenBookingEmailHtml(body, [
-      { url: bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
-      { url: servicesUrl, label: leadgenServicesButtonLabel(clientName) },
+      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL },
+      { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
     ]),
     sentBy: agent.id,
     clientVisible: false,

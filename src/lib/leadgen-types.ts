@@ -245,6 +245,58 @@ export type LeadgenAppointmentRow = {
 // LEADGEN_BOOKING_BUTTON_LABEL usage in lib/leadgen-email.ts.
 export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
 
+// Root-cause fix for the "Thank you for your interest in ." bug: these
+// three template keys require a specific lead (first name) and are
+// meant to be sent only through a lead profile's "Send 15-Minute
+// Consultation Invitation" / "Send Follow-Up Email" / "Send Consultation
+// Email" buttons, where every {{placeholder}} is filled from real data.
+// The Client Communications composer (src/app/leadgen/admin/(dashboard)/
+// clients/[id]/ClientDetailClient.tsx) has no lead in scope - if offered
+// one of these templates there, its "start from a template" step just
+// strips every {{...}} to nothing, producing exactly the broken email
+// reported ("Thank you for your interest in .", no booking button, no
+// services link, a bare "on behalf of"). Excluded from that composer's
+// template dropdown entirely so this can't happen again.
+export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "consultation_invitation", "consultation_follow_up"];
+
+// Brent's Essentials is currently the only real Lead Generation CRM
+// client, and the brief asked for these exact values as a hard-coded
+// safety net: even if leadgen_clients.name/booking_link/
+// services_info_link were ever somehow blank at render time, an email
+// for this specific client still renders correctly rather than with an
+// empty {{client_business_name}}/missing button. Never applied to any
+// other client - a blank booking/services link for a different client
+// correctly falls back to the generic "please reply"/omitted-section
+// behavior (leadgenBookingInviteSection/leadgenServicesInviteSection
+// below), not to Brent's Essentials' own links.
+export const LEADGEN_BRENTS_ESSENTIALS_FALLBACK = {
+  name: "Brent's Essentials",
+  bookingUrl: "https://calendly.com/kelechiamadi1/free-15-minute-business-growth-strategy-session?month=2026-07",
+  servicesUrl: "https://www.brentsessentials.com/growth-system",
+} as const;
+
+export function isLeadgenBrentsEssentials(client: Pick<LeadgenClientRow, "name" | "slug">): boolean {
+  return client.slug === "BrentsEssentials" || client.name.trim() === LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name;
+}
+
+// Resolves the effective client name/booking link/services link to
+// render into a consultation email, applying the Brent's Essentials
+// hard-coded fallback (see above) only when both (a) this client *is*
+// Brent's Essentials and (b) the real database value is missing/blank.
+// Any other client's blank fields pass through unchanged to the
+// existing generic fallback behavior elsewhere.
+export function resolveLeadgenEmailBranding(
+  client: Pick<LeadgenClientRow, "name" | "slug">,
+  bookingLink: string | null,
+  servicesLink: string | null
+): { clientName: string; bookingUrl: string | null; servicesUrl: string | null } {
+  const isBrents = isLeadgenBrentsEssentials(client);
+  const clientName = client.name.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name : client.name);
+  const bookingUrl = bookingLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink);
+  const servicesUrl = servicesLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl : servicesLink);
+  return { clientName, bookingUrl: bookingUrl || null, servicesUrl: servicesUrl || null };
+}
+
 export type LeadgenEmailTemplateRow = {
   id: string;
   created_at: string;

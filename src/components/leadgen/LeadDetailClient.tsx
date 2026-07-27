@@ -17,6 +17,7 @@ import {
   leadgenBookingParagraph,
   leadgenBookingInviteSection,
   leadgenServicesInviteSection,
+  resolveLeadgenEmailBranding,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -143,13 +144,18 @@ export default function LeadDetailClient({
       })
     : "";
 
-  const bookingSection = leadgenBookingInviteSection(bookingLink, LEADGEN_BOOKING_BUTTON_LABEL);
-  const servicesSection = leadgenServicesInviteSection(servicesInfoLink, client.name);
-  const invitationVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection, services_section: servicesSection };
+  // Validated/fallback-resolved values (see resolveLeadgenEmailBranding
+  // in lib/leadgen-types.ts) - guarantees a Brent's Essentials email
+  // never renders with an empty client name or missing button even if
+  // the database row were somehow blank at render time.
+  const branding = resolveLeadgenEmailBranding(client, bookingLink, servicesInfoLink);
+  const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
+  const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
+  const invitationVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
   const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
 
-  const followUpVars = { first_name: firstName, client_business_name: client.name, booking_section: bookingSection, services_section: servicesSection };
+  const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
   const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
 
@@ -230,8 +236,8 @@ export default function LeadDetailClient({
           agentName={currentUserName}
           subject={invitationSubject}
           body={invitationBody}
-          bookingUrl={bookingLink}
-          servicesUrl={servicesInfoLink}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={branding.servicesUrl}
           onClose={() => setShowInvitationModal(false)}
           onSend={(formData) => actions.sendConsultationInvitation(lead.id, formData)}
           onSent={() => {
@@ -250,8 +256,8 @@ export default function LeadDetailClient({
           title="Send Follow-Up Email"
           defaultSubject={followUpSubject}
           defaultBody={followUpBody}
-          bookingUrl={bookingLink}
-          servicesUrl={servicesInfoLink}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={branding.servicesUrl}
           onClose={() => setShowInvitationFollowUpModal(false)}
           onSend={(formData) => actions.sendConsultationFollowUp(lead.id, formData)}
           onSent={() => {
