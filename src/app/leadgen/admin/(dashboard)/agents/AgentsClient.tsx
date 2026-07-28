@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LEADGEN_ROLES, type LeadgenClientRow, type LeadgenRole, type LeadgenUserRow } from "@/lib/leadgen-types";
 import { inviteLeadgenUserAction, removeLeadgenUserAction, updateLeadgenUserAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
 type Performance = { leads: number; calls: number; appointments: number; completed: number };
+type RemovalFailure = {
+  error?: string;
+  errorId?: string;
+  step?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
 
 export default function AgentsClient({
   users,
@@ -17,19 +27,27 @@ export default function AgentsClient({
   clients: LeadgenClientRow[];
   performanceByAgent: Record<string, Performance>;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteRole, setInviteRole] = useState<LeadgenRole>("agent");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeFailure, setRemoveFailure] = useState<RemovalFailure | null>(null);
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
 
-  function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
+  function runAction(fn: () => Promise<{ error?: string; errorId?: string } | void>, onSuccess?: () => void) {
     setError(null);
+    setSuccess(null);
+    setRemoveFailure(null);
     startTransition(async () => {
       const result = await fn();
-      if (result && "error" in result && result.error) setError(result.error);
+      if (result && "error" in result && result.error) {
+        setError(result.errorId ? `${result.error} (${result.errorId})` : result.error);
+      }
       else onSuccess?.();
     });
   }
@@ -44,6 +62,32 @@ export default function AgentsClient({
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {success && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</p>}
+      {removeFailure && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold text-amber-900">Removal failed</p>
+          <dl className="mt-2 space-y-1.5 text-[13px]">
+            <div>
+              <dt className="inline font-semibold">Internal error ID:</dt> <dd className="inline">{removeFailure.errorId ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="inline font-semibold">Failed step:</dt> <dd className="inline">{removeFailure.step ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="inline font-semibold">Message:</dt> <dd className="inline">{removeFailure.message ?? removeFailure.error ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="inline font-semibold">Code:</dt> <dd className="inline">{removeFailure.code ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="inline font-semibold">Details:</dt> <dd className="inline">{removeFailure.details ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="inline font-semibold">Hint:</dt> <dd className="inline">{removeFailure.hint ?? "—"}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       {showInvite && (
         <form
@@ -160,15 +204,30 @@ export default function AgentsClient({
                           </button>
                           <button
                             type="button"
-                            disabled={isPending}
-                            onClick={() => {
-                              if (confirm(`Remove ${user.full_name}'s login? This cannot be undone.`)) {
-                                runAction(() => removeLeadgenUserAction(user.id));
+                            disabled={isPending || removingId === user.id}
+                            onClick={async () => {
+                              if (!confirm("Are you sure you want to remove this user? They will no longer be able to sign in.")) return;
+
+                              setError(null);
+                              setSuccess(null);
+                              setRemoveFailure(null);
+                              setRemovingId(user.id);
+
+                              const result = await removeLeadgenUserAction(user.id);
+                              if (result.error) {
+                                setRemoveFailure(result);
+                                setError(result.errorId ? `${result.error} (${result.errorId})` : result.error);
+                                setRemovingId(null);
+                                return;
                               }
+
+                              setRemovingId(null);
+                              setSuccess("User removed successfully.");
+                              router.refresh();
                             }}
                             className="text-[12px] font-semibold text-rose-600"
                           >
-                            Remove
+                            {removingId === user.id ? "Removing…" : "Remove"}
                           </button>
                         </>
                       )}

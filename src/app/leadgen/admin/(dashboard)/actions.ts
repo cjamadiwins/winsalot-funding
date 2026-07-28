@@ -16,7 +16,100 @@ import {
   type LeadgenRole,
 } from "@/lib/leadgen-types";
 
-type ActionResult = { error?: string };
+type ActionResult = {
+  error?: string;
+  errorId?: string;
+  step?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+type SupabaseErrorLike = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  status?: number;
+};
+
+function logLeadgenRemovalFailure(params: {
+  step: string;
+  errorId: string;
+  userId: string;
+  userRole?: string | null;
+  userEmail?: string | null;
+  supabaseError?: SupabaseErrorLike | null;
+  authError?: SupabaseErrorLike | null;
+  dbError?: SupabaseErrorLike | null;
+  note?: string;
+}) {
+  const { step, errorId, userId, userRole, userEmail, supabaseError, authError, dbError, note } = params;
+  const error = supabaseError ?? authError ?? dbError ?? null;
+
+  console.error("[LeadGen] Remove user failed.", {
+    step,
+    errorId,
+    userId,
+    userRole: userRole ?? null,
+    userEmail: userEmail ?? null,
+    note: note ?? null,
+    supabaseError: supabaseError
+      ? {
+          message: supabaseError.message ?? null,
+          code: supabaseError.code ?? null,
+          details: supabaseError.details ?? null,
+          hint: supabaseError.hint ?? null,
+          status: supabaseError.status ?? null,
+        }
+      : null,
+    authError: authError
+      ? {
+          message: authError.message ?? null,
+          code: authError.code ?? null,
+          details: authError.details ?? null,
+          hint: authError.hint ?? null,
+          status: authError.status ?? null,
+        }
+      : null,
+    dbError: dbError
+      ? {
+          message: dbError.message ?? null,
+          code: dbError.code ?? null,
+          details: dbError.details ?? null,
+          hint: dbError.hint ?? null,
+          status: dbError.status ?? null,
+        }
+      : null,
+    errorMessage: error?.message ?? null,
+    errorCode: error?.code ?? null,
+    errorDetails: error?.details ?? null,
+    errorHint: error?.hint ?? null,
+    errorStatus: error?.status ?? null,
+  });
+}
+
+function buildRemovalFailureResult(params: {
+  errorId: string;
+  step: string;
+  error: string;
+  supabaseError?: SupabaseErrorLike | null;
+  authError?: SupabaseErrorLike | null;
+  dbError?: SupabaseErrorLike | null;
+}): ActionResult {
+  const source = params.supabaseError ?? params.authError ?? params.dbError ?? null;
+
+  return {
+    error: params.error,
+    errorId: params.errorId,
+    step: params.step,
+    message: source?.message,
+    code: source?.code,
+    details: source?.details,
+    hint: source?.hint,
+  };
+}
 
 type CleanupSummary = {
   clientId: string;
@@ -322,13 +415,121 @@ export async function updateLeadgenUserAction(userId: string, formData: FormData
 
 export async function removeLeadgenUserAction(userId: string): Promise<ActionResult> {
   const currentAdmin = await requireLeadgenAdmin();
-  if (userId === currentAdmin.id) return { error: "You can't remove your own account." };
+  if (userId === currentAdmin.id) {
+    console.error("[LeadGen] Remove user blocked: self-removal attempt.", {
+      step: "guard_self_removal",
+      errorId: "REMOVE_SELF_BLOCKED",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      errorMessage: "You can't remove your own account.",
+    });
+    return {
+      error: "You can't remove your own account.",
+      errorId: "REMOVE_SELF_BLOCKED",
+      step: "Prevent self-removal",
+    };
+  }
 
   const admin = getSupabaseAdmin();
-  const { error } = await admin.auth.admin.deleteUser(userId);
-  if (error) return { error: "Failed to remove this user." };
+  const { data: userRow, error: userReadError } = await admin.from("leadgen_users").select("id, full_name, email, role, client_id").eq("id", userId).maybeSingle();
+  if (userReadError) {
+    logLeadgenRemovalFailure({
+      step: "load_user_before_removal",
+      errorId: "REMOVE_PROFILE_FAILED",
+      userId,
+      userRole: null,
+      userEmail: null,
+      supabaseError: userReadError,
+      note: "Failed while loading the target user record before cleanup.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_PROFILE_FAILED",
+      step: "Load user profile",
+      supabaseError: userReadError,
+    });
+  }
+  if (!userRow) {
+    console.error("[LeadGen] Remove user failed: user profile not found.", {
+      step: "load_user_before_removal",
+      errorId: "REMOVE_PROFILE_NOT_FOUND",
+      userId,
+      userRole: null,
+      userEmail: null,
+      errorMessage: "User not found.",
+    });
+    logLeadgenRemovalFailure({
+      step: "load_user_before_removal",
+      errorId: "REMOVE_PROFILE_NOT_FOUND",
+      userId,
+      userRole: null,
+      userEmail: null,
+      note: "The requested leadgen_users row was not found.",
+    });
+    return {
+      error: "User not found.",
+      errorId: "REMOVE_PROFILE_NOT_FOUND",
+      step: "Load user profile",
+    };
+  }
+
+  const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
+  if (authDeleteError) {
+    const notFound = /not found/i.test(authDeleteError.message ?? "") || authDeleteError.status === 404;
+    if (!notFound) {
+      logLeadgenRemovalFailure({
+        step: "delete_auth_user",
+        errorId: "REMOVE_AUTH_USER_FAILED",
+        userId,
+        userRole: userRow.role,
+        userEmail: userRow.email,
+        authError: authDeleteError,
+        note: "Failed while deleting the Supabase Auth user record.",
+      });
+      return buildRemovalFailureResult({
+        error: "Failed to remove this user.",
+        errorId: "REMOVE_AUTH_USER_FAILED",
+        step: "Delete auth user",
+        authError: authDeleteError,
+      });
+    }
+    console.error("[LeadGen] Auth user was already missing during removal; continuing profile cleanup.", {
+      step: "delete_auth_user",
+      errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
+      userId,
+      userRole: userRow.role,
+      userEmail: userRow.email,
+      authError: authDeleteError as SupabaseErrorLike,
+      authErrorFields: {
+        message: authDeleteError.message ?? null,
+        code: authDeleteError.code ?? null,
+        status: authDeleteError.status ?? null,
+      },
+    });
+  }
+
+  const { error: profileDeleteError } = await admin.from("leadgen_users").delete().eq("id", userId);
+  if (profileDeleteError) {
+    logLeadgenRemovalFailure({
+      step: "delete_profile_row",
+      errorId: "REMOVE_PROFILE_FAILED",
+      userId,
+      userRole: userRow.role,
+      userEmail: userRow.email,
+      dbError: profileDeleteError,
+      note: "Failed while deleting the leadgen_users profile row after auth cleanup.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_PROFILE_FAILED",
+      step: "Delete user profile",
+      dbError: profileDeleteError,
+    });
+  }
 
   revalidatePath("/leadgen/admin/agents");
+  revalidatePath("/leadgen/admin");
   return {};
 }
 

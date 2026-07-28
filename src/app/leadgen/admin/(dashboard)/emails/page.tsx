@@ -65,7 +65,7 @@ export default async function LeadgenAdminEmailsPage() {
                           <span className="text-slate-500">No lead</span>
                         )}
                       </td>
-                      <td className="py-2 pr-3 text-slate-700">{sender ? sender.full_name || sender.email : "System"}</td>
+                      <td className="py-2 pr-3 text-slate-700">{sender ? sender.full_name || sender.email : email.sent_by ? "Removed User" : "System"}</td>
                       <td className="py-2 pr-3 text-slate-700">{email.to_email}</td>
                       <td className="max-w-[260px] truncate py-2 pr-3 text-slate-700" title={email.subject}>
                         {email.subject}
