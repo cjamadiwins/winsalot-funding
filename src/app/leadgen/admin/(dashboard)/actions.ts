@@ -27,12 +27,78 @@ type ActionResult = {
 };
 
 type SupabaseErrorLike = {
+  name?: string;
   message?: string;
   code?: string;
   details?: string;
   hint?: string;
   status?: number;
+  serialized?: unknown;
 };
+
+const UUID_V4_OR_V1_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string | null | undefined): value is string {
+  if (!value) return false;
+  return UUID_V4_OR_V1_REGEX.test(value.trim());
+}
+
+function redactSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return lower.includes("token") || lower.includes("secret") || lower.includes("password") || lower.includes("cookie") || lower.includes("authorization") || lower.endsWith("key");
+}
+
+function safeSerializeUnknown(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "function") return "[Function]";
+
+  if (Array.isArray(value)) {
+    return value.map((item) => safeSerializeUnknown(item, seen));
+  }
+
+  if (typeof value === "object") {
+    if (seen.has(value as object)) return "[Circular]";
+    seen.add(value as object);
+
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (redactSensitiveKey(key)) {
+        out[key] = "[REDACTED]";
+        continue;
+      }
+      out[key] = safeSerializeUnknown(entry, seen);
+    }
+    return out;
+  }
+
+  try {
+    return String(value);
+  } catch {
+    return "[Unserializable]";
+  }
+}
+
+function toSupabaseErrorLike(error: unknown): SupabaseErrorLike {
+  const raw = (error ?? null) as Record<string, unknown> | null;
+
+  return {
+    name: typeof raw?.name === "string" ? raw.name : undefined,
+    message: typeof raw?.message === "string" ? raw.message : undefined,
+    code: typeof raw?.code === "string" ? raw.code : undefined,
+    details: typeof raw?.details === "string" ? raw.details : undefined,
+    hint: typeof raw?.hint === "string" ? raw.hint : undefined,
+    status: typeof raw?.status === "number" ? raw.status : undefined,
+    serialized: safeSerializeUnknown(error),
+  };
+}
+
+function isAuthNotFoundError(error: SupabaseErrorLike | null | undefined): boolean {
+  if (!error) return false;
+  const text = [error.name, error.message, error.details, error.hint, error.code].filter(Boolean).join(" ").toLowerCase();
+  return error.status === 404 || text.includes("not found") || text.includes("does not exist") || text.includes("user not found");
+}
 
 function logLeadgenRemovalFailure(params: {
   step: string;
@@ -57,36 +123,44 @@ function logLeadgenRemovalFailure(params: {
     note: note ?? null,
     supabaseError: supabaseError
       ? {
+          name: supabaseError.name ?? null,
           message: supabaseError.message ?? null,
           code: supabaseError.code ?? null,
           details: supabaseError.details ?? null,
           hint: supabaseError.hint ?? null,
           status: supabaseError.status ?? null,
+          serialized: supabaseError.serialized ?? null,
         }
       : null,
     authError: authError
       ? {
+          name: authError.name ?? null,
           message: authError.message ?? null,
           code: authError.code ?? null,
           details: authError.details ?? null,
           hint: authError.hint ?? null,
           status: authError.status ?? null,
+          serialized: authError.serialized ?? null,
         }
       : null,
     dbError: dbError
       ? {
+          name: dbError.name ?? null,
           message: dbError.message ?? null,
           code: dbError.code ?? null,
           details: dbError.details ?? null,
           hint: dbError.hint ?? null,
           status: dbError.status ?? null,
+          serialized: dbError.serialized ?? null,
         }
       : null,
+    errorName: error?.name ?? null,
     errorMessage: error?.message ?? null,
     errorCode: error?.code ?? null,
     errorDetails: error?.details ?? null,
     errorHint: error?.hint ?? null,
     errorStatus: error?.status ?? null,
+    errorSerialized: error?.serialized ?? null,
   });
 }
 
@@ -104,11 +178,38 @@ function buildRemovalFailureResult(params: {
     error: params.error,
     errorId: params.errorId,
     step: params.step,
-    message: source?.message,
-    code: source?.code,
-    details: source?.details,
+    message: source?.message ?? source?.name,
+    code: source?.code ?? (source?.status ? String(source.status) : undefined),
+    details:
+      source?.details ??
+      (source?.serialized
+        ? JSON.stringify(source.serialized)
+        : undefined),
     hint: source?.hint,
   };
+}
+
+async function findAuthUserIdByEmail(admin: ReturnType<typeof getSupabaseAdmin>, email: string): Promise<{ authUserId: string | null; authError?: SupabaseErrorLike }> {
+  const targetEmail = email.trim().toLowerCase();
+  if (!targetEmail) return { authUserId: null };
+
+  let page = 1;
+  const perPage = 200;
+  const maxPages = 50;
+
+  while (page <= maxPages) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) return { authUserId: null, authError: toSupabaseErrorLike(error) };
+
+    const users = data?.users ?? [];
+    const match = users.find((u) => (u.email ?? "").trim().toLowerCase() === targetEmail);
+    if (match?.id) return { authUserId: match.id };
+
+    if (users.length < perPage) break;
+    page += 1;
+  }
+
+  return { authUserId: null };
 }
 
 type CleanupSummary = {
@@ -431,23 +532,66 @@ export async function removeLeadgenUserAction(userId: string): Promise<ActionRes
     };
   }
 
-  const admin = getSupabaseAdmin();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    const configError = toSupabaseErrorLike(new Error("Missing server-side Supabase admin configuration."));
+    logLeadgenRemovalFailure({
+      step: "validate_server_supabase_admin_config",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      authError: configError,
+      note: "NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY is missing on the server runtime.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      step: "Validate server Supabase config",
+      authError: configError,
+    });
+  }
+
+  let admin: ReturnType<typeof getSupabaseAdmin>;
+  try {
+    admin = getSupabaseAdmin();
+  } catch (error) {
+    const configError = toSupabaseErrorLike(error);
+    logLeadgenRemovalFailure({
+      step: "create_supabase_admin_client",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      authError: configError,
+      note: "Failed to initialize the server-side Supabase admin client.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      step: "Initialize server Supabase admin client",
+      authError: configError,
+    });
+  }
+
   const { data: userRow, error: userReadError } = await admin.from("leadgen_users").select("id, full_name, email, role, client_id").eq("id", userId).maybeSingle();
   if (userReadError) {
+    const safeError = toSupabaseErrorLike(userReadError);
     logLeadgenRemovalFailure({
       step: "load_user_before_removal",
       errorId: "REMOVE_PROFILE_FAILED",
       userId,
       userRole: null,
       userEmail: null,
-      supabaseError: userReadError,
+      supabaseError: safeError,
       note: "Failed while loading the target user record before cleanup.",
     });
     return buildRemovalFailureResult({
       error: "Failed to remove this user.",
       errorId: "REMOVE_PROFILE_FAILED",
       step: "Load user profile",
-      supabaseError: userReadError,
+      supabaseError: safeError,
     });
   }
   if (!userRow) {
@@ -474,57 +618,94 @@ export async function removeLeadgenUserAction(userId: string): Promise<ActionRes
     };
   }
 
-  const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
-  if (authDeleteError) {
-    const notFound = /not found/i.test(authDeleteError.message ?? "") || authDeleteError.status === 404;
-    if (!notFound) {
+  // `leadgen_users.id` is expected to be the Auth UUID. If this value is
+  // malformed or stale, fall back to finding the Auth user by email.
+  let authUserId = isUuid(userId) ? userId : null;
+  if (!authUserId && isUuid(userRow.id)) authUserId = userRow.id;
+
+  if (!authUserId && userRow.email) {
+    const lookup = await findAuthUserIdByEmail(admin, userRow.email);
+    if (lookup.authError) {
       logLeadgenRemovalFailure({
-        step: "delete_auth_user",
-        errorId: "REMOVE_AUTH_USER_FAILED",
+        step: "lookup_auth_user_by_email",
+        errorId: "REMOVE_AUTH_LOOKUP_FAILED",
         userId,
         userRole: userRow.role,
         userEmail: userRow.email,
-        authError: authDeleteError,
-        note: "Failed while deleting the Supabase Auth user record.",
+        authError: lookup.authError,
+        note: "Failed while searching Auth users by email to resolve a valid auth.users UUID.",
       });
       return buildRemovalFailureResult({
         error: "Failed to remove this user.",
-        errorId: "REMOVE_AUTH_USER_FAILED",
-        step: "Delete auth user",
-        authError: authDeleteError,
+        errorId: "REMOVE_AUTH_LOOKUP_FAILED",
+        step: "Find auth user by email",
+        authError: lookup.authError,
       });
     }
-    console.error("[LeadGen] Auth user was already missing during removal; continuing profile cleanup.", {
-      step: "delete_auth_user",
+    authUserId = lookup.authUserId;
+  }
+
+  if (authUserId) {
+    const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUserId);
+    if (authDeleteError) {
+      const safeAuthError = toSupabaseErrorLike(authDeleteError);
+      if (!isAuthNotFoundError(safeAuthError)) {
+        logLeadgenRemovalFailure({
+          step: "delete_auth_user",
+          errorId: "REMOVE_AUTH_USER_FAILED",
+          userId,
+          userRole: userRow.role,
+          userEmail: userRow.email,
+          authError: safeAuthError,
+          note: "Failed while deleting the Supabase Auth user record.",
+        });
+        return buildRemovalFailureResult({
+          error: "Failed to remove this user.",
+          errorId: "REMOVE_AUTH_USER_FAILED",
+          step: "Delete auth user",
+          authError: safeAuthError,
+        });
+      }
+
+      console.error("[LeadGen] Auth user was already missing during removal; continuing profile cleanup.", {
+        step: "delete_auth_user",
+        errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
+        userId,
+        resolvedAuthUserId: authUserId,
+        userRole: userRow.role,
+        userEmail: userRow.email,
+        authError: safeAuthError,
+      });
+    }
+  } else {
+    console.error("[LeadGen] No matching Auth user found; treating Auth deletion as already complete.", {
+      step: "resolve_auth_user_id",
       errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
       userId,
+      profileId: userRow.id,
       userRole: userRow.role,
       userEmail: userRow.email,
-      authError: authDeleteError as SupabaseErrorLike,
-      authErrorFields: {
-        message: authDeleteError.message ?? null,
-        code: authDeleteError.code ?? null,
-        status: authDeleteError.status ?? null,
-      },
+      note: "No auth.users row was found by UUID or email; continuing profile cleanup.",
     });
   }
 
   const { error: profileDeleteError } = await admin.from("leadgen_users").delete().eq("id", userId);
   if (profileDeleteError) {
+    const safeDbError = toSupabaseErrorLike(profileDeleteError);
     logLeadgenRemovalFailure({
       step: "delete_profile_row",
       errorId: "REMOVE_PROFILE_FAILED",
       userId,
       userRole: userRow.role,
       userEmail: userRow.email,
-      dbError: profileDeleteError,
+      dbError: safeDbError,
       note: "Failed while deleting the leadgen_users profile row after auth cleanup.",
     });
     return buildRemovalFailureResult({
       error: "Failed to remove this user.",
       errorId: "REMOVE_PROFILE_FAILED",
       step: "Delete user profile",
-      dbError: profileDeleteError,
+      dbError: safeDbError,
     });
   }
 
