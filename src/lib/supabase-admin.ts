@@ -16,7 +16,10 @@ export function getSupabaseAdmin(): SupabaseClient {
   }
 
   cachedClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   });
   return cachedClient;
 }

@@ -94,6 +94,47 @@ function toSupabaseErrorLike(error: unknown): SupabaseErrorLike {
   };
 }
 
+function decodeBase64Url(input: string): string {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function projectRefFromSupabaseUrl(supabaseUrl: string): string | null {
+  try {
+    const hostname = new URL(supabaseUrl).hostname.toLowerCase();
+    const ref = hostname.split(".")[0];
+    return ref || null;
+  } catch {
+    return null;
+  }
+}
+
+function projectRefFromServiceRoleKey(serviceRoleKey: string): string | null {
+  try {
+    const parts = serviceRoleKey.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(decodeBase64Url(parts[1])) as { iss?: string };
+    if (!payload.iss) return null;
+    return projectRefFromSupabaseUrl(payload.iss);
+  } catch {
+    return null;
+  }
+}
+
+function isRetryableAuthError(error: SupabaseErrorLike | null | undefined): boolean {
+  if (!error) return false;
+  if (error.status !== undefined && error.status >= 500) return true;
+  const text = [error.name, error.message, error.code, error.details, error.hint].filter(Boolean).join(" ").toLowerCase();
+  return text.includes("retryable") || text.includes("timeout") || text.includes("temporar") || text.includes("service unavailable");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function isAuthNotFoundError(error: SupabaseErrorLike | null | undefined): boolean {
   if (!error) return false;
   const text = [error.name, error.message, error.details, error.hint, error.code].filter(Boolean).join(" ").toLowerCase();
@@ -553,6 +594,35 @@ export async function removeLeadgenUserAction(userId: string): Promise<ActionRes
     });
   }
 
+  const urlRef = projectRefFromSupabaseUrl(supabaseUrl);
+  const keyRef = projectRefFromServiceRoleKey(serviceRoleKey);
+  if (urlRef && keyRef && urlRef !== keyRef) {
+    const mismatchError = toSupabaseErrorLike(
+      new Error("Supabase project mismatch between URL and service role key.")
+    );
+    logLeadgenRemovalFailure({
+      step: "validate_supabase_project_match",
+      errorId: "REMOVE_AUTH_CONFIG_MISMATCH",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      authError: {
+        ...mismatchError,
+        details: `URL project ref (${urlRef}) does not match key project ref (${keyRef}).`,
+      },
+      note: "Server runtime appears to use a service-role key for a different Supabase project.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_AUTH_CONFIG_MISMATCH",
+      step: "Validate Supabase project linkage",
+      authError: {
+        ...mismatchError,
+        details: `URL project ref (${urlRef}) does not match key project ref (${keyRef}).`,
+      },
+    });
+  }
+
   let admin: ReturnType<typeof getSupabaseAdmin>;
   try {
     admin = getSupabaseAdmin();
@@ -646,36 +716,115 @@ export async function removeLeadgenUserAction(userId: string): Promise<ActionRes
   }
 
   if (authUserId) {
-    const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUserId);
-    if (authDeleteError) {
-      const safeAuthError = toSupabaseErrorLike(authDeleteError);
-      if (!isAuthNotFoundError(safeAuthError)) {
+    const { data: authUserLookup, error: authLookupError } = await admin.auth.admin.getUserById(authUserId);
+    if (authLookupError) {
+      const safeLookupError = toSupabaseErrorLike(authLookupError);
+      if (!isAuthNotFoundError(safeLookupError)) {
         logLeadgenRemovalFailure({
-          step: "delete_auth_user",
-          errorId: "REMOVE_AUTH_USER_FAILED",
+          step: "get_auth_user_before_delete",
+          errorId: "REMOVE_AUTH_LOOKUP_FAILED",
           userId,
           userRole: userRow.role,
           userEmail: userRow.email,
-          authError: safeAuthError,
-          note: "Failed while deleting the Supabase Auth user record.",
+          authError: safeLookupError,
+          note: "Failed while retrieving the target Auth user before delete.",
         });
         return buildRemovalFailureResult({
           error: "Failed to remove this user.",
-          errorId: "REMOVE_AUTH_USER_FAILED",
-          step: "Delete auth user",
-          authError: safeAuthError,
+          errorId: "REMOVE_AUTH_LOOKUP_FAILED",
+          step: "Retrieve auth user",
+          authError: safeLookupError,
         });
       }
-
-      console.error("[LeadGen] Auth user was already missing during removal; continuing profile cleanup.", {
-        step: "delete_auth_user",
+      console.error("[LeadGen] Auth user not found during pre-delete lookup; continuing profile cleanup.", {
+        step: "get_auth_user_before_delete",
         errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
         userId,
         resolvedAuthUserId: authUserId,
         userRole: userRow.role,
         userEmail: userRow.email,
-        authError: safeAuthError,
+        authError: safeLookupError,
       });
+    } else if (!authUserLookup?.user?.id) {
+      console.error("[LeadGen] Auth user lookup returned no user; continuing profile cleanup.", {
+        step: "get_auth_user_before_delete",
+        errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
+        userId,
+        resolvedAuthUserId: authUserId,
+        userRole: userRow.role,
+        userEmail: userRow.email,
+      });
+    } else {
+      authUserId = authUserLookup.user.id;
+      const maxDeleteAttempts = 3;
+      let lastRetryableAuthError: SupabaseErrorLike | null = null;
+
+      for (let attempt = 1; attempt <= maxDeleteAttempts; attempt += 1) {
+        const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUserId);
+        if (!authDeleteError) {
+          lastRetryableAuthError = null;
+          break;
+        }
+
+        const safeAuthError = toSupabaseErrorLike(authDeleteError);
+        console.error("[LeadGen] Auth user delete attempt failed.", {
+          step: "delete_auth_user",
+          errorId: "REMOVE_AUTH_USER_ATTEMPT_FAILED",
+          userId,
+          resolvedAuthUserId: authUserId,
+          userRole: userRow.role,
+          userEmail: userRow.email,
+          attempt,
+          maxAttempts: maxDeleteAttempts,
+          authError: safeAuthError,
+        });
+
+        if (isAuthNotFoundError(safeAuthError)) {
+          lastRetryableAuthError = null;
+          break;
+        }
+
+        if (!isRetryableAuthError(safeAuthError)) {
+          logLeadgenRemovalFailure({
+            step: "delete_auth_user",
+            errorId: "REMOVE_AUTH_USER_FAILED",
+            userId,
+            userRole: userRow.role,
+            userEmail: userRow.email,
+            authError: safeAuthError,
+            note: "Non-retryable Auth delete error.",
+          });
+          return buildRemovalFailureResult({
+            error: "Failed to remove this user.",
+            errorId: "REMOVE_AUTH_USER_FAILED",
+            step: "Delete auth user",
+            authError: safeAuthError,
+          });
+        }
+
+        lastRetryableAuthError = safeAuthError;
+        if (attempt < maxDeleteAttempts) {
+          await delay(250 * attempt);
+        }
+      }
+
+      if (lastRetryableAuthError) {
+        logLeadgenRemovalFailure({
+          step: "delete_auth_user",
+          errorId: "AUTH_PROVIDER_TEMPORARY_FAILURE",
+          userId,
+          userRole: userRow.role,
+          userEmail: userRow.email,
+          authError: lastRetryableAuthError,
+          note: "Retryable Auth provider error persisted after max retries; CRM profile deletion intentionally skipped.",
+        });
+        return buildRemovalFailureResult({
+          error: "Auth provider temporary failure. Please retry shortly.",
+          errorId: "AUTH_PROVIDER_TEMPORARY_FAILURE",
+          step: "Delete auth user",
+          authError: lastRetryableAuthError,
+        });
+      }
     }
   } else {
     console.error("[LeadGen] No matching Auth user found; treating Auth deletion as already complete.", {
