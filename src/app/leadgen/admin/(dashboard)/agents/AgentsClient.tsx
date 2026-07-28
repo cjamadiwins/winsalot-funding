@@ -32,6 +32,7 @@ export default function AgentsClient({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [inviteMode, setInviteMode] = useState<"existing" | "new">("existing");
   const [inviteRole, setInviteRole] = useState<LeadgenRole>("agent");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusChangingId, setStatusChangingId] = useState<string | null>(null);
@@ -106,6 +107,18 @@ export default function AgentsClient({
             <input name="email" type="email" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-slate-600">Access Type</span>
+            <select
+              name="invite_mode"
+              value={inviteMode}
+              onChange={(e) => setInviteMode(e.target.value as "existing" | "new")}
+              className={inputClass}
+            >
+              <option value="existing">Existing CRM User (use current password)</option>
+              <option value="new">Brand-new User (send password setup invite)</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Role</span>
             <select name="role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as LeadgenRole)} className={inputClass}>
               {LEADGEN_ROLES.map((role) => (
@@ -131,10 +144,12 @@ export default function AgentsClient({
             </label>
           )}
           <p className="text-[12.5px] text-slate-500 sm:col-span-2">
-            An invite email is sent immediately - the recipient sets their own password via that link.
+            {inviteMode === "new"
+              ? "An invite email is sent immediately and the recipient sets their password via that link."
+              : "Adds Lead Generation CRM access to an existing CRM login without changing the user password."}
           </p>
           <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
-            {isPending ? "Sending Invite…" : "Send Invite"}
+            {isPending ? "Saving…" : inviteMode === "new" ? "Send Invite" : "Add Lead Generation Access"}
           </button>
         </form>
       )}

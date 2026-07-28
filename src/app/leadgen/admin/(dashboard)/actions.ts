@@ -505,11 +505,13 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = String(formData.get("role") ?? "").trim();
   const clientId = textOrNull(formData, "client_id");
+  const inviteMode = String(formData.get("invite_mode") ?? "existing").trim().toLowerCase();
 
   if (!fullName || !email) return { error: "Name and email are required." };
   if (!LEADGEN_ROLES.includes(role as LeadgenRole)) return { error: "Invalid role." };
   if (role === "client" && !clientId) return { error: "Select which client this login belongs to." };
   if (role !== "client" && clientId) return { error: "Only a client-role login can be tied to a client." };
+  if (inviteMode !== "existing" && inviteMode !== "new") return { error: "Invalid invite mode." };
 
   const admin = getSupabaseAdmin();
   const redirectTo = `${getAuthRedirectBaseUrl()}/leadgen/set-password`;
@@ -527,16 +529,7 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   const existingCrmProfile = (crmMatches ?? [])[0] ?? null;
 
   if (existingCrmProfile?.active) {
-    return { error: "This user already has an active CRM account." };
-  }
-
-  const { authUserId, authError } = await findAuthUserIdByEmail(admin, email);
-  if (authError) {
-    return { error: "Unable to verify account status right now. Please try again." };
-  }
-
-  if (existingCrmProfile && authUserId && existingCrmProfile.id !== authUserId) {
-    return { error: "Duplicate account conflict detected for this email. Resolve account mismatch before inviting again." };
+    return { error: "This user already has Lead Generation CRM access." };
   }
 
   if (existingCrmProfile) {
@@ -552,44 +545,44 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
       .eq("id", existingCrmProfile.id);
     if (updateError) return { error: "Failed to reactivate the existing CRM user." };
 
-    if (authUserId) {
-      await admin.auth.admin.updateUserById(authUserId, {
-        email,
-        user_metadata: { full_name: fullName },
-      });
-    }
-
-    const { error: resetError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
-    if (resetError) return { error: "Existing user reactivated, but failed to send password setup email." };
-
     revalidatePath("/leadgen/admin/agents");
     revalidatePath("/leadgen/admin/leads");
     revalidatePath("/leadgen/admin/appointments");
     revalidatePath("/leadgen/admin");
-    return { success: "Existing user reactivated and invitation sent." };
+    return { success: "Lead Generation access updated and reactivated." };
   }
 
-  if (authUserId) {
-    const { error: insertExistingAuthError } = await admin.from("leadgen_users").insert({
-      id: authUserId,
+  if (inviteMode === "existing") {
+    const { data: existingCrmUsers, error: existingCrmUsersError } = await admin
+      .from("crm_users")
+      .select("id, email")
+      .ilike("email", email);
+    if (existingCrmUsersError) return { error: "Failed to verify existing CRM user." };
+
+    if ((existingCrmUsers ?? []).length > 1) {
+      return { error: "Multiple CRM users share this email. Resolve duplicates before adding Lead Generation access." };
+    }
+
+    const existingCrmUser = (existingCrmUsers ?? [])[0] ?? null;
+    if (!existingCrmUser) {
+      return { error: "No existing CRM login found for this email. Use the brand-new user option to send an invitation." };
+    }
+
+    const { error: insertExistingCrmUserError } = await admin.from("leadgen_users").insert({
+      id: existingCrmUser.id,
       full_name: fullName,
       email,
       role,
       client_id: role === "client" ? clientId : null,
       active: true,
     });
-    if (insertExistingAuthError) return { error: "Failed to create CRM profile for this existing login." };
-
-    await admin.auth.admin.updateUserById(authUserId, {
-      email,
-      user_metadata: { full_name: fullName },
-    });
-
-    const { error: resetExistingAuthError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
-    if (resetExistingAuthError) return { error: "CRM profile created, but failed to send password setup email." };
+    if (insertExistingCrmUserError) return { error: "Failed to add Lead Generation access for this user." };
 
     revalidatePath("/leadgen/admin/agents");
-    return { success: "Invitation sent." };
+    revalidatePath("/leadgen/admin/leads");
+    revalidatePath("/leadgen/admin/appointments");
+    revalidatePath("/leadgen/admin");
+    return { success: "Lead Generation access added. The user can sign in with their existing email and password." };
   }
 
   const { data: authUser, error: authInviteError } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -598,6 +591,10 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   });
 
   if (authInviteError || !authUser.user) {
+    const authErrorText = (authInviteError?.message ?? "").toLowerCase();
+    if (authErrorText.includes("already") || authErrorText.includes("registered") || authErrorText.includes("exists")) {
+      return { error: "A login already exists for this email. Use the existing user option to add Lead Generation access." };
+    }
     return { error: authInviteError?.message ?? "Failed to invite this user." };
   }
 
