@@ -27,6 +27,8 @@ import {
   updateLeadAction,
 } from "./actions";
 
+const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
+
 const actions: LeadDetailActions = {
   updateLead: updateLeadAction,
   recordCallOutcome: recordCallOutcomeAction,
@@ -67,7 +69,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     lead.campaign_id
       ? admin.from("leadgen_campaigns").select("*").eq("id", lead.campaign_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).order("full_name"),
+    admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
     admin.from("leadgen_lead_activities").select("*").eq("lead_id", id).order("occurred_at", { ascending: false }),
     admin.from("leadgen_followups").select("*").eq("lead_id", id).order("scheduled_at", { ascending: true }),
     admin.from("leadgen_appointments").select("*").eq("lead_id", id).order("appointment_date", { ascending: false }),

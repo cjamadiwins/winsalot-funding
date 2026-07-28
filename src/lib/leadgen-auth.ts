@@ -3,6 +3,8 @@ import { redirect, notFound } from "next/navigation";
 import { createSupabaseServerClient } from "./supabase-server";
 import type { LeadgenClientRow, LeadgenUserRow } from "./leadgen-types";
 
+const FORCE_DEACTIVATED_LEADGEN_EMAIL = "test-agent@winsalotcorp.com";
+
 // Session + role gates for the Lead Generation CRM. Deliberately its own
 // file, not an extension of src/lib/crm-auth.ts - this CRM has a
 // completely different role model (admin/agent/client vs the cleaning
@@ -19,6 +21,11 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
 
   if (authError || !authData.user) {
     redirect("/leadgen/login");
+  }
+
+  if ((authData.user.email ?? "").trim().toLowerCase() === FORCE_DEACTIVATED_LEADGEN_EMAIL) {
+    await supabase.auth.signOut();
+    redirect(`/leadgen/login?error=${encodeURIComponent("Your account has been deactivated. Please contact the administrator.")}`);
   }
 
   const { data: leadgenUser } = await supabase

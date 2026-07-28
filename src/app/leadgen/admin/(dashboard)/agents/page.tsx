@@ -3,12 +3,21 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { LeadgenClientRow, LeadgenUserRow } from "@/lib/leadgen-types";
 import AgentsClient from "./AgentsClient";
 
+const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
+
 export default async function LeadgenAgentsPage() {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
 
+  await admin
+    .from("leadgen_users")
+    .update({ active: false })
+    .eq("email", DEACTIVATED_TEST_AGENT_EMAIL)
+    .eq("role", "agent")
+    .eq("active", true);
+
   const [{ data: users }, { data: clients }, { data: leads }, { data: activities }, { data: appointments }] = await Promise.all([
-    admin.from("leadgen_users").select("*").order("full_name"),
+    admin.from("leadgen_users").select("*").neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
     admin.from("leadgen_clients").select("*").order("name"),
     admin.from("leadgen_leads").select("assigned_agent_id, status"),
     admin.from("leadgen_lead_activities").select("agent_id, activity_type"),
