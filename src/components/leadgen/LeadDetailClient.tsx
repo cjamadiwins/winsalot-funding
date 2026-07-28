@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LEADGEN_ACTIVITY_TYPE_LABELS,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
@@ -48,6 +49,7 @@ export type LeadDetailActions = {
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
+  deleteLead?: (leadId: string) => Promise<{ error?: string } | void>;
 };
 
 // Shared Lead Generation CRM lead profile - identical between
@@ -109,9 +111,11 @@ export default function LeadDetailClient({
   actions: LeadDetailActions;
   listPath: string;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [showConsultationModal, setShowConsultationModal] = useState(false);
@@ -131,6 +135,24 @@ export default function LeadDetailClient({
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     });
+  }
+
+  async function handleDeleteLead() {
+    if (!actions.deleteLead || isPending || isDeletingLead) return;
+    if (!confirm("Are you sure you want to permanently delete this lead and all related test data? This action cannot be undone.")) {
+      return;
+    }
+
+    setError(null);
+    setIsDeletingLead(true);
+    const result = await actions.deleteLead(lead.id);
+    if (result && "error" in result && result.error) {
+      setError(result.error);
+      setIsDeletingLead(false);
+      return;
+    }
+
+    router.replace(`${listPath}?deleted=1`);
   }
 
   const bouncedSet = new Set(bouncedEmails);
@@ -215,6 +237,16 @@ export default function LeadDetailClient({
         <ActionButton onClick={() => setShowFollowUpForm((v) => !v)}>{showFollowUpForm ? "Cancel Follow-up" : "Schedule Follow-up"}</ActionButton>
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
+        {isAdmin && actions.deleteLead && (
+          <button
+            type="button"
+            disabled={isPending || isDeletingLead}
+            onClick={handleDeleteLead}
+            className="rounded-full border border-rose-300 bg-rose-50 px-5 py-2.5 text-[13px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isDeletingLead ? "Deleting…" : "Delete"}
+          </button>
+        )}
       </div>
 
       {showConsultationModal && (

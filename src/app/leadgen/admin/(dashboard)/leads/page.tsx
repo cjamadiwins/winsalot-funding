@@ -3,9 +3,10 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenUserRow } from "@/lib/leadgen-types";
 import LeadsListClient from "./LeadsListClient";
 
-export default async function LeadgenLeadsPage() {
+export default async function LeadgenLeadsPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
+  const { deleted } = await searchParams;
 
   const [{ data: leads }, { data: clients }, { data: campaigns }, { data: agents }] = await Promise.all([
     admin.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
@@ -24,6 +25,7 @@ export default async function LeadgenLeadsPage() {
         clients={(clients ?? []) as LeadgenClientRow[]}
         campaigns={(campaigns ?? []) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
+        initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
       />
     </div>
   );

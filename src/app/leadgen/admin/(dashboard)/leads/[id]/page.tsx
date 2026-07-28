@@ -14,7 +14,7 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
-import { assignLeadAction } from "../actions";
+import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
 import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
@@ -39,6 +39,7 @@ const actions: LeadDetailActions = {
   resendEmail: resendLeadgenEmailAction,
   assignAgent: assignLeadAction,
   clearBouncedEmail: clearBouncedEmailAction,
+  deleteLead: deleteLeadgenLeadAction,
 };
 
 export default async function LeadgenAdminLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {

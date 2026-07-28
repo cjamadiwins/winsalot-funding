@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
@@ -10,7 +11,7 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
-import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, uploadLeadsCsvAction } from "./actions";
+import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, deleteLeadgenLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -19,19 +20,24 @@ export default function LeadsListClient({
   clients,
   campaigns,
   agents,
+  initialSuccessMessage,
 }: {
   leads: LeadgenLeadRow[];
   clients: LeadgenClientRow[];
   campaigns: LeadgenCampaignRow[];
   agents: LeadgenUserRow[];
+  initialSuccessMessage?: string | null;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploadResult, setUploadResult] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(initialSuccessMessage ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAgent, setBulkAgent] = useState("");
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("all");
   const [campaignFilter, setCampaignFilter] = useState("all");
@@ -79,6 +85,33 @@ export default function LeadsListClient({
     });
   }
 
+  async function handleDeleteLead(lead: LeadgenLeadRow) {
+    if (isPending || deletingLeadId) return;
+    if (!confirm("Are you sure you want to permanently delete this lead and all related test data? This action cannot be undone.")) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setDeletingLeadId(lead.id);
+
+    const result = await deleteLeadgenLeadAction(lead.id);
+    if (result.error) {
+      setError(result.error);
+      setDeletingLeadId(null);
+      return;
+    }
+
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(lead.id);
+      return next;
+    });
+    setDeletingLeadId(null);
+    setSuccessMessage("Lead deleted successfully.");
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mt-6 flex flex-wrap gap-3">
@@ -95,6 +128,7 @@ export default function LeadsListClient({
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {successMessage && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>}
       {uploadResult && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{uploadResult}</p>}
 
       {showAddForm && (
@@ -298,6 +332,7 @@ export default function LeadsListClient({
                 <th className="p-3">Agent</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Next Follow-up</th>
+                <th className="p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -339,6 +374,16 @@ export default function LeadsListClient({
                   </td>
                   <td className="p-3 text-slate-600">
                     {lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      disabled={isPending || deletingLeadId === lead.id}
+                      onClick={() => handleDeleteLead(lead)}
+                      className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
+                    </button>
                   </td>
                 </tr>
               ))}

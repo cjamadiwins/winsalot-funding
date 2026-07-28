@@ -127,6 +127,20 @@ export async function assignLeadAction(leadId: string, agentId: string | null): 
   return {};
 }
 
+export async function deleteLeadgenLeadAction(leadId: string): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc("leadgen_delete_lead", { p_lead_id: leadId });
+  if (error) return { error: error.message || "Failed to delete the lead." };
+
+  revalidatePath("/leadgen/admin");
+  revalidatePath("/leadgen/admin/leads");
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin/emails");
+  return {};
+}
+
 export async function bulkAssignLeadsAction(leadIds: string[], agentId: string | null): Promise<ActionResult> {
   const adminUser = await requireLeadgenAdmin();
   if (leadIds.length === 0) return { error: "Select at least one lead." };
