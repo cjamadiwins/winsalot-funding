@@ -6,9 +6,8 @@ import {
 } from "@/lib/leadgen-types";
 
 // Lead Generation CRM equivalent of the cleaning CRM's EmailStatusPanel:
-// prominent top-of-page status with the four operational milestones the
-// team requested (Sent/Delivered/Bounced/Failed), plus the latest status
-// badge and latest status-change timestamp.
+// prominent top-of-page status with the full requested milestones, plus
+// the latest status badge and latest status-change timestamp.
 export default function LeadgenEmailStatusPanel({ latestEmail }: { latestEmail: LeadgenEmailRow | null }) {
   if (!latestEmail) {
     return (
@@ -19,11 +18,19 @@ export default function LeadgenEmailStatusPanel({ latestEmail }: { latestEmail: 
     );
   }
 
-  const milestones: { label: "Sent" | "Delivered" | "Bounced" | "Failed"; at: string | null; bad?: boolean }[] = [
+  const milestones: {
+    label: "Sent" | "Delivered" | "Delayed" | "Bounced" | "Failed" | "Opened" | "Consultation Link Clicked";
+    at: string | null;
+    bad?: boolean;
+    warning?: boolean;
+  }[] = [
     { label: "Sent", at: latestEmail.sent_at },
     { label: "Delivered", at: latestEmail.delivered_at },
+    { label: "Delayed", at: latestEmail.delayed_at, warning: true },
     { label: "Bounced", at: latestEmail.bounced_at, bad: true },
     { label: "Failed", at: latestEmail.failed_at, bad: true },
+    { label: "Opened", at: latestEmail.opened_at },
+    { label: "Consultation Link Clicked", at: latestEmail.clicked_at },
   ];
 
   const latestAt = leadgenEmailStatusAt(latestEmail);
@@ -41,12 +48,18 @@ export default function LeadgenEmailStatusPanel({ latestEmail }: { latestEmail: 
         Most recent email to {latestEmail.to_email} — &quot;{latestEmail.subject}&quot;
       </p>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {milestones.map((m) => (
           <div
             key={m.label}
             className={`rounded-lg border px-3 py-2.5 text-xs ${
-              m.at ? (m.bad ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50") : "border-slate-200 bg-slate-50 text-slate-400"
+              m.at
+                ? m.bad
+                  ? "border-rose-200 bg-rose-50"
+                  : m.warning
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-emerald-200 bg-emerald-50"
+                : "border-slate-200 bg-slate-50 text-slate-400"
             }`}
           >
             <dt className={`font-semibold ${m.at ? "text-slate-700" : "text-slate-400"}`}>{m.label}</dt>

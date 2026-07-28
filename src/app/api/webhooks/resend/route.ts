@@ -169,31 +169,47 @@ export async function POST(request: NextRequest) {
     // in lib/leadgen-email.ts only ever sets 'sent' on a successful send
     // - 'delivered' is set here, and only here).
     const leadgenUpdates: Record<string, unknown> = {};
+    const leadgenEventColumnByType: Record<string, string> = {
+      "email.sent": "sent_at",
+      "email.delivered": "delivered_at",
+      "email.delivery_delayed": "delayed_at",
+      "email.bounced": "bounced_at",
+      "email.complained": "complained_at",
+      "email.opened": "opened_at",
+      "email.clicked": "clicked_at",
+      "email.failed": "failed_at",
+    };
+
+    const leadgenEventColumn = leadgenEventColumnByType[event.type];
+    if (leadgenEventColumn) {
+      leadgenUpdates[leadgenEventColumn] = eventAt;
+    }
+
     switch (event.type) {
       case "email.sent":
         leadgenUpdates.status = "sent";
-        leadgenUpdates.sent_at = eventAt;
         break;
       case "email.delivered":
         leadgenUpdates.status = "delivered";
-        leadgenUpdates.delivered_at = eventAt;
         break;
       case "email.delivery_delayed":
         leadgenUpdates.status = "delayed";
-        leadgenUpdates.delayed_at = eventAt;
         break;
       case "email.bounced":
         leadgenUpdates.status = "bounced";
-        leadgenUpdates.bounced_at = eventAt;
         leadgenUpdates.bounce_reason = event.data.bounce.message;
         break;
       case "email.complained":
         leadgenUpdates.status = "complained";
-        leadgenUpdates.complained_at = eventAt;
+        break;
+      case "email.opened":
+        leadgenUpdates.status = "opened";
+        break;
+      case "email.clicked":
+        leadgenUpdates.status = "clicked";
         break;
       case "email.failed":
         leadgenUpdates.status = "failed";
-        leadgenUpdates.failed_at = eventAt;
         leadgenUpdates.failure_reason = event.data.failed.reason;
         break;
       default:
@@ -229,11 +245,16 @@ export async function POST(request: NextRequest) {
 
     if (leadgenEmail.lead_id) {
       const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
-      let notes = `Email ${leadgenUpdates.status} (to ${toEmail}) — "${event.data.subject}".`;
+      const leadgenStatus = (leadgenUpdates.status ?? leadgenEmail.status) as string;
+      let notes = `Email ${leadgenStatus} (to ${toEmail}) — "${event.data.subject}".`;
       if (event.type === "email.bounced") {
         notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. This address is now blocked from further agent sends until an admin corrects or approves it.`;
       } else if (event.type === "email.complained") {
         notes = `Recipient marked this email as spam (to ${toEmail}). Consider not emailing this lead again.`;
+      } else if (event.type === "email.clicked") {
+        notes = `Consultation link clicked (to ${toEmail}).`;
+      } else if (event.type === "email.opened") {
+        notes = `Email opened (to ${toEmail}).`;
       } else if (event.type === "email.failed") {
         notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
       }

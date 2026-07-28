@@ -323,7 +323,7 @@ export type LeadgenEmailTemplateRow = {
   created_by: string | null;
 };
 
-export const LEADGEN_EMAIL_STATUSES = ["draft", "sending", "sent", "delivered", "delayed", "bounced", "complained", "failed"] as const;
+export const LEADGEN_EMAIL_STATUSES = ["draft", "sending", "sent", "delivered", "delayed", "bounced", "complained", "opened", "clicked", "failed"] as const;
 export type LeadgenEmailStatus = (typeof LEADGEN_EMAIL_STATUSES)[number];
 
 export const LEADGEN_EMAIL_STATUS_STYLES: Record<LeadgenEmailStatus, string> = {
@@ -334,6 +334,8 @@ export const LEADGEN_EMAIL_STATUS_STYLES: Record<LeadgenEmailStatus, string> = {
   delayed: "bg-amber-100 text-amber-800",
   bounced: "bg-rose-100 text-rose-800",
   complained: "bg-rose-200 text-rose-900",
+  opened: "bg-cyan-100 text-cyan-800",
+  clicked: "bg-indigo-100 text-indigo-800",
   failed: "bg-rose-200 text-rose-900",
 };
 
@@ -348,6 +350,8 @@ export const LEADGEN_EMAIL_STATUS_LABELS: Record<LeadgenEmailStatus, string> = {
   delayed: "Delayed",
   bounced: "Bounced",
   complained: "Marked as spam",
+  opened: "Opened",
+  clicked: "Consultation Link Clicked",
   failed: "Failed",
 };
 
@@ -373,6 +377,8 @@ export type LeadgenEmailRow = {
   bounced_at: string | null;
   bounce_reason: string | null;
   complained_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
   failed_at: string | null;
   failure_reason: string | null;
   client_visible: boolean;
@@ -386,6 +392,8 @@ export type LeadgenEmailRow = {
 export function leadgenEmailStatusAt(email: LeadgenEmailRow): string {
   return (
     email.failed_at ??
+    email.clicked_at ??
+    email.opened_at ??
     email.complained_at ??
     email.bounced_at ??
     email.delayed_at ??
