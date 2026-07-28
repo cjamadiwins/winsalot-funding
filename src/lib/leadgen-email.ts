@@ -104,6 +104,9 @@ export type SendLeadgenEmailInput = {
   toName?: string | null;
   subject: string;
   body: string;
+  // Optional explicit plain-text body to send via Resend's `text`
+  // field when `body` contains HTML markup intended only for `html`.
+  text?: string;
   // Custom HTML for the email body (e.g. a real button rendered in place
   // of a plain-text marker - see leadgenButtonHtml). Falls back to
   // textToSimpleHtml(body) when omitted, unchanged from before this
@@ -186,14 +189,27 @@ export async function sendLeadgenEmail(
   const emailId = inserted.id as string;
 
   try {
+    const finalText = input.text ?? input.body;
+    const finalHtml = input.html ?? textToSimpleHtml(input.body);
+
+    // Temporary trace for Brent's Essentials preview validation: confirms
+    // HTML/text separation right before the Resend API call.
+    console.log("[leadgen-email] pre-send payload", {
+      emailId,
+      templateKey: input.templateKey ?? null,
+      hasHtml: Boolean(finalHtml && finalHtml.trim()),
+      textContainsAnchorTag: /<a\s+href/i.test(finalText),
+      htmlContainsAnchorTag: /<a\s+href/i.test(finalHtml),
+    });
+
     const resend = getResendClient();
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: senderEmail,
       to: input.toEmail,
       replyTo: getLeadgenReplyToEmail(),
       subject: input.subject,
-      text: input.body,
-      html: input.html ?? textToSimpleHtml(input.body),
+      text: finalText,
+      html: finalHtml,
     });
 
     if (sendError || !sendResult) {

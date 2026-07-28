@@ -39,14 +39,20 @@ export async function sendClientCommunicationAction(clientId: string, formData: 
   // Essentials email from this composer can never go out with a missing
   // button either.
   let html: string | undefined;
+  let text = body;
   if (templateKey === "consultation_invitation") {
     const { data: clientRow } = await supabase.from("leadgen_clients").select("name, slug, booking_link, services_info_link").eq("id", clientId).maybeSingle();
     if (clientRow) {
       const branding = resolveLeadgenEmailBranding(clientRow, submittedBookingUrl ?? clientRow.booking_link, submittedServicesUrl ?? clientRow.services_info_link);
-      html = buildLeadgenBookingEmailHtml(body, [
-        { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
-        { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
-      ]);
+      if (/<a\s+href/i.test(body)) {
+        html = body;
+        text = body.replace(/<[^>]*>/g, "").replace(/\n{3,}/g, "\n\n").trim();
+      } else {
+        html = buildLeadgenBookingEmailHtml(body, [
+          { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
+          { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
+        ]);
+      }
     }
   }
 
@@ -57,6 +63,7 @@ export async function sendClientCommunicationAction(clientId: string, formData: 
     toEmail,
     subject,
     body,
+    text,
     html,
     sentBy: admin.id,
     clientVisible: true,
