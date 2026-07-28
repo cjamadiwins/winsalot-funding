@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isLeadgenFollowUpDueToday, isLeadgenFollowUpOverdue } from "@/lib/leadgen-types";
 
+const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
+
 export default async function LeadgenAdminDashboardPage() {
   const admin = getSupabaseAdmin();
 
@@ -12,7 +14,12 @@ export default async function LeadgenAdminDashboardPage() {
       admin.from("leadgen_appointments").select("status, client_id"),
       admin.from("leadgen_followups").select("scheduled_at, status"),
       admin.from("leadgen_clients").select("id, name"),
-      admin.from("leadgen_users").select("id, full_name, role").eq("role", "agent"),
+      admin
+        .from("leadgen_users")
+        .select("id, full_name, role")
+        .eq("role", "agent")
+        .eq("active", true)
+        .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     ]);
 
   const allLeads = leads ?? [];
