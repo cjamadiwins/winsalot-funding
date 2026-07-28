@@ -247,7 +247,7 @@ export type LeadgenAppointmentRow = {
 // Calendly URL is deliberately never shown as visible text in the
 // email - only this label and the "click here to book your
 // consultation" fallback link.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a Free 15-Minute Consultation";
+export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK A FREE 15-MINUTE CONSULTATION";
 export const LEADGEN_CONSULTATION_CTA_LABEL = "BOOK A FREE 15-MINUTE CONSULTATION";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
@@ -289,7 +289,13 @@ export const LEADGEN_BRENTS_ESSENTIALS_FALLBACK = {
 } as const;
 
 export function isLeadgenBrentsEssentials(client: Pick<LeadgenClientRow, "name" | "slug">): boolean {
-  return client.slug === "BrentsEssentials" || client.name.trim() === LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name;
+  const normalizedSlug = client.slug.trim().toLowerCase();
+  const normalizedName = client.name.trim().toLowerCase();
+  return (
+    normalizedSlug === "brentsessentials" ||
+    normalizedSlug === "brents-essentials" ||
+    normalizedName === LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name.toLowerCase()
+  );
 }
 
 // Resolves the effective client name/booking link/services link to

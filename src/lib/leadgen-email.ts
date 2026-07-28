@@ -54,7 +54,8 @@ export function leadgenBookingButtonHtml(url: string, label: string): string {
   const safeLabel = escapeHtml(label);
   return `<div style="margin: 20px 0; font-family: sans-serif; text-align:center;">
   <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:bold;text-decoration:none;padding:16px 40px;border-radius:6px;">${safeLabel}</a>
-  <div style="margin-top:10px;font-size:13px;color:#6b7280;">If the button does not work, <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">click here to book your consultation</a>.</div>
+  <div style="margin-top:10px;font-size:13px;color:#6b7280;">If the button does not work, open this booking link:</div>
+  <div style="margin-top:4px;font-size:13px;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;word-break:break-all;">${safeUrl}</a></div>
 </div>`;
 }
 
@@ -74,14 +75,23 @@ export function buildLeadgenBookingEmailHtml(
   body: string,
   buttons: { url: string | null | undefined; label: string; style?: "button" | "booking" }[]
 ): string {
-  const found = buttons
+  const usableButtons = buttons.filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url);
+
+  const found = usableButtons
     .filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url)
     .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
     .map((b) => ({ ...b, index: body.indexOf(b.marker) }))
     .filter((b) => b.index !== -1)
     .sort((a, b) => a.index - b.index);
 
-  if (found.length === 0) return textToSimpleHtml(body);
+  if (found.length === 0) {
+    if (usableButtons.length === 0) return textToSimpleHtml(body);
+    let html = textToSimpleHtml(body);
+    for (const button of usableButtons) {
+      html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
+    }
+    return html;
+  }
 
   let html = "";
   let cursor = 0;
@@ -121,7 +131,8 @@ export function buildLeadgenConsultationCtaEmail(
   canonicalRegex.lastIndex = 0;
   const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
 
-  const text = appendWebsiteLineToText(body.replace(pattern, buttonLabel));
+  const textWithoutWebsite = body.replace(pattern, buttonLabel);
+  const text = appendWebsiteLineToText(textWithoutWebsite);
 
   let html = "";
   let cursor = 0;
@@ -140,7 +151,11 @@ export function buildLeadgenConsultationCtaEmail(
     cursor = index + match[0].length;
   }
 
-  if (!found) return { text, html: appendWebsiteLineToHtml(textToSimpleHtml(body)) };
+  if (!found) {
+    const fallbackText = appendWebsiteLineToText(`${textWithoutWebsite}\n\n${buttonLabel}\n${bookingUrl}`);
+    const fallbackHtml = appendWebsiteLineToHtml(`${textToSimpleHtml(body)}${leadgenBookingButtonHtml(bookingUrl, buttonLabel)}`);
+    return { text: fallbackText, html: fallbackHtml };
+  }
 
   html += textToSimpleHtml(body.slice(cursor));
   return { text, html: appendWebsiteLineToHtml(html) };
