@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("webhook-signature") ?? request.headers.get("svix-signature");
 
   if (!id || !timestamp || !signature) {
-    console.error("[resend-webhook] Missing signature headers on incoming request.");
+    console.error(`[resend-webhook] Missing signature headers on incoming request. webhook id=${id ?? "none"}`);
     return NextResponse.json({ error: "Missing webhook signature headers." }, { status: 400 });
   }
 
@@ -73,7 +73,16 @@ export async function POST(request: NextRequest) {
       webhookSecret,
     });
   } catch (err) {
-    console.error("[resend-webhook] Signature verification failed:", err);
+    // Include the webhook id so a signature failure can be correlated
+    // against a specific delivery in Resend's dashboard (Webhooks -> the
+    // endpoint pointed at this URL -> Recent deliveries). This error
+    // means RESEND_WEBHOOK_SECRET on this deployment does not match the
+    // signing secret Resend used to sign this payload - each registered
+    // endpoint has its own distinct secret, so the fix is to copy the
+    // Signing Secret from the exact endpoint whose URL matches this
+    // deployment and set it as RESEND_WEBHOOK_SECRET here. It is never a
+    // bug in the verification code itself.
+    console.error(`[resend-webhook] Signature verification failed for webhook id ${id}:`, err);
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
