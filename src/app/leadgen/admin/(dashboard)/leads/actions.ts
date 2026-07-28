@@ -131,7 +131,28 @@ export async function deleteLeadgenLeadAction(leadId: string): Promise<ActionRes
   await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { error } = await supabase.rpc("leadgen_delete_lead", { p_lead_id: leadId });
+  const { data: lead, error: leadReadError } = await supabase
+    .from("leadgen_leads")
+    .select("id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (leadReadError) return { error: "Failed to load the lead." };
+  if (!lead) return { error: "Lead not found." };
+
+  const deleteSteps = [
+    supabase.from("leadgen_followups").delete().eq("lead_id", leadId),
+    supabase.from("leadgen_appointments").delete().eq("lead_id", leadId),
+    supabase.from("leadgen_lead_activities").delete().eq("lead_id", leadId),
+    supabase.from("leadgen_emails").delete().eq("lead_id", leadId),
+  ] as const;
+
+  for (const step of deleteSteps) {
+    const { error } = await step;
+    if (error) return { error: error.message || "Failed to delete the lead." };
+  }
+
+  const { error } = await supabase.from("leadgen_leads").delete().eq("id", leadId);
   if (error) return { error: error.message || "Failed to delete the lead." };
 
   revalidatePath("/leadgen/admin");
