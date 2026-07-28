@@ -82,6 +82,64 @@ export default function BrentsEssentialsTrainingContent({ dashboardHref }: Props
               </li>
             </ul>
           </section>
+
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+            <h2 className="text-base font-bold text-slate-900">HELPING BUSINESSES BOOK THEIR FREE CONSULTATION</h2>
+
+            <h3 className="mt-4 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Goal</h3>
+            <p className="mt-2">The agent&apos;s goal is to help the business owner successfully book their FREE 15-minute AI Business Growth Consultation.</p>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 1 - Confirm the Business</h3>
+            <p className="mt-2 font-semibold text-slate-900">Agent Script:</p>
+            <p className="mt-1">&ldquo;Hi, am I speaking with the owner or manager of [Business Name]?&rdquo;</p>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 2 - Explain the Purpose</h3>
+            <p className="mt-2 font-semibold text-slate-900">Agent Script:</p>
+            <p className="mt-1">
+              &ldquo;We&apos;re offering a free 15-minute consultation where our specialist will show you practical ways AI can help your business attract more customers, generate more qualified leads, automate customer follow-up, save time, and improve sales opportunities.&rdquo;
+            </p>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 3 - Guide Them to the Email</h3>
+            <p className="mt-2 font-semibold text-slate-900">Agent Script:</p>
+            <p className="mt-1">&ldquo;I&apos;ve just sent you an email. Could you please open it while we&apos;re on the phone?&rdquo;</p>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 4 - Help Them Find the Button</h3>
+            <p className="mt-2 font-semibold text-slate-900">Agent Script:</p>
+            <p className="mt-1">&ldquo;You should see a blue button that says &apos;BOOK A FREE 15-MINUTE CONSULTATION.&apos; Please click that button.&rdquo;</p>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 5 - Help Them Complete the Appointment Form</h3>
+            <p className="mt-2">Guide the business owner to:</p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
+              <li>Select a convenient date.</li>
+              <li>Choose an available time.</li>
+              <li>Enter their name, email address, and phone number.</li>
+              <li>Review the information.</li>
+              <li>Click the final confirmation button to book the appointment.</li>
+            </ul>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 6 - Confirm the Appointment</h3>
+            <p className="mt-2 font-semibold text-slate-900">Ask:</p>
+            <p className="mt-1">&ldquo;Did you receive the appointment confirmation?&rdquo;</p>
+            <p className="mt-3 font-semibold text-slate-900">If YES, say:</p>
+            <p className="mt-1">&ldquo;Excellent. Our specialist will speak with you at the scheduled time. We look forward to helping your business grow.&rdquo;</p>
+            <p className="mt-3 font-semibold text-slate-900">If NO:</p>
+            <ul className="mt-1 list-disc space-y-1.5 pl-5">
+              <li>Confirm the form was submitted.</li>
+              <li>Ask them to check their Spam or Junk folder.</li>
+              <li>Verify the email address is correct.</li>
+              <li>Resend the consultation email if necessary.</li>
+            </ul>
+
+            <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Important Reminders</h3>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
+              <li>Do not pressure the business owner.</li>
+              <li>Speak calmly, slowly, and professionally.</li>
+              <li>Stay on the phone while they complete the booking whenever possible.</li>
+              <li>Never ask for passwords or sensitive information.</li>
+              <li>Answer basic questions clearly and confidently.</li>
+              <li>Thank them for their time, even if they decide not to book.</li>
+            </ul>
+          </section>
         </div>
       </div>
 
