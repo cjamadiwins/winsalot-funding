@@ -192,16 +192,6 @@ export async function sendLeadgenEmail(
     const finalText = input.text ?? input.body;
     const finalHtml = input.html ?? textToSimpleHtml(input.body);
 
-    // Temporary trace for Brent's Essentials preview validation: confirms
-    // HTML/text separation right before the Resend API call.
-    console.log("[leadgen-email] pre-send payload", {
-      emailId,
-      templateKey: input.templateKey ?? null,
-      hasHtml: Boolean(finalHtml && finalHtml.trim()),
-      textContainsAnchorTag: /<a\s+href/i.test(finalText),
-      htmlContainsAnchorTag: /<a\s+href/i.test(finalHtml),
-    });
-
     const resend = getResendClient();
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: senderEmail,
