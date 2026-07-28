@@ -29,6 +29,18 @@ export function textToSimpleHtml(text: string): string {
   return `<div style="font-family: sans-serif; font-size: 15px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${escaped}</div>`;
 }
 
+function stripHtmlTags(value: string): string {
+  return value
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\s*\/\s*p\s*>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\r\n/g, "\n");
+}
+
+function sanitizePlainEmailBody(body: string): string {
+  return stripHtmlTags(body).replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // A real, styled HTML button (not just a plain link) for the
 // consultation booking link - renders as a clickable button in every
 // major desktop and mobile email client, with the raw URL underneath as
@@ -76,18 +88,19 @@ export function buildLeadgenBookingEmailHtml(
   body: string,
   buttons: { url: string | null | undefined; label: string; style?: "button" | "booking" }[]
 ): string {
+  const sanitizedBody = sanitizePlainEmailBody(body);
   const usableButtons = buttons.filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url);
 
   const found = usableButtons
     .filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url)
     .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
-    .map((b) => ({ ...b, index: body.indexOf(b.marker) }))
+    .map((b) => ({ ...b, index: sanitizedBody.indexOf(b.marker) }))
     .filter((b) => b.index !== -1)
     .sort((a, b) => a.index - b.index);
 
   if (found.length === 0) {
-    if (usableButtons.length === 0) return textToSimpleHtml(body);
-    let html = textToSimpleHtml(body);
+    if (usableButtons.length === 0) return textToSimpleHtml(sanitizedBody);
+    let html = textToSimpleHtml(sanitizedBody);
     for (const button of usableButtons) {
       html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
     }
@@ -97,11 +110,11 @@ export function buildLeadgenBookingEmailHtml(
   let html = "";
   let cursor = 0;
   for (const button of found) {
-    html += textToSimpleHtml(body.slice(cursor, button.index));
+    html += textToSimpleHtml(sanitizedBody.slice(cursor, button.index));
     html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
     cursor = button.index + button.marker.length;
   }
-  html += textToSimpleHtml(body.slice(cursor));
+  html += textToSimpleHtml(sanitizedBody.slice(cursor));
   return html;
 }
 
@@ -114,6 +127,7 @@ export function buildLeadgenConsultationCtaEmail(
   bookingUrl: string | null,
   buttonLabel: string
 ): { text: string; html?: string } {
+  const sanitizedBody = sanitizePlainEmailBody(body);
   const websiteUrl = "https://brentsessentials.com";
   const websiteLine = `Website: ${websiteUrl}`;
   const appendWebsiteLineToText = (value: string) => `${value}\n\n${websiteLine}`;
@@ -122,27 +136,27 @@ export function buildLeadgenConsultationCtaEmail(
       websiteUrl
     )}</a></div>`;
 
-  if (!bookingUrl) return { text: appendWebsiteLineToText(body), html: appendWebsiteLineToHtml(textToSimpleHtml(body)) };
+  if (!bookingUrl) return { text: appendWebsiteLineToText(sanitizedBody), html: appendWebsiteLineToHtml(textToSimpleHtml(sanitizedBody)) };
 
   const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const canonicalRegex = new RegExp(`${escapedBase}(?:\\?[^\\s\\n]*)?`, "gi");
   const calendlyRegex = /https?:\/\/calendly\.com\/[^\s\n]+/gi;
 
-  const hasCanonical = canonicalRegex.test(body);
+  const hasCanonical = canonicalRegex.test(sanitizedBody);
   canonicalRegex.lastIndex = 0;
   const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
 
-  const textWithoutWebsite = body.replace(pattern, buttonLabel);
+  const textWithoutWebsite = sanitizedBody.replace(pattern, buttonLabel);
   const text = appendWebsiteLineToText(textWithoutWebsite);
 
   let html = "";
   let cursor = 0;
   let found = false;
-  for (const match of body.matchAll(pattern)) {
+  for (const match of sanitizedBody.matchAll(pattern)) {
     const index = match.index ?? -1;
     if (index < 0) continue;
     found = true;
-    html += textToSimpleHtml(body.slice(cursor, index));
+    html += textToSimpleHtml(sanitizedBody.slice(cursor, index));
     const safeUrl = escapeHtml(bookingUrl);
     html += `<a href="${safeUrl}"
   target="_blank"
@@ -154,11 +168,11 @@ export function buildLeadgenConsultationCtaEmail(
 
   if (!found) {
     const fallbackText = appendWebsiteLineToText(`${textWithoutWebsite}\n\n${buttonLabel}\n${bookingUrl}`);
-    const fallbackHtml = appendWebsiteLineToHtml(`${textToSimpleHtml(body)}${leadgenBookingButtonHtml(bookingUrl, buttonLabel)}`);
+    const fallbackHtml = appendWebsiteLineToHtml(`${textToSimpleHtml(sanitizedBody)}${leadgenBookingButtonHtml(bookingUrl, buttonLabel)}`);
     return { text: fallbackText, html: fallbackHtml };
   }
 
-  html += textToSimpleHtml(body.slice(cursor));
+  html += textToSimpleHtml(sanitizedBody.slice(cursor));
   return { text, html: appendWebsiteLineToHtml(html) };
 }
 
@@ -258,7 +272,7 @@ export async function sendLeadgenEmail(
   const admin = getSupabaseAdmin();
 
   try {
-    const finalText = input.text ?? input.body;
+    const finalText = sanitizePlainEmailBody(input.text ?? input.body);
     const finalHtml = input.html ?? textToSimpleHtml(input.body);
 
     const resend = getResendClient();
