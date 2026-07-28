@@ -193,6 +193,14 @@ export default function LeadDetailClient({
     subject: renderLeadgenTemplate(template.subject, followUpVars),
     body: renderLeadgenTemplate(template.body, followUpVars),
   }));
+  if (followUpTemplateOptions.length === 0) {
+    followUpTemplateOptions.push({
+      id: "__default_follow_up__",
+      name: "Default Follow-Up Template",
+      subject: followUpSubject,
+      body: followUpBody,
+    });
+  }
   const latestEmail = emails[0] ?? null;
 
   return (
