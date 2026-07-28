@@ -272,15 +272,16 @@ export async function sendLeadgenEmail(
     });
 
     if (sendError || !sendResult) {
+      const safeReason = sendError?.message ?? "Unknown Resend error.";
       await admin
         .from("leadgen_emails")
         .update({
           status: "failed",
           failed_at: new Date().toISOString(),
-          failure_reason: sendError?.message ?? "Unknown Resend error.",
+          failure_reason: safeReason,
         })
         .eq("id", emailId);
-      return { emailId, error: sendError?.message ?? "Failed to send the email." };
+      return { emailId, error: "Failed to send the email. Please try again." };
     }
 
     const { error: sentStatusError } = await admin
@@ -288,6 +289,15 @@ export async function sendLeadgenEmail(
       .update({ status: "sent", resend_message_id: sendResult.id, sent_at: new Date().toISOString() })
       .eq("id", emailId);
     if (sentStatusError) {
+      await admin
+        .from("leadgen_emails")
+        .update({
+          status: "failed",
+          failed_at: new Date().toISOString(),
+          failure_reason: "Status update failed after Resend accepted the email.",
+          resend_message_id: sendResult.id,
+        })
+        .eq("id", emailId);
       return { emailId, error: "Email was accepted by Resend but status tracking failed." };
     }
 
@@ -298,6 +308,6 @@ export async function sendLeadgenEmail(
       .from("leadgen_emails")
       .update({ status: "failed", failed_at: new Date().toISOString(), failure_reason: message })
       .eq("id", emailId);
-    return { emailId, error: message };
+    return { emailId, error: "Failed to send the email. Please try again." };
   }
 }
