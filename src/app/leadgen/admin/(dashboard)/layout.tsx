@@ -31,6 +31,9 @@ export default async function LeadgenAdminLayout({ children }: { children: React
             <Link href="/leadgen/admin/templates" className="text-sm font-medium text-slate-600 hover:text-sky-600">
               Templates
             </Link>
+            <Link href="/leadgen/admin/training" className="text-sm font-medium text-slate-600 hover:text-sky-600">
+              Training
+            </Link>
           </nav>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-slate-500 sm:inline">{user.email}</span>

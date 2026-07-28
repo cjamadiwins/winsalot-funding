@@ -134,6 +134,16 @@ export default async function LeadgenAdminDashboardPage() {
           )}
         </section>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
+        <p className="mt-2 text-[13.5px] text-slate-600">
+          Open the Brent&apos;s Essentials call script for a clear, read-only guide agents can use while calling.
+        </p>
+        <Link href="/leadgen/admin/training" className="mt-3 inline-block text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+          Open Training
+        </Link>
+      </section>
     </div>
   );
 }

@@ -47,6 +47,16 @@ export default async function LeadgenAgentDashboardPage() {
         <FollowUpGroup title="Overdue" items={overdue} emphasis="danger" />
         <FollowUpGroup title="Due Today" items={dueToday} emphasis="warn" />
       </div>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
+        <p className="mt-2 text-[13.5px] text-slate-600">
+          Keep the Brent&apos;s Essentials call script open while dialing to stay consistent on every call.
+        </p>
+        <Link href="/leadgen/agent/training" className="mt-3 inline-block text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+          Open Training
+        </Link>
+      </section>
     </div>
   );
 }
