@@ -596,7 +596,61 @@ export async function removeLeadgenUserAction(userId: string): Promise<ActionRes
 
   const urlRef = projectRefFromSupabaseUrl(supabaseUrl);
   const keyRef = projectRefFromServiceRoleKey(serviceRoleKey);
-  if (urlRef && keyRef && urlRef !== keyRef) {
+  if (!urlRef) {
+    const invalidUrlError = toSupabaseErrorLike(
+      new Error("Unable to resolve Supabase project reference from URL.")
+    );
+    logLeadgenRemovalFailure({
+      step: "validate_supabase_project_match",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      authError: {
+        ...invalidUrlError,
+        details: "NEXT_PUBLIC_SUPABASE_URL is not a valid Supabase project URL.",
+      },
+      note: "Supabase URL could not be parsed into a project reference.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      step: "Validate Supabase project linkage",
+      authError: {
+        ...invalidUrlError,
+        details: "NEXT_PUBLIC_SUPABASE_URL is not a valid Supabase project URL.",
+      },
+    });
+  }
+
+  if (!keyRef) {
+    const invalidKeyError = toSupabaseErrorLike(
+      new Error("Unable to resolve Supabase project reference from service-role key.")
+    );
+    logLeadgenRemovalFailure({
+      step: "validate_supabase_project_match",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      userId,
+      userRole: currentAdmin.role,
+      userEmail: currentAdmin.email,
+      authError: {
+        ...invalidKeyError,
+        details: "SUPABASE_SERVICE_ROLE_KEY is missing, invalid, or not a JWT for this project.",
+      },
+      note: "Service-role key could not be parsed into a project reference.",
+    });
+    return buildRemovalFailureResult({
+      error: "Failed to remove this user.",
+      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+      step: "Validate Supabase project linkage",
+      authError: {
+        ...invalidKeyError,
+        details: "SUPABASE_SERVICE_ROLE_KEY is missing, invalid, or not a JWT for this project.",
+      },
+    });
+  }
+
+  if (urlRef !== keyRef) {
     const mismatchError = toSupabaseErrorLike(
       new Error("Supabase project mismatch between URL and service role key.")
     );
