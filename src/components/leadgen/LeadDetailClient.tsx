@@ -32,6 +32,7 @@ import ConsultationEmailModal, { type SendConsultationEmailResult } from "./Cons
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
+import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -158,6 +159,7 @@ export default function LeadDetailClient({
   const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
   const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
+  const latestEmail = emails[0] ?? null;
 
   return (
     <div>
@@ -199,6 +201,8 @@ export default function LeadDetailClient({
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {successMessage && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>}
+
+      <LeadgenEmailStatusPanel latestEmail={latestEmail} />
 
       <div className="mt-5 flex flex-wrap gap-2.5">
         <button
