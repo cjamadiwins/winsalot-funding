@@ -248,6 +248,7 @@ export type LeadgenAppointmentRow = {
 // email - only this label and the "click here to book your
 // consultation" fallback link.
 export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a Free 15-Minute Consultation";
+export const LEADGEN_CONSULTATION_CTA_LABEL = "BOOK A FREE 15-MINUTE CONSULTATION";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be
@@ -283,7 +284,7 @@ export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "con
 // below), not to Brent's Essentials' own links.
 export const LEADGEN_BRENTS_ESSENTIALS_FALLBACK = {
   name: "Brent's Essentials",
-  bookingUrl: "https://calendly.com/kelechiamadi1/free-15-minute-business-growth-strategy-session?month=2026-07",
+  bookingUrl: "https://calendly.com/kelechiamadi1/free-15-minute-business-growth-strategy-session",
   servicesUrl: "https://www.brentsessentials.com/growth-system",
 } as const;
 
@@ -304,7 +305,7 @@ export function resolveLeadgenEmailBranding(
 ): { clientName: string; bookingUrl: string | null; servicesUrl: string | null } {
   const isBrents = isLeadgenBrentsEssentials(client);
   const clientName = client.name.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name : client.name);
-  const bookingUrl = bookingLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink);
+  const bookingUrl = isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink?.trim() || bookingLink;
   const servicesUrl = servicesLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl : servicesLink);
   return { clientName, bookingUrl: bookingUrl || null, servicesUrl: servicesUrl || null };
 }

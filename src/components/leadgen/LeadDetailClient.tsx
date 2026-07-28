@@ -136,20 +136,20 @@ export default function LeadDetailClient({
   const bouncedSet = new Set(bouncedEmails);
   const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
 
-  const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
-  const defaultSubject = consultationTemplate?.subject ?? "Your FREE 15-Minute AI Business Growth Consultation";
-  const defaultBody = consultationTemplate
-    ? renderLeadgenTemplate(consultationTemplate.body, {
-        first_name: firstName,
-        booking_paragraph: leadgenBookingParagraph(bookingLink),
-      })
-    : "";
-
   // Validated/fallback-resolved values (see resolveLeadgenEmailBranding
   // in lib/leadgen-types.ts) - guarantees a Brent's Essentials email
   // never renders with an empty client name or missing button even if
   // the database row were somehow blank at render time.
   const branding = resolveLeadgenEmailBranding(client, bookingLink, servicesInfoLink);
+
+  const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
+  const defaultSubject = consultationTemplate?.subject ?? "Your FREE 15-Minute AI Business Growth Consultation";
+  const defaultBody = consultationTemplate
+    ? renderLeadgenTemplate(consultationTemplate.body, {
+        first_name: firstName,
+        booking_paragraph: leadgenBookingParagraph(branding.bookingUrl),
+      })
+    : "";
   const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
   const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
   const invitationVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
@@ -224,6 +224,7 @@ export default function LeadDetailClient({
           campaignName={campaign?.name ?? null}
           defaultSubject={defaultSubject}
           defaultBody={defaultBody}
+          bookingUrl={branding.bookingUrl}
           onClose={() => setShowConsultationModal(false)}
           onSend={(formData) => actions.sendConsultationEmail(lead.id, formData)}
           onSent={() => {

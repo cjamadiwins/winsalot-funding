@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { buildLeadgenBookingEmailHtml, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
+import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import {
   isValidEmail,
   LEADGEN_BOOKING_BUTTON_LABEL,
+  LEADGEN_CONSULTATION_CTA_LABEL,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_PROVINCES,
   leadgenServicesButtonLabel,
@@ -177,12 +178,23 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   const adminUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { data: lead } = await supabase.from("leadgen_leads").select("client_id, campaign_id").eq("id", leadId).maybeSingle();
+  const { data: lead } = await supabase
+    .from("leadgen_leads")
+    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link)")
+    .eq("id", leadId)
+    .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found." };
 
   const toEmail = String(formData.get("to_email") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+
+  type EmbeddedClient = { name: string; slug: string; booking_link: string | null };
+  const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
+  const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  const branding = embeddedClient ? resolveLeadgenEmailBranding(embeddedClient, submittedBookingUrl ?? embeddedClient.booking_link, null) : { bookingUrl: submittedBookingUrl };
+  const rendered = buildLeadgenConsultationCtaEmail(body, branding.bookingUrl ?? null, LEADGEN_CONSULTATION_CTA_LABEL);
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -197,6 +209,8 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     toEmail,
     subject,
     body,
+    text: rendered.text,
+    html: rendered.html,
     sentBy: adminUser.id,
     clientVisible: false,
   });

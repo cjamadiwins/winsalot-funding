@@ -94,6 +94,50 @@ export function buildLeadgenBookingEmailHtml(
   return html;
 }
 
+// Consultation Information emails come from editable plain-text templates
+// that historically included a visible Calendly URL line. This helper
+// preserves the wording around that line while rendering the link itself
+// as a centered blue CTA button in HTML and a non-URL fallback in text.
+export function buildLeadgenConsultationCtaEmail(
+  body: string,
+  bookingUrl: string | null,
+  buttonLabel: string
+): { text: string; html?: string } {
+  if (!bookingUrl) return { text: body };
+
+  const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const canonicalRegex = new RegExp(`${escapedBase}(?:\\?[^\\s\\n]*)?`, "gi");
+  const calendlyRegex = /https?:\/\/calendly\.com\/[^\s\n]+/gi;
+
+  const hasCanonical = canonicalRegex.test(body);
+  canonicalRegex.lastIndex = 0;
+  const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
+
+  const text = body.replace(pattern, buttonLabel);
+
+  let html = "";
+  let cursor = 0;
+  let found = false;
+  for (const match of body.matchAll(pattern)) {
+    const index = match.index ?? -1;
+    if (index < 0) continue;
+    found = true;
+    html += textToSimpleHtml(body.slice(cursor, index));
+    const safeUrl = escapeHtml(bookingUrl);
+    html += `<a href="${safeUrl}"
+  target="_blank"
+  style="display:block;width:100%;box-sizing:border-box;background:#2563eb;color:#ffffff;text-decoration:none;text-align:center;font-size:18px;font-weight:700;padding:18px 16px;border-radius:10px;">
+  ${escapeHtml(buttonLabel)}
+  </a>`;
+    cursor = index + match[0].length;
+  }
+
+  if (!found) return { text, html: textToSimpleHtml(body) };
+
+  html += textToSimpleHtml(body.slice(cursor));
+  return { text, html };
+}
+
 export type SendLeadgenEmailInput = {
   clientId: string | null;
   campaignId?: string | null;
