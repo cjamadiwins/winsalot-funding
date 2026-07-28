@@ -1,6 +1,6 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenUserRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import AppointmentsListClient from "./AppointmentsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -26,7 +26,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
       <AppointmentsListClient
         appointments={(appointments ?? []) as LeadgenAppointmentRow[]}
         clients={(clients ?? []) as LeadgenClientRow[]}
-        campaigns={(campaigns ?? []) as LeadgenCampaignRow[]}
+        campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         leads={(leads ?? []) as Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">[]}
         highlightId={highlight}

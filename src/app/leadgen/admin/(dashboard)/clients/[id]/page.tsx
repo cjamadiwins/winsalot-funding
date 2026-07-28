@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenCampaignRow, LeadgenClientRow, LeadgenEmailRow, LeadgenEmailTemplateRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenEmailTemplateRow } from "@/lib/leadgen-types";
 import ClientDetailClient from "./ClientDetailClient";
 
 export default async function LeadgenClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +34,7 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
   return (
     <ClientDetailClient
       client={client as LeadgenClientRow}
-      campaigns={(campaigns ?? []) as LeadgenCampaignRow[]}
+      campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
       emails={(emails ?? []) as LeadgenEmailRow[]}
       templates={(templates ?? []) as LeadgenEmailTemplateRow[]}
       leadCountByCampaign={Object.fromEntries(leadCountByCampaign)}

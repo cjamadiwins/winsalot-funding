@@ -1,6 +1,6 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenUserRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import LeadsListClient from "./LeadsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -25,7 +25,7 @@ export default async function LeadgenLeadsPage({ searchParams }: { searchParams:
       <LeadsListClient
         leads={(leads ?? []) as LeadgenLeadRow[]}
         clients={(clients ?? []) as LeadgenClientRow[]}
-        campaigns={(campaigns ?? []) as LeadgenCampaignRow[]}
+        campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
       />

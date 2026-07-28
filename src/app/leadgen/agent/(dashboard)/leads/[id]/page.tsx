@@ -3,6 +3,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   getEffectiveBookingLink,
+  isHiddenLeadgenCampaignName,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -80,13 +81,14 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
   // `actions`, same pattern as resendEmail/assignAgent above).
   const { data: bouncedRows } = await supabase.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
 
-  const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
+  const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
+  const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, visibleCampaign as LeadgenCampaignRow | null) : null;
 
   return (
     <LeadDetailClient
       lead={lead as LeadgenLeadRow}
       client={client as LeadgenClientRow}
-      campaign={campaign as LeadgenCampaignRow | null}
+      campaign={visibleCampaign as LeadgenCampaignRow | null}
       agents={[]}
       assignedAgentName={agent.full_name}
       currentUserName={agent.full_name || agent.email}

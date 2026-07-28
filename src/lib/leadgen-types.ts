@@ -288,6 +288,12 @@ export const LEADGEN_BRENTS_ESSENTIALS_FALLBACK = {
   servicesUrl: "https://www.brentsessentials.com/growth-system",
 } as const;
 
+export const LEADGEN_HIDDEN_CAMPAIGN_NAME = "Q3 Growth Campaign";
+
+export function isHiddenLeadgenCampaignName(name: string | null | undefined): boolean {
+  return (name ?? "").trim().toLowerCase() === LEADGEN_HIDDEN_CAMPAIGN_NAME.toLowerCase();
+}
+
 export function isLeadgenBrentsEssentials(client: Pick<LeadgenClientRow, "name" | "slug">): boolean {
   const normalizedSlug = client.slug.trim().toLowerCase();
   const normalizedName = client.name.trim().toLowerCase();

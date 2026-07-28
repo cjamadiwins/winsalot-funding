@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
 import CampaignDetailClient from "./CampaignDetailClient";
 
 export default async function LeadgenCampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +10,7 @@ export default async function LeadgenCampaignDetailPage({ params }: { params: Pr
   const admin = getSupabaseAdmin();
 
   const { data: campaign } = await admin.from("leadgen_campaigns").select("*").eq("id", id).maybeSingle();
-  if (!campaign) notFound();
+  if (!campaign || isHiddenLeadgenCampaignName(campaign.name)) notFound();
 
   const [{ data: client }, { data: leads }, { data: appointments }] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", campaign.client_id).maybeSingle(),

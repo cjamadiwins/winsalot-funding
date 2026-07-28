@@ -3,6 +3,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   getEffectiveBookingLink,
+  isHiddenLeadgenCampaignName,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -83,13 +84,14 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
 
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
-  const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, campaign as LeadgenCampaignRow | null) : null;
+  const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
+  const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, visibleCampaign as LeadgenCampaignRow | null) : null;
 
   return (
     <LeadDetailClient
       lead={lead as LeadgenLeadRow}
       client={client as LeadgenClientRow}
-      campaign={campaign as LeadgenCampaignRow | null}
+      campaign={visibleCampaign as LeadgenCampaignRow | null}
       agents={(agents ?? []) as LeadgenUserRow[]}
       assignedAgentName={assignedAgent?.full_name ?? null}
       currentUserName={adminUser.full_name || adminUser.email}

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { escapeHtml } from "./html";
+import { getSupabaseAdmin } from "./supabase-admin";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -254,6 +255,7 @@ export async function sendLeadgenEmail(
   }
 
   const emailId = inserted.id as string;
+  const admin = getSupabaseAdmin();
 
   try {
     const finalText = input.text ?? input.body;
@@ -270,7 +272,7 @@ export async function sendLeadgenEmail(
     });
 
     if (sendError || !sendResult) {
-      await supabase
+      await admin
         .from("leadgen_emails")
         .update({
           status: "failed",
@@ -281,15 +283,18 @@ export async function sendLeadgenEmail(
       return { emailId, error: sendError?.message ?? "Failed to send the email." };
     }
 
-    await supabase
+    const { error: sentStatusError } = await admin
       .from("leadgen_emails")
       .update({ status: "sent", resend_message_id: sendResult.id, sent_at: new Date().toISOString() })
       .eq("id", emailId);
+    if (sentStatusError) {
+      return { emailId, error: "Email was accepted by Resend but status tracking failed." };
+    }
 
     return { emailId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send the email.";
-    await supabase
+    await admin
       .from("leadgen_emails")
       .update({ status: "failed", failed_at: new Date().toISOString(), failure_reason: message })
       .eq("id", emailId);

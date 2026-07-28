@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { LeadgenCampaignRow, LeadgenClientRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName } from "@/lib/leadgen-types";
 import { createAgentLeadAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -49,7 +49,7 @@ export default async function LeadgenAgentNewLeadPage({
           <Field label="Campaign">
             <select name="campaign_id" className={inputClass} defaultValue="">
               <option value="">No campaign</option>
-              {(campaigns ?? []).map((campaign) => (
+              {(campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name)).map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
                   {campaign.name}
                 </option>
