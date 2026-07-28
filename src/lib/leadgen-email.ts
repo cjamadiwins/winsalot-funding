@@ -103,7 +103,15 @@ export function buildLeadgenConsultationCtaEmail(
   bookingUrl: string | null,
   buttonLabel: string
 ): { text: string; html?: string } {
-  if (!bookingUrl) return { text: body };
+  const websiteUrl = "https://brentsessentials.com";
+  const websiteLine = `Website: ${websiteUrl}`;
+  const appendWebsiteLineToText = (value: string) => `${value}\n\n${websiteLine}`;
+  const appendWebsiteLineToHtml = (value: string) =>
+    `${value}<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;">Website: <a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${escapeHtml(
+      websiteUrl
+    )}</a></div>`;
+
+  if (!bookingUrl) return { text: appendWebsiteLineToText(body), html: appendWebsiteLineToHtml(textToSimpleHtml(body)) };
 
   const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const canonicalRegex = new RegExp(`${escapedBase}(?:\\?[^\\s\\n]*)?`, "gi");
@@ -113,7 +121,7 @@ export function buildLeadgenConsultationCtaEmail(
   canonicalRegex.lastIndex = 0;
   const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
 
-  const text = body.replace(pattern, buttonLabel);
+  const text = appendWebsiteLineToText(body.replace(pattern, buttonLabel));
 
   let html = "";
   let cursor = 0;
@@ -132,10 +140,10 @@ export function buildLeadgenConsultationCtaEmail(
     cursor = index + match[0].length;
   }
 
-  if (!found) return { text, html: textToSimpleHtml(body) };
+  if (!found) return { text, html: appendWebsiteLineToHtml(textToSimpleHtml(body)) };
 
   html += textToSimpleHtml(body.slice(cursor));
-  return { text, html };
+  return { text, html: appendWebsiteLineToHtml(html) };
 }
 
 export type SendLeadgenEmailInput = {
