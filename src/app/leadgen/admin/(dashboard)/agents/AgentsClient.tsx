@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LEADGEN_ROLES, type LeadgenClientRow, type LeadgenRole, type LeadgenUserRow } from "@/lib/leadgen-types";
-import { inviteLeadgenUserAction, removeLeadgenUserAction, updateLeadgenUserAction } from "../actions";
+import { deactivateLeadgenUserAction, inviteLeadgenUserAction, reactivateLeadgenUserAction, updateLeadgenUserAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -34,7 +34,7 @@ export default function AgentsClient({
   const [showInvite, setShowInvite] = useState(false);
   const [inviteRole, setInviteRole] = useState<LeadgenRole>("agent");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [statusChangingId, setStatusChangingId] = useState<string | null>(null);
   const [removeFailure, setRemoveFailure] = useState<RemovalFailure | null>(null);
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
@@ -65,7 +65,7 @@ export default function AgentsClient({
       {success && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</p>}
       {removeFailure && (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p className="font-semibold text-amber-900">Removal failed</p>
+          <p className="font-semibold text-amber-900">User action failed</p>
           <dl className="mt-2 space-y-1.5 text-[13px]">
             <div>
               <dt className="inline font-semibold">Internal error ID:</dt> <dd className="inline">{removeFailure.errorId ?? "—"}</dd>
@@ -204,30 +204,35 @@ export default function AgentsClient({
                           </button>
                           <button
                             type="button"
-                            disabled={isPending || removingId === user.id}
+                            disabled={isPending || statusChangingId === user.id}
                             onClick={async () => {
-                              if (!confirm("Are you sure you want to remove this user? They will no longer be able to sign in.")) return;
+                              if (user.active) {
+                                const confirmed = confirm("Are you sure you want to deactivate this user? They will no longer be able to access the CRM.");
+                                if (!confirmed) return;
+                              }
 
                               setError(null);
                               setSuccess(null);
                               setRemoveFailure(null);
-                              setRemovingId(user.id);
+                              setStatusChangingId(user.id);
 
-                              const result = await removeLeadgenUserAction(user.id);
+                              const result = user.active
+                                ? await deactivateLeadgenUserAction(user.id)
+                                : await reactivateLeadgenUserAction(user.id);
                               if (result.error) {
                                 setRemoveFailure(result);
                                 setError(result.errorId ? `${result.error} (${result.errorId})` : result.error);
-                                setRemovingId(null);
+                                setStatusChangingId(null);
                                 return;
                               }
 
-                              setRemovingId(null);
-                              setSuccess("User removed successfully.");
+                              setStatusChangingId(null);
+                              setSuccess(user.active ? "User deactivated successfully." : "User reactivated successfully.");
                               router.refresh();
                             }}
-                            className="text-[12px] font-semibold text-rose-600"
+                            className={`text-[12px] font-semibold ${user.active ? "text-rose-600" : "text-emerald-700"}`}
                           >
-                            {removingId === user.id ? "Removing…" : "Remove"}
+                            {statusChangingId === user.id ? "Saving…" : user.active ? "Deactivate" : "Reactivate"}
                           </button>
                         </>
                       )}

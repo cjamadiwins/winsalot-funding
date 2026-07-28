@@ -12,7 +12,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
     admin.from("leadgen_appointments").select("*").order("appointment_date", { ascending: false }),
     admin.from("leadgen_clients").select("*").order("name"),
     admin.from("leadgen_campaigns").select("*").order("name"),
-    admin.from("leadgen_users").select("*").eq("role", "agent").order("full_name"),
+    admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).order("full_name"),
     admin.from("leadgen_leads").select("id, business_name, client_id, campaign_id, contact_name, phone, email").order("business_name"),
   ]);
 

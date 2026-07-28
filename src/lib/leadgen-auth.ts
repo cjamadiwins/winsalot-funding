@@ -25,11 +25,15 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
     .from("leadgen_users")
     .select("*")
     .eq("id", authData.user.id)
-    .eq("active", true)
     .maybeSingle();
 
   if (!leadgenUser) {
     redirect("/leadgen/login?error=Your account is not set up for the Lead Generation CRM yet.");
+  }
+
+  if (!leadgenUser.active) {
+    await supabase.auth.signOut();
+    redirect(`/leadgen/login?error=${encodeURIComponent("Your account has been deactivated. Please contact the administrator.")}`);
   }
 
   return leadgenUser as LeadgenUserRow;

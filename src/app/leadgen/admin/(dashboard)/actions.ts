@@ -555,366 +555,64 @@ export async function updateLeadgenUserAction(userId: string, formData: FormData
   return {};
 }
 
-export async function removeLeadgenUserAction(userId: string): Promise<ActionResult> {
+export async function deactivateLeadgenUserAction(userId: string): Promise<ActionResult> {
   const currentAdmin = await requireLeadgenAdmin();
   if (userId === currentAdmin.id) {
-    console.error("[LeadGen] Remove user blocked: self-removal attempt.", {
-      step: "guard_self_removal",
-      errorId: "REMOVE_SELF_BLOCKED",
-      userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      errorMessage: "You can't remove your own account.",
-    });
-    return {
-      error: "You can't remove your own account.",
-      errorId: "REMOVE_SELF_BLOCKED",
-      step: "Prevent self-removal",
-    };
+    return { error: "You can't deactivate your own account.", errorId: "DEACTIVATE_SELF_BLOCKED" };
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
-    const configError = toSupabaseErrorLike(new Error("Missing server-side Supabase admin configuration."));
-    logLeadgenRemovalFailure({
-      step: "validate_server_supabase_admin_config",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("leadgen_users").update({ active: false }).eq("id", userId);
+  if (error) {
+    console.error("[LeadGen] Failed to deactivate user.", {
+      step: "deactivate_user_profile",
+      errorId: "DEACTIVATE_USER_FAILED",
       userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      authError: configError,
-      note: "NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY is missing on the server runtime.",
+      error: toSupabaseErrorLike(error),
     });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      step: "Validate server Supabase config",
-      authError: configError,
-    });
-  }
-
-  const urlRef = projectRefFromSupabaseUrl(supabaseUrl);
-  const keyRef = projectRefFromServiceRoleKey(serviceRoleKey);
-  if (!urlRef) {
-    const invalidUrlError = toSupabaseErrorLike(
-      new Error("Unable to resolve Supabase project reference from URL.")
-    );
-    logLeadgenRemovalFailure({
-      step: "validate_supabase_project_match",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      authError: {
-        ...invalidUrlError,
-        details: "NEXT_PUBLIC_SUPABASE_URL is not a valid Supabase project URL.",
-      },
-      note: "Supabase URL could not be parsed into a project reference.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      step: "Validate Supabase project linkage",
-      authError: {
-        ...invalidUrlError,
-        details: "NEXT_PUBLIC_SUPABASE_URL is not a valid Supabase project URL.",
-      },
-    });
-  }
-
-  if (!keyRef) {
-    const invalidKeyError = toSupabaseErrorLike(
-      new Error("Unable to resolve Supabase project reference from service-role key.")
-    );
-    logLeadgenRemovalFailure({
-      step: "validate_supabase_project_match",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      authError: {
-        ...invalidKeyError,
-        details: "SUPABASE_SERVICE_ROLE_KEY is missing, invalid, or not a JWT for this project.",
-      },
-      note: "Service-role key could not be parsed into a project reference.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      step: "Validate Supabase project linkage",
-      authError: {
-        ...invalidKeyError,
-        details: "SUPABASE_SERVICE_ROLE_KEY is missing, invalid, or not a JWT for this project.",
-      },
-    });
-  }
-
-  if (urlRef !== keyRef) {
-    const mismatchError = toSupabaseErrorLike(
-      new Error("Supabase project mismatch between URL and service role key.")
-    );
-    logLeadgenRemovalFailure({
-      step: "validate_supabase_project_match",
-      errorId: "REMOVE_AUTH_CONFIG_MISMATCH",
-      userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      authError: {
-        ...mismatchError,
-        details: `URL project ref (${urlRef}) does not match key project ref (${keyRef}).`,
-      },
-      note: "Server runtime appears to use a service-role key for a different Supabase project.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_AUTH_CONFIG_MISMATCH",
-      step: "Validate Supabase project linkage",
-      authError: {
-        ...mismatchError,
-        details: `URL project ref (${urlRef}) does not match key project ref (${keyRef}).`,
-      },
-    });
-  }
-
-  let admin: ReturnType<typeof getSupabaseAdmin>;
-  try {
-    admin = getSupabaseAdmin();
-  } catch (error) {
-    const configError = toSupabaseErrorLike(error);
-    logLeadgenRemovalFailure({
-      step: "create_supabase_admin_client",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      userId,
-      userRole: currentAdmin.role,
-      userEmail: currentAdmin.email,
-      authError: configError,
-      note: "Failed to initialize the server-side Supabase admin client.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_AUTH_CONFIG_FAILED",
-      step: "Initialize server Supabase admin client",
-      authError: configError,
-    });
-  }
-
-  const { data: userRow, error: userReadError } = await admin.from("leadgen_users").select("id, full_name, email, role, client_id").eq("id", userId).maybeSingle();
-  if (userReadError) {
-    const safeError = toSupabaseErrorLike(userReadError);
-    logLeadgenRemovalFailure({
-      step: "load_user_before_removal",
-      errorId: "REMOVE_PROFILE_FAILED",
-      userId,
-      userRole: null,
-      userEmail: null,
-      supabaseError: safeError,
-      note: "Failed while loading the target user record before cleanup.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_PROFILE_FAILED",
-      step: "Load user profile",
-      supabaseError: safeError,
-    });
-  }
-  if (!userRow) {
-    console.error("[LeadGen] Remove user failed: user profile not found.", {
-      step: "load_user_before_removal",
-      errorId: "REMOVE_PROFILE_NOT_FOUND",
-      userId,
-      userRole: null,
-      userEmail: null,
-      errorMessage: "User not found.",
-    });
-    logLeadgenRemovalFailure({
-      step: "load_user_before_removal",
-      errorId: "REMOVE_PROFILE_NOT_FOUND",
-      userId,
-      userRole: null,
-      userEmail: null,
-      note: "The requested leadgen_users row was not found.",
-    });
-    return {
-      error: "User not found.",
-      errorId: "REMOVE_PROFILE_NOT_FOUND",
-      step: "Load user profile",
-    };
-  }
-
-  // `leadgen_users.id` is expected to be the Auth UUID. If this value is
-  // malformed or stale, fall back to finding the Auth user by email.
-  let authUserId = isUuid(userId) ? userId : null;
-  if (!authUserId && isUuid(userRow.id)) authUserId = userRow.id;
-
-  if (!authUserId && userRow.email) {
-    const lookup = await findAuthUserIdByEmail(admin, userRow.email);
-    if (lookup.authError) {
-      logLeadgenRemovalFailure({
-        step: "lookup_auth_user_by_email",
-        errorId: "REMOVE_AUTH_LOOKUP_FAILED",
-        userId,
-        userRole: userRow.role,
-        userEmail: userRow.email,
-        authError: lookup.authError,
-        note: "Failed while searching Auth users by email to resolve a valid auth.users UUID.",
-      });
-      return buildRemovalFailureResult({
-        error: "Failed to remove this user.",
-        errorId: "REMOVE_AUTH_LOOKUP_FAILED",
-        step: "Find auth user by email",
-        authError: lookup.authError,
-      });
-    }
-    authUserId = lookup.authUserId;
-  }
-
-  if (authUserId) {
-    const { data: authUserLookup, error: authLookupError } = await admin.auth.admin.getUserById(authUserId);
-    if (authLookupError) {
-      const safeLookupError = toSupabaseErrorLike(authLookupError);
-      if (!isAuthNotFoundError(safeLookupError)) {
-        logLeadgenRemovalFailure({
-          step: "get_auth_user_before_delete",
-          errorId: "REMOVE_AUTH_LOOKUP_FAILED",
-          userId,
-          userRole: userRow.role,
-          userEmail: userRow.email,
-          authError: safeLookupError,
-          note: "Failed while retrieving the target Auth user before delete.",
-        });
-        return buildRemovalFailureResult({
-          error: "Failed to remove this user.",
-          errorId: "REMOVE_AUTH_LOOKUP_FAILED",
-          step: "Retrieve auth user",
-          authError: safeLookupError,
-        });
-      }
-      console.error("[LeadGen] Auth user not found during pre-delete lookup; continuing profile cleanup.", {
-        step: "get_auth_user_before_delete",
-        errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
-        userId,
-        resolvedAuthUserId: authUserId,
-        userRole: userRow.role,
-        userEmail: userRow.email,
-        authError: safeLookupError,
-      });
-    } else if (!authUserLookup?.user?.id) {
-      console.error("[LeadGen] Auth user lookup returned no user; continuing profile cleanup.", {
-        step: "get_auth_user_before_delete",
-        errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
-        userId,
-        resolvedAuthUserId: authUserId,
-        userRole: userRow.role,
-        userEmail: userRow.email,
-      });
-    } else {
-      authUserId = authUserLookup.user.id;
-      const maxDeleteAttempts = 3;
-      let lastRetryableAuthError: SupabaseErrorLike | null = null;
-
-      for (let attempt = 1; attempt <= maxDeleteAttempts; attempt += 1) {
-        const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUserId);
-        if (!authDeleteError) {
-          lastRetryableAuthError = null;
-          break;
-        }
-
-        const safeAuthError = toSupabaseErrorLike(authDeleteError);
-        console.error("[LeadGen] Auth user delete attempt failed.", {
-          step: "delete_auth_user",
-          errorId: "REMOVE_AUTH_USER_ATTEMPT_FAILED",
-          userId,
-          resolvedAuthUserId: authUserId,
-          userRole: userRow.role,
-          userEmail: userRow.email,
-          attempt,
-          maxAttempts: maxDeleteAttempts,
-          authError: safeAuthError,
-        });
-
-        if (isAuthNotFoundError(safeAuthError)) {
-          lastRetryableAuthError = null;
-          break;
-        }
-
-        if (!isRetryableAuthError(safeAuthError)) {
-          logLeadgenRemovalFailure({
-            step: "delete_auth_user",
-            errorId: "REMOVE_AUTH_USER_FAILED",
-            userId,
-            userRole: userRow.role,
-            userEmail: userRow.email,
-            authError: safeAuthError,
-            note: "Non-retryable Auth delete error.",
-          });
-          return buildRemovalFailureResult({
-            error: "Failed to remove this user.",
-            errorId: "REMOVE_AUTH_USER_FAILED",
-            step: "Delete auth user",
-            authError: safeAuthError,
-          });
-        }
-
-        lastRetryableAuthError = safeAuthError;
-        if (attempt < maxDeleteAttempts) {
-          await delay(250 * attempt);
-        }
-      }
-
-      if (lastRetryableAuthError) {
-        logLeadgenRemovalFailure({
-          step: "delete_auth_user",
-          errorId: "AUTH_PROVIDER_TEMPORARY_FAILURE",
-          userId,
-          userRole: userRow.role,
-          userEmail: userRow.email,
-          authError: lastRetryableAuthError,
-          note: "Retryable Auth provider error persisted after max retries; CRM profile deletion intentionally skipped.",
-        });
-        return buildRemovalFailureResult({
-          error: "Auth provider temporary failure. Please retry shortly.",
-          errorId: "AUTH_PROVIDER_TEMPORARY_FAILURE",
-          step: "Delete auth user",
-          authError: lastRetryableAuthError,
-        });
-      }
-    }
-  } else {
-    console.error("[LeadGen] No matching Auth user found; treating Auth deletion as already complete.", {
-      step: "resolve_auth_user_id",
-      errorId: "REMOVE_AUTH_USER_ALREADY_MISSING",
-      userId,
-      profileId: userRow.id,
-      userRole: userRow.role,
-      userEmail: userRow.email,
-      note: "No auth.users row was found by UUID or email; continuing profile cleanup.",
-    });
-  }
-
-  const { error: profileDeleteError } = await admin.from("leadgen_users").delete().eq("id", userId);
-  if (profileDeleteError) {
-    const safeDbError = toSupabaseErrorLike(profileDeleteError);
-    logLeadgenRemovalFailure({
-      step: "delete_profile_row",
-      errorId: "REMOVE_PROFILE_FAILED",
-      userId,
-      userRole: userRow.role,
-      userEmail: userRow.email,
-      dbError: safeDbError,
-      note: "Failed while deleting the leadgen_users profile row after auth cleanup.",
-    });
-    return buildRemovalFailureResult({
-      error: "Failed to remove this user.",
-      errorId: "REMOVE_PROFILE_FAILED",
-      step: "Delete user profile",
-      dbError: safeDbError,
-    });
+    return { error: "Failed to deactivate this user.", errorId: "DEACTIVATE_USER_FAILED" };
   }
 
   revalidatePath("/leadgen/admin/agents");
+  revalidatePath("/leadgen/admin/leads");
+  revalidatePath("/leadgen/admin/appointments");
   revalidatePath("/leadgen/admin");
   return {};
+}
+
+export async function reactivateLeadgenUserAction(userId: string): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("leadgen_users").update({ active: true }).eq("id", userId);
+  if (error) {
+    console.error("[LeadGen] Failed to reactivate user.", {
+      step: "reactivate_user_profile",
+      errorId: "REACTIVATE_USER_FAILED",
+      userId,
+      error: toSupabaseErrorLike(error),
+    });
+    return { error: "Failed to reactivate this user.", errorId: "REACTIVATE_USER_FAILED" };
+  }
+
+  revalidatePath("/leadgen/admin/agents");
+  revalidatePath("/leadgen/admin/leads");
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin");
+  return {};
+}
+
+export async function removeLeadgenUserAction(userId: string): Promise<ActionResult> {
+  console.error("[LeadGen] Permanent user removal is disabled.", {
+    step: "remove_user_disabled",
+    errorId: "REMOVE_USER_DISABLED",
+    userId,
+  });
+  return {
+    error: "Permanent deletion is currently disabled. Use Deactivate instead.",
+    errorId: "REMOVE_USER_DISABLED",
+    step: "Remove user",
+  };
 }
 
 // ---------------------------------------------------------------------
