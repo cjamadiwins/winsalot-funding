@@ -6,8 +6,15 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthRedirectBaseUrl } from "@/lib/site-url";
-import { sendLeadgenEmail } from "@/lib/leadgen-email";
-import { slugifyClientName, LEADGEN_ROLES, type LeadgenRole } from "@/lib/leadgen-types";
+import { buildLeadgenBookingEmailHtml, sendLeadgenEmail } from "@/lib/leadgen-email";
+import {
+  LEADGEN_BOOKING_BUTTON_LABEL,
+  LEADGEN_ROLES,
+  leadgenServicesButtonLabel,
+  resolveLeadgenEmailBranding,
+  slugifyClientName,
+  type LeadgenRole,
+} from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
 
@@ -243,6 +250,25 @@ export async function resendLeadgenEmailAction(emailId: string): Promise<ActionR
     return { error: "Only a failed or bounced email can be resent." };
   }
 
+  // Preserve the original plain-text body while restoring the consultation
+  // buttons into the HTML channel for resend attempts.
+  let html: string | undefined;
+  if (original.template_key === "consultation_invitation" || original.template_key === "consultation_follow_up") {
+    const { data: clientRow } = await supabase
+      .from("leadgen_clients")
+      .select("name, slug, booking_link, services_info_link")
+      .eq("id", original.client_id)
+      .maybeSingle();
+
+    if (clientRow) {
+      const branding = resolveLeadgenEmailBranding(clientRow, clientRow.booking_link, clientRow.services_info_link);
+      html = buildLeadgenBookingEmailHtml(original.body, [
+        { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
+        { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
+      ]);
+    }
+  }
+
   const result = await sendLeadgenEmail(supabase, {
     clientId: original.client_id,
     campaignId: original.campaign_id,
@@ -253,6 +279,7 @@ export async function resendLeadgenEmailAction(emailId: string): Promise<ActionR
     toName: original.to_name,
     subject: original.subject,
     body: original.body,
+    html,
     sentBy: adminUser.id,
     clientVisible: original.client_visible,
   });
