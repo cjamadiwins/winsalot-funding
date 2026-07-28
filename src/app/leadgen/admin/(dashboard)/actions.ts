@@ -18,6 +18,7 @@ import {
 
 type ActionResult = {
   error?: string;
+  success?: string;
   errorId?: string;
   step?: string;
   message?: string;
@@ -501,7 +502,7 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   await requireLeadgenAdmin();
 
   const fullName = String(formData.get("full_name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = String(formData.get("role") ?? "").trim();
   const clientId = textOrNull(formData, "client_id");
 
@@ -511,13 +512,93 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   if (role !== "client" && clientId) return { error: "Only a client-role login can be tied to a client." };
 
   const admin = getSupabaseAdmin();
-  const { data: authUser, error: authError } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${getAuthRedirectBaseUrl()}/leadgen/set-password`,
+  const redirectTo = `${getAuthRedirectBaseUrl()}/leadgen/set-password`;
+
+  const { data: crmMatches, error: crmMatchError } = await admin
+    .from("leadgen_users")
+    .select("id, active, role, email")
+    .ilike("email", email);
+  if (crmMatchError) return { error: "Failed to check for existing CRM users." };
+
+  if ((crmMatches ?? []).length > 1) {
+    return { error: "Duplicate CRM profiles exist for this email. Resolve duplicates before sending another invitation." };
+  }
+
+  const existingCrmProfile = (crmMatches ?? [])[0] ?? null;
+
+  if (existingCrmProfile?.active) {
+    return { error: "This user already has an active CRM account." };
+  }
+
+  const { authUserId, authError } = await findAuthUserIdByEmail(admin, email);
+  if (authError) {
+    return { error: "Unable to verify account status right now. Please try again." };
+  }
+
+  if (existingCrmProfile && authUserId && existingCrmProfile.id !== authUserId) {
+    return { error: "Duplicate account conflict detected for this email. Resolve account mismatch before inviting again." };
+  }
+
+  if (existingCrmProfile) {
+    const { error: updateError } = await admin
+      .from("leadgen_users")
+      .update({
+        full_name: fullName,
+        email,
+        role,
+        client_id: role === "client" ? clientId : null,
+        active: true,
+      })
+      .eq("id", existingCrmProfile.id);
+    if (updateError) return { error: "Failed to reactivate the existing CRM user." };
+
+    if (authUserId) {
+      await admin.auth.admin.updateUserById(authUserId, {
+        email,
+        user_metadata: { full_name: fullName },
+      });
+    }
+
+    const { error: resetError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    if (resetError) return { error: "Existing user reactivated, but failed to send password setup email." };
+
+    revalidatePath("/leadgen/admin/agents");
+    revalidatePath("/leadgen/admin/leads");
+    revalidatePath("/leadgen/admin/appointments");
+    revalidatePath("/leadgen/admin");
+    return { success: "Existing user reactivated and invitation sent." };
+  }
+
+  if (authUserId) {
+    const { error: insertExistingAuthError } = await admin.from("leadgen_users").insert({
+      id: authUserId,
+      full_name: fullName,
+      email,
+      role,
+      client_id: role === "client" ? clientId : null,
+      active: true,
+    });
+    if (insertExistingAuthError) return { error: "Failed to create CRM profile for this existing login." };
+
+    await admin.auth.admin.updateUserById(authUserId, {
+      email,
+      user_metadata: { full_name: fullName },
+    });
+
+    const { error: resetExistingAuthError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    if (resetExistingAuthError) return { error: "CRM profile created, but failed to send password setup email." };
+
+    revalidatePath("/leadgen/admin/agents");
+    return { success: "Invitation sent." };
+  }
+
+  const { data: authUser, error: authInviteError } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo,
     data: { full_name: fullName },
   });
 
-  if (authError || !authUser.user) {
-    return { error: authError?.message ?? "Failed to invite this user." };
+  if (authInviteError || !authUser.user) {
+    return { error: authInviteError?.message ?? "Failed to invite this user." };
   }
 
   const { error: insertError } = await admin.from("leadgen_users").insert({
@@ -530,12 +611,11 @@ export async function inviteLeadgenUserAction(formData: FormData): Promise<Actio
   });
 
   if (insertError) {
-    await admin.auth.admin.deleteUser(authUser.user.id);
     return { error: "Failed to save the user record." };
   }
 
   revalidatePath("/leadgen/admin/agents");
-  return {};
+  return { success: "Invitation sent." };
 }
 
 export async function updateLeadgenUserAction(userId: string, formData: FormData): Promise<ActionResult> {

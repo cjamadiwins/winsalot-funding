@@ -39,7 +39,7 @@ export default function AgentsClient({
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
 
-  function runAction(fn: () => Promise<{ error?: string; errorId?: string } | void>, onSuccess?: () => void) {
+  function runAction(fn: () => Promise<{ error?: string; errorId?: string; success?: string } | void>, onSuccess?: () => void) {
     setError(null);
     setSuccess(null);
     setRemoveFailure(null);
@@ -48,7 +48,10 @@ export default function AgentsClient({
       if (result && "error" in result && result.error) {
         setError(result.errorId ? `${result.error} (${result.errorId})` : result.error);
       }
-      else onSuccess?.();
+      else {
+        if (result?.success) setSuccess(result.success);
+        onSuccess?.();
+      }
     });
   }
 
