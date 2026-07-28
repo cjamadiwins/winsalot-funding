@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import { slugifyClientName } from "@/lib/leadgen-types";
-import { cleanupLeadgenTestClientsAction, createClientAction } from "../actions";
+import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClientAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -58,6 +58,25 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
         .join(" | ");
 
       setInfo(details || "Cleanup completed.");
+      router.refresh();
+    });
+  }
+
+  function handleDeleteClient(client: LeadgenClientRow) {
+    if (!confirm("Are you sure you want to permanently delete this client and all associated data? This action cannot be undone.")) {
+      return;
+    }
+
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const result = await deleteLeadgenClientAction(client.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setInfo(`${client.name} deleted.`);
       router.refresh();
     });
   }
@@ -158,13 +177,14 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
         </p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[520px] text-left text-[13.5px]">
+          <table className="w-full min-w-[680px] text-left text-[13.5px]">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
                 <th className="p-3">Client</th>
                 <th className="p-3">Slug</th>
                 <th className="p-3">Contact</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -185,6 +205,20 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                     >
                       {client.active ? "Active" : "Inactive"}
                     </span>
+                  </td>
+                  <td className="p-3">
+                    {client.name.trim() === "Brent's Essentials" ? (
+                      <span className="text-[12px] font-medium text-slate-400">Locked</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleDeleteClient(client)}
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

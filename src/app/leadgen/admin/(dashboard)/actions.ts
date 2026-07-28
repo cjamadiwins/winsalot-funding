@@ -30,6 +30,93 @@ type CleanupSummary = {
   deletedClientUsers: number;
 };
 
+type DeleteClientDataResult =
+  | { error: string }
+  | {
+      deletedEmails: number;
+      deletedAppointments: number;
+      deletedFollowUps: number;
+      deletedActivities: number;
+      deletedLeads: number;
+      deletedCampaigns: number;
+      deletedClientUsers: number;
+    };
+
+async function deleteLeadgenClientData(
+  clientId: string,
+  clientName: string,
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
+): Promise<DeleteClientDataResult> {
+  const { data: leadRows, error: leadReadError } = await supabase.from("leadgen_leads").select("id").eq("client_id", clientId);
+  if (leadReadError) return { error: `Failed to read leads for ${clientName}.` };
+
+  const leadIds = (leadRows ?? []).map((r) => r.id as string);
+
+  const { data: emailsDeleted, error: emailsDeleteError } = await supabase
+    .from("leadgen_emails")
+    .delete()
+    .eq("client_id", clientId)
+    .select("id");
+  if (emailsDeleteError) return { error: `Failed to delete emails for ${clientName}.` };
+
+  const { data: apptsDeleted, error: apptsDeleteError } = await supabase
+    .from("leadgen_appointments")
+    .delete()
+    .eq("client_id", clientId)
+    .select("id");
+  if (apptsDeleteError) return { error: `Failed to delete appointments for ${clientName}.` };
+
+  let followUpsDeletedCount = 0;
+  let activitiesDeletedCount = 0;
+  if (leadIds.length > 0) {
+    const { data: followUpsDeleted, error: followUpsDeleteError } = await supabase
+      .from("leadgen_followups")
+      .delete()
+      .in("lead_id", leadIds)
+      .select("id");
+    if (followUpsDeleteError) return { error: `Failed to delete follow-ups for ${clientName}.` };
+    followUpsDeletedCount = (followUpsDeleted ?? []).length;
+
+    const { data: activitiesDeleted, error: activitiesDeleteError } = await supabase
+      .from("leadgen_lead_activities")
+      .delete()
+      .in("lead_id", leadIds)
+      .select("id");
+    if (activitiesDeleteError) return { error: `Failed to delete lead activities for ${clientName}.` };
+    activitiesDeletedCount = (activitiesDeleted ?? []).length;
+  }
+
+  const { data: leadsDeleted, error: leadsDeleteError } = await supabase.from("leadgen_leads").delete().eq("client_id", clientId).select("id");
+  if (leadsDeleteError) return { error: `Failed to delete leads for ${clientName}.` };
+
+  const { data: campaignsDeleted, error: campaignsDeleteError } = await supabase
+    .from("leadgen_campaigns")
+    .delete()
+    .eq("client_id", clientId)
+    .select("id");
+  if (campaignsDeleteError) return { error: `Failed to delete campaigns for ${clientName}.` };
+
+  const { data: clientUsersDeleted, error: clientUsersDeleteError } = await supabase
+    .from("leadgen_users")
+    .delete()
+    .eq("client_id", clientId)
+    .select("id");
+  if (clientUsersDeleteError) return { error: `Failed to delete client users for ${clientName}.` };
+
+  const { error: clientDeleteError } = await supabase.from("leadgen_clients").delete().eq("id", clientId);
+  if (clientDeleteError) return { error: `Failed to delete client ${clientName}.` };
+
+  return {
+    deletedEmails: (emailsDeleted ?? []).length,
+    deletedAppointments: (apptsDeleted ?? []).length,
+    deletedFollowUps: followUpsDeletedCount,
+    deletedActivities: activitiesDeletedCount,
+    deletedLeads: (leadsDeleted ?? []).length,
+    deletedCampaigns: (campaignsDeleted ?? []).length,
+    deletedClientUsers: (clientUsersDeleted ?? []).length,
+  };
+}
+
 export async function signOutLeadgenAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
@@ -353,79 +440,19 @@ export async function cleanupLeadgenTestClientsAction(): Promise<ActionResult & 
   const summaries: CleanupSummary[] = [];
 
   for (const client of targetClients) {
-    const { data: leadRows, error: leadReadError } = await supabase.from("leadgen_leads").select("id").eq("client_id", client.id);
-    if (leadReadError) return { error: `Failed to read leads for ${client.name}.` };
-
-    const leadIds = (leadRows ?? []).map((r) => r.id as string);
-
-    const { data: emailsDeleted, error: emailsDeleteError } = await supabase
-      .from("leadgen_emails")
-      .delete()
-      .eq("client_id", client.id)
-      .select("id");
-    if (emailsDeleteError) return { error: `Failed to delete emails for ${client.name}.` };
-
-    const { data: apptsDeleted, error: apptsDeleteError } = await supabase
-      .from("leadgen_appointments")
-      .delete()
-      .eq("client_id", client.id)
-      .select("id");
-    if (apptsDeleteError) return { error: `Failed to delete appointments for ${client.name}.` };
-
-    let followUpsDeletedCount = 0;
-    let activitiesDeletedCount = 0;
-    if (leadIds.length > 0) {
-      const { data: followUpsDeleted, error: followUpsDeleteError } = await supabase
-        .from("leadgen_followups")
-        .delete()
-        .in("lead_id", leadIds)
-        .select("id");
-      if (followUpsDeleteError) return { error: `Failed to delete follow-ups for ${client.name}.` };
-      followUpsDeletedCount = (followUpsDeleted ?? []).length;
-
-      const { data: activitiesDeleted, error: activitiesDeleteError } = await supabase
-        .from("leadgen_lead_activities")
-        .delete()
-        .in("lead_id", leadIds)
-        .select("id");
-      if (activitiesDeleteError) return { error: `Failed to delete lead activities for ${client.name}.` };
-      activitiesDeletedCount = (activitiesDeleted ?? []).length;
-    }
-
-    const { data: leadsDeleted, error: leadsDeleteError } = await supabase
-      .from("leadgen_leads")
-      .delete()
-      .eq("client_id", client.id)
-      .select("id");
-    if (leadsDeleteError) return { error: `Failed to delete leads for ${client.name}.` };
-
-    const { data: campaignsDeleted, error: campaignsDeleteError } = await supabase
-      .from("leadgen_campaigns")
-      .delete()
-      .eq("client_id", client.id)
-      .select("id");
-    if (campaignsDeleteError) return { error: `Failed to delete campaigns for ${client.name}.` };
-
-    const { data: clientUsersDeleted, error: clientUsersDeleteError } = await supabase
-      .from("leadgen_users")
-      .delete()
-      .eq("client_id", client.id)
-      .select("id");
-    if (clientUsersDeleteError) return { error: `Failed to delete client users for ${client.name}.` };
-
-    const { error: clientDeleteError } = await supabase.from("leadgen_clients").delete().eq("id", client.id);
-    if (clientDeleteError) return { error: `Failed to delete client ${client.name}.` };
+    const result = await deleteLeadgenClientData(client.id, client.name, supabase);
+    if ("error" in result) return { error: result.error };
 
     summaries.push({
       clientId: client.id,
       clientName: client.name,
-      deletedEmails: (emailsDeleted ?? []).length,
-      deletedAppointments: (apptsDeleted ?? []).length,
-      deletedFollowUps: followUpsDeletedCount,
-      deletedActivities: activitiesDeletedCount,
-      deletedLeads: (leadsDeleted ?? []).length,
-      deletedCampaigns: (campaignsDeleted ?? []).length,
-      deletedClientUsers: (clientUsersDeleted ?? []).length,
+      deletedEmails: result.deletedEmails,
+      deletedAppointments: result.deletedAppointments,
+      deletedFollowUps: result.deletedFollowUps,
+      deletedActivities: result.deletedActivities,
+      deletedLeads: result.deletedLeads,
+      deletedCampaigns: result.deletedCampaigns,
+      deletedClientUsers: result.deletedClientUsers,
     });
   }
 
@@ -436,4 +463,24 @@ export async function cleanupLeadgenTestClientsAction(): Promise<ActionResult & 
   revalidatePath("/leadgen/admin/emails");
 
   return { summaries };
+}
+
+export async function deleteLeadgenClientAction(clientId: string): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: client, error: clientError } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  if (clientError) return { error: "Failed to load the client." };
+  if (!client) return { error: "Client not found." };
+  if (client.name.trim() === "Brent's Essentials") return { error: "Brent's Essentials cannot be deleted." };
+
+  const result = await deleteLeadgenClientData(client.id, client.name, supabase);
+  if ("error" in result) return { error: result.error };
+
+  revalidatePath("/leadgen/admin");
+  revalidatePath("/leadgen/admin/clients");
+  revalidatePath("/leadgen/admin/leads");
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin/emails");
+  return {};
 }
