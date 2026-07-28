@@ -128,7 +128,7 @@ export function buildLeadgenConsultationCtaEmail(
   buttonLabel: string
 ): { text: string; html?: string } {
   const sanitizedBody = sanitizePlainEmailBody(body);
-  const websiteUrl = "https://brentsessentials.com";
+  const websiteUrl = "https://brentsessentials.com/growth-system";
   const websiteLine = `Website: ${websiteUrl}`;
   const appendWebsiteLineToText = (value: string) => `${value}\n\n${websiteLine}`;
   const appendWebsiteLineToHtml = (value: string) =>

@@ -284,8 +284,8 @@ export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "con
 // below), not to Brent's Essentials' own links.
 export const LEADGEN_BRENTS_ESSENTIALS_FALLBACK = {
   name: "Brent's Essentials",
-  bookingUrl: "https://calendly.com/kelechiamadi1/free-15-minute-business-growth-strategy-session",
-  servicesUrl: "https://www.brentsessentials.com/growth-system",
+  bookingUrl: "https://brentsessentials.com/growth-system",
+  servicesUrl: "https://brentsessentials.com/growth-system",
 } as const;
 
 export const LEADGEN_HIDDEN_CAMPAIGN_NAME = "Q3 Growth Campaign";
