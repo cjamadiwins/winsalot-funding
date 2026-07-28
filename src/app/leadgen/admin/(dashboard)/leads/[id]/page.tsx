@@ -61,6 +61,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     { data: consultationTemplate },
     { data: consultationInvitationTemplate },
     { data: consultationFollowUpTemplate },
+    { data: followUpTemplates },
   ] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id
@@ -74,6 +75,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_information").maybeSingle(),
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_invitation").maybeSingle(),
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
+    admin.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
   ]);
 
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
@@ -97,6 +99,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
+      followUpTemplates={(followUpTemplates ?? []) as LeadgenEmailTemplateRow[]}
       bookingLink={bookingLink}
       servicesInfoLink={(client as LeadgenClientRow)?.services_info_link ?? null}
       bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}

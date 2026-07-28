@@ -59,6 +59,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     { data: consultationTemplate },
     { data: consultationInvitationTemplate },
     { data: consultationFollowUpTemplate },
+    { data: followUpTemplates },
   ] = await Promise.all([
     supabase.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id ? supabase.from("leadgen_campaigns").select("*").eq("id", lead.campaign_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -69,6 +70,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_information").maybeSingle(),
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_invitation").maybeSingle(),
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
+    supabase.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
   ]);
 
   // Agents have read-only access to leadgen_bounced_emails (RLS:
@@ -96,6 +98,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
+      followUpTemplates={(followUpTemplates ?? []) as LeadgenEmailTemplateRow[]}
       bookingLink={bookingLink}
       servicesInfoLink={(client as LeadgenClientRow)?.services_info_link ?? null}
       bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}

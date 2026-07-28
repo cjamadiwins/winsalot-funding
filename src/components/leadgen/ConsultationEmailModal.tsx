@@ -6,6 +6,7 @@ import { isValidEmail, type LeadgenLeadRow } from "@/lib/leadgen-types";
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
 export type SendConsultationEmailResult = { error?: string; emailId?: string };
+type FollowUpTemplateOption = { id: string; name: string; subject: string; body: string };
 
 // "Send Consultation Email" workflow (the brief's centerpiece feature):
 // a review screen prefilled from the lead/campaign, editable before
@@ -21,6 +22,8 @@ export default function ConsultationEmailModal({
   defaultBody,
   bookingUrl,
   servicesUrl,
+  templateOptions,
+  templateSelectLabel,
   onClose,
   onSend,
   onSent,
@@ -39,18 +42,30 @@ export default function ConsultationEmailModal({
   // error.
   bookingUrl?: string | null;
   servicesUrl?: string | null;
+  templateOptions?: FollowUpTemplateOption[];
+  templateSelectLabel?: string;
   onClose: () => void;
   onSend: (formData: FormData) => Promise<SendConsultationEmailResult>;
   onSent: () => void;
 }) {
+  const selectedTemplate = templateOptions?.[0] ?? null;
   const [toEmail, setToEmail] = useState(lead.email ?? "");
-  const [subject, setSubject] = useState(defaultSubject);
-  const [body, setBody] = useState(defaultBody);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(selectedTemplate?.id ?? "");
+  const [subject, setSubject] = useState(selectedTemplate?.subject ?? defaultSubject);
+  const [body, setBody] = useState(selectedTemplate?.body ?? defaultBody);
   const [step, setStep] = useState<"edit" | "confirm">("edit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const emailValid = isValidEmail(toEmail);
+
+  function handleTemplateChange(nextTemplateId: string) {
+    setSelectedTemplateId(nextTemplateId);
+    const nextTemplate = templateOptions?.find((t) => t.id === nextTemplateId);
+    if (!nextTemplate) return;
+    setSubject(nextTemplate.subject);
+    setBody(nextTemplate.body);
+  }
 
   async function handleConfirmSend() {
     if (submitting) return; // belt-and-suspenders against a double-click racing state updates
@@ -114,6 +129,19 @@ export default function ConsultationEmailModal({
 
         {step === "edit" ? (
           <div className="mt-4 space-y-3">
+            {templateOptions && templateOptions.length > 0 && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">{templateSelectLabel ?? "Saved Template"}</span>
+                <select value={selectedTemplateId} onChange={(e) => handleTemplateChange(e.target.value)} className={inputClass}>
+                  {templateOptions.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-slate-600">Recipient Email</span>
               <input

@@ -72,6 +72,7 @@ export default function LeadDetailClient({
   consultationTemplate,
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
+  followUpTemplates,
   bookingLink,
   servicesInfoLink,
   bouncedEmails,
@@ -93,6 +94,7 @@ export default function LeadDetailClient({
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
   consultationFollowUpTemplate: LeadgenEmailTemplateRow | null;
+  followUpTemplates: LeadgenEmailTemplateRow[];
   // The client's (or campaign's) configured booking link - shared by all
   // three consultation email types now (the original "Send Consultation
   // Email", the invitation, and the follow-up).
@@ -180,7 +182,17 @@ export default function LeadDetailClient({
 
   const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
-  const followUpBody = consultationFollowUpTemplate ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars) : "";
+  const followUpBody = consultationFollowUpTemplate
+    ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars)
+    : `Hi ${firstName},\n\nJust following up on your FREE 15-minute AI Business Growth Consultation invitation.\n\nUse the button below to choose a convenient time for your consultation:\n\n${bookingSection}\n\nWe look forward to speaking with you and helping your business grow.\n\nRegards,\n\nWinsalot Corp.`;
+  const fallbackFollowUpTemplates = consultationFollowUpTemplate ? [consultationFollowUpTemplate] : [];
+  const followUpTemplateRows = followUpTemplates.length > 0 ? followUpTemplates : fallbackFollowUpTemplates;
+  const followUpTemplateOptions = followUpTemplateRows.map((template) => ({
+    id: template.id,
+    name: template.name,
+    subject: renderLeadgenTemplate(template.subject, followUpVars),
+    body: renderLeadgenTemplate(template.body, followUpVars),
+  }));
   const latestEmail = emails[0] ?? null;
 
   return (
@@ -295,6 +307,8 @@ export default function LeadDetailClient({
           defaultBody={followUpBody}
           bookingUrl={branding.bookingUrl}
           servicesUrl={branding.servicesUrl}
+          templateOptions={followUpTemplateOptions}
+          templateSelectLabel="Saved Follow-Up Template"
           onClose={() => setShowInvitationFollowUpModal(false)}
           onSend={(formData) => actions.sendConsultationFollowUp(lead.id, formData)}
           onSent={() => {
