@@ -36,6 +36,21 @@ export async function proxy(request: NextRequest) {
     ]);
   }
 
+  if (pathname.startsWith("/leadgen")) {
+    // The Lead Generation CRM - a separate application from the cleaning
+    // CRM above, with its own login/session (still Supabase Auth, just a
+    // different leadgen_users role table - see src/lib/leadgen-auth.ts).
+    // Same coarse "is there any session at all" gate as /admin and
+    // /agent; role- and client-slug-specific authorization happens
+    // server-side in requireLeadgenAdmin()/requireLeadgenAgent()/
+    // requireLeadgenClient(). postLoginPath is /leadgen itself, which
+    // dispatches to the right role's home.
+    return handleSessionGate(request, "/leadgen/login", "/leadgen", [
+      "/leadgen/set-password",
+      "/leadgen/forgot-password",
+    ]);
+  }
+
   return NextResponse.next();
 }
 
@@ -142,5 +157,5 @@ async function handleSessionGate(
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*", "/agent/:path*"],
+  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*"],
 };

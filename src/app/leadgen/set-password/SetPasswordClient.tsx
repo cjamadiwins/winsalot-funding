@@ -1,0 +1,181 @@
+"use client";
+
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
+type Status = "checking" | "ready" | "invalid";
+
+// Shared completion page for both the invite flow and the forgot-password
+// flow - identical logic/safeguards to src/app/agent/set-password/
+// SetPasswordClient.tsx (see that file's comments for the full
+// rationale on why "a session merely exists" is never treated as proof
+// of a fresh invite/recovery link). Kept as its own copy rather than a
+// shared import so this CRM's auth pages never depend on anything under
+// src/app/agent/* or src/app/admin/*.
+export default function SetPasswordClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkError = searchParams.get("error");
+  const serverVerified = searchParams.get("verified") === "1";
+
+  const [hadAuthHashOnLoad] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      /access_token=/.test(window.location.hash) &&
+      /type=(invite|recovery)/.test(window.location.hash)
+  );
+  const [hadAuthCodeOnLoad] = useState(() => Boolean(searchParams.get("code")));
+
+  const hasProofOfFreshLink = serverVerified || hadAuthHashOnLoad || hadAuthCodeOnLoad;
+
+  const [status, setStatus] = useState<Status>(() => {
+    if (linkError) return "invalid";
+    return hasProofOfFreshLink ? "checking" : "invalid";
+  });
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (linkError || !hasProofOfFreshLink) return;
+
+    let active = true;
+    const supabase = createSupabaseBrowserClient();
+
+    function markReady(userId: string) {
+      if (!active) return;
+      setExpectedUserId(userId);
+      setStatus("ready");
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) {
+        markReady(data.session.user.id);
+        return;
+      }
+      setTimeout(() => {
+        if (!active) return;
+        supabase.auth.getSession().then(({ data: retry }) => {
+          if (!active) return;
+          if (retry.session) markReady(retry.session.user.id);
+          else setStatus("invalid");
+        });
+      }, 800);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) markReady(session.user.id);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [linkError, hasProofOfFreshLink]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitError(null);
+
+    if (password.length < 8) {
+      setSubmitError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSubmitError("Passwords do not match.");
+      return;
+    }
+
+    setSubmitting(true);
+    const supabase = createSupabaseBrowserClient();
+
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser.user || currentUser.user.id !== expectedUserId) {
+      setSubmitting(false);
+      setSubmitError("Your session has changed since this page loaded. Please open the link from your email again.");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password });
+    setSubmitting(false);
+
+    if (error) {
+      setSubmitError(error.message);
+      return;
+    }
+
+    router.push("/leadgen");
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 shadow-sm">
+        <h1 className="font-heading text-xl font-bold text-[var(--color-ink-strong)]">Set Your Password</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">Winsalot Lead Generation CRM</p>
+
+        {status === "checking" && <p className="mt-6 text-sm text-[var(--color-text-muted)]">Checking your link…</p>}
+
+        {status === "invalid" && (
+          <div className="mt-6 space-y-3">
+            <p className="text-sm text-red-600">{linkError ?? "This link is invalid or has expired."}</p>
+            <a href="/leadgen/login" className="text-sm font-semibold text-[var(--color-accent)]">
+              Back to sign in
+            </a>
+          </div>
+        )}
+
+        {status === "ready" && (
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="password" className="text-sm font-medium text-[var(--color-ink)]">
+                New password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-3 text-base text-[var(--color-ink-strong)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="text-sm font-medium text-[var(--color-ink)]">
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-3 text-base text-[var(--color-ink-strong)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+              />
+            </div>
+
+            {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-full bg-[var(--color-accent)] px-4 py-3 text-base font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? "Saving…" : "Set Password & Sign In"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}

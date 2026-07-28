@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("webhook-signature") ?? request.headers.get("svix-signature");
 
   if (!id || !timestamp || !signature) {
-    console.error("[resend-webhook] Missing signature headers on incoming request.");
+    console.error(`[resend-webhook] Missing signature headers on incoming request. webhook id=${id ?? "none"}`);
     return NextResponse.json({ error: "Missing webhook signature headers." }, { status: 400 });
   }
 
@@ -73,7 +73,16 @@ export async function POST(request: NextRequest) {
       webhookSecret,
     });
   } catch (err) {
-    console.error("[resend-webhook] Signature verification failed:", err);
+    // Include the webhook id so a signature failure can be correlated
+    // against a specific delivery in Resend's dashboard (Webhooks -> the
+    // endpoint pointed at this URL -> Recent deliveries). This error
+    // means RESEND_WEBHOOK_SECRET on this deployment does not match the
+    // signing secret Resend used to sign this payload - each registered
+    // endpoint has its own distinct secret, so the fix is to copy the
+    // Signing Secret from the exact endpoint whose URL matches this
+    // deployment and set it as RESEND_WEBHOOK_SECRET here. It is never a
+    // bug in the verification code itself.
+    console.error(`[resend-webhook] Signature verification failed for webhook id ${id}:`, err);
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
@@ -135,8 +144,109 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!tracked) {
-    console.log(`[resend-webhook] no crm_lead_emails row matches Resend email id ${emailId} — ignoring.`);
-    return NextResponse.json({ received: true, tracked: false });
+    // Not a cleaning-CRM-tracked email - check the Lead Generation CRM's
+    // completely separate email log (leadgen_emails) before giving up.
+    // This is the only place the two CRMs' email tracking ever touch the
+    // same code path, and only ever as an independent fallback lookup -
+    // neither table is ever written to based on a match in the other.
+    const { data: leadgenEmail } = await admin
+      .from("leadgen_emails")
+      .select("id, lead_id, to_email, status")
+      .eq("resend_message_id", emailId)
+      .maybeSingle();
+
+    if (!leadgenEmail) {
+      console.log(`[resend-webhook] no crm_lead_emails or leadgen_emails row matches Resend email id ${emailId} — ignoring.`);
+      return NextResponse.json({ received: true, tracked: false });
+    }
+
+    console.log(`[resend-webhook] matched email ${emailId} to leadgen_emails ${leadgenEmail.id}`);
+
+    // Every event Resend can send for a tracked leadgen_emails row -
+    // brief: "Do not mark an email as 'Delivered' merely because the
+    // Resend send request succeeded. Only mark it delivered after
+    // receiving the official email.delivered webhook" (sendLeadgenEmail
+    // in lib/leadgen-email.ts only ever sets 'sent' on a successful send
+    // - 'delivered' is set here, and only here).
+    const leadgenUpdates: Record<string, unknown> = {};
+    switch (event.type) {
+      case "email.sent":
+        leadgenUpdates.status = "sent";
+        leadgenUpdates.sent_at = eventAt;
+        break;
+      case "email.delivered":
+        leadgenUpdates.status = "delivered";
+        leadgenUpdates.delivered_at = eventAt;
+        break;
+      case "email.delivery_delayed":
+        leadgenUpdates.status = "delayed";
+        leadgenUpdates.delayed_at = eventAt;
+        break;
+      case "email.bounced":
+        leadgenUpdates.status = "bounced";
+        leadgenUpdates.bounced_at = eventAt;
+        leadgenUpdates.bounce_reason = event.data.bounce.message;
+        break;
+      case "email.complained":
+        leadgenUpdates.status = "complained";
+        leadgenUpdates.complained_at = eventAt;
+        break;
+      case "email.failed":
+        leadgenUpdates.status = "failed";
+        leadgenUpdates.failed_at = eventAt;
+        leadgenUpdates.failure_reason = event.data.failed.reason;
+        break;
+      default:
+        return NextResponse.json({ received: true, tracked: true, ignored: true });
+    }
+
+    const { error: leadgenUpdateError } = await admin.from("leadgen_emails").update(leadgenUpdates).eq("id", leadgenEmail.id);
+    if (leadgenUpdateError) {
+      console.error(`[resend-webhook] failed to update leadgen_emails ${leadgenEmail.id}:`, leadgenUpdateError);
+    }
+
+    // A hard bounce (re-)blocks this exact address from further agent
+    // sends until an admin corrects or approves it - see
+    // leadgen_bounced_emails and the check in sendLeadgenEmail() (lib/
+    // leadgen-email.ts). cleared_at is reset to null on every fresh
+    // bounce, even one an admin previously cleared: a repeat bounce means
+    // whatever correction was made didn't fix it, so it needs another look.
+    if (event.type === "email.bounced") {
+      const { error: bounceUpsertError } = await admin.from("leadgen_bounced_emails").upsert(
+        {
+          email: leadgenEmail.to_email.trim().toLowerCase(),
+          bounce_reason: event.data.bounce.message,
+          bounced_at: eventAt,
+          cleared_at: null,
+          cleared_by: null,
+        },
+        { onConflict: "email" }
+      );
+      if (bounceUpsertError) {
+        console.error(`[resend-webhook] failed to record bounced address for ${leadgenEmail.to_email}:`, bounceUpsertError);
+      }
+    }
+
+    if (leadgenEmail.lead_id) {
+      const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+      let notes = `Email ${leadgenUpdates.status} (to ${toEmail}) — "${event.data.subject}".`;
+      if (event.type === "email.bounced") {
+        notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. This address is now blocked from further agent sends until an admin corrects or approves it.`;
+      } else if (event.type === "email.complained") {
+        notes = `Recipient marked this email as spam (to ${toEmail}). Consider not emailing this lead again.`;
+      } else if (event.type === "email.failed") {
+        notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
+      }
+      await admin.from("leadgen_lead_activities").insert({
+        lead_id: leadgenEmail.lead_id,
+        agent_id: null,
+        activity_type: "email",
+        notes,
+        occurred_at: eventAt,
+      });
+    }
+
+    return NextResponse.json({ received: true, tracked: true });
   }
 
   console.log(
