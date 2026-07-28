@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import { slugifyClientName } from "@/lib/leadgen-types";
-import { createClientAction } from "../actions";
+import { cleanupLeadgenTestClientsAction, createClientAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -17,9 +17,11 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
   const [slugTouched, setSlugTouched] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   function handleSubmit(formData: FormData) {
     setError(null);
+    setInfo(null);
     startTransition(async () => {
       const result = await createClientAction(formData);
       if (result.error) {
@@ -34,18 +36,56 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
     });
   }
 
+  function handleCleanup() {
+    if (!confirm("Delete test clients Chijioke Amadi and Winsalot Corp. plus linked test records? Brent's Essentials will not be touched.")) {
+      return;
+    }
+
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const result = await cleanupLeadgenTestClientsAction();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      const details = (result.summaries ?? [])
+        .map(
+          (s) =>
+            `${s.clientName}: emails ${s.deletedEmails}, appointments ${s.deletedAppointments}, follow-ups ${s.deletedFollowUps}, activities ${s.deletedActivities}, leads ${s.deletedLeads}, campaigns ${s.deletedCampaigns}, client users ${s.deletedClientUsers}`
+        )
+        .join(" | ");
+
+      setInfo(details || "Cleanup completed.");
+      router.refresh();
+    });
+  }
+
   return (
     <div>
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All Clients ({clients.length})</h2>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
-        >
-          {showForm ? "Cancel" : "+ Add Client"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCleanup}
+            disabled={isPending}
+            className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Remove Test Clients
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
+          >
+            {showForm ? "Cancel" : "+ Add Client"}
+          </button>
+        </div>
       </div>
+
+      {info && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800">{info}</p>}
 
       {showForm && (
         <form
