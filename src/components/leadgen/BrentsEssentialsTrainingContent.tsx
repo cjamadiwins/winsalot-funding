@@ -19,6 +19,25 @@ export default function BrentsEssentialsTrainingContent({ dashboardHref }: Props
             </p>
           </section>
 
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+            <h2 className="text-base font-bold text-slate-900">Brent&apos;s AI Services — 15-Minute Consultation Script</h2>
+            <p className="mt-3 font-semibold text-slate-900">Opening Script</p>
+            <div className="mt-2 rounded-lg border border-sky-200 bg-white p-4 text-slate-700">
+              <p>
+                &ldquo;Hi, this is Brent&apos;s Essentials. I&apos;m not calling to sell you anything today. We help businesses improve operations, generate more leads, and save time with practical AI solutions. I&apos;d love to offer you a free 15-minute consultation. Would you be open to booking a time?&rdquo;
+              </p>
+            </div>
+
+            <p className="mt-4 font-semibold text-slate-900">Training Notes</p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
+              <li>Be friendly and confident.</li>
+              <li>Speak naturally without rushing.</li>
+              <li>Focus on the value, not the technology.</li>
+              <li>The goal is to book the free 15-minute consultation.</li>
+              <li>If the prospect is interested, send the consultation booking email directly from the CRM.</li>
+            </ul>
+          </section>
+
           <section>
             <h2 className="text-base font-bold text-slate-900">Call Script</h2>
             <p className="mt-2 font-semibold text-slate-900">Agent:</p>
