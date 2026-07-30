@@ -386,6 +386,29 @@ export function groupTrainingMaterialsByCategory(
   return orderedKeys.filter((key) => groups.has(key)).map((category) => ({ category, materials: groups.get(category)! }));
 }
 
+// Attendance: agent Clock In / Clock Out sessions (crm_attendance,
+// migration 0043). total_hours is null while an agent is still clocked
+// in (clock_out_at not yet set) and is computed by the database once
+// they clock out, so every reader sees the same figure.
+export type CrmAttendanceRow = {
+  id: string;
+  created_at: string;
+  agent_id: string;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  total_hours: number | null;
+};
+
+// "7h 15m" / "45m" / "-" (still clocked in, or no hours yet).
+export function attendanceHoursLabel(hours: number | null): string {
+  if (hours === null) return "-";
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  if (wholeHours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${wholeHours}h`;
+  return `${wholeHours}h ${minutes}m`;
+}
+
 // Formats an ISO timestamp for a <input type="datetime-local"> defaultValue
 // (which needs "YYYY-MM-DDTHH:mm" in local time, not an ISO string).
 export function toDatetimeLocal(iso: string): string {
