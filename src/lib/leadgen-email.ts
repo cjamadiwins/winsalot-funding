@@ -128,17 +128,27 @@ export function buildLeadgenConsultationCtaEmail(
   buttonLabel: string
 ): { text: string; html?: string } {
   const sanitizedBody = sanitizePlainEmailBody(body);
-  const websiteUrl = "https://brentsessentials.com/growth-system";
-  const websiteLine = `Website: ${websiteUrl}`;
-  const appendWebsiteLineToText = (value: string) => `${value}\n\n${websiteLine}`;
-  const appendWebsiteLineToHtml = (value: string) =>
-    `${value}<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;">Website: <a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${escapeHtml(
-      websiteUrl
-    )}</a></div>`;
+  const effectiveBookingUrl = bookingUrl?.trim() || "https://brentsessentials.com/growth-system";
+  const websiteLine = `Website: ${effectiveBookingUrl}`;
+  const signatureText = `Best,\nBrent's Essentials Team\nBrent's Essentials\n${effectiveBookingUrl}`;
 
-  if (!bookingUrl) return { text: appendWebsiteLineToText(sanitizedBody), html: appendWebsiteLineToHtml(textToSimpleHtml(sanitizedBody)) };
+  const buildCtaHtml = () => {
+    const safeUrl = escapeHtml(effectiveBookingUrl);
+    return `<div style="margin:20px 0 14px 0;font-family:sans-serif;text-align:center;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:700;line-height:1.3;text-decoration:none;padding:16px 24px;border-radius:6px;">
+    ${escapeHtml(buttonLabel)}
+  </a>
+  <div style="margin-top:10px;font-size:13px;color:#475569;">If the button does not work, open this link:</div>
+  <div style="margin-top:4px;font-size:13px;line-height:1.5;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;word-break:break-all;">${safeUrl}</a></div>
+</div>`;
+  };
 
-  const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const buildSignatureHtml = () => {
+    const safeUrl = escapeHtml(effectiveBookingUrl);
+    return `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;white-space:pre-wrap;">Best,<br>Brent's Essentials Team<br>Brent's Essentials<br>Website: <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${safeUrl}</a></div>`;
+  };
+
+  const escapedBase = effectiveBookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const canonicalRegex = new RegExp(`${escapedBase}(?:\\?[^\\s\\n]*)?`, "gi");
   const calendlyRegex = /https?:\/\/calendly\.com\/[^\s\n]+/gi;
 
@@ -146,34 +156,24 @@ export function buildLeadgenConsultationCtaEmail(
   canonicalRegex.lastIndex = 0;
   const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
 
-  const textWithoutWebsite = sanitizedBody.replace(pattern, buttonLabel);
-  const text = appendWebsiteLineToText(textWithoutWebsite);
+  const textWithoutInlineUrl = sanitizedBody.replace(pattern, "").replace(/\n{3,}/g, "\n\n").trim();
+  const textCore = textWithoutInlineUrl || sanitizedBody;
+  const text = `${textCore}\n\n${buttonLabel}\n${effectiveBookingUrl}\n\n${websiteLine}\n\n${signatureText}`;
 
   let html = "";
   let cursor = 0;
-  let found = false;
+  let removedUrlFromBody = false;
   for (const match of sanitizedBody.matchAll(pattern)) {
     const index = match.index ?? -1;
     if (index < 0) continue;
-    found = true;
+    removedUrlFromBody = true;
     html += textToSimpleHtml(sanitizedBody.slice(cursor, index));
-    const safeUrl = escapeHtml(bookingUrl);
-    html += `<a href="${safeUrl}"
-  target="_blank"
-  style="display:block;width:100%;box-sizing:border-box;background:#2563eb;color:#ffffff;text-decoration:none;text-align:center;font-size:18px;font-weight:700;padding:18px 16px;border-radius:10px;">
-  ${escapeHtml(buttonLabel)}
-  </a>`;
     cursor = index + match[0].length;
   }
 
-  if (!found) {
-    const fallbackText = appendWebsiteLineToText(`${textWithoutWebsite}\n\n${buttonLabel}\n${bookingUrl}`);
-    const fallbackHtml = appendWebsiteLineToHtml(`${textToSimpleHtml(sanitizedBody)}${leadgenBookingButtonHtml(bookingUrl, buttonLabel)}`);
-    return { text: fallbackText, html: fallbackHtml };
-  }
-
-  html += textToSimpleHtml(sanitizedBody.slice(cursor));
-  return { text, html: appendWebsiteLineToHtml(html) };
+  const htmlCore = removedUrlFromBody ? `${html}${textToSimpleHtml(sanitizedBody.slice(cursor))}` : textToSimpleHtml(sanitizedBody);
+  const fullHtml = `${htmlCore}${buildCtaHtml()}${buildSignatureHtml()}`;
+  return { text, html: fullHtml };
 }
 
 export type SendLeadgenEmailInput = {
@@ -227,6 +227,21 @@ export async function sendLeadgenEmail(
   input: SendLeadgenEmailInput
 ): Promise<SendLeadgenEmailResult> {
   const senderEmail = getLeadgenSenderEmail();
+  const finalText = sanitizePlainEmailBody(input.text ?? input.body);
+  const finalHtml = input.html ?? textToSimpleHtml(input.body);
+
+  // Do not save/send consultation information emails unless the fully
+  // generated HTML includes the required CTA, fallback URL, and
+  // signature section.
+  if (input.templateKey === "consultation_information") {
+    const requiredUrl = "https://brentsessentials.com/growth-system";
+    const hasButtonLabel = finalHtml.includes("BOOK YOUR FREE 15-MINUTE CONSULTATION");
+    const hasRequiredUrl = finalHtml.includes(requiredUrl);
+    const hasSignature = finalHtml.includes("Brent's Essentials Team") && finalHtml.includes("Best,");
+    if (!hasButtonLabel || !hasRequiredUrl || !hasSignature) {
+      return { emailId: "", error: "Consultation email HTML is incomplete. Please regenerate and try again." };
+    }
+  }
 
   // Brief: "Prevent agents from repeatedly emailing a permanently
   // bounced address unless an admin corrects or approves the email
@@ -272,9 +287,6 @@ export async function sendLeadgenEmail(
   const admin = getSupabaseAdmin();
 
   try {
-    const finalText = sanitizePlainEmailBody(input.text ?? input.body);
-    const finalHtml = input.html ?? textToSimpleHtml(input.body);
-
     const resend = getResendClient();
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: senderEmail,

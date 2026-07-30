@@ -9,6 +9,15 @@ export type CrmUserRow = {
   active: boolean;
 };
 
+export type AgentAttendanceRow = {
+  id: string;
+  agent_id: string;
+  clock_in: string;
+  clock_out: string | null;
+  total_minutes: number | null;
+  created_at: string;
+};
+
 export const LEAD_STAGES = [
   "New interested lead",
   "Waiting for cleaning details",

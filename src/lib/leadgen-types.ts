@@ -19,6 +19,17 @@ export type LeadgenUserRow = {
   active: boolean;
 };
 
+export type LeadgenAgentAttendanceRow = {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  attendance_date: string;
+  clock_in: string;
+  clock_out: string | null;
+  total_minutes: number | null;
+  created_at: string;
+};
+
 export type LeadgenClientRow = {
   id: string;
   created_at: string;
@@ -247,8 +258,8 @@ export type LeadgenAppointmentRow = {
 // Calendly URL is deliberately never shown as visible text in the
 // email - only this label and the "click here to book your
 // consultation" fallback link.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK A FREE 15-MINUTE CONSULTATION";
-export const LEADGEN_CONSULTATION_CTA_LABEL = "BOOK A FREE 15-MINUTE CONSULTATION";
+export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
+export const LEADGEN_CONSULTATION_CTA_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be

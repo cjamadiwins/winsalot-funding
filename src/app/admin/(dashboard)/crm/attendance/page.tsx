@@ -1,37 +1,39 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { CrmAttendanceRow, CrmUserRow } from "@/lib/crm-types";
-import AttendanceAdminClient from "./AttendanceAdminClient";
+import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
+import AdminAttendanceClient from "./AdminAttendanceClient";
 
-export default async function AdminCrmAttendancePage() {
+export default async function AdminAttendancePage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  // RLS (crm_attendance_admin_all / crm_users_admin_select_all) permits a
-  // full read here because this page is already gated by requireCrmAdmin().
-  const [
-    { data: records, error: recordsError },
-    { data: agents, error: agentsError },
-  ] = await Promise.all([
-    supabase.from("crm_attendance").select("*").order("clock_in_at", { ascending: false }),
-    supabase.from("crm_users").select("*").order("full_name"),
-  ]);
+  const [{ data: attendance, error: attendanceError }, { data: agents, error: agentsError }] =
+    await Promise.all([
+      supabase.from("agent_attendance").select("*").order("clock_in", { ascending: false }),
+      supabase
+        .from("crm_users")
+        .select("*")
+        .eq("role", "agent")
+        .order("full_name", { ascending: true }),
+    ]);
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-      <p className="mt-1 text-sm text-slate-500">Clock in/out history for every agent.</p>
+      <h1 className="text-2xl font-bold text-slate-900">Agent Attendance</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        Clock-in and clock-out records across all agents.
+      </p>
 
-      {(recordsError || agentsError) && (
+      {(attendanceError || agentsError) && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Failed to load attendance: {(recordsError ?? agentsError)?.message}
+          Failed to load attendance: {(attendanceError ?? agentsError)?.message}
         </p>
       )}
 
-      {!recordsError && !agentsError && (
+      {!attendanceError && !agentsError && (
         <div className="mt-6">
-          <AttendanceAdminClient
-            records={(records ?? []) as CrmAttendanceRow[]}
+          <AdminAttendanceClient
+            attendance={(attendance ?? []) as AgentAttendanceRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
           />
         </div>

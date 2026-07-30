@@ -5,26 +5,37 @@ import {
   LEADGEN_LEAD_STATUS_STYLES,
   isLeadgenFollowUpDueToday,
   isLeadgenFollowUpOverdue,
+  type LeadgenAgentAttendanceRow,
   type LeadgenFollowUpWithLead,
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import { completeFollowUpAction } from "./leads/[id]/actions";
+import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: leads }, { data: followUps }] = await Promise.all([
+  const [{ data: leads }, { data: followUps }, { data: attendanceData, error: attendanceError }] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
       .from("leadgen_followups")
       .select("*, leadgen_leads(id, business_name, contact_name, phone, email, status)")
       .eq("status", "pending")
       .order("scheduled_at", { ascending: true }),
+    supabase
+      .from("leadgen_agent_attendance")
+      .select("*")
+      .eq("agent_id", agent.id)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
   const allFollowUps = (followUps ?? []) as LeadgenFollowUpWithLead[];
+  const openShift = attendanceError ? null : ((attendanceData ?? null) as LeadgenAgentAttendanceRow | null);
   const dueToday = allFollowUps.filter(isLeadgenFollowUpDueToday);
   const overdue = allFollowUps.filter(isLeadgenFollowUpOverdue);
 
@@ -42,6 +53,13 @@ export default async function LeadgenAgentDashboardPage() {
         <StatCard label="Overdue" value={String(overdue.length)} emphasis={overdue.length > 0 ? "text-rose-700" : undefined} />
         <StatCard label="Interested" value={String(statusCounts.get("Interested") ?? 0)} />
       </div>
+
+      <LeadgenAttendanceCard openShift={openShift} />
+      {attendanceError && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load attendance: {attendanceError.message}
+        </p>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <FollowUpGroup title="Overdue" items={overdue} emphasis="danger" />

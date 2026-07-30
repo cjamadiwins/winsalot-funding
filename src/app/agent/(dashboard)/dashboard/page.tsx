@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
+import type { AgentAttendanceRow, CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
 import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueLeadsPanel from "./OverdueLeadsPanel";
 import ProviderFollowUps from "./ProviderFollowUps";
+import AttendanceCard from "./AttendanceCard";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -19,6 +20,7 @@ export default async function AgentDashboardPage() {
     { data: leadsData, error: leadsError },
     { data: followUpsData, error: followUpsError },
     { data: providerFollowUpsData, error: providerFollowUpsError },
+    { data: attendanceData, error: attendanceError },
   ] = await Promise.all([
     supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -40,11 +42,20 @@ export default async function AgentDashboardPage() {
       .eq("status", "pending")
       .not("provider_lead_id", "is", null)
       .order("scheduled_at", { ascending: true }),
+    supabase
+      .from("agent_attendance")
+      .select("*")
+      .eq("agent_id", crmUser.id)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const leads = (leadsData ?? []) as CrmLeadRow[];
   const followUps = (followUpsData ?? []) as CrmFollowUpWithLead[];
   const providerFollowUps = (providerFollowUpsData ?? []) as ProviderFollowUpWithLead[];
+  const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
 
   return (
     <div>
@@ -64,6 +75,13 @@ export default async function AgentDashboardPage() {
           + Add Lead
         </Link>
       </div>
+
+      <AttendanceCard openShift={openShift} />
+      {attendanceError && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load attendance: {attendanceError.message}
+        </p>
+      )}
 
       {!leadsError && !followUpsError && (
         <div className="mt-8">
