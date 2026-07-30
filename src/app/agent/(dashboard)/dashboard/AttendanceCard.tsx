@@ -5,7 +5,7 @@ import type { AgentAttendanceRow } from "@/lib/crm-types";
 import {
   clockInAction,
   clockOutAction,
-  INITIAL_ATTENDANCE_ACTION_STATE,
+  type AttendanceActionState,
 } from "./attendance-actions";
 
 function formatElapsed(ms: number) {
@@ -22,13 +22,14 @@ function formatElapsed(ms: number) {
 
 export default function AttendanceCard({ openShift }: { openShift: AgentAttendanceRow | null }) {
   const [now, setNow] = useState(() => Date.now());
+  const initialAttendanceState: AttendanceActionState = { error: null };
   const [clockInState, clockInFormAction, clockInPending] = useActionState(
     clockInAction,
-    INITIAL_ATTENDANCE_ACTION_STATE
+    initialAttendanceState
   );
   const [clockOutState, clockOutFormAction, clockOutPending] = useActionState(
     clockOutAction,
-    INITIAL_ATTENDANCE_ACTION_STATE
+    initialAttendanceState
   );
 
   useEffect(() => {

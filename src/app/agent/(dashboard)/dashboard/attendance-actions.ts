@@ -8,10 +8,6 @@ export type AttendanceActionState = {
   error: string | null;
 };
 
-export const INITIAL_ATTENDANCE_ACTION_STATE: AttendanceActionState = {
-  error: null,
-};
-
 export async function clockInAction(
   _prevState: AttendanceActionState,
   _formData: FormData

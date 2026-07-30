@@ -3,9 +3,9 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
 import {
-  INITIAL_LEADGEN_ATTENDANCE_ACTION_STATE,
   leadgenClockInAction,
   leadgenClockOutAction,
+  type LeadgenAttendanceActionState,
 } from "./leadgen-attendance-actions";
 
 function formatElapsed(ms: number) {
@@ -20,13 +20,14 @@ function formatElapsed(ms: number) {
 
 export default function LeadgenAttendanceCard({ openShift }: { openShift: LeadgenAgentAttendanceRow | null }) {
   const [now, setNow] = useState(() => Date.now());
+  const initialAttendanceState: LeadgenAttendanceActionState = { error: null };
   const [clockInState, clockInFormAction, clockInPending] = useActionState(
     leadgenClockInAction,
-    INITIAL_LEADGEN_ATTENDANCE_ACTION_STATE
+    initialAttendanceState
   );
   const [clockOutState, clockOutFormAction, clockOutPending] = useActionState(
     leadgenClockOutAction,
-    INITIAL_LEADGEN_ATTENDANCE_ACTION_STATE
+    initialAttendanceState
   );
 
   useEffect(() => {

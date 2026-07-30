@@ -8,10 +8,6 @@ export type LeadgenAttendanceActionState = {
   error: string | null;
 };
 
-export const INITIAL_LEADGEN_ATTENDANCE_ACTION_STATE: LeadgenAttendanceActionState = {
-  error: null,
-};
-
 export async function leadgenClockInAction(
   _prevState: LeadgenAttendanceActionState,
   _formData: FormData
