@@ -176,11 +176,17 @@ export default function LeadDetailClient({
     : "";
   const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
   const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
-  const invitationVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
+  // booking_paragraph is aliased to the same marker text as
+  // booking_section: some saved templates use that placeholder name
+  // (matching the original "Send Consultation Email" template) instead
+  // of booking_section, and without this alias it renders as nothing,
+  // silently dropping the booking button from wherever it was placed in
+  // the template body.
+  const invitationVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection, services_section: servicesSection };
   const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
 
-  const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
+  const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection, services_section: servicesSection };
   const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
   const followUpBody = consultationFollowUpTemplate
     ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars)

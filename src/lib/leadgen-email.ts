@@ -90,22 +90,19 @@ export function buildLeadgenBookingEmailHtml(
 ): string {
   const sanitizedBody = sanitizePlainEmailBody(body);
   const usableButtons = buttons.filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url);
+  const withMarkers = usableButtons.map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }));
 
-  const found = usableButtons
-    .filter((b): b is { url: string; label: string; style?: "button" | "booking" } => !!b.url)
-    .map((b) => ({ ...b, marker: `[${b.label}]\n\n${b.url}` }))
+  const found = withMarkers
     .map((b) => ({ ...b, index: sanitizedBody.indexOf(b.marker) }))
     .filter((b) => b.index !== -1)
     .sort((a, b) => a.index - b.index);
-
-  if (found.length === 0) {
-    if (usableButtons.length === 0) return textToSimpleHtml(sanitizedBody);
-    let html = textToSimpleHtml(sanitizedBody);
-    for (const button of usableButtons) {
-      html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
-    }
-    return html;
-  }
+  // A usable button whose marker text isn't literally present in the body
+  // (e.g. the template placeholder that was supposed to produce it was
+  // edited to something this function doesn't render, or removed) must
+  // still show up somewhere rather than silently vanish - appended after
+  // the found ones, in the order given, same as when none are found.
+  const foundMarkers = new Set(found.map((b) => b.marker));
+  const notFound = withMarkers.filter((b) => !foundMarkers.has(b.marker));
 
   let html = "";
   let cursor = 0;
@@ -115,6 +112,9 @@ export function buildLeadgenBookingEmailHtml(
     cursor = button.index + button.marker.length;
   }
   html += textToSimpleHtml(sanitizedBody.slice(cursor));
+  for (const button of notFound) {
+    html += button.style === "booking" ? leadgenBookingButtonHtml(button.url, button.label) : leadgenButtonHtml(button.url, button.label);
+  }
   return html;
 }
 
