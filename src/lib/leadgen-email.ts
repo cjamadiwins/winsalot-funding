@@ -120,8 +120,12 @@ export function buildLeadgenBookingEmailHtml(
 
 // Consultation Information emails come from editable plain-text templates
 // that historically included a visible Calendly URL line. This helper
-// preserves the wording around that line while rendering the link itself
-// as a centered blue CTA button in HTML and a non-URL fallback in text.
+// renders that link as a centered blue CTA button, in the order: message,
+// then button, then one signature. Whatever wording followed the URL in
+// the template (e.g. "We look forward to speaking with you... Regards,
+// ...") duplicated the closing this function already appends below, so
+// it's dropped along with the URL rather than kept as a second closing
+// ahead of the button.
 export function buildLeadgenConsultationCtaEmail(
   body: string,
   bookingUrl: string | null,
@@ -129,7 +133,6 @@ export function buildLeadgenConsultationCtaEmail(
 ): { text: string; html?: string } {
   const sanitizedBody = sanitizePlainEmailBody(body);
   const effectiveBookingUrl = bookingUrl?.trim() || "https://brentsessentials.com/growth-system";
-  const websiteLine = `Website: ${effectiveBookingUrl}`;
   const signatureText = `Best,\nBrent's Essentials Team\nBrent's Essentials\n${effectiveBookingUrl}`;
 
   const buildCtaHtml = () => {
@@ -156,24 +159,15 @@ export function buildLeadgenConsultationCtaEmail(
   canonicalRegex.lastIndex = 0;
   const pattern = hasCanonical ? canonicalRegex : calendlyRegex;
 
-  const textWithoutInlineUrl = sanitizedBody.replace(pattern, "").replace(/\n{3,}/g, "\n\n").trim();
-  const textCore = textWithoutInlineUrl || sanitizedBody;
-  const text = `${textCore}\n\n${buttonLabel}\n${effectiveBookingUrl}\n\n${websiteLine}\n\n${signatureText}`;
+  // The message is everything up to the booking URL - nothing renders
+  // after the button except the one signature built above.
+  pattern.lastIndex = 0;
+  const match = pattern.exec(sanitizedBody);
+  const messageCore = (match ? sanitizedBody.slice(0, match.index) : sanitizedBody).replace(/\n{3,}/g, "\n\n").trim();
 
-  let html = "";
-  let cursor = 0;
-  let removedUrlFromBody = false;
-  for (const match of sanitizedBody.matchAll(pattern)) {
-    const index = match.index ?? -1;
-    if (index < 0) continue;
-    removedUrlFromBody = true;
-    html += textToSimpleHtml(sanitizedBody.slice(cursor, index));
-    cursor = index + match[0].length;
-  }
-
-  const htmlCore = removedUrlFromBody ? `${html}${textToSimpleHtml(sanitizedBody.slice(cursor))}` : textToSimpleHtml(sanitizedBody);
-  const fullHtml = `${htmlCore}${buildCtaHtml()}${buildSignatureHtml()}`;
-  return { text, html: fullHtml };
+  const text = `${messageCore}\n\n${buttonLabel}\n${effectiveBookingUrl}\n\n${signatureText}`;
+  const html = `${textToSimpleHtml(messageCore)}${buildCtaHtml()}${buildSignatureHtml()}`;
+  return { text, html };
 }
 
 export type SendLeadgenEmailInput = {
