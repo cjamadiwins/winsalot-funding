@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { escapeHtml } from "./html";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { LEADGEN_BRENTS_ESSENTIALS_FALLBACK } from "./leadgen-types";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -126,17 +127,23 @@ export function buildLeadgenBookingEmailHtml(
 // ...") duplicated the closing this function already appends below, so
 // it's dropped along with the URL rather than kept as a second closing
 // ahead of the button.
+//
+// bookingUrl is required (never falls back to the Brent's Essentials
+// website) - the caller must block sending entirely when the client has
+// no Consultation Booking Link configured, rather than pass one in here.
+// The Brent's Essentials website only ever appears in the signature's
+// separate "Website:" line below, never as the booking button's target.
 export function buildLeadgenConsultationCtaEmail(
   body: string,
-  bookingUrl: string | null,
+  bookingUrl: string,
   buttonLabel: string
 ): { text: string; html?: string } {
   const sanitizedBody = sanitizePlainEmailBody(body);
-  const effectiveBookingUrl = bookingUrl?.trim() || "https://brentsessentials.com/growth-system";
-  const signatureText = `Best,\nBrent's Essentials Team\nBrent's Essentials\n${effectiveBookingUrl}`;
+  const websiteUrl = LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl;
+  const signatureText = `Best,\nBrent's Essentials Team\nBrent's Essentials\n${websiteUrl}`;
 
   const buildCtaHtml = () => {
-    const safeUrl = escapeHtml(effectiveBookingUrl);
+    const safeUrl = escapeHtml(bookingUrl);
     return `<div style="margin:20px 0 14px 0;font-family:sans-serif;text-align:center;">
   <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:700;line-height:1.3;text-decoration:none;padding:16px 24px;border-radius:6px;">
     ${escapeHtml(buttonLabel)}
@@ -147,11 +154,11 @@ export function buildLeadgenConsultationCtaEmail(
   };
 
   const buildSignatureHtml = () => {
-    const safeUrl = escapeHtml(effectiveBookingUrl);
+    const safeUrl = escapeHtml(websiteUrl);
     return `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;white-space:pre-wrap;">Best,<br>Brent's Essentials Team<br>Brent's Essentials<br>Website: <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${safeUrl}</a></div>`;
   };
 
-  const escapedBase = effectiveBookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const canonicalRegex = new RegExp(`${escapedBase}(?:\\?[^\\s\\n]*)?`, "gi");
   const calendlyRegex = /https?:\/\/calendly\.com\/[^\s\n]+/gi;
 
@@ -165,7 +172,7 @@ export function buildLeadgenConsultationCtaEmail(
   const match = pattern.exec(sanitizedBody);
   const messageCore = (match ? sanitizedBody.slice(0, match.index) : sanitizedBody).replace(/\n{3,}/g, "\n\n").trim();
 
-  const text = `${messageCore}\n\n${buttonLabel}\n${effectiveBookingUrl}\n\n${signatureText}`;
+  const text = `${messageCore}\n\n${buttonLabel}\n${bookingUrl}\n\n${signatureText}`;
   const html = `${textToSimpleHtml(messageCore)}${buildCtaHtml()}${buildSignatureHtml()}`;
   return { text, html };
 }
@@ -232,7 +239,7 @@ export async function sendLeadgenEmail(
   // pinning this to the Brent's Essentials fallback URL would block
   // sending as soon as that admin-configured link differed from it.
   if (input.templateKey === "consultation_information") {
-    const hasButtonLabel = finalHtml.includes("BOOK YOUR FREE 15-MINUTE CONSULTATION");
+    const hasButtonLabel = finalHtml.includes("Book Your Free 15-Minute Consultation");
     const hasBookingLink = /href="https?:\/\/[^"]+"/.test(finalHtml);
     const hasSignature = finalHtml.includes("Brent's Essentials Team") && finalHtml.includes("Best,");
     if (!hasButtonLabel || !hasBookingLink || !hasSignature) {

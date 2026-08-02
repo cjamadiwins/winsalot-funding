@@ -259,7 +259,12 @@ export type LeadgenAppointmentRow = {
 // email - only this label and the "click here to book your
 // consultation" fallback link.
 export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
-export const LEADGEN_CONSULTATION_CTA_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
+// Label for the "Send Consultation Email" button specifically (template
+// key consultation_information) - kept distinct from
+// LEADGEN_BOOKING_BUTTON_LABEL above (used by the separate consultation
+// invitation/follow-up templates) so this one email's button text can
+// change without touching those.
+export const LEADGEN_CONSULTATION_CTA_LABEL = "Book Your Free 15-Minute Consultation";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be

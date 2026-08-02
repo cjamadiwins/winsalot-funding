@@ -165,13 +165,21 @@ export default function LeadDetailClient({
   // never renders with an empty client name or missing button even if
   // the database row were somehow blank at render time.
   const branding = resolveLeadgenEmailBranding(client, bookingLink, servicesInfoLink);
+  // The "Send Consultation Email" button's link, deliberately NOT run
+  // through resolveLeadgenEmailBranding above - that function's Brent's
+  // Essentials fallback exists for the other templates' buttons, but
+  // this one must only ever use the client's actual saved Consultation
+  // Booking Link (bookingLink, already campaign-override-aware - see
+  // getEffectiveBookingLink in the page component) and must show/send
+  // nothing else when it's blank.
+  const rawBookingUrl = bookingLink?.trim() || null;
 
   const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
   const defaultSubject = consultationTemplate?.subject ?? "Book Your Free 15-Minute Business Growth Consultation";
   const defaultBody = consultationTemplate
     ? renderLeadgenTemplate(consultationTemplate.body, {
         first_name: firstName,
-        booking_paragraph: leadgenBookingParagraph(branding.bookingUrl),
+        booking_paragraph: leadgenBookingParagraph(rawBookingUrl),
       })
     : "";
   const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
@@ -252,6 +260,12 @@ export default function LeadDetailClient({
 
       <LeadgenEmailStatusPanel latestEmail={latestEmail} />
 
+      {!rawBookingUrl && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending the consultation email.
+        </p>
+      )}
+
       <div className="mt-5 flex flex-wrap gap-2.5">
         <button
           type="button"
@@ -282,7 +296,7 @@ export default function LeadDetailClient({
           campaignName={campaign?.name ?? null}
           defaultSubject={defaultSubject}
           defaultBody={defaultBody}
-          bookingUrl={branding.bookingUrl}
+          bookingUrl={rawBookingUrl}
           onClose={() => setShowConsultationModal(false)}
           onSend={(formData) => actions.sendConsultationEmail(lead.id, formData)}
           onSent={() => {
