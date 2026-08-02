@@ -487,6 +487,25 @@ export function isLeadgenFollowUpUpcoming(followUp: Pick<LeadgenFollowUpRow, "sc
   return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
 }
 
+// Same due-today/overdue rules as above, but operating directly on a
+// lead's next_follow_up_at (LeadgenLeadRow) instead of a followup row -
+// used by the admin Leads page's "Due Today"/"Overdue" filters (linked
+// from the dashboard's Follow-Ups cards). next_follow_up_at is always
+// kept in sync with that lead's earliest *pending* follow-up (see
+// recomputeNextFollowUp in the leadgen lead-detail actions), so no
+// separate status check is needed here - null simply means no pending
+// follow-up exists.
+export function isLeadgenNextFollowUpOverdue(nextFollowUpAt: string | null): boolean {
+  if (!nextFollowUpAt) return false;
+  return new Date(nextFollowUpAt).getTime() < Date.now();
+}
+
+export function isLeadgenNextFollowUpDueToday(nextFollowUpAt: string | null): boolean {
+  if (!nextFollowUpAt) return false;
+  if (isLeadgenNextFollowUpOverdue(nextFollowUpAt)) return false;
+  return startOfDay(new Date(nextFollowUpAt)) === startOfDay(new Date());
+}
+
 export function leadgenOverdueDurationLabel(scheduledIso: string): string {
   const elapsedMs = Date.now() - new Date(scheduledIso).getTime();
   if (elapsedMs <= 0) return "";

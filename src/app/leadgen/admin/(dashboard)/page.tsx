@@ -7,36 +7,28 @@ const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 export default async function LeadgenAdminDashboardPage() {
   const admin = getSupabaseAdmin();
 
-  const [{ data: leads }, { data: activities }, { data: appointments }, { data: followUps }, { data: clients }, { data: users }] =
-    await Promise.all([
-      admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id"),
-      admin.from("leadgen_lead_activities").select("activity_type, call_outcome"),
-      admin.from("leadgen_appointments").select("status, client_id"),
-      admin.from("leadgen_followups").select("scheduled_at, status"),
-      admin.from("leadgen_clients").select("id, name"),
-      admin
-        .from("leadgen_users")
-        .select("id, full_name, role")
-        .eq("role", "agent")
-        .eq("active", true)
-        .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
-    ]);
+  const [{ data: leads }, { data: appointments }, { data: followUps }, { data: clients }, { data: users }] = await Promise.all([
+    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id"),
+    admin.from("leadgen_appointments").select("status, client_id"),
+    admin.from("leadgen_followups").select("scheduled_at, status"),
+    admin.from("leadgen_clients").select("id, name"),
+    admin
+      .from("leadgen_users")
+      .select("id, full_name, role")
+      .eq("role", "agent")
+      .eq("active", true)
+      .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
+  ]);
 
   const allLeads = leads ?? [];
-  const allActivities = activities ?? [];
   const allAppointments = appointments ?? [];
   const allFollowUps = followUps ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
 
   const totalLeads = allLeads.length;
-  const callsCompleted = allActivities.filter((a) => a.activity_type === "call").length;
-  const ownersReached = allActivities.filter((a) => a.call_outcome === "Owner reached").length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
   const appointmentsBooked = allAppointments.length;
-  const appointmentsCompleted = allAppointments.filter((a) => a.status === "Completed").length;
-  const noShows = allAppointments.filter((a) => a.status === "No-show").length;
-  const conversionRate = totalLeads > 0 ? Math.round((appointmentsBooked / totalLeads) * 100) : 0;
   const followUpsDueToday = allFollowUps.filter(isLeadgenFollowUpDueToday).length;
   const overdueFollowUps = allFollowUps.filter(isLeadgenFollowUpOverdue).length;
 
@@ -59,17 +51,21 @@ export default async function LeadgenAdminDashboardPage() {
     if (entry) entry.leads++;
   }
 
-  const stats: { label: string; value: string }[] = [
-    { label: "Total Leads", value: String(totalLeads) },
-    { label: "Calls Completed", value: String(callsCompleted) },
-    { label: "Owners Reached", value: String(ownersReached) },
-    { label: "Interested Leads", value: String(interestedLeads) },
-    { label: "Appointments Booked", value: String(appointmentsBooked) },
-    { label: "Appointments Completed", value: String(appointmentsCompleted) },
-    { label: "No-shows", value: String(noShows) },
-    { label: "Conversion Rate", value: `${conversionRate}%` },
-    { label: "Follow-ups Due Today", value: String(followUpsDueToday) },
-    { label: "Overdue Follow-ups", value: String(overdueFollowUps) },
+  // Each card links straight into the Leads page pre-filtered to that
+  // exact slice (see LeadsListClient's initialStatusFilter/
+  // initialFollowUpFilter props), so clicking a number is never a dead
+  // end - every row on the landed page already links to that lead's own
+  // profile, where the admin can act immediately.
+  const stats: { label: string; value: string; href: string }[] = [
+    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads" },
+    { label: "Interested Leads", value: String(interestedLeads), href: "/leadgen/admin/leads?status=Interested" },
+    {
+      label: "Appointments Booked",
+      value: String(appointmentsBooked),
+      href: `/leadgen/admin/leads?status=${encodeURIComponent("Appointment booked")}`,
+    },
+    { label: "Follow-ups Due Today", value: String(followUpsDueToday), href: "/leadgen/admin/leads?followup=due_today" },
+    { label: "Overdue Follow-ups", value: String(overdueFollowUps), href: "/leadgen/admin/leads?followup=overdue" },
   ];
 
   return (
@@ -79,10 +75,14 @@ export default async function LeadgenAdminDashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <Link
+            key={stat.label}
+            href={stat.href}
+            className="rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-sky-400 hover:shadow-sm"
+          >
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
             <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
-          </div>
+          </Link>
         ))}
       </div>
 
