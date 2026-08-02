@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
+import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { LEADGEN_APPOINTMENT_STATUSES, LEADGEN_MEETING_TYPES, type LeadgenAppointmentStatus, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -138,6 +139,27 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
         clientVisible: true,
       });
     }
+  }
+
+  const { data: clientForNotify } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  if (clientForNotify) {
+    await notifyOfNewLeadgenAppointment(
+      {
+        id: appointment.id as string,
+        lead_id: leadId,
+        business_name: businessName,
+        contact_name: contactName,
+        phone,
+        email,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
+        timezone,
+        meeting_type: meetingType as LeadgenMeetingType,
+        meeting_link: meetingLink,
+      },
+      clientForNotify,
+      adminUser.full_name || adminUser.email
+    );
   }
 
   revalidatePath("/leadgen/admin/appointments");

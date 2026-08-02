@@ -167,7 +167,7 @@ export default function LeadDetailClient({
   const branding = resolveLeadgenEmailBranding(client, bookingLink, servicesInfoLink);
 
   const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
-  const defaultSubject = consultationTemplate?.subject ?? "Your FREE 15-Minute AI Business Growth Consultation";
+  const defaultSubject = consultationTemplate?.subject ?? "Book Your Free 15-Minute Business Growth Consultation";
   const defaultBody = consultationTemplate
     ? renderLeadgenTemplate(consultationTemplate.body, {
         first_name: firstName,

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -33,6 +34,11 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   if (!LEADGEN_MEETING_TYPES.includes(meetingType as LeadgenMeetingType)) return { error: "Select a meeting type." };
 
   const leadId = textOrNull(formData, "lead_id");
+  const contactName = textOrNull(formData, "contact_name");
+  const phone = textOrNull(formData, "phone");
+  const email = textOrNull(formData, "email");
+  const timezone = String(formData.get("timezone") ?? "America/Toronto").trim();
+  const meetingLink = textOrNull(formData, "meeting_link");
 
   const supabase = await createSupabaseServerClient();
   const { data: appointment, error } = await supabase
@@ -42,14 +48,14 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       client_id: clientId,
       campaign_id: textOrNull(formData, "campaign_id"),
       business_name: businessName,
-      contact_name: textOrNull(formData, "contact_name"),
-      phone: textOrNull(formData, "phone"),
-      email: textOrNull(formData, "email"),
+      contact_name: contactName,
+      phone,
+      email,
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
-      timezone: String(formData.get("timezone") ?? "America/Toronto").trim(),
+      timezone,
       meeting_type: meetingType,
-      meeting_link: textOrNull(formData, "meeting_link"),
+      meeting_link: meetingLink,
       assigned_specialist_id: textOrNull(formData, "assigned_specialist_id") ?? agent.id,
       appointment_notes: textOrNull(formData, "appointment_notes"),
       created_by: agent.id,
@@ -71,6 +77,27 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       call_outcome: "Appointment booked",
       notes: `Appointment booked for ${appointmentDate} ${appointmentTime} by ${agent.full_name || agent.email}.`,
     });
+  }
+
+  const { data: clientForNotify } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  if (clientForNotify) {
+    await notifyOfNewLeadgenAppointment(
+      {
+        id: appointment.id as string,
+        lead_id: leadId,
+        business_name: businessName,
+        contact_name: contactName,
+        phone,
+        email,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
+        timezone,
+        meeting_type: meetingType as LeadgenMeetingType,
+        meeting_link: meetingLink,
+      },
+      clientForNotify,
+      agent.full_name || agent.email
+    );
   }
 
   revalidatePath("/leadgen/agent/appointments");

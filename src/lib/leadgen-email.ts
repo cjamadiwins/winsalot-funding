@@ -225,14 +225,17 @@ export async function sendLeadgenEmail(
   const finalHtml = input.html ?? textToSimpleHtml(input.body);
 
   // Do not save/send consultation information emails unless the fully
-  // generated HTML includes the required CTA, fallback URL, and
-  // signature section.
+  // generated HTML includes the required CTA, a real booking link, and
+  // signature section. Checks for *a* link rather than one hardcoded URL
+  // so this still passes once an admin points the booking button at
+  // their own link (see resolveLeadgenEmailBranding in lib/leadgen-types.ts) -
+  // pinning this to the Brent's Essentials fallback URL would block
+  // sending as soon as that admin-configured link differed from it.
   if (input.templateKey === "consultation_information") {
-    const requiredUrl = "https://brentsessentials.com/growth-system";
     const hasButtonLabel = finalHtml.includes("BOOK YOUR FREE 15-MINUTE CONSULTATION");
-    const hasRequiredUrl = finalHtml.includes(requiredUrl);
+    const hasBookingLink = /href="https?:\/\/[^"]+"/.test(finalHtml);
     const hasSignature = finalHtml.includes("Brent's Essentials Team") && finalHtml.includes("Best,");
-    if (!hasButtonLabel || !hasRequiredUrl || !hasSignature) {
+    if (!hasButtonLabel || !hasBookingLink || !hasSignature) {
       return { emailId: "", error: "Consultation email HTML is incomplete. Please regenerate and try again." };
     }
   }

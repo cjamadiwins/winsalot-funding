@@ -1,15 +1,16 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendLeadgenEmail } from "./leadgen-email";
 import { sendSmsToNumber } from "./twilio";
 import { getSiteUrl } from "./site-url";
+import { getSupabaseAdmin } from "./supabase-admin";
 import type { LeadgenAppointmentRow, LeadgenClientRow } from "./leadgen-types";
 
-function appointmentSummaryLines(
-  appt: Pick<LeadgenAppointmentRow, "id" | "contact_name" | "business_name" | "email" | "phone" | "appointment_date" | "appointment_time" | "timezone">,
-  clientName: string,
-  agentName: string | null
-): string[] {
+type AppointmentForNotify = Pick<
+  LeadgenAppointmentRow,
+  "id" | "lead_id" | "contact_name" | "business_name" | "email" | "phone" | "appointment_date" | "appointment_time" | "timezone" | "meeting_type" | "meeting_link"
+>;
+
+function appointmentSummaryLines(appt: AppointmentForNotify, clientName: string, agentName: string | null): string[] {
   return [
     `Prospect: ${appt.contact_name || "—"}`,
     `Business: ${appt.business_name}`,
@@ -22,28 +23,54 @@ function appointmentSummaryLines(
   ];
 }
 
-// Admin notification for a newly booked consultation - email to
-// LEADGEN_ADMIN_NOTIFICATION_EMAIL (defaults to info@winsalotcorp.com)
-// and SMS to LEADGEN_ADMIN_SMS_NUMBER (defaults to 647-300-1270) via the
-// existing Twilio integration (src/lib/twilio.ts). Uses
-// Promise.allSettled so a failure in one channel never blocks the
-// other, same pattern as the cleaning CRM's notifyAdminOfCustomerResponse
+function buildCustomerConfirmationBody(appt: AppointmentForNotify, clientName: string): string {
+  const lines = [
+    `Hi ${appt.contact_name || "there"},`,
+    "",
+    `Your FREE 15-minute Business Growth Consultation with ${clientName} is confirmed.`,
+    "",
+    `Appointment Date: ${appt.appointment_date}`,
+    `Appointment Time: ${appt.appointment_time} (${appt.timezone})`,
+    `Meeting Type: ${appt.meeting_type}`,
+  ];
+  if (appt.meeting_link) lines.push(`Meeting Link: ${appt.meeting_link}`);
+  lines.push("", "If you need to reschedule or have any questions, just reply to this email.", "", "We look forward to speaking with you!", "", "Best,", `${clientName} Team`);
+  return lines.join("\n");
+}
+
+// Post-booking notifications for a newly booked consultation:
+// 1. A confirmation email to the customer/prospect (when an email address
+//    is on file).
+// 2. An admin notification email to LEADGEN_ADMIN_NOTIFICATION_EMAIL
+//    (defaults to info@winsalotcorp.com).
+// 3. An admin SMS to LEADGEN_ADMIN_SMS_NUMBER (defaults to
+//    647-300-1270) via the existing Twilio integration (src/lib/twilio.ts).
+// Uses Promise.allSettled so a failure in one channel never blocks the
+// others, same pattern as the cleaning CRM's notifyAdminOfCustomerResponse
 // (src/app/customer-quote/[token]/actions.ts). Shared by every source
-// that can create a leadgen_appointments row (staff-booked, and now the
-// Calendly webhook at src/app/api/webhooks/calendly/route.ts) - the
-// caller is responsible for its own duplicate-notification guard
-// (admin_notified_at on the appointment row).
-export async function notifyAdminOfNewLeadgenAppointment(
-  supabase: SupabaseClient,
-  appt: LeadgenAppointmentRow,
+// that can create a leadgen_appointments row (staff-booked in the admin
+// and agent dashboards, and the Calendly webhook at
+// src/app/api/webhooks/calendly/route.ts) - the caller is responsible for
+// its own duplicate-notification guard (admin_notified_at on the
+// appointment row).
+//
+// Always uses the service-role admin client (never a caller's
+// session-scoped one): these are system-generated sends (sentBy: null)
+// to the admin inbox and the prospect, not the signed-in user's own
+// send, and the leadgen_emails agent-insert RLS policy only allows an
+// agent to insert a row attributed to themselves - it would reject these
+// when called from the agent dashboard's booking flow.
+export async function notifyOfNewLeadgenAppointment(
+  appt: AppointmentForNotify,
   client: Pick<LeadgenClientRow, "id" | "name">,
   agentName: string | null
 ): Promise<void> {
+  const supabase = getSupabaseAdmin();
   const adminEmail = process.env.LEADGEN_ADMIN_NOTIFICATION_EMAIL || "info@winsalotcorp.com";
   const adminSmsNumber = process.env.LEADGEN_ADMIN_SMS_NUMBER || "6473001270";
   const crmLink = `${getSiteUrl()}/leadgen/admin/appointments?highlight=${appt.id}`;
 
-  const text = [
+  const summaryText = [
     `New 15-minute consultation booked for ${client.name}.`,
     "",
     ...appointmentSummaryLines(appt, client.name, agentName),
@@ -51,7 +78,7 @@ export async function notifyAdminOfNewLeadgenAppointment(
     `Open in CRM: ${crmLink}`,
   ].join("\n");
 
-  const results = await Promise.allSettled([
+  const tasks: Promise<unknown>[] = [
     sendLeadgenEmail(supabase, {
       clientId: client.id,
       leadId: appt.lead_id,
@@ -59,16 +86,40 @@ export async function notifyAdminOfNewLeadgenAppointment(
       templateKey: null,
       toEmail: adminEmail,
       subject: `New Consultation Booked: ${appt.business_name} (${client.name})`,
-      body: text,
+      body: summaryText,
       sentBy: null,
       clientVisible: false,
     }),
-    sendSmsToNumber(adminSmsNumber, text.slice(0, 1500)),
-  ]);
+    sendSmsToNumber(adminSmsNumber, summaryText.slice(0, 1500)),
+  ];
 
+  if (appt.email) {
+    tasks.push(
+      sendLeadgenEmail(supabase, {
+        clientId: client.id,
+        leadId: appt.lead_id,
+        appointmentId: appt.id,
+        templateKey: null,
+        toEmail: appt.email,
+        toName: appt.contact_name,
+        subject: `Your Consultation with ${client.name} is Confirmed`,
+        body: buildCustomerConfirmationBody(appt, client.name),
+        sentBy: null,
+        clientVisible: false,
+      }).then((result) => {
+        if (result.error) {
+          console.error("[leadgen] Failed to send customer appointment confirmation:", result.error);
+        } else {
+          return supabase.from("leadgen_appointments").update({ confirmation_sent: true }).eq("id", appt.id);
+        }
+      })
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
   results.forEach((result) => {
     if (result.status === "rejected") {
-      console.error("[leadgen] Failed to send admin appointment notification:", result.reason);
+      console.error("[leadgen] Failed to send appointment notification:", result.reason);
     }
   });
 }
