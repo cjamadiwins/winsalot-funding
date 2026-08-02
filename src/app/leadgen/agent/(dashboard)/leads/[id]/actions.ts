@@ -206,13 +206,20 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   type EmbeddedClient = { name: string; slug: string; booking_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
-  const branding = embeddedClient ? resolveLeadgenEmailBranding(embeddedClient, submittedBookingUrl ?? embeddedClient.booking_link, null) : { bookingUrl: submittedBookingUrl };
-  const rendered = buildLeadgenConsultationCtaEmail(body, branding.bookingUrl ?? null, LEADGEN_CONSULTATION_CTA_LABEL);
+  // The client's saved Consultation Booking Link (or its campaign-level
+  // override, submitted from the client-side preview) - never the
+  // Brent's Essentials website fallback. resolveLeadgenEmailBranding is
+  // deliberately not used here, since it would substitute that fallback
+  // URL for a blank link instead of blocking the send below.
+  const bookingUrl = submittedBookingUrl ?? embeddedClient?.booking_link?.trim() ?? null;
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
+  if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
+
+  const rendered = buildLeadgenConsultationCtaEmail(body, bookingUrl, LEADGEN_CONSULTATION_CTA_LABEL);
 
   const result = await sendLeadgenEmail(supabase, {
     clientId: lead.client_id,
