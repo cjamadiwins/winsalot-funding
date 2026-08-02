@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { notifyAdminOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import type { LeadgenAppointmentRow, LeadgenClientRow, LeadgenMeetingType } from "@/lib/leadgen-types";
+import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 export const runtime = "nodejs";
 
@@ -197,10 +197,30 @@ export async function POST(request: NextRequest) {
   const joinUrl = scheduledEvent?.location?.join_url ?? null;
   const meetingType: LeadgenMeetingType = joinUrl ? "Video Call" : "Phone Call";
 
+  // Best-effort match back to an existing lead for this client by email,
+  // so a self-serve booking (via the consultation email's booking link)
+  // still advances that lead's status the same way a staff-booked
+  // appointment does. Picks the most recently created open (not already
+  // closed-out) lead with a matching email; no match just leaves the
+  // appointment lead-less, same as before.
+  let matchedLeadId: string | null = null;
+  if (invitee.email) {
+    const { data: leadCandidates } = await admin
+      .from("leadgen_leads")
+      .select("id, status")
+      .eq("client_id", client.id)
+      .ilike("email", invitee.email.trim())
+      .order("created_at", { ascending: false });
+    const matchedLead = (leadCandidates ?? []).find(
+      (lead) => !LEADGEN_LEAD_CLOSED_STATUSES.includes(lead.status as LeadgenLeadStatus)
+    );
+    matchedLeadId = matchedLead?.id ?? null;
+  }
+
   const { data: appointment, error: insertError } = await admin
     .from("leadgen_appointments")
     .insert({
-      lead_id: null,
+      lead_id: matchedLeadId,
       client_id: client.id,
       campaign_id: null,
       business_name: extractBusinessName(invitee),
@@ -226,7 +246,21 @@ export async function POST(request: NextRequest) {
 
   console.log(`[calendly-webhook] saved appointment ${appointment.id} for client ${client.name} (invitee ${invitee.uri})`);
 
-  await notifyAdminOfNewLeadgenAppointment(admin, appointment as LeadgenAppointmentRow, client, null);
+  if (matchedLeadId) {
+    await admin
+      .from("leadgen_leads")
+      .update({ status: "Appointment booked", last_contacted_at: new Date().toISOString() })
+      .eq("id", matchedLeadId);
+    await admin.from("leadgen_lead_activities").insert({
+      lead_id: matchedLeadId,
+      agent_id: null,
+      activity_type: "appointment_booked",
+      call_outcome: "Appointment booked",
+      notes: `Appointment self-booked via booking link for ${date} ${time} (${timezone}).`,
+    });
+  }
+
+  await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
   await admin.from("leadgen_appointments").update({ admin_notified_at: new Date().toISOString() }).eq("id", appointment.id);
 
   return NextResponse.json({ received: true, appointmentId: appointment.id });

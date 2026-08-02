@@ -328,7 +328,12 @@ export function resolveLeadgenEmailBranding(
 ): { clientName: string; bookingUrl: string | null; servicesUrl: string | null } {
   const isBrents = isLeadgenBrentsEssentials(client);
   const clientName = client.name.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name : client.name);
-  const bookingUrl = isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink?.trim() || bookingLink;
+  // The admin-configured booking_link always wins, for every client
+  // including Brent's Essentials - the hardcoded fallback below only
+  // covers the case where that field is genuinely blank, so an admin can
+  // repoint the booking button (or a future client can set their own)
+  // without a code change.
+  const bookingUrl = bookingLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink);
   const servicesUrl = servicesLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl : servicesLink);
   return { clientName, bookingUrl: bookingUrl || null, servicesUrl: servicesUrl || null };
 }
