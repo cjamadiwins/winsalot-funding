@@ -4,16 +4,21 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  isLeadgenNextFollowUpDueToday,
+  isLeadgenNextFollowUpOverdue,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
   type LeadgenLeadRow,
+  type LeadgenLeadStatus,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, deleteLeadgenLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+
+type FollowUpFilter = "all" | "due_today" | "overdue";
 
 export default function LeadsListClient({
   leads,
@@ -21,12 +26,20 @@ export default function LeadsListClient({
   campaigns,
   agents,
   initialSuccessMessage,
+  initialStatusFilter,
+  initialFollowUpFilter,
 }: {
   leads: LeadgenLeadRow[];
   clients: LeadgenClientRow[];
   campaigns: LeadgenCampaignRow[];
   agents: LeadgenUserRow[];
   initialSuccessMessage?: string | null;
+  // Pre-select a filter when landing here from the admin dashboard's
+  // clickable stat cards (see /leadgen/admin/(dashboard)/page.tsx) -
+  // ignored (falls back to "all") if not a recognized value, so a
+  // stale/tampered URL never crashes this page.
+  initialStatusFilter?: string;
+  initialFollowUpFilter?: "due_today" | "overdue";
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -42,7 +55,10 @@ export default function LeadsListClient({
   const [clientFilter, setClientFilter] = useState("all");
   const [campaignFilter, setCampaignFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string>(
+    initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
+  );
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
   const [search, setSearch] = useState("");
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
@@ -57,6 +73,8 @@ export default function LeadsListClient({
       if (agentFilter === "unassigned" && lead.assigned_agent_id) return false;
       if (agentFilter !== "all" && agentFilter !== "unassigned" && lead.assigned_agent_id !== agentFilter) return false;
       if (statusFilter !== "all" && lead.status !== statusFilter) return false;
+      if (followUpFilter === "due_today" && !isLeadgenNextFollowUpDueToday(lead.next_follow_up_at)) return false;
+      if (followUpFilter === "overdue" && !isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
       if (!query) return true;
       return (
         lead.business_name.toLowerCase().includes(query) ||
@@ -65,7 +83,7 @@ export default function LeadsListClient({
         (lead.email ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, search]);
+  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, followUpFilter, search]);
 
   function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
     setError(null);
@@ -276,6 +294,15 @@ export default function LeadsListClient({
               {s}
             </option>
           ))}
+        </select>
+        <select
+          value={followUpFilter}
+          onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)}
+          className={`${inputClass} w-auto`}
+        >
+          <option value="all">All follow-ups</option>
+          <option value="due_today">Due today</option>
+          <option value="overdue">Overdue</option>
         </select>
       </div>
 
