@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
+import { adminClockOutAgentAction, type AdminClockOutState } from "./actions";
 
 type StatusFilter = "all" | "clocked_in" | "clocked_out";
 
@@ -32,6 +33,32 @@ function startOfMonth(date: Date) {
 
 function minutesToHoursLabel(minutes: number) {
   return (minutes / 60).toFixed(2);
+}
+
+function ClockOutAgentButton({ attendanceId }: { attendanceId: string }) {
+  const initialState: AdminClockOutState = { error: null };
+  const [state, formAction, pending] = useActionState(adminClockOutAgentAction, initialState);
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={(event) => {
+        if (!window.confirm("Are you sure you want to clock out this agent?")) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="attendance_id" value={attendanceId} />
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {pending ? "Clocking Out..." : "Admin Clock Out"}
+      </button>
+      {state.error && <p className="mt-1.5 max-w-[220px] text-xs text-rose-600">{state.error}</p>}
+    </form>
+  );
 }
 
 export default function AdminAttendanceClient({
@@ -150,6 +177,7 @@ export default function AdminAttendanceClient({
               <th className="px-4 py-3">Clock Out</th>
               <th className="px-4 py-3">Total Hours</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -167,6 +195,11 @@ export default function AdminAttendanceClient({
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {row.clock_out ? new Date(row.clock_out).toLocaleString() : "-"}
+                    {row.clocked_out_by_admin_id && (
+                      <div className="text-xs text-slate-400">
+                        Clocked out by {row.clocked_out_by_admin_name || "an administrator"} (admin)
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {row.total_minutes == null ? "-" : `${minutesToHoursLabel(row.total_minutes)} h`}
@@ -182,13 +215,14 @@ export default function AdminAttendanceClient({
                       {status}
                     </span>
                   </td>
+                  <td className="px-4 py-3">{!row.clock_out && <ClockOutAgentButton attendanceId={row.id} />}</td>
                 </tr>
               );
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No attendance records match your filters.
                 </td>
               </tr>

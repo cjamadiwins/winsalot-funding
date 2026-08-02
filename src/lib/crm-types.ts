@@ -16,6 +16,8 @@ export type AgentAttendanceRow = {
   clock_out: string | null;
   total_minutes: number | null;
   created_at: string;
+  clocked_out_by_admin_id: string | null;
+  clocked_out_by_admin_name: string | null;
 };
 
 export const LEAD_STAGES = [
