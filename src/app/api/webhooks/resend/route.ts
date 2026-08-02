@@ -36,9 +36,23 @@ const STATUS_COLUMN: Record<EmailEventStatus, string> = {
   failed: "failed_at",
 };
 
+// Normalizes an env var against accidental formatting issues
+// (leading/trailing whitespace/newlines or quoted value pasted from a
+// UI/CLI export) and drops it if that leaves it empty.
+function normalizeSecret(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim().replace(/^['"]|['"]$/g, "");
+  return trimmed ? trimmed : undefined;
+}
+
 export async function POST(request: NextRequest) {
-  const rawLeadgenWebhookSecret = process.env.RESEND_LEADGEN_WEBHOOK_SECRET;
-  if (!rawLeadgenWebhookSecret) {
+  // This single endpoint receives Resend webhook deliveries for two
+  // separately-registered endpoints that share this deployment - the
+  // cleaning CRM's (signed with RESEND_WEBHOOK_SECRET) and the LeadGen
+  // CRM's (signed with RESEND_LEADGEN_WEBHOOK_SECRET). Each endpoint has
+  // its own distinct signing secret, so both are tried below.
+  const leadgenWebhookSecret = normalizeSecret(process.env.RESEND_LEADGEN_WEBHOOK_SECRET);
+  const cleaningWebhookSecret = normalizeSecret(process.env.RESEND_WEBHOOK_SECRET);
+  if (!leadgenWebhookSecret && !cleaningWebhookSecret) {
     // Vercel scopes env vars per environment (Production/Preview/Development
     // independently) and only injects the current value into *new*
     // deployments - adding or fixing the var in Project Settings never
@@ -48,18 +62,10 @@ export async function POST(request: NextRequest) {
     // request (this route runs on the Node.js runtime, not Edge), so once
     // a deployment actually has the var, no further redeploy is needed.
     console.error(
-      "[resend-webhook] RESEND_LEADGEN_WEBHOOK_SECRET is not set on this deployment - " +
-        "check the var is defined for the environment handling this webhook (not just Production) " +
+      "[resend-webhook] Neither RESEND_WEBHOOK_SECRET nor RESEND_LEADGEN_WEBHOOK_SECRET is set on this deployment - " +
+        "check the vars are defined for the environment handling this webhook (not just Production) " +
         "in Vercel Project Settings -> Environment Variables, then redeploy. Rejecting request."
     );
-    return NextResponse.json({ error: "Webhook not configured." }, { status: 500 });
-  }
-
-  // Hardens against accidental env formatting issues (leading/trailing
-  // whitespace/newlines or quoted value pasted from a UI/CLI export).
-  const leadgenWebhookSecret = rawLeadgenWebhookSecret.trim().replace(/^['"]|['"]$/g, "");
-  if (!leadgenWebhookSecret) {
-    console.error("[resend-webhook] RESEND_LEADGEN_WEBHOOK_SECRET resolved to an empty value after normalization.");
     return NextResponse.json({ error: "Webhook not configured." }, { status: 500 });
   }
 
@@ -74,29 +80,37 @@ export async function POST(request: NextRequest) {
   }
 
   let event;
-  try {
-    event = getResendClient().webhooks.verify({
-      payload,
-      headers: { id, timestamp, signature },
-      webhookSecret: leadgenWebhookSecret,
-    });
-  } catch {
+  const candidateSecrets = [leadgenWebhookSecret, cleaningWebhookSecret].filter((secret): secret is string => !!secret);
+  let verifiedWith: "leadgen" | "cleaning" | null = null;
+
+  for (const secret of candidateSecrets) {
+    try {
+      event = getResendClient().webhooks.verify({
+        payload,
+        headers: { id, timestamp, signature },
+        webhookSecret: secret,
+      });
+      verifiedWith = secret === leadgenWebhookSecret ? "leadgen" : "cleaning";
+      break;
+    } catch {
+      // Try the next configured webhook secret.
+    }
+  }
+
+  if (!event) {
     // Include the webhook id so a signature failure can be correlated
     // against a specific delivery in Resend's dashboard (Webhooks -> the
     // endpoint pointed at this URL -> Recent deliveries). This error means
-    // RESEND_LEADGEN_WEBHOOK_SECRET on this deployment does not match the
-    // signing secret Resend used for this endpoint. The fix is to copy the
-    // Signing Secret from that exact LeadGen webhook endpoint and set it as
-    // RESEND_LEADGEN_WEBHOOK_SECRET.
-    // Each registered endpoint has its own distinct secret, so the fix is
-    // to copy the Signing Secret from the exact endpoint whose URL matches
+    // none of the configured webhook secrets matched this payload. Each
+    // registered endpoint has its own distinct secret, so the fix is to
+    // copy the Signing Secret from the exact endpoint whose URL matches
     // this deployment and set it as the corresponding env var here. It is
     // never a bug in the verification code itself.
     console.error(`[resend-webhook] Signature verification failed for webhook id ${id}.`);
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
-  console.log(`[resend-webhook] received ${event.type} (webhook id ${id}, verified with leadgen secret)`);
+  console.log(`[resend-webhook] received ${event.type} (webhook id ${id}, verified with ${verifiedWith} secret)`);
 
   let status: EmailEventStatus;
   switch (event.type) {
