@@ -136,12 +136,22 @@ export async function POST(request: NextRequest) {
   const admin = getSupabaseAdmin();
 
   // Idempotency: a redelivered webhook (Resend retries until it gets a
-  // 2xx) reuses the same webhook id. Recording it once and bailing out on
-  // a duplicate means a retry never double-logs the same event.
+  // 2xx) reuses the same webhook id, and the same webhook id can also
+  // legitimately reach this route more than once if more than one
+  // endpoint is registered for these events (Resend/Svix sends every
+  // registered endpoint the same webhook id for one underlying event).
+  // Recording it once here is used only to skip logging a duplicate
+  // crm_activities/leadgen_lead_activities note below - it must NOT skip
+  // the status update itself. The status write (below) only ever sets
+  // columns to the values this exact event carries, so re-applying it -
+  // whether from a genuine retry or from a second registered endpoint
+  // racing this one for the same id - is a harmless no-op, and skipping
+  // it here would leave the row stuck on whatever status it already had
+  // any time this handler loses that race.
   const { error: dedupeError } = await admin.from("crm_email_webhook_events").insert({ id });
-  if (dedupeError) {
-    console.log(`[resend-webhook] duplicate delivery of webhook id ${id}, skipping.`);
-    return NextResponse.json({ received: true, duplicate: true });
+  const isDuplicateDelivery = !!dedupeError;
+  if (isDuplicateDelivery) {
+    console.log(`[resend-webhook] webhook id ${id} already recorded (retry or a second registered endpoint) - applying the status update but skipping the activity note.`);
   }
 
   const emailId = event.data.email_id;
@@ -253,7 +263,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (leadgenEmail.lead_id) {
+    if (leadgenEmail.lead_id && !isDuplicateDelivery) {
       const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
       const leadgenStatus = (leadgenUpdates.status ?? leadgenEmail.status) as string;
       let notes = `Email ${leadgenStatus} (to ${toEmail}) — "${event.data.subject}".`;
@@ -348,16 +358,18 @@ export async function POST(request: NextRequest) {
     notes = `Email failed to send (to ${toEmail}) — ${event.data.failed.reason}.`;
   }
 
-  const { error: activityError } = await admin.from("crm_activities").insert({
-    lead_id: tracked.lead_id,
-    provider_lead_id: tracked.provider_lead_id,
-    agent_id: null,
-    activity_type: "email",
-    notes,
-    occurred_at: eventAt,
-  });
-  if (activityError) {
-    console.error(`[resend-webhook] failed to log activity for ${targetTable} ${targetId}:`, activityError);
+  if (!isDuplicateDelivery) {
+    const { error: activityError } = await admin.from("crm_activities").insert({
+      lead_id: tracked.lead_id,
+      provider_lead_id: tracked.provider_lead_id,
+      agent_id: null,
+      activity_type: "email",
+      notes,
+      occurred_at: eventAt,
+    });
+    if (activityError) {
+      console.error(`[resend-webhook] failed to log activity for ${targetTable} ${targetId}:`, activityError);
+    }
   }
 
   return NextResponse.json({ received: true });
