@@ -10,6 +10,25 @@
 
 export const LEADGEN_BOOKING_TIMEZONE = "America/Toronto";
 export const LEADGEN_BOOKING_TIMEZONE_LABEL = "ET";
+
+// Slugifies a client name for the public /book/<slug> path. Deliberately
+// separate from slugifyClientName in lib/leadgen-types.ts (used to
+// suggest a client's *login* slug elsewhere) rather than reused, so a
+// change here can never affect that unrelated feature or any
+// already-stored login slug. Strips apostrophes outright before
+// hyphenating everything else, so "Brent's Essentials" produces the
+// clean "brents-essentials" instead of slugifyClientName's
+// "brent-s-essentials" (which splits the word around the apostrophe).
+export function slugifyForLeadgenBookingPath(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
 const BUSINESS_START_HOUR = 9; // 9:00 AM
 const BUSINESS_END_HOUR = 17; // 5:00 PM (last bookable slot starts at 16:45)
 const SLOT_MINUTES = 15;

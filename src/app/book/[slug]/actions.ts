@@ -9,15 +9,15 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE } from "@/lib/leadgen-booking";
-import { isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, slugifyClientName, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
+import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
+import { isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
 
 export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: string };
 
 async function findActiveClientBySlug(slug: string): Promise<Pick<LeadgenClientRow, "id" | "name" | "slug"> | null> {
   const admin = getSupabaseAdmin();
   const { data: clients } = await admin.from("leadgen_clients").select("id, name, slug").eq("active", true);
-  return (clients ?? []).find((c) => slugifyClientName(c.name) === slug || c.slug.toLowerCase() === slug.toLowerCase()) ?? null;
+  return (clients ?? []).find((c) => slugifyForLeadgenBookingPath(c.name) === slug || c.slug.toLowerCase() === slug.toLowerCase()) ?? null;
 }
 
 export async function bookLeadgenAppointmentAction(slug: string, formData: FormData): Promise<BookLeadgenAppointmentResult> {

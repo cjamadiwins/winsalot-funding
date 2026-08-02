@@ -1,15 +1,14 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { generateLeadgenBookingDays } from "@/lib/leadgen-booking";
-import { slugifyClientName } from "@/lib/leadgen-types";
+import { generateLeadgenBookingDays, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import BookingPageClient from "./BookingPageClient";
 
 export const dynamic = "force-dynamic";
 
 // Public, unauthenticated built-in consultation booking page - no
 // Supabase session, no CRM chrome. Reachable at /book/<slug>, where
-// <slug> is the client's name slugified (see slugifyClientName in
-// lib/leadgen-types.ts) - e.g. "Brent's Essentials" -> "brents-essentials".
+// <slug> is the client's name slugified (see slugifyForLeadgenBookingPath
+// above) - e.g. "Brent's Essentials" -> "brents-essentials".
 // This is the page leadgen_clients.booking_link points customers at; the
 // blue "Book Your Free 15-Minute Appointment" button already used by
 // every consultation/follow-up email just opens whatever URL is saved
@@ -21,7 +20,7 @@ export default async function LeadgenBookingPage({ params }: { params: Promise<{
   const admin = getSupabaseAdmin();
 
   const { data: clients } = await admin.from("leadgen_clients").select("id, name").eq("active", true);
-  const client = (clients ?? []).find((c) => slugifyClientName(c.name) === slug);
+  const client = (clients ?? []).find((c) => slugifyForLeadgenBookingPath(c.name) === slug);
   if (!client) notFound();
 
   const { data: existing } = await admin
