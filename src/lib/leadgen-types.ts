@@ -28,6 +28,11 @@ export type LeadgenAgentAttendanceRow = {
   clock_out: string | null;
   total_minutes: number | null;
   created_at: string;
+  // Set only when an admin force-closes an agent's shift from the
+  // Attendance page (see leadgen/admin/(dashboard)/attendance/actions.ts).
+  // Null means the agent clocked themselves out.
+  clocked_out_by_admin_id: string | null;
+  clocked_out_by_admin_name: string | null;
 };
 
 export type LeadgenClientRow = {
