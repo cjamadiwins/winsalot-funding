@@ -257,8 +257,9 @@ export type LeadgenAppointmentRow = {
 // Styled to match the cleaning-quote emails' blue CTA button; the raw
 // Calendly URL is deliberately never shown as visible text in the
 // email - only this label and the "click here to book your
-// consultation" fallback link.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "BOOK YOUR FREE 15-MINUTE CONSULTATION";
+// consultation" fallback link. Used by the "Send 15-Minute Consultation
+// Invitation" and "Send Follow-Up Email" buttons.
+export const LEADGEN_BOOKING_BUTTON_LABEL = "Book Your Free 15-Minute Appointment";
 // Label for the "Send Consultation Email" button specifically (template
 // key consultation_information) - kept distinct from
 // LEADGEN_BOOKING_BUTTON_LABEL above (used by the separate consultation
@@ -333,14 +334,17 @@ export function resolveLeadgenEmailBranding(
 ): { clientName: string; bookingUrl: string | null; servicesUrl: string | null } {
   const isBrents = isLeadgenBrentsEssentials(client);
   const clientName = client.name.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.name : client.name);
-  // The admin-configured booking_link always wins, for every client
-  // including Brent's Essentials - the hardcoded fallback below only
-  // covers the case where that field is genuinely blank, so an admin can
-  // repoint the booking button (or a future client can set their own)
-  // without a code change.
-  const bookingUrl = bookingLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.bookingUrl : bookingLink);
+  // The booking button must only ever use the client's actual saved
+  // Consultation Booking Link - never the Brent's Essentials website
+  // (or any other hardcoded/stale link) as a fallback. A blank link
+  // means null here; every caller that sends a consultation-related
+  // email is responsible for blocking the send with a clear error
+  // instead of silently substituting a different URL (see the
+  // "Please add a Consultation Booking Link..." checks in the leadgen
+  // lead-detail send actions).
+  const bookingUrl = bookingLink?.trim() || null;
   const servicesUrl = servicesLink?.trim() || (isBrents ? LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl : servicesLink);
-  return { clientName, bookingUrl: bookingUrl || null, servicesUrl: servicesUrl || null };
+  return { clientName, bookingUrl, servicesUrl: servicesUrl || null };
 }
 
 export type LeadgenEmailTemplateRow = {

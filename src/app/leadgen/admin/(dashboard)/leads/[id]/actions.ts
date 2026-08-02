@@ -275,6 +275,7 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
+  if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
 
   const result = await sendLeadgenEmail(supabase, {
     clientId: lead.client_id,
@@ -347,6 +348,7 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
+  if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
 
   const result = await sendLeadgenEmail(supabase, {
     clientId: lead.client_id,

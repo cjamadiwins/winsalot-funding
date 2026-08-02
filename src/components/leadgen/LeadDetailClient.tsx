@@ -262,7 +262,8 @@ export default function LeadDetailClient({
 
       {!rawBookingUrl && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending the consultation email.
+          No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending the consultation email, the
+          15-minute consultation invitation, or a follow-up email.
         </p>
       )}
 
