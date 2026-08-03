@@ -55,6 +55,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Agents
             </Link>
             <Link
+              href="/admin/crm/performance"
+              className="text-sm font-medium text-slate-600 hover:text-sky-600"
+            >
+              Performance
+            </Link>
+            <Link
               href="/admin/crm/attendance"
               className="text-sm font-medium text-slate-600 hover:text-sky-600"
             >
