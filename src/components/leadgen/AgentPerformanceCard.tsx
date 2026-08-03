@@ -1,6 +1,16 @@
-import type { LeadgenAgentPerformance } from "@/lib/leadgen-performance";
-import { leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
+import type { LeadgenAgentPerformance, LeadgenPerformanceTier } from "@/lib/leadgen-performance";
+import { LEADGEN_PERFORMANCE_TIER_LABEL, leadgenPerformanceTier, leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES } from "@/lib/leadgen-types";
+
+// One color per tier, shared by the percentage badge, the progress bar,
+// and the performance status pill so all three always agree for a given
+// agent (brief: "Use the same color on the percentage badge, progress
+// bar, and performance status").
+const TIER_STYLES: Record<LeadgenPerformanceTier, { bar: string; badge: string; text: string }> = {
+  green: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
+  yellow: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
+  red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
+};
 
 // Renders one agent's Agent Performance Report card - shared by the
 // admin's "every agent" view (/leadgen/admin/performance) and an agent's
@@ -10,7 +20,8 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
   const { bookedThisWeek, target, percentage, remainingToTarget, weekStart, weekEnd, dailyBreakdown, previousWeekTotal, monthlyTotal, appointments } =
     performance;
   const barWidth = Math.min(100, percentage);
-  const barColor = percentage >= 100 ? "bg-emerald-500" : percentage >= 50 ? "bg-sky-500" : "bg-amber-500";
+  const tier = leadgenPerformanceTier(percentage);
+  const tierStyle = TIER_STYLES[tier];
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -22,7 +33,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Booked This Week" value={String(bookedThisWeek)} />
         <Stat label="Weekly Target" value={String(target)} />
-        <Stat label="Performance" value={`${percentage}%`} />
+        <Stat label="Performance" value={`${percentage}%`} badgeClassName={tierStyle.badge} />
         <Stat label="Remaining to 100%" value={String(remainingToTarget)} />
         <Stat label="Previous Week" value={String(previousWeekTotal)} />
         <Stat label="Monthly Total" value={String(monthlyTotal)} />
@@ -31,10 +42,15 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       <div className="mt-4">
         <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           <span>Weekly Progress</span>
-          <span>{percentage}%</span>
+          <span className="flex items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal ${tierStyle.badge}`}>
+              {LEADGEN_PERFORMANCE_TIER_LABEL[tier]}
+            </span>
+            <span className={tierStyle.text}>{percentage}%</span>
+          </span>
         </div>
         <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${barWidth}%` }} />
+          <div className={`h-full rounded-full ${tierStyle.bar} transition-all`} style={{ width: `${barWidth}%` }} />
         </div>
       </div>
 
@@ -91,11 +107,15 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, badgeClassName }: { label: string; value: string; badgeClassName?: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
+      {badgeClassName ? (
+        <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[15px] font-bold ${badgeClassName}`}>{value}</div>
+      ) : (
+        <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
+      )}
     </div>
   );
 }

@@ -53,6 +53,23 @@ export type LeadgenAgentPerformance = {
   appointments: LeadgenPerformanceAppointment[];
 };
 
+export type LeadgenPerformanceTier = "green" | "yellow" | "red";
+
+// 70%+ = Green, 40-69% = Yellow, 0-39% = Red. Drives the percentage badge,
+// progress bar, and performance status label together so the three never
+// show conflicting colors for the same agent.
+export function leadgenPerformanceTier(percentage: number): LeadgenPerformanceTier {
+  if (percentage >= 70) return "green";
+  if (percentage >= 40) return "yellow";
+  return "red";
+}
+
+export const LEADGEN_PERFORMANCE_TIER_LABEL: Record<LeadgenPerformanceTier, string> = {
+  green: "On Track",
+  yellow: "Needs Improvement",
+  red: "Behind Target",
+};
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
