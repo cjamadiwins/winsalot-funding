@@ -25,6 +25,9 @@ export default async function LeadgenAdminLayout({ children }: { children: React
             <Link href="/leadgen/admin/appointments" className="text-sm font-medium text-slate-600 hover:text-sky-600">
               Appointments
             </Link>
+            <Link href="/leadgen/admin/performance" className="text-sm font-medium text-slate-600 hover:text-sky-600">
+              Performance
+            </Link>
             <Link href="/leadgen/admin/attendance" className="text-sm font-medium text-slate-600 hover:text-sky-600">
               Attendance
             </Link>

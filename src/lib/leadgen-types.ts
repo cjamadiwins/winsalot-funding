@@ -252,6 +252,11 @@ export type LeadgenAppointmentRow = {
   created_by: string | null;
   admin_notified_at: string | null;
   calendly_invitee_uri: string | null;
+  // The agent credited with this booking for the Agent Performance Report
+  // (see supabase/migrations/0050_leadgen_agent_performance.sql and
+  // lib/leadgen-performance.ts) - set automatically at insert time, never
+  // written directly by application code.
+  booking_agent_id: string | null;
 };
 
 // Shared literal button text for the consultation booking button, used
