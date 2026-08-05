@@ -3,6 +3,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   LEADGEN_LEAD_STATUS_STYLES,
+  LEADGEN_STAT_CARD_STYLES,
   isLeadgenFollowUpDueToday,
   isLeadgenFollowUpOverdue,
   type LeadgenAgentAttendanceRow,
@@ -48,10 +49,14 @@ export default async function LeadgenAgentDashboardPage() {
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="My Leads" value={String(myLeads.length)} />
-        <StatCard label="Due Today" value={String(dueToday.length)} />
-        <StatCard label="Overdue" value={String(overdue.length)} emphasis={overdue.length > 0 ? "text-rose-700" : undefined} />
-        <StatCard label="Interested" value={String(statusCounts.get("Interested") ?? 0)} />
+        <StatCard label="My Leads" value={String(myLeads.length)} colorClass={LEADGEN_STAT_CARD_STYLES.leads} />
+        <StatCard label="Due Today" value={String(dueToday.length)} colorClass={LEADGEN_STAT_CARD_STYLES.dueToday} />
+        <StatCard label="Overdue" value={String(overdue.length)} colorClass={LEADGEN_STAT_CARD_STYLES.overdue} />
+        <StatCard
+          label="Interested"
+          value={String(statusCounts.get("Interested") ?? 0)}
+          colorClass={LEADGEN_STAT_CARD_STYLES.interested}
+        />
       </div>
 
       <LeadgenAttendanceCard openShift={openShift} />
@@ -79,11 +84,11 @@ export default async function LeadgenAgentDashboardPage() {
   );
 }
 
-function StatCard({ label, value, emphasis }: { label: string; value: string; emphasis?: string }) {
+function StatCard({ label, value, colorClass }: { label: string; value: string; colorClass: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-1 text-[18px] font-bold ${emphasis ?? "text-slate-900"}`}>{value}</div>
+    <div className={`rounded-xl border p-3.5 ${colorClass}`}>
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
+      <div className="mt-1 text-[18px] font-bold">{value}</div>
     </div>
   );
 }

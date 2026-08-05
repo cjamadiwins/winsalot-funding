@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { isLeadgenFollowUpDueToday, isLeadgenFollowUpOverdue } from "@/lib/leadgen-types";
+import { LEADGEN_STAT_CARD_STYLES, isLeadgenFollowUpDueToday, isLeadgenFollowUpOverdue } from "@/lib/leadgen-types";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -56,16 +56,32 @@ export default async function LeadgenAdminDashboardPage() {
   // initialFollowUpFilter props), so clicking a number is never a dead
   // end - every row on the landed page already links to that lead's own
   // profile, where the admin can act immediately.
-  const stats: { label: string; value: string; href: string }[] = [
-    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads" },
-    { label: "Interested Leads", value: String(interestedLeads), href: "/leadgen/admin/leads?status=Interested" },
+  const stats: { label: string; value: string; href: string; colorClass: string }[] = [
+    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads", colorClass: LEADGEN_STAT_CARD_STYLES.leads },
+    {
+      label: "Interested Leads",
+      value: String(interestedLeads),
+      href: "/leadgen/admin/leads?status=Interested",
+      colorClass: LEADGEN_STAT_CARD_STYLES.interested,
+    },
     {
       label: "Appointments Booked",
       value: String(appointmentsBooked),
       href: `/leadgen/admin/leads?status=${encodeURIComponent("Appointment booked")}`,
+      colorClass: LEADGEN_STAT_CARD_STYLES.appointments,
     },
-    { label: "Follow-ups Due Today", value: String(followUpsDueToday), href: "/leadgen/admin/leads?followup=due_today" },
-    { label: "Overdue Follow-ups", value: String(overdueFollowUps), href: "/leadgen/admin/leads?followup=overdue" },
+    {
+      label: "Follow-ups Due Today",
+      value: String(followUpsDueToday),
+      href: "/leadgen/admin/leads?followup=due_today",
+      colorClass: LEADGEN_STAT_CARD_STYLES.dueToday,
+    },
+    {
+      label: "Overdue Follow-ups",
+      value: String(overdueFollowUps),
+      href: "/leadgen/admin/leads?followup=overdue",
+      colorClass: LEADGEN_STAT_CARD_STYLES.overdue,
+    },
   ];
 
   return (
@@ -78,17 +94,17 @@ export default async function LeadgenAdminDashboardPage() {
           <Link
             key={stat.label}
             href={stat.href}
-            className="rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-sky-400 hover:shadow-sm"
+            className={`rounded-xl border p-3.5 transition hover:shadow-sm ${stat.colorClass}`}
           >
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
-            <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
+            <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{stat.label}</div>
+            <div className="mt-1 text-[18px] font-bold">{stat.value}</div>
           </Link>
         ))}
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Results by Client</h2>
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
           {byCampaignClient.size === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No clients yet.</p>
           ) : (
@@ -118,7 +134,7 @@ export default async function LeadgenAdminDashboardPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Results by Agent</h2>
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Results by Agent</h2>
           {byAgent.size === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No agents yet.</p>
           ) : (

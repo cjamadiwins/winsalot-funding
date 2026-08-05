@@ -93,22 +93,34 @@ export const LEADGEN_LEAD_STATUSES = [
 export type LeadgenLeadStatus = (typeof LEADGEN_LEAD_STATUSES)[number];
 
 export const LEADGEN_LEAD_STATUS_STYLES: Record<LeadgenLeadStatus, string> = {
-  New: "bg-slate-100 text-slate-700",
+  New: "bg-blue-100 text-blue-800",
   "Not called": "bg-slate-100 text-slate-700",
   "No answer": "bg-amber-100 text-amber-800",
   Voicemail: "bg-amber-100 text-amber-800",
   Gatekeeper: "bg-amber-100 text-amber-800",
   "Owner reached": "bg-sky-100 text-sky-800",
   "Callback requested": "bg-orange-100 text-orange-800",
-  Interested: "bg-emerald-100 text-emerald-800",
+  Interested: "bg-indigo-100 text-indigo-800",
   "Information requested": "bg-sky-100 text-sky-800",
-  "Appointment booked": "bg-purple-100 text-purple-800",
+  "Appointment booked": "bg-green-100 text-green-800",
   "Not interested": "bg-rose-100 text-rose-800",
   "Wrong number": "bg-rose-100 text-rose-800",
   "Do not call": "bg-rose-200 text-rose-900",
   Closed: "bg-slate-200 text-slate-600",
   "Consultation Information Sent": "bg-indigo-100 text-indigo-800",
 };
+
+// Shared dashboard stat-card colour palette (New Lead=blue, Interested=
+// indigo, Appointment Booked=green, Due Today=yellow, Overdue=red) - the
+// admin and agent Lead Gen dashboards both import these same classes so
+// equivalent cards can never display different colours.
+export const LEADGEN_STAT_CARD_STYLES = {
+  leads: "border-blue-200 bg-blue-50 text-blue-700",
+  interested: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  appointments: "border-green-200 bg-green-50 text-green-700",
+  dueToday: "border-amber-200 bg-amber-50 text-amber-700",
+  overdue: "border-red-200 bg-red-50 text-red-700",
+} as const;
 
 // Statuses that mean this lead is done being actively worked - used to
 // decide whether it should still be eligible for an overdue-follow-up
