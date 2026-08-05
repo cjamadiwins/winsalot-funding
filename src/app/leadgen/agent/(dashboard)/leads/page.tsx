@@ -4,9 +4,17 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { LeadgenLeadRow } from "@/lib/leadgen-types";
 import AgentLeadsListClient from "./AgentLeadsListClient";
 
-export default async function LeadgenAgentLeadsPage() {
+export default async function LeadgenAgentLeadsPage({
+  searchParams,
+}: {
+  // status/followup are set by the agent dashboard's clickable stat
+  // cards (see /leadgen/agent/(dashboard)/page.tsx) to land here
+  // pre-filtered - same convention as the admin leads page.
+  searchParams: Promise<{ status?: string; followup?: string }>;
+}) {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
+  const { status, followup } = await searchParams;
   const { data: leads } = await supabase
     .from("leadgen_leads")
     .select("*")
@@ -27,7 +35,11 @@ export default async function LeadgenAgentLeadsPage() {
           + Add Lead
         </Link>
       </div>
-      <AgentLeadsListClient leads={(leads ?? []) as LeadgenLeadRow[]} />
+      <AgentLeadsListClient
+        leads={(leads ?? []) as LeadgenLeadRow[]}
+        initialStatusFilter={status}
+        initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
+      />
     </div>
   );
 }
