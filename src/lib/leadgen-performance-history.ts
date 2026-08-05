@@ -62,6 +62,7 @@ export type LeadgenMonthlyPerformance = {
   totalBooked: number;
   monthlyGoal: number;
   percentage: number;
+  remainingToGoal: number;
   weeklyAverage: number;
   bestWeek: LeadgenWeeklyRecord | null;
   weeklyBreakdown: LeadgenWeeklyRecord[];
@@ -186,6 +187,7 @@ export function computeLeadgenMonthlyPerformance(
   const totalBooked = begunWeeks.reduce((sum, week) => sum + week.bookedCount, 0);
   const monthlyGoal = LEADGEN_WEEKLY_APPOINTMENT_TARGET * weeksIncluded;
   const percentage = monthlyGoal > 0 ? Math.round((totalBooked / monthlyGoal) * 100) : 0;
+  const remainingToGoal = Math.max(0, monthlyGoal - totalBooked);
   const weeklyAverage = weeksIncluded > 0 ? Math.round((totalBooked / weeksIncluded) * 10) / 10 : 0;
   const bestWeek = begunWeeks.reduce<LeadgenWeeklyRecord | null>(
     (best, week) => (!best || week.bookedCount > best.bookedCount ? week : best),
@@ -200,6 +202,7 @@ export function computeLeadgenMonthlyPerformance(
     totalBooked,
     monthlyGoal,
     percentage,
+    remainingToGoal,
     weeklyAverage,
     bestWeek,
     weeklyBreakdown,
