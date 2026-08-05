@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ADMIN_ONLY_STATUSES,
   CANADIAN_PROVINCES_AND_TERRITORIES,
+  PROVIDER_ACQUISITION_STAGE_STYLES,
   PROVIDER_ACTIVITY_TYPE_LABELS,
   PROVIDER_CALL_OUTCOMES,
   PROVIDER_SERVICES_OFFERED,
@@ -13,6 +14,7 @@ import {
   CALL_OUTCOMES_REQUIRING_FOLLOW_UP,
   isProviderOverdue,
   overdueProviderDurationLabel,
+  providerAcquisitionStage,
   type LatestProviderLeadEmail,
   type ProviderActivityRow,
   type ProviderCallOutcome,
@@ -195,18 +197,28 @@ export default function ProviderDetailClient({
             )}
           </div>
         </div>
-        <select
-          value={provider.status}
-          disabled={isPending}
-          onChange={(e) => runAction(() => actions.updateStatus(provider.id, e.target.value))}
-          className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${PROVIDER_STATUS_STYLES[provider.status]}`}
-        >
-          {visibleStatuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col items-end gap-1.5">
+          <select
+            value={provider.status}
+            disabled={isPending}
+            onChange={(e) => runAction(() => actions.updateStatus(provider.id, e.target.value))}
+            className={`rounded-full border-none px-3.5 py-2 text-[13px] font-semibold ${PROVIDER_STATUS_STYLES[provider.status]}`}
+          >
+            {visibleStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+          {/* Same shared stage-colour mapping used on both the admin and
+              agent list pages (provider-types.ts) - kept in sync by
+              construction, never a separately-maintained colour. */}
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${PROVIDER_ACQUISITION_STAGE_STYLES[providerAcquisitionStage(provider)]}`}
+          >
+            {providerAcquisitionStage(provider)}
+          </span>
+        </div>
       </div>
 
       <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-[12.5px] text-slate-600">

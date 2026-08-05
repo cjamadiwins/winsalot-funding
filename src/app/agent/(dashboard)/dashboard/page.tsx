@@ -38,7 +38,9 @@ export default async function AgentDashboardPage() {
     // Follow-Up Calendar above, never mixed with customer-lead callbacks.
     supabase
       .from("crm_followups")
-      .select("*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id)")
+      .select(
+        "*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id, intake_completed_at, cleaning_provider_id)"
+      )
       .eq("status", "pending")
       .not("provider_lead_id", "is", null)
       .order("scheduled_at", { ascending: true }),
