@@ -23,6 +23,15 @@ const TIER_STYLES: Record<LeadgenPerformanceTier, { badge: string; text: string 
   red: { badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
+// A week that's still in progress or hasn't started yet has no
+// green/yellow/red result to show - it gets a neutral label instead
+// (brief: future weeks "must not display 0% or 'Behind Target'").
+const PERIOD_LABEL: Record<"current" | "future", string> = {
+  current: "In Progress",
+  future: "Not Started",
+};
+const PERIOD_BADGE_CLASS = "bg-slate-100 text-slate-500";
+
 const selectClass = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13.5px] text-slate-900";
 
 // Table of history spans a lot of months for an old dataset - cap how
@@ -129,7 +138,8 @@ export default function MonthlyPerformanceSection({
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
           <p className="mt-1 text-[13px] text-slate-500">
             Permanently saved weekly results rolled up by month. The monthly goal is 4 appointments times the number of
-            Monday-Sunday weeks in the selected month.
+            Monday-Sunday weeks in the selected month that have begun - weeks that haven&apos;t started yet don&apos;t
+            count against it yet.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -190,21 +200,17 @@ export default function MonthlyPerformanceSection({
                 </tr>
               ) : (
                 monthly.weeklyBreakdown.map((week) => {
-                  const tier = week.tier;
-                  const style = TIER_STYLES[tier];
+                  const isFuture = week.period === "future";
+                  const statusBadgeClass = week.period === "completed" ? TIER_STYLES[week.tier].badge : PERIOD_BADGE_CLASS;
+                  const statusLabel = week.period === "completed" ? LEADGEN_PERFORMANCE_TIER_LABEL[week.tier] : PERIOD_LABEL[week.period];
                   return (
                     <tr key={week.weekStart} className="border-b border-slate-100">
-                      <td className="p-2.5 font-medium text-slate-900">
-                        {leadgenWeekRangeLabel(week.weekStart, week.weekEnd)}
-                        {!week.frozen && <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">In Progress</span>}
-                      </td>
-                      <td className="p-2.5 text-slate-600">{week.bookedCount}</td>
+                      <td className="p-2.5 font-medium text-slate-900">{leadgenWeekRangeLabel(week.weekStart, week.weekEnd)}</td>
+                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : week.bookedCount}</td>
                       <td className="p-2.5 text-slate-600">{week.target}</td>
-                      <td className="p-2.5 text-slate-600">{week.percentage}%</td>
+                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : `${week.percentage}%`}</td>
                       <td className="p-2.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${style.badge}`}>
-                          {LEADGEN_PERFORMANCE_TIER_LABEL[tier]}
-                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${statusBadgeClass}`}>{statusLabel}</span>
                       </td>
                     </tr>
                   );
