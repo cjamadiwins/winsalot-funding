@@ -478,7 +478,15 @@ export type ProviderFollowUpRow = {
 export type ProviderFollowUpWithLead = ProviderFollowUpRow & {
   provider_leads: Pick<
     ProviderLeadRow,
-    "id" | "business_name" | "contact_person" | "phone" | "email" | "status" | "assigned_agent_id"
+    | "id"
+    | "business_name"
+    | "contact_person"
+    | "phone"
+    | "email"
+    | "status"
+    | "assigned_agent_id"
+    | "intake_completed_at"
+    | "cleaning_provider_id"
   > | null;
 };
 

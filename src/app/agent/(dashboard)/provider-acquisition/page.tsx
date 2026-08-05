@@ -1,19 +1,29 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { ProviderLeadRow } from "@/lib/provider-types";
+import type { ProviderFollowUpWithLead, ProviderLeadRow } from "@/lib/provider-types";
 import ProviderAcquisitionAgentClient from "./ProviderAcquisitionAgentClient";
 
 export default async function AgentProviderAcquisitionPage() {
   await requireCrmUser();
   const supabase = await createSupabaseServerClient();
 
-  // RLS (provider_leads_agent_select_own) already restricts this to
-  // providers assigned to the signed-in agent.
-  const { data: providers, error } = await supabase
-    .from("provider_leads")
-    .select("*")
-    .order("created_at", { ascending: false });
+  // RLS (provider_leads_agent_select_own / crm_followups' equivalent
+  // agent-scoping) already restricts both of these to this agent's own
+  // providers - same fetch shape as the admin page
+  // (/admin/crm/provider-acquisition), just automatically narrower.
+  const [
+    { data: providers, error: providersError },
+    { data: followUps, error: followUpsError },
+  ] = await Promise.all([
+    supabase.from("provider_leads").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("crm_followups")
+      .select("*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id)")
+      .eq("status", "pending")
+      .not("provider_lead_id", "is", null)
+      .order("scheduled_at", { ascending: true }),
+  ]);
 
   return (
     <div>
@@ -34,13 +44,18 @@ export default async function AgentProviderAcquisitionPage() {
         </Link>
       </div>
 
-      {error && (
+      {(providersError || followUpsError) && (
         <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Failed to load provider leads: {error.message}
+          Failed to load provider leads: {(providersError ?? followUpsError)?.message}
         </p>
       )}
 
-      {!error && <ProviderAcquisitionAgentClient providers={(providers ?? []) as ProviderLeadRow[]} />}
+      {!providersError && !followUpsError && (
+        <ProviderAcquisitionAgentClient
+          providers={(providers ?? []) as ProviderLeadRow[]}
+          followUps={(followUps ?? []) as ProviderFollowUpWithLead[]}
+        />
+      )}
     </div>
   );
 }

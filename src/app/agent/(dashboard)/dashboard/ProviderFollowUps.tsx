@@ -3,11 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  PROVIDER_ACQUISITION_STAGE_STYLES,
   PROVIDER_CALL_OUTCOMES,
-  PROVIDER_STATUS_STYLES,
   isProviderFollowUpDueToday,
   isProviderFollowUpOverdue,
   isProviderFollowUpUpcoming,
+  providerAcquisitionStage,
   type ProviderCallOutcome,
   type ProviderFollowUpWithLead,
 } from "@/lib/provider-types";
@@ -204,9 +205,9 @@ function Group({
               </div>
               {provider?.status && (
                 <span
-                  className={`mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${PROVIDER_STATUS_STYLES[provider.status]}`}
+                  className={`mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${PROVIDER_ACQUISITION_STAGE_STYLES[providerAcquisitionStage(provider)]}`}
                 >
-                  {provider.status}
+                  {providerAcquisitionStage(provider)}
                 </span>
               )}
               {followUp.note && <p className="mt-1.5 text-[13.5px] text-[var(--color-text-body)]">{followUp.note}</p>}
