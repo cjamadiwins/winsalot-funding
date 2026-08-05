@@ -74,9 +74,11 @@ export type CrmMonthlyPerformance = {
   totalSent: number;
   sentGoal: number;
   sentPercentage: number;
+  remainingSent: number;
   totalReceived: number;
   receivedGoal: number;
   receivedPercentage: number;
+  remainingReceived: number;
   averageSentPerPeriod: number;
   bestPeriod: CrmPeriodRecord | null;
   monthlyTier: CrmPerformanceTier;
@@ -234,6 +236,8 @@ export function computeCrmMonthlyPerformance(
   const receivedGoal = CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET * periodsStarted;
   const sentPercentage = sentGoal > 0 ? Math.round((totalSent / sentGoal) * 100) : 0;
   const receivedPercentage = receivedGoal > 0 ? Math.round((totalReceived / receivedGoal) * 100) : 0;
+  const remainingSent = Math.max(0, sentGoal - totalSent);
+  const remainingReceived = Math.max(0, receivedGoal - totalReceived);
   const averageSentPerPeriod = periodsStarted > 0 ? Math.round((totalSent / periodsStarted) * 10) / 10 : 0;
   const bestPeriod = startedPeriods.reduce<CrmPeriodRecord | null>(
     (best, period) => (!best || period.overallPercentage > best.overallPercentage ? period : best),
@@ -256,9 +260,11 @@ export function computeCrmMonthlyPerformance(
     totalSent,
     sentGoal,
     sentPercentage,
+    remainingSent,
     totalReceived,
     receivedGoal,
     receivedPercentage,
+    remainingReceived,
     averageSentPerPeriod,
     bestPeriod,
     monthlyTier,
