@@ -88,7 +88,7 @@ export function leadgenDateKey(iso: string | Date): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-function addDays(dateKey: string, days: number): string {
+export function addDays(dateKey: string, days: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const next = new Date(y, m - 1, d + days);
   return `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`;
@@ -180,4 +180,31 @@ export function computeLeadgenAgentPerformance(
     monthlyTotal,
     appointments: sortedAppointments,
   };
+}
+
+// Same "credited to this agent" rule as computeLeadgenAgentPerformance
+// above (booking_agent_id match, status not Cancelled) - pulled out so
+// the Monthly Performance history (leadgen-performance-history.ts) can
+// count an arbitrary Monday-Sunday week the same way the live weekly
+// report does, without duplicating or drifting from this filter.
+export function leadgenCreditedAppointments(
+  appointments: LeadgenPerformanceAppointment[],
+  agentId: string
+): LeadgenPerformanceAppointment[] {
+  return appointments.filter((appt) => appt.booking_agent_id === agentId && appt.status !== "Cancelled");
+}
+
+// Count of an agent's valid (credited, non-cancelled) appointments whose
+// created_at - the same "booked on" date the live weekly report buckets
+// by - falls within [weekStart, weekEnd] (inclusive, both YYYY-MM-DD).
+export function computeLeadgenWeekBookedCount(
+  appointments: LeadgenPerformanceAppointment[],
+  agentId: string,
+  weekStart: string,
+  weekEnd: string
+): number {
+  return leadgenCreditedAppointments(appointments, agentId).filter((appt) => {
+    const key = leadgenDateKey(appt.created_at);
+    return key >= weekStart && key <= weekEnd;
+  }).length;
 }
