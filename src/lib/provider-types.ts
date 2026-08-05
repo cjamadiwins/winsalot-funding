@@ -588,3 +588,84 @@ export function isProviderFollowUpUpcoming(
   if (isProviderFollowUpOverdue(followUp)) return false;
   return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
 }
+
+// ---------------------------------------------------------------------
+// CRM / Provider Acquisition: a simplified 6-stage view over the 16
+// granular PROVIDER_STATUSES above, for dashboard cards and color-coded
+// badges only. Purely a display grouping computed from existing fields -
+// never written to the database, and every existing status value,
+// status-specific action (send intake email, "Approve and Add to
+// Providers", etc.), and the full status dropdown are all unchanged.
+// This keeps "map existing statuses carefully instead of deleting data"
+// literal: nothing about the underlying 16-status pipeline is removed or
+// renamed, this just adds a coarser lens on top of it.
+// ---------------------------------------------------------------------
+export const PROVIDER_ACQUISITION_STAGES = [
+  "New Interested Lead",
+  "Quote Form Sent",
+  "Quote Form Incomplete",
+  "Qualified Provider",
+  "Closed – Won",
+  "Closed – Lost",
+] as const;
+
+export type ProviderAcquisitionStage = (typeof PROVIDER_ACQUISITION_STAGES)[number];
+
+export const PROVIDER_ACQUISITION_STAGE_STYLES: Record<ProviderAcquisitionStage, string> = {
+  "New Interested Lead": "bg-blue-100 text-blue-800",
+  "Quote Form Sent": "bg-purple-100 text-purple-800",
+  "Quote Form Incomplete": "bg-orange-100 text-orange-800",
+  "Qualified Provider": "bg-green-100 text-green-800",
+  "Closed – Won": "bg-emerald-200 text-emerald-900",
+  "Closed – Lost": "bg-slate-200 text-slate-700",
+};
+
+// Mapping rationale (a judgment call - there's no exact 1:1 source for
+// this in the 16-status pipeline, so this groups by what each status
+// actually means for acquisition-funnel reporting purposes):
+//  - "Closed – Won": the lead was actually approved/promoted - either it
+//    already has a permanent cleaning_provider_id (the definitive signal
+//    an admin ran "Approve and Add to Providers"), or its status is one
+//    of the post-approval lifecycle statuses (Approved Provider, Active,
+//    Inactive, Suspended - Provider Profile migration 0028). All of
+//    these mean the acquisition itself succeeded at some point, even if
+//    the provider's current operational status has since changed.
+//  - "Closed – Lost": the funnel ended without success (Not Interested,
+//    Invalid Contact, Declined, or the generic legacy Closed status).
+//  - "Qualified Provider": brief - "Do not count a company that only
+//    requested the quote form as a qualified provider. Count it as a
+//    Qualified Provider only after the required form or provider
+//    information has been completed." intake_completed_at is the actual
+//    completion timestamp (set once, when the form is submitted),
+//    checked ahead of the status string so this can never mis-flag a
+//    lead that's merely been sent the form - Intake Form Completed and
+//    Under Review are included as a fallback for the same reason.
+//  - "Quote Form Sent": Intake Form Sent - the form link has gone out
+//    but nothing has come back yet.
+//  - "Quote Form Incomplete": Follow-up Required - the closest existing
+//    status for "we're waiting on something from them and need to
+//    chase it," typically reached after a form was sent but not
+//    completed. The 16-status pipeline has no separate "form opened but
+//    abandoned" signal to source this from more precisely.
+//  - Everything else (New, Contact Attempted, Contacted, Interested)
+//    falls back to "New Interested Lead" - still early outreach, no form
+//    sent yet.
+export function providerAcquisitionStage(
+  provider: Pick<ProviderLeadRow, "status" | "intake_completed_at" | "cleaning_provider_id">
+): ProviderAcquisitionStage {
+  if (
+    provider.cleaning_provider_id ||
+    (["Approved Provider", "Active", "Inactive", "Suspended"] as ProviderStatus[]).includes(provider.status)
+  ) {
+    return "Closed – Won";
+  }
+  if ((["Not Interested", "Invalid Contact", "Declined", "Closed"] as ProviderStatus[]).includes(provider.status)) {
+    return "Closed – Lost";
+  }
+  if (provider.intake_completed_at || provider.status === "Intake Form Completed" || provider.status === "Under Review") {
+    return "Qualified Provider";
+  }
+  if (provider.status === "Intake Form Sent") return "Quote Form Sent";
+  if (provider.status === "Follow-up Required") return "Quote Form Incomplete";
+  return "New Interested Lead";
+}
