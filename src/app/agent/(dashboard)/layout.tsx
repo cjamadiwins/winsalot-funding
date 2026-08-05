@@ -67,6 +67,12 @@ export default async function AgentLayout({ children }: { children: ReactNode })
             >
               Performance
             </Link>
+            <Link
+              href="/agent/performance/monthly"
+              className="text-[14px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
+            >
+              Monthly Performance
+            </Link>
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell
