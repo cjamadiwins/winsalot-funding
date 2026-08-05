@@ -1,78 +1,63 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { CrmFollowUpWithLead, CrmLeadRow, CrmUserRow } from "@/lib/crm-types";
-import AdminCrmClient from "./AdminCrmClient";
-import AdminFollowUps from "./AdminFollowUps";
-import AdminOverdueLeadsPanel from "./AdminOverdueLeadsPanel";
+import type { CrmUserRow } from "@/lib/crm-types";
+import type { ProviderFollowUpWithLead, ProviderLeadRow } from "@/lib/provider-types";
+import ProviderAcquisitionAdminClient from "./provider-acquisition/ProviderAcquisitionAdminClient";
 
+// The CRM tracks cleaning-company/provider acquisition only - customer
+// quote fulfillment (the previous content of this page: crm_leads, its
+// stage pipeline, and follow-ups) moved to /admin/crm/leads, where it
+// remains fully intact and unchanged. This page now shows the same
+// Provider Acquisition dashboard as /admin/crm/provider-acquisition
+// (kept as its own route too, unchanged) - New Interested Leads / Due
+// Today / Overdue / Quote Forms Sent / Quote Forms Incomplete /
+// Qualified Providers / Closed - Won / Closed - Lost.
 export default async function AdminCrmPage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  // RLS (crm_leads_admin_all / crm_users_admin_select_all /
-  // crm_followups_admin_all) permits a full read here because this page
-  // is already gated by requireCrmAdmin().
+  // RLS (provider_leads_admin_all / crm_users_admin_select_all /
+  // crm_followups_admin_all) permits a full read here since this page is
+  // already gated by requireCrmAdmin().
   const [
-    { data: leads, error: leadsError },
+    { data: providers, error: providersError },
     { data: agents, error: agentsError },
     { data: followUps, error: followUpsError },
   ] = await Promise.all([
-    supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
+    supabase.from("provider_leads").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
     supabase
       .from("crm_followups")
-      .select("*, crm_leads(id, business_name, phone, city, assigned_agent_id)")
+      .select("*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id)")
       .eq("status", "pending")
-      // crm_followups also holds opportunity- and provider-lead-targeted
-      // rows (migrations 0013/0026) - this page's lead follow-ups are
-      // lead-only, so exclude those explicitly rather than relying on RLS
-      // alone (which permits all three target types).
-      .not("lead_id", "is", null)
+      .not("provider_lead_id", "is", null)
       .order("scheduled_at", { ascending: true }),
   ]);
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">CRM</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Leads, follow-ups, and quote progress across every agent.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">CRM</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Cleaning-company / provider acquisition — recruiting and onboarding providers. Customer quote fulfillment
+            has its own dashboard at Quote Fulfillment.
+          </p>
+        </div>
+      </div>
 
-      {(leadsError || agentsError) && (
+      {(providersError || agentsError || followUpsError) && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Failed to load CRM data: {(leadsError ?? agentsError)?.message}
+          Failed to load provider data: {(providersError ?? agentsError ?? followUpsError)?.message}
         </p>
       )}
 
-      {!leadsError && !agentsError && !followUpsError && (
+      {!providersError && !agentsError && !followUpsError && (
         <div className="mt-6">
-          <AdminOverdueLeadsPanel
-            leads={(leads ?? []) as CrmLeadRow[]}
-            followUps={(followUps ?? []) as CrmFollowUpWithLead[]}
+          <ProviderAcquisitionAdminClient
+            providers={(providers ?? []) as ProviderLeadRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
-          />
-        </div>
-      )}
-
-      {!leadsError && !agentsError && (
-        <div className="mt-6">
-          <AdminCrmClient
-            leads={(leads ?? []) as CrmLeadRow[]}
-            agents={(agents ?? []) as CrmUserRow[]}
-          />
-        </div>
-      )}
-
-      <h2 className="mt-10 text-lg font-bold text-slate-900">All Agents&apos; Follow-Ups</h2>
-      {followUpsError ? (
-        <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Failed to load follow-ups: {followUpsError.message}
-        </p>
-      ) : (
-        <div className="mt-3">
-          <AdminFollowUps
-            followUps={(followUps ?? []) as CrmFollowUpWithLead[]}
-            agents={(agents ?? []) as CrmUserRow[]}
+            followUps={(followUps ?? []) as ProviderFollowUpWithLead[]}
           />
         </div>
       )}

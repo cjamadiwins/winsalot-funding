@@ -85,6 +85,7 @@ export async function removeAgentAction(agentId: string): Promise<ActionResult> 
 
   revalidatePath("/admin/crm/agents");
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
   return {};
 }
 

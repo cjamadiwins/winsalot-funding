@@ -76,6 +76,7 @@ export async function rescheduleFollowUpAction(
   }
 
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
   revalidatePath(`/admin/crm/leads/${leadId}`);
   refresh();
 }
@@ -110,6 +111,7 @@ export async function completeFollowUpAction(followUpId: string, leadId: string)
   }
 
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
   revalidatePath(`/admin/crm/leads/${leadId}`);
   refresh();
 }

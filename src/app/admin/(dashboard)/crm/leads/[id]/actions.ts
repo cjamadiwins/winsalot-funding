@@ -58,6 +58,7 @@ export async function updateLeadAction(leadId: string, formData: FormData) {
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 }
 
 // Closed leads are never deleted (kept searchable/visible for reporting) -
@@ -84,6 +85,7 @@ export async function deleteLeadAction(leadId: string) {
   if (error) throw new Error("Failed to delete the lead.");
 
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 }
 
 export async function addActivityAction(leadId: string, formData: FormData) {
@@ -133,6 +135,7 @@ export async function addActivityAction(leadId: string, formData: FormData) {
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 }
 
 // Sends the "Get a Free Cleaning Quote" prospecting email to this lead's
@@ -146,6 +149,7 @@ export async function sendQuoteRequestEmailAction(leadId: string): Promise<{ ema
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 
   return result;
 }
@@ -159,6 +163,7 @@ export async function sendFollowUpEmailAction(leadId: string): Promise<{ email: 
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 
   return result;
 }
@@ -172,6 +177,7 @@ export async function closeLeadAction(leadId: string, outcome: string, reason: s
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
   refresh();
 }
 
@@ -291,4 +297,5 @@ export async function finalApproveLeadAction(leadId: string) {
 
   revalidatePath(`/admin/crm/leads/${leadId}`);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/leads");
 }
