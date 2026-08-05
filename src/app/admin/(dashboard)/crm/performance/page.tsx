@@ -1,14 +1,20 @@
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { computeCrmAgentPerformance } from "@/lib/crm-performance";
+import { biweeklyPeriodStartOf, computeCrmAgentPerformance, crmDateKey } from "@/lib/crm-performance";
+import { syncCrmBiweeklyPerformanceHistory } from "@/lib/crm-performance-history-sync";
+import type { CrmBiweeklyHistoryRow } from "@/lib/crm-performance-history";
 import type { CrmUserRow } from "@/lib/crm-types";
 import CrmPerformanceCard from "@/components/CrmPerformanceCard";
+import CrmMonthlyPerformanceSection from "@/components/CrmMonthlyPerformanceSection";
 
 // Admin view of the Cleaning CRM's Agent Performance Report - every active
 // agent, each with their own biweekly-target card (see
 // CrmPerformanceCard). Agents only ever see their own card -
-// /agent/performance.
+// /agent/performance. Below the unchanged biweekly cards,
+// CrmMonthlyPerformanceSection adds the Monthly Performance history
+// view, reading the permanent biweekly ledger this page keeps in sync
+// (see crm-performance-history-sync.ts).
 export default async function AdminCrmPerformancePage() {
   await requireCrmAdmin();
   const admin = getSupabaseAdmin();
@@ -19,6 +25,20 @@ export default async function AdminCrmPerformancePage() {
   ]);
 
   const allAgents = (agents ?? []) as Pick<CrmUserRow, "id" | "full_name" | "email">[];
+
+  const now = new Date();
+  await syncCrmBiweeklyPerformanceHistory(admin, allAgents, records, now);
+
+  const { data: historyRows } = await admin
+    .from("crm_agent_biweekly_performance")
+    .select(
+      "agent_id, agent_name, period_start, period_end, quotes_sent, quotes_sent_target, quotes_sent_percentage, quotes_received, quotes_received_target, quotes_received_percentage, overall_percentage, status"
+    )
+    .in("agent_id", allAgents.map((agent) => agent.id));
+
+  const todayKey = crmDateKey(now);
+  const currentPeriodStart = biweeklyPeriodStartOf(todayKey);
+  const [currentYear, currentMonth] = todayKey.split("-").map(Number);
 
   return (
     <div>
@@ -38,6 +58,15 @@ export default async function AdminCrmPerformancePage() {
           ))
         )}
       </div>
+
+      <CrmMonthlyPerformanceSection
+        agents={allAgents.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
+        records={records}
+        historyRows={(historyRows ?? []) as CrmBiweeklyHistoryRow[]}
+        currentPeriodStart={currentPeriodStart}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+      />
     </div>
   );
 }

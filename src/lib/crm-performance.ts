@@ -77,7 +77,7 @@ export function crmDateKey(iso: string | Date): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-function addDays(dateKey: string, days: number): string {
+export function addDays(dateKey: string, days: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const next = new Date(y, m - 1, d + days);
   return `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`;
@@ -101,7 +101,10 @@ function mondayOf(dateKey: string): string {
 
 // The Monday that starts the two-week period containing dateKey, aligned to
 // BIWEEKLY_EPOCH_MONDAY so periods never drift depending on when this runs.
-function biweeklyPeriodStartOf(dateKey: string): string {
+// Exported so the Monthly Performance history module
+// (crm-performance-history.ts) can find "which period does this month's
+// 1st fall in" the same way this file already does internally.
+export function biweeklyPeriodStartOf(dateKey: string): string {
   const monday = mondayOf(dateKey);
   const weeksSinceEpoch = Math.floor(daysBetween(BIWEEKLY_EPOCH_MONDAY, monday) / 7);
   return weeksSinceEpoch % 2 === 0 ? monday : addDays(monday, -7);
@@ -126,7 +129,11 @@ export function crmPerformanceTier(percentage: number): CrmPerformanceTier {
   return "red";
 }
 
-function computePeriod(
+// Exported so the Monthly Performance history module can compute an
+// arbitrary period's totals the same way this file's own current/history
+// periods are computed, without duplicating (or drifting from) this
+// credited-quote filter.
+export function computeCrmPeriodPerformance(
   records: CrmPerformanceQuoteRecord[],
   agentId: string,
   periodStart: string,
@@ -177,7 +184,7 @@ export function computeCrmAgentPerformance(
   for (let i = 0; i <= CRM_PERFORMANCE_HISTORY_PERIODS; i++) {
     const periodStart = addDays(currentPeriodStart, -14 * i);
     const periodEnd = addDays(periodStart, 13);
-    periods.push(computePeriod(records, agentId, periodStart, periodEnd));
+    periods.push(computeCrmPeriodPerformance(records, agentId, periodStart, periodEnd));
   }
 
   const [current, ...history] = periods;
