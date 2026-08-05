@@ -1,14 +1,20 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { computeLeadgenAgentPerformance, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
+import { computeLeadgenAgentPerformance, leadgenDateKey, leadgenMondayOf, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
+import { syncLeadgenWeeklyPerformanceHistory } from "@/lib/leadgen-performance-history-sync";
+import type { LeadgenWeeklyHistoryRow } from "@/lib/leadgen-performance-history";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
 import AgentPerformanceCard from "@/components/leadgen/AgentPerformanceCard";
+import MonthlyPerformanceSection from "@/components/leadgen/MonthlyPerformanceSection";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
 // Admin view of the Agent Performance Report - every active agent, each
 // with their own weekly-target card (see AgentPerformanceCard). Agents
-// only ever see their own card - /leadgen/agent/performance.
+// only ever see their own card - /leadgen/agent/performance. Below the
+// unchanged weekly cards, MonthlyPerformanceSection adds the Monthly
+// Performance history view, reading the permanent weekly ledger this
+// page keeps in sync (see leadgen-performance-history-sync.ts).
 export default async function LeadgenAdminPerformancePage() {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
@@ -30,6 +36,18 @@ export default async function LeadgenAdminPerformancePage() {
   const allAgents = (agents ?? []) as Pick<LeadgenUserRow, "id" | "full_name" | "email">[];
   const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
 
+  const now = new Date();
+  await syncLeadgenWeeklyPerformanceHistory(admin, allAgents, allAppointments, now);
+
+  const { data: historyRows } = await admin
+    .from("leadgen_agent_weekly_performance")
+    .select("agent_id, agent_name, week_start, week_end, booked_count, target, percentage, status")
+    .in("agent_id", allAgents.map((agent) => agent.id));
+
+  const todayKey = leadgenDateKey(now);
+  const currentWeekStart = leadgenMondayOf(todayKey);
+  const [currentYear, currentMonth] = todayKey.split("-").map(Number);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
@@ -50,6 +68,15 @@ export default async function LeadgenAdminPerformancePage() {
           ))
         )}
       </div>
+
+      <MonthlyPerformanceSection
+        agents={allAgents.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
+        appointments={allAppointments}
+        historyRows={(historyRows ?? []) as LeadgenWeeklyHistoryRow[]}
+        currentWeekStart={currentWeekStart}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+      />
     </div>
   );
 }
