@@ -49,6 +49,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               CRM
             </Link>
             <Link
+              href="/admin/crm/leads"
+              className="text-sm font-medium text-slate-600 hover:text-sky-600"
+            >
+              Quote Fulfillment
+            </Link>
+            <Link
               href="/admin/crm/agents"
               className="text-sm font-medium text-slate-600 hover:text-sky-600"
             >
