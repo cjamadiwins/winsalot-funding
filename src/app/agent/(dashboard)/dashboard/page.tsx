@@ -9,9 +9,17 @@ import OverdueLeadsPanel from "./OverdueLeadsPanel";
 import ProviderFollowUps from "./ProviderFollowUps";
 import AttendanceCard from "./AttendanceCard";
 
-export default async function AgentDashboardPage() {
+export default async function AgentDashboardPage({
+  searchParams,
+}: {
+  // stage/followup are set by the "My Leads" stat cards below (see
+  // AgentDashboardClient.tsx) to pre-filter the list on the same page -
+  // same convention as the Leads CRM's clickable dashboard cards.
+  searchParams: Promise<{ stage?: string; followup?: string }>;
+}) {
   const crmUser = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
+  const { stage, followup } = await searchParams;
 
   // RLS (crm_leads_agent_select_own / crm_followups_agent_select_own_lead)
   // already restricts both of these to leads assigned to the signed-in
@@ -119,7 +127,7 @@ export default async function AgentDashboardPage() {
         </div>
       )}
 
-      <h2 className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
+      <h2 id="my-leads" className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
         My Leads
       </h2>
 
@@ -129,7 +137,18 @@ export default async function AgentDashboardPage() {
         </p>
       )}
 
-      {!leadsError && <AgentDashboardClient leads={leads} />}
+      {!leadsError && (
+        <AgentDashboardClient
+          // Force a remount when the URL filter changes, since Next.js
+          // reuses this client component across same-route navigations -
+          // without this, clicking a different stat card while already
+          // on the dashboard wouldn't re-seed the filter state below.
+          key={`${stage ?? "all"}|${followup ?? "all"}`}
+          leads={leads}
+          initialStageFilter={stage}
+          initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
+        />
+      )}
     </div>
   );
 }

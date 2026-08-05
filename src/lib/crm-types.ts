@@ -73,7 +73,7 @@ export const SYSTEM_ONLY_STAGES: LeadStage[] = [
 ];
 
 export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
-  "New interested lead": "bg-slate-100 text-slate-700",
+  "New interested lead": "bg-indigo-100 text-indigo-800",
   "Waiting for cleaning details": "bg-slate-100 text-slate-700",
   "Quote requested from provider": "bg-amber-100 text-amber-800",
   "Provider quote received": "bg-sky-100 text-sky-800",
@@ -86,6 +86,17 @@ export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
   "Closed – Won": "bg-emerald-100 text-emerald-800",
   "Closed – Lost": "bg-rose-100 text-rose-800",
 };
+
+// Shared colour palette for the agent dashboard's 5 "My Leads" stat
+// cards - a single source of truth so the cards, and anything else that
+// wants to reference the same concept, can never diverge in colour.
+export const CRM_LEAD_DASHBOARD_CARD_STYLES = {
+  total: "border-blue-200 bg-blue-50 text-blue-700",
+  newLead: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  dueToday: "border-amber-200 bg-amber-50 text-amber-700",
+  overdue: "border-red-200 bg-red-50 text-red-700",
+  followUp: "border-orange-200 bg-orange-50 text-orange-700",
+} as const;
 
 // ---------------------------------------------------------------------
 // Quote Fulfillment display labels/colors: a clearer, customer/provider-

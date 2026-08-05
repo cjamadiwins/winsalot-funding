@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  CRM_LEAD_DASHBOARD_CARD_STYLES,
   EMAIL_STATUS_LABELS,
   EMAIL_STATUS_STYLES,
   LEAD_STAGES,
@@ -14,9 +16,27 @@ import {
   type LeadStage,
 } from "@/lib/crm-types";
 
-export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] }) {
+type FollowUpFilter = "all" | "due_today" | "overdue";
+
+export default function AgentDashboardClient({
+  leads,
+  initialStageFilter,
+  initialFollowUpFilter,
+}: {
+  leads: CrmLeadRow[];
+  // Pre-select a filter when landing here from the stat cards below -
+  // ignored (falls back to "all") if not a recognized value, so a
+  // stale/tampered URL never crashes this page.
+  initialStageFilter?: string;
+  initialFollowUpFilter?: "due_today" | "overdue";
+}) {
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
+  const [stageFilter, setStageFilter] = useState<LeadStage | "all">(
+    initialStageFilter && (LEAD_STAGES as readonly string[]).includes(initialStageFilter)
+      ? (initialStageFilter as LeadStage)
+      : "all"
+  );
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
 
   const overdueLeads = useMemo(
     () =>
@@ -30,18 +50,40 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
   const newLeads = leads.filter((l) => l.stage === "New interested lead").length;
   const followUpRequired = leads.filter((l) => l.stage === "Follow-up required").length;
 
-  const stats = [
-    { label: "Total Leads", value: leads.length },
-    { label: "New Leads", value: newLeads },
-    { label: "Due Today", value: dueToday, warn: dueToday > 0 },
-    { label: "Overdue", value: overdue, danger: overdue > 0 },
-    { label: "Follow-up Required", value: followUpRequired },
+  const stats: { label: string; value: number; href: string; colorClass: string }[] = [
+    { label: "Total Leads", value: leads.length, href: "/agent/dashboard#my-leads", colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.total },
+    {
+      label: "New Leads",
+      value: newLeads,
+      href: `/agent/dashboard?stage=${encodeURIComponent("New interested lead")}#my-leads`,
+      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.newLead,
+    },
+    {
+      label: "Due Today",
+      value: dueToday,
+      href: "/agent/dashboard?followup=due_today#my-leads",
+      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.dueToday,
+    },
+    {
+      label: "Overdue",
+      value: overdue,
+      href: "/agent/dashboard?followup=overdue#my-leads",
+      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.overdue,
+    },
+    {
+      label: "Follow-up Required",
+      value: followUpRequired,
+      href: `/agent/dashboard?stage=${encodeURIComponent("Follow-up required")}#my-leads`,
+      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.followUp,
+    },
   ];
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
     return leads.filter((lead) => {
       if (stageFilter !== "all" && lead.stage !== stageFilter) return false;
+      if (followUpFilter === "due_today" && !isDueToday(lead)) return false;
+      if (followUpFilter === "overdue" && !isOverdue(lead)) return false;
       if (!query) return true;
       return (
         lead.business_name.toLowerCase().includes(query) ||
@@ -51,33 +93,13 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
         lead.city.toLowerCase().includes(query)
       );
     });
-  }, [leads, query, stageFilter]);
+  }, [leads, query, stageFilter, followUpFilter]);
 
   return (
     <div>
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className={`rounded-xl border p-4 ${
-              stat.danger
-                ? "border-red-200 bg-red-50"
-                : stat.warn
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
-            }`}
-          >
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-              {stat.label}
-            </div>
-            <div
-              className={`mt-1 font-heading text-[22px] font-bold ${
-                stat.danger ? "text-red-700" : "text-[var(--color-ink-strong)]"
-              }`}
-            >
-              {stat.value}
-            </div>
-          </div>
+          <StatCard key={stat.label} href={stat.href} label={stat.label} value={stat.value} colorClass={stat.colorClass} />
         ))}
       </div>
 
@@ -100,6 +122,15 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
               {stage}
             </option>
           ))}
+        </select>
+        <select
+          value={followUpFilter}
+          onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)}
+          className="rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
+        >
+          <option value="all">All follow-ups</option>
+          <option value="due_today">Due today</option>
+          <option value="overdue">Overdue</option>
         </select>
       </div>
 
@@ -172,5 +203,29 @@ export default function AgentDashboardClient({ leads }: { leads: CrmLeadRow[] })
         </div>
       )}
     </div>
+  );
+}
+
+// Whole-card clickable stat tile. A plain <Link> already gets Enter-key
+// activation and pointer/focus semantics for free from the browser -
+// this only adds explicit Space-key support (anchors don't activate on
+// Space natively) so both keys work.
+function StatCard({ href, label, value, colorClass }: { href: string; label: string; value: number; colorClass: string }) {
+  const router = useRouter();
+
+  return (
+    <Link
+      href={href}
+      onKeyDown={(e) => {
+        if (e.key === " ") {
+          e.preventDefault();
+          router.push(href);
+        }
+      }}
+      className={`block cursor-pointer rounded-xl border p-4 transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${colorClass}`}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
+      <div className="mt-1 font-heading text-[22px] font-bold">{value}</div>
+    </Link>
   );
 }
