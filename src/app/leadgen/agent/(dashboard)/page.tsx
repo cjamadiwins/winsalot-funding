@@ -10,6 +10,7 @@ import {
   type LeadgenFollowUpWithLead,
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
+import ClickableStatCard from "@/components/leadgen/ClickableStatCard";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 
@@ -49,10 +50,26 @@ export default async function LeadgenAgentDashboardPage() {
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="My Leads" value={String(myLeads.length)} colorClass={LEADGEN_STAT_CARD_STYLES.leads} />
-        <StatCard label="Due Today" value={String(dueToday.length)} colorClass={LEADGEN_STAT_CARD_STYLES.dueToday} />
-        <StatCard label="Overdue" value={String(overdue.length)} colorClass={LEADGEN_STAT_CARD_STYLES.overdue} />
-        <StatCard
+        <ClickableStatCard
+          href="/leadgen/agent/leads"
+          label="My Leads"
+          value={String(myLeads.length)}
+          colorClass={LEADGEN_STAT_CARD_STYLES.leads}
+        />
+        <ClickableStatCard
+          href="/leadgen/agent/leads?followup=due_today"
+          label="Due Today"
+          value={String(dueToday.length)}
+          colorClass={LEADGEN_STAT_CARD_STYLES.dueToday}
+        />
+        <ClickableStatCard
+          href="/leadgen/agent/leads?followup=overdue"
+          label="Overdue"
+          value={String(overdue.length)}
+          colorClass={LEADGEN_STAT_CARD_STYLES.overdue}
+        />
+        <ClickableStatCard
+          href={`/leadgen/agent/leads?status=${encodeURIComponent("Interested")}`}
           label="Interested"
           value={String(statusCounts.get("Interested") ?? 0)}
           colorClass={LEADGEN_STAT_CARD_STYLES.interested}
@@ -80,15 +97,6 @@ export default async function LeadgenAgentDashboardPage() {
           Open Training
         </Link>
       </section>
-    </div>
-  );
-}
-
-function StatCard({ label, value, colorClass }: { label: string; value: string; colorClass: string }) {
-  return (
-    <div className={`rounded-xl border p-3.5 ${colorClass}`}>
-      <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
-      <div className="mt-1 text-[18px] font-bold">{value}</div>
     </div>
   );
 }

@@ -2,18 +2,45 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { LEADGEN_LEAD_STATUSES, LEADGEN_LEAD_STATUS_STYLES, type LeadgenLeadRow } from "@/lib/leadgen-types";
+import {
+  LEADGEN_LEAD_STATUSES,
+  LEADGEN_LEAD_STATUS_STYLES,
+  isLeadgenNextFollowUpDueToday,
+  isLeadgenNextFollowUpOverdue,
+  type LeadgenLeadRow,
+  type LeadgenLeadStatus,
+} from "@/lib/leadgen-types";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
-export default function AgentLeadsListClient({ leads }: { leads: LeadgenLeadRow[] }) {
-  const [statusFilter, setStatusFilter] = useState("all");
+type FollowUpFilter = "all" | "due_today" | "overdue";
+
+export default function AgentLeadsListClient({
+  leads,
+  initialStatusFilter,
+  initialFollowUpFilter,
+}: {
+  leads: LeadgenLeadRow[];
+  // Pre-select a filter when landing here from the agent dashboard's
+  // clickable stat cards (see /leadgen/agent/(dashboard)/page.tsx) -
+  // ignored (falls back to "all") if not a recognized value, so a
+  // stale/tampered URL never crashes this page. Same convention as the
+  // admin leads page's LeadsListClient.
+  initialStatusFilter?: string;
+  initialFollowUpFilter?: "due_today" | "overdue";
+}) {
+  const [statusFilter, setStatusFilter] = useState<string>(
+    initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
+  );
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
       if (statusFilter !== "all" && lead.status !== statusFilter) return false;
+      if (followUpFilter === "due_today" && !isLeadgenNextFollowUpDueToday(lead.next_follow_up_at)) return false;
+      if (followUpFilter === "overdue" && !isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
       if (!query) return true;
       return (
         lead.business_name.toLowerCase().includes(query) ||
@@ -21,7 +48,7 @@ export default function AgentLeadsListClient({ leads }: { leads: LeadgenLeadRow[
         (lead.phone ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, statusFilter, search]);
+  }, [leads, statusFilter, followUpFilter, search]);
 
   return (
     <div>
@@ -40,6 +67,15 @@ export default function AgentLeadsListClient({ leads }: { leads: LeadgenLeadRow[
               {s}
             </option>
           ))}
+        </select>
+        <select
+          value={followUpFilter}
+          onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)}
+          className={`${inputClass} w-auto`}
+        >
+          <option value="all">All follow-ups</option>
+          <option value="due_today">Due today</option>
+          <option value="overdue">Overdue</option>
         </select>
       </div>
 
