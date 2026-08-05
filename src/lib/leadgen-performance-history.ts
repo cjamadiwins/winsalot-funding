@@ -31,6 +31,14 @@ export type LeadgenWeeklyHistoryRow = {
   status: LeadgenPerformanceTier;
 };
 
+// Where a week sits relative to "today": a week that hasn't started yet
+// has no result to judge (brief: "future weekly periods... must not
+// display 0% or 'Behind Target'"), so it's never given a green/yellow/red
+// tier - only "completed" weeks are. "current" is the one still-open
+// week in progress; the UI has its own "In Progress" label for it
+// distinct from the completed-week tier labels.
+export type LeadgenWeekPeriod = "completed" | "current" | "future";
+
 export type LeadgenWeeklyRecord = {
   weekStart: string; // YYYY-MM-DD, Monday
   weekEnd: string; // YYYY-MM-DD, Sunday
@@ -38,6 +46,7 @@ export type LeadgenWeeklyRecord = {
   target: number;
   percentage: number;
   tier: LeadgenPerformanceTier;
+  period: LeadgenWeekPeriod;
   // true = a closed week's permanently saved result (from
   // leadgen_agent_weekly_performance); false = the current, still-open
   // week, computed live from appointments the same way the weekly
@@ -120,7 +129,8 @@ export function buildLeadgenWeeklyRecords(
 
   return weekStarts.map((weekStart) => {
     const weekEnd = addDays(weekStart, 6);
-    const frozenRow = weekStart < currentWeekStart ? historyByWeek.get(weekStart) : undefined;
+    const period: LeadgenWeekPeriod = weekStart < currentWeekStart ? "completed" : weekStart === currentWeekStart ? "current" : "future";
+    const frozenRow = period === "completed" ? historyByWeek.get(weekStart) : undefined;
 
     if (frozenRow) {
       return {
@@ -130,11 +140,16 @@ export function buildLeadgenWeeklyRecords(
         target: frozenRow.target,
         percentage: frozenRow.percentage,
         tier: frozenRow.status,
+        period,
         frozen: true,
       };
     }
 
-    const bookedCount = computeLeadgenWeekBookedCount(appointments, agentId, weekStart, weekEnd);
+    // A future week hasn't started - there is nothing to count yet, so
+    // it's always 0 regardless of what's in `appointments` (created_at
+    // can never be in the future, but this keeps the "not started" state
+    // unambiguous rather than depending on that).
+    const bookedCount = period === "future" ? 0 : computeLeadgenWeekBookedCount(appointments, agentId, weekStart, weekEnd);
     const percentage = Math.round((bookedCount / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100);
     return {
       weekStart,
@@ -143,22 +158,36 @@ export function buildLeadgenWeeklyRecords(
       target: LEADGEN_WEEKLY_APPOINTMENT_TARGET,
       percentage,
       tier: leadgenPerformanceTier(percentage),
+      period,
       frozen: false,
     };
   });
 }
 
+// weeklyBreakdown covers every Mon-Sun week in the month, including any
+// that haven't started yet (period "future") - kept as-is on the
+// returned object so the UI can still list/label them. But a week that
+// hasn't begun has no result to weigh the month's numbers down with
+// (brief: "future weeks must be excluded from the current monthly
+// performance percentage, weekly average, and overall monthly status
+// until those weeks begin"), so every aggregate below is computed only
+// over weeks that have begun (completed or the current in-progress
+// week) - otherwise, e.g., picking a month on day one would show a
+// misleadingly low percentage/red status purely because most of its
+// weeks hadn't started.
 export function computeLeadgenMonthlyPerformance(
   year: number,
   month: number,
   weeklyBreakdown: LeadgenWeeklyRecord[]
 ): LeadgenMonthlyPerformance {
-  const weeksIncluded = weeklyBreakdown.length;
-  const totalBooked = weeklyBreakdown.reduce((sum, week) => sum + week.bookedCount, 0);
+  const begunWeeks = weeklyBreakdown.filter((week) => week.period !== "future");
+
+  const weeksIncluded = begunWeeks.length;
+  const totalBooked = begunWeeks.reduce((sum, week) => sum + week.bookedCount, 0);
   const monthlyGoal = LEADGEN_WEEKLY_APPOINTMENT_TARGET * weeksIncluded;
   const percentage = monthlyGoal > 0 ? Math.round((totalBooked / monthlyGoal) * 100) : 0;
   const weeklyAverage = weeksIncluded > 0 ? Math.round((totalBooked / weeksIncluded) * 10) / 10 : 0;
-  const bestWeek = weeklyBreakdown.reduce<LeadgenWeeklyRecord | null>(
+  const bestWeek = begunWeeks.reduce<LeadgenWeeklyRecord | null>(
     (best, week) => (!best || week.bookedCount > best.bookedCount ? week : best),
     null
   );
