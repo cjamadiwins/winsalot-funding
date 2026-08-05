@@ -4,11 +4,16 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   CANADIAN_PROVINCES_AND_TERRITORIES,
+  PROVIDER_ACQUISITION_STAGES,
+  PROVIDER_ACQUISITION_STAGE_STYLES,
   PROVIDER_SERVICES_OFFERED,
   PROVIDER_STATUSES,
   PROVIDER_STATUS_STYLES,
+  isProviderFollowUpDueToday,
   isProviderFollowUpOverdue,
   isProviderOverdue,
+  providerAcquisitionStage,
+  type ProviderAcquisitionStage,
   type ProviderFollowUpWithLead,
   type ProviderLeadRow,
   type ProviderStatus,
@@ -33,6 +38,7 @@ export default function ProviderAcquisitionAdminClient({
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProviderStatus | "all">("all");
+  const [stageFilter, setStageFilter] = useState<ProviderAcquisitionStage | "all">("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [provinceFilter, setProvinceFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState("");
@@ -60,28 +66,33 @@ export default function ProviderAcquisitionAdminClient({
   }
 
   const overdueFollowUps = useMemo(() => followUps.filter(isProviderFollowUpOverdue), [followUps]);
+  const stageCounts = useMemo(() => {
+    const counts = new Map<ProviderAcquisitionStage, number>();
+    for (const stage of PROVIDER_ACQUISITION_STAGES) counts.set(stage, 0);
+    for (const provider of providers) {
+      const stage = providerAcquisitionStage(provider);
+      counts.set(stage, (counts.get(stage) ?? 0) + 1);
+    }
+    return counts;
+  }, [providers]);
 
-  const stats = [
-    { label: "Total Provider Leads", value: providers.length },
-    { label: "New Provider Leads", value: providers.filter((p) => p.status === "New").length },
-    {
-      label: "Providers Contacted",
-      value: providers.filter((p) => ["Contacted", "Contact Attempted"].includes(p.status)).length,
-    },
-    { label: "Interested Providers", value: providers.filter((p) => p.status === "Interested").length },
-    { label: "Intake Forms Sent", value: providers.filter((p) => p.status === "Intake Form Sent").length },
-    {
-      label: "Intake Forms Completed",
-      value: providers.filter((p) => p.status === "Intake Form Completed").length,
-    },
-    { label: "Approved Providers", value: providers.filter((p) => p.status === "Approved Provider").length },
-    { label: "Follow-ups Due Today", value: followUps.filter((f) => !isProviderFollowUpOverdue(f) && new Date(f.scheduled_at).toDateString() === new Date().toDateString()).length, warn: true },
-    { label: "Overdue Follow-ups", value: overdueFollowUps.length, danger: true },
-    {
-      label: "Email Bounces",
-      value: providers.filter((p) => p.last_email_status === "bounced" || p.last_email_status === "complained").length,
-      danger: true,
-    },
+  // Dashboard cards: New Interested Leads / Due Today / Overdue / Quote
+  // Forms Sent / Quote Forms Incomplete / Qualified Providers / Closed –
+  // Won / Closed – Lost - each with its own fixed color so the row reads
+  // at a glance regardless of count (brief: "Use consistent colours for
+  // dashboard cards"). Due Today/Overdue reuse the same
+  // isProviderFollowUpDueToday/isProviderFollowUpOverdue pending-callback
+  // logic already used everywhere else in this app, so a follow-up
+  // completed here immediately drops out of both, same as before.
+  const stats: { label: string; value: number; colorClass: string }[] = [
+    { label: "New Interested Leads", value: stageCounts.get("New Interested Lead") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["New Interested Lead"] },
+    { label: "Due Today", value: followUps.filter(isProviderFollowUpDueToday).length, colorClass: "bg-amber-100 text-amber-800" },
+    { label: "Overdue", value: overdueFollowUps.length, colorClass: "bg-rose-100 text-rose-800" },
+    { label: "Quote Forms Sent", value: stageCounts.get("Quote Form Sent") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["Quote Form Sent"] },
+    { label: "Quote Forms Incomplete", value: stageCounts.get("Quote Form Incomplete") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["Quote Form Incomplete"] },
+    { label: "Qualified Providers", value: stageCounts.get("Qualified Provider") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["Qualified Provider"] },
+    { label: "Closed – Won", value: stageCounts.get("Closed – Won") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["Closed – Won"] },
+    { label: "Closed – Lost", value: stageCounts.get("Closed – Lost") ?? 0, colorClass: PROVIDER_ACQUISITION_STAGE_STYLES["Closed – Lost"] },
   ];
 
   const byCity = useMemo(() => groupCount(providers, (p) => p.city), [providers]);
@@ -108,6 +119,7 @@ export default function ProviderAcquisitionAdminClient({
   const filtered = useMemo(() => {
     return providers.filter((p) => {
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (stageFilter !== "all" && providerAcquisitionStage(p) !== stageFilter) return false;
       if (agentFilter !== "all" && (p.assigned_agent_id ?? "unassigned") !== agentFilter) return false;
       if (provinceFilter !== "all" && p.province !== provinceFilter) return false;
       if (cityFilter && !p.city.toLowerCase().includes(cityFilter.toLowerCase())) return false;
@@ -130,6 +142,7 @@ export default function ProviderAcquisitionAdminClient({
     providers,
     query,
     statusFilter,
+    stageFilter,
     agentFilter,
     provinceFilter,
     cityFilter,
@@ -141,22 +154,11 @@ export default function ProviderAcquisitionAdminClient({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className={`rounded-xl border p-4 ${
-              stat.danger && stat.value > 0
-                ? "border-rose-200 bg-rose-50"
-                : stat.warn && stat.value > 0
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-slate-200 bg-white"
-            }`}
-          >
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
-            <div className={`mt-1 text-xl font-bold ${stat.danger && stat.value > 0 ? "text-rose-700" : "text-slate-900"}`}>
-              {stat.value}
-            </div>
+          <div key={stat.label} className={`rounded-xl border border-transparent p-4 ${stat.colorClass}`}>
+            <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{stat.label}</div>
+            <div className="mt-1 text-xl font-bold">{stat.value}</div>
           </div>
         ))}
       </div>
@@ -190,6 +192,14 @@ export default function ProviderAcquisitionAdminClient({
           {PROVIDER_STATUSES.map((status) => (
             <option key={status} value={status}>
               {status}
+            </option>
+          ))}
+        </select>
+        <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value as ProviderAcquisitionStage | "all")} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
+          <option value="all">All stages</option>
+          {PROVIDER_ACQUISITION_STAGES.map((stage) => (
+            <option key={stage} value={stage}>
+              {stage}
             </option>
           ))}
         </select>
@@ -315,6 +325,11 @@ export default function ProviderAcquisitionAdminClient({
                         </option>
                       ))}
                     </select>
+                    <span
+                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${PROVIDER_ACQUISITION_STAGE_STYLES[providerAcquisitionStage(provider)]}`}
+                    >
+                      {providerAcquisitionStage(provider)}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     {provider.last_email_status ? (

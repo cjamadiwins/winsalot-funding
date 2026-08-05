@@ -10,6 +10,8 @@ import {
   isOverdue,
   isDueToday,
   overdueDurationLabel,
+  quoteFulfillmentStageLabel,
+  quoteFulfillmentStageStyle,
   type CrmLeadRow,
   type CrmUserRow,
   type LeadStage,
@@ -35,30 +37,85 @@ export default function AdminCrmClient({
   // Each tile is a one-click filter view (requirement: dedicated admin
   // views/filters for all overdue leads and for each closing stage) -
   // clicking one sets stageFilter/overdueOnly directly rather than
-  // requiring the admin to hunt for the right dropdown option.
+  // requiring the admin to hunt for the right dropdown option. Every
+  // tile now carries a fixed color (Quote Fulfillment color scheme) so
+  // the row reads at a glance regardless of count.
+  //
+  // "Waiting on Customer" is now correctly wired to "Waiting for
+  // cleaning details" - Winsalot waiting on the *customer* to provide
+  // missing info - fixing a pre-existing mismap to "Quote sent to
+  // customer" (which is actually "quote already sent, awaiting the
+  // customer's accept/decline," a different stage, now its own "Quote
+  // Sent to Customer" tile below).
   const stats: {
     label: string;
     value: number;
-    warn?: boolean;
-    danger?: boolean;
+    colorClass: string;
     stageValue?: LeadStage;
     isOverdueTile?: boolean;
   }[] = [
-    { label: "New Leads", value: leads.filter((l) => l.stage === "New interested lead").length, stageValue: "New interested lead" },
-    { label: "Due Today", value: leads.filter(isDueToday).length, warn: true },
-    { label: "Overdue", value: overdueLeads.length, danger: true, isOverdueTile: true },
+    {
+      label: "New Quote Request",
+      value: leads.filter((l) => l.stage === "New interested lead").length,
+      stageValue: "New interested lead",
+      colorClass: "bg-blue-100 text-blue-800",
+    },
+    { label: "Due Today", value: leads.filter(isDueToday).length, colorClass: "bg-amber-100 text-amber-800" },
+    { label: "Overdue", value: overdueLeads.length, isOverdueTile: true, colorClass: "bg-rose-100 text-rose-800" },
+    {
+      label: "Waiting on Customer",
+      value: leads.filter((l) => l.stage === "Waiting for cleaning details").length,
+      stageValue: "Waiting for cleaning details",
+      colorClass: "bg-orange-100 text-orange-800",
+    },
     {
       label: "Waiting on Provider",
       value: leads.filter((l) => l.stage === "Quote requested from provider").length,
       stageValue: "Quote requested from provider",
+      colorClass: "bg-purple-100 text-purple-800",
     },
     {
-      label: "Waiting on Customer",
+      label: "Quote Received",
+      value: leads.filter((l) => l.stage === "Provider quote received").length,
+      stageValue: "Provider quote received",
+      colorClass: "bg-teal-100 text-teal-800",
+    },
+    {
+      label: "Quote Sent to Customer",
       value: leads.filter((l) => l.stage === "Quote sent to customer").length,
       stageValue: "Quote sent to customer",
+      colorClass: "bg-sky-100 text-sky-800",
     },
-    { label: "Closed – Won", value: leads.filter((l) => l.stage === "Closed – Won").length, stageValue: "Closed – Won" },
-    { label: "Closed – Lost", value: leads.filter((l) => l.stage === "Closed – Lost").length, stageValue: "Closed – Lost" },
+    {
+      label: "Customer Accepted",
+      value: leads.filter((l) => l.stage === "Customer accepted").length,
+      stageValue: "Customer accepted",
+      colorClass: "bg-green-100 text-green-800",
+    },
+    {
+      label: "Customer Declined",
+      value: leads.filter((l) => l.stage === "Customer declined").length,
+      stageValue: "Customer declined",
+      colorClass: "bg-red-100 text-red-800",
+    },
+    {
+      label: "Job Completed",
+      value: leads.filter((l) => l.stage === "Closed/completed").length,
+      stageValue: "Closed/completed",
+      colorClass: "bg-emerald-200 text-emerald-900",
+    },
+    {
+      label: "Closed – Won",
+      value: leads.filter((l) => l.stage === "Closed – Won").length,
+      stageValue: "Closed – Won",
+      colorClass: LEAD_STAGE_STYLES["Closed – Won"],
+    },
+    {
+      label: "Closed – Lost",
+      value: leads.filter((l) => l.stage === "Closed – Lost").length,
+      stageValue: "Closed – Lost",
+      colorClass: LEAD_STAGE_STYLES["Closed – Lost"],
+    },
   ];
 
   const byAgent = useMemo(() => {
@@ -104,7 +161,7 @@ export default function AdminCrmClient({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((stat) => {
           const clickable = Boolean(stat.stageValue || stat.isOverdueTile);
           const isActive = stat.isOverdueTile
@@ -129,26 +186,12 @@ export default function AdminCrmClient({
               key={stat.label}
               type={clickable ? "button" : undefined}
               onClick={clickable ? handleClick : undefined}
-              className={`rounded-xl border p-4 text-left ${clickable ? "cursor-pointer transition hover:border-sky-400" : ""} ${
-                isActive
-                  ? "border-sky-400 bg-sky-50 ring-2 ring-sky-200"
-                  : stat.danger && stat.value > 0
-                    ? "border-rose-200 bg-rose-50"
-                    : stat.warn && stat.value > 0
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-slate-200 bg-white"
-              }`}
+              className={`rounded-xl border p-4 text-left ${stat.colorClass} ${
+                clickable ? "cursor-pointer transition hover:opacity-90" : ""
+              } ${isActive ? "border-sky-500 ring-2 ring-sky-300" : "border-transparent"}`}
             >
-              <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
-                {stat.label}
-              </div>
-              <div
-                className={`mt-1 text-xl font-bold ${
-                  stat.danger && stat.value > 0 ? "text-rose-700" : "text-slate-900"
-                }`}
-              >
-                {stat.value}
-              </div>
+              <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{stat.label}</div>
+              <div className="mt-1 text-xl font-bold">{stat.value}</div>
             </Tag>
           );
         })}
@@ -177,7 +220,7 @@ export default function AdminCrmClient({
           <option value="all">All stages</option>
           {LEAD_STAGES.map((stage) => (
             <option key={stage} value={stage}>
-              {stage}
+              {quoteFulfillmentStageLabel(stage)}
             </option>
           ))}
         </select>
@@ -240,9 +283,9 @@ export default function AdminCrmClient({
                   <td className="px-4 py-3 text-slate-600">{agent?.full_name || agent?.email || "Unassigned"}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${LEAD_STAGE_STYLES[lead.stage]}`}
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${quoteFulfillmentStageStyle(lead.stage)}`}
                     >
-                      {lead.stage}
+                      {quoteFulfillmentStageLabel(lead.stage)}
                     </span>
                   </td>
                   <td className="px-4 py-3">

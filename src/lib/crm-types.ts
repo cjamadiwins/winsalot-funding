@@ -87,6 +87,47 @@ export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
   "Closed – Lost": "bg-rose-100 text-rose-800",
 };
 
+// ---------------------------------------------------------------------
+// Quote Fulfillment display labels/colors: a clearer, customer/provider-
+// relationship-explicit name and color for 8 of the 12 LeadStage values,
+// used only for dashboard cards, stage badges, and filters. Purely
+// presentational - the underlying LeadStage string stored on crm_leads,
+// every trigger/constraint keyed on it (migrations 0009/0024), and every
+// filter's actual value are all unchanged, so this can never affect
+// which leads a filter matches or what gets saved. A stage not in this
+// map (Follow-up required / No response / Closed – Won / Closed – Lost)
+// keeps its existing label and LEAD_STAGE_STYLES color exactly as
+// before - nothing about them is removed.
+export const QUOTE_FULFILLMENT_STAGE_LABELS: Partial<Record<LeadStage, string>> = {
+  "New interested lead": "New Quote Request",
+  "Waiting for cleaning details": "Waiting on Customer",
+  "Quote requested from provider": "Waiting on Provider",
+  "Provider quote received": "Quote Received",
+  "Quote sent to customer": "Quote Sent to Customer",
+  "Customer accepted": "Customer Accepted",
+  "Customer declined": "Customer Declined",
+  "Closed/completed": "Job Completed",
+};
+
+export const QUOTE_FULFILLMENT_STAGE_STYLES: Partial<Record<LeadStage, string>> = {
+  "New interested lead": "bg-blue-100 text-blue-800",
+  "Waiting for cleaning details": "bg-orange-100 text-orange-800",
+  "Quote requested from provider": "bg-purple-100 text-purple-800",
+  "Provider quote received": "bg-teal-100 text-teal-800",
+  "Quote sent to customer": "bg-sky-100 text-sky-800",
+  "Customer accepted": "bg-green-100 text-green-800",
+  "Customer declined": "bg-red-100 text-red-800",
+  "Closed/completed": "bg-emerald-200 text-emerald-900",
+};
+
+export function quoteFulfillmentStageLabel(stage: LeadStage): string {
+  return QUOTE_FULFILLMENT_STAGE_LABELS[stage] ?? stage;
+}
+
+export function quoteFulfillmentStageStyle(stage: LeadStage): string {
+  return QUOTE_FULFILLMENT_STAGE_STYLES[stage] ?? LEAD_STAGE_STYLES[stage];
+}
+
 export const CLOSE_OUTCOMES = ["won", "lost"] as const;
 export type CloseOutcome = (typeof CLOSE_OUTCOMES)[number];
 
