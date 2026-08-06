@@ -50,6 +50,12 @@ export default async function AgentLayout({ children }: { children: ReactNode })
               Providers
             </Link>
             <Link
+              href="/agent/emails"
+              className="text-[14px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
+            >
+              Email Tracking
+            </Link>
+            <Link
               href="/agent/training"
               className="text-[14px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
             >
