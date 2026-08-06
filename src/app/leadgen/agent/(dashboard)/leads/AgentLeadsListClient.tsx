@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  LEADGEN_EMAIL_STATUS_LABELS,
+  LEADGEN_EMAIL_STATUS_STYLES,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
   isLeadgenNextFollowUpDueToday,
   isLeadgenNextFollowUpOverdue,
+  type LeadgenEmailStatus,
   type LeadgenLeadRow,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
@@ -19,6 +22,7 @@ export default function AgentLeadsListClient({
   leads,
   initialStatusFilter,
   initialFollowUpFilter,
+  emailStatusByLeadId,
 }: {
   leads: LeadgenLeadRow[];
   // Pre-select a filter when landing here from the agent dashboard's
@@ -28,6 +32,10 @@ export default function AgentLeadsListClient({
   // admin leads page's LeadsListClient.
   initialStatusFilter?: string;
   initialFollowUpFilter?: "due_today" | "overdue";
+  // Latest tracked-email status per lead id, for the quick-glance badge
+  // below - optional so any other caller of this component keeps working
+  // unchanged if it doesn't pass one.
+  emailStatusByLeadId?: Record<string, LeadgenEmailStatus>;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>(
     initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
@@ -105,6 +113,15 @@ export default function AgentLeadsListClient({
               {lead.next_follow_up_at && (
                 <div className="mt-1.5 text-[12.5px] font-medium text-slate-600">
                   Next follow-up: {new Date(lead.next_follow_up_at).toLocaleString()}
+                </div>
+              )}
+              {emailStatusByLeadId?.[lead.id] && (
+                <div className="mt-1.5">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
+                  >
+                    Email: {LEADGEN_EMAIL_STATUS_LABELS[emailStatusByLeadId[lead.id]]}
+                  </span>
                 </div>
               )}
             </Link>
