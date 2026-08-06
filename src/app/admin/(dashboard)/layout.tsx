@@ -91,6 +91,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Training
             </Link>
             <Link
+              href="/admin/crm/emails"
+              className="text-sm font-medium text-slate-600 hover:text-sky-600"
+            >
+              Email Tracking
+            </Link>
+            <Link
               href="/admin/crm/attendance"
               className="text-sm font-medium text-slate-600 hover:text-sky-600"
             >
