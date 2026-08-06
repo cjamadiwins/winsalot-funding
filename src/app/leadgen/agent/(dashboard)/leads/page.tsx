@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { LeadgenLeadRow } from "@/lib/leadgen-types";
+import type { LeadgenEmailStatus, LeadgenLeadRow } from "@/lib/leadgen-types";
 import AgentLeadsListClient from "./AgentLeadsListClient";
 
 export default async function LeadgenAgentLeadsPage({
@@ -21,6 +21,29 @@ export default async function LeadgenAgentLeadsPage({
     .eq("assigned_agent_id", agent.id)
     .order("next_follow_up_at", { ascending: true, nullsFirst: false });
 
+  // Quick-glance email delivery status per lead for this list view - each
+  // lead's own page already shows the full Sent/Delivered/Bounced/Failed
+  // history (LeadgenEmailStatusPanel), this just surfaces the latest one
+  // here too so an agent doesn't have to open every lead to see it.
+  // leadgen_emails RLS (leadgen_emails_agent_select_own) already scopes
+  // this agent to only rows tied to their own leads; scoping by this
+  // page's own lead ids on top of that is just to keep the query small.
+  const leadIds = (leads ?? []).map((l) => l.id);
+  const { data: emails } = leadIds.length
+    ? await supabase
+        .from("leadgen_emails")
+        .select("lead_id, status, created_at")
+        .in("lead_id", leadIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as { lead_id: string | null; status: LeadgenEmailStatus }[] };
+
+  const emailStatusByLeadId: Record<string, LeadgenEmailStatus> = {};
+  for (const email of emails ?? []) {
+    if (email.lead_id && !(email.lead_id in emailStatusByLeadId)) {
+      emailStatusByLeadId[email.lead_id] = email.status as LeadgenEmailStatus;
+    }
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -39,6 +62,7 @@ export default async function LeadgenAgentLeadsPage({
         leads={(leads ?? []) as LeadgenLeadRow[]}
         initialStatusFilter={status}
         initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
+        emailStatusByLeadId={emailStatusByLeadId}
       />
     </div>
   );
