@@ -51,6 +51,7 @@ export type OperationalProviderDetailActions = {
   removeDocument?: (documentId: string, providerId: string) => Promise<{ error?: string } | void>;
   addScoreAdjustment?: (providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
   recalculateScore?: (providerId: string) => Promise<{ error?: string } | void>;
+  updateScorecard?: (providerId: string, formData: FormData) => Promise<{ error?: string } | void>;
   deleteProvider?: (providerId: string) => Promise<{ error?: string } | void>;
 };
 
@@ -205,23 +206,26 @@ export default function OperationalProviderDetailClient({
         </div>
       )}
 
-      {provider.score !== null && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => document.getElementById("scorecard")?.scrollIntoView({ behavior: "smooth" })}
-            className="flex items-center gap-2"
-          >
-            <span className="text-2xl font-bold text-slate-900">{provider.score}</span>
-            {provider.score_label && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11.5px] font-semibold text-slate-700">
-                {provider.score_label}
-              </span>
-            )}
-            <span className="text-[12.5px] font-semibold text-sky-600">View Scorecard →</span>
-          </button>
-        </div>
-      )}
+      <div className="mt-4">
+        <ProviderScorecardCard
+          provider={provider}
+          score={provider.score}
+          label={provider.score_label}
+          breakdown={provider.score_breakdown}
+          missingCategories={provider.score_missing_categories}
+          isNewProvider={provider.score_is_new_provider}
+          calculatedAt={provider.score_calculated_at}
+          adjustments={scoreAdjustments}
+          isAdmin={isAdmin}
+          onAddAdjustment={
+            actions.addScoreAdjustment ? (formData) => actions.addScoreAdjustment!(provider.id, formData) : undefined
+          }
+          onRecalculate={actions.recalculateScore ? () => actions.recalculateScore!(provider.id) : undefined}
+          onUpdateScorecard={
+            actions.updateScorecard ? (formData) => actions.updateScorecard!(provider.id, formData) : undefined
+          }
+        />
+      </div>
 
       <ProviderEmailStatusPanel latestEmail={latestEmail} />
 
@@ -605,22 +609,7 @@ export default function OperationalProviderDetailClient({
         </section>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ProviderScorecardCard
-          score={provider.score}
-          label={provider.score_label}
-          breakdown={provider.score_breakdown}
-          missingCategories={provider.score_missing_categories}
-          isNewProvider={provider.score_is_new_provider}
-          calculatedAt={provider.score_calculated_at}
-          adjustments={scoreAdjustments}
-          isAdmin={isAdmin}
-          onAddAdjustment={
-            actions.addScoreAdjustment ? (formData) => actions.addScoreAdjustment!(provider.id, formData) : undefined
-          }
-          onRecalculate={actions.recalculateScore ? () => actions.recalculateScore!(provider.id) : undefined}
-        />
-
+      <div className="mt-6">
         <PerformanceMetricsCard quoteHistory={quoteHistory} />
       </div>
 

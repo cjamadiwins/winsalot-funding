@@ -254,6 +254,28 @@ export type CleaningProviderRow = {
   score_missing_categories: string[];
   score_is_new_provider: boolean;
   score_calculated_at: string | null;
+  // Manual Provider Scorecard (migration 0030) - administrator-set 1-5
+  // ratings, operational counters, and free-text notes, merged into the
+  // same Provider Scorecard card as the automatic score above rather than
+  // a second scorecard. Every existing provider gets these as null/0
+  // automatically (purely additive columns) until an administrator fills
+  // them in.
+  quote_response_speed_rating: number | null;
+  pricing_competitiveness_rating: number | null;
+  service_quality_rating: number | null;
+  reliability_rating: number | null;
+  communication_rating: number | null;
+  customer_satisfaction_rating: number | null;
+  jobs_assigned_count: number;
+  quotes_submitted_count: number;
+  quotes_approved_count: number;
+  jobs_completed_count: number;
+  cancellation_no_show_count: number;
+  scorecard_notes: string | null;
+  manual_score: number | null;
+  manual_score_label: ManualScorecardStatus | null;
+  manual_score_updated_at: string | null;
+  manual_score_updated_by: string | null;
 };
 
 // ---------------------------------------------------------------------
@@ -406,6 +428,84 @@ export const PROVIDER_SCORE_RATING_STYLES: Record<ProviderScoreRatingLabel, stri
   "Needs Attention": "bg-orange-100 text-orange-800",
   "High Risk": "bg-rose-100 text-rose-800",
 };
+
+// ---------------------------------------------------------------------
+// Provider Scorecard: administrator-editable manual ratings, merged into
+// the same Provider Scorecard card as the automatic score above (rather
+// than a second scorecard). Six 1-5 quality ratings feed the Overall
+// Provider Score below; five operational counters and a free-text notes
+// field are administrative record-keeping shown alongside it.
+// ---------------------------------------------------------------------
+export const MANUAL_SCORECARD_RATING_CATEGORIES = [
+  "quote_response_speed",
+  "pricing_competitiveness",
+  "service_quality",
+  "reliability",
+  "communication",
+  "customer_satisfaction",
+] as const;
+
+export type ManualScorecardRatingCategory = (typeof MANUAL_SCORECARD_RATING_CATEGORIES)[number];
+
+export const MANUAL_SCORECARD_RATING_LABELS: Record<ManualScorecardRatingCategory, string> = {
+  quote_response_speed: "Quote Response Speed",
+  pricing_competitiveness: "Pricing Competitiveness",
+  service_quality: "Service Quality",
+  reliability: "Reliability",
+  communication: "Communication",
+  customer_satisfaction: "Customer Satisfaction",
+};
+
+export type ManualScorecardRatings = Record<ManualScorecardRatingCategory, number | null>;
+
+export const MANUAL_SCORECARD_COUNTER_FIELDS = [
+  "jobs_assigned_count",
+  "quotes_submitted_count",
+  "quotes_approved_count",
+  "jobs_completed_count",
+  "cancellation_no_show_count",
+] as const;
+
+export type ManualScorecardCounterField = (typeof MANUAL_SCORECARD_COUNTER_FIELDS)[number];
+
+export const MANUAL_SCORECARD_COUNTER_LABELS: Record<ManualScorecardCounterField, string> = {
+  jobs_assigned_count: "Jobs Assigned",
+  quotes_submitted_count: "Quotes Submitted",
+  quotes_approved_count: "Quotes Approved",
+  jobs_completed_count: "Jobs Completed",
+  cancellation_no_show_count: "Cancellation / No-Show Count",
+};
+
+export const MANUAL_SCORECARD_STATUSES = ["Excellent", "Good", "Needs Improvement", "High Risk"] as const;
+export type ManualScorecardStatus = (typeof MANUAL_SCORECARD_STATUSES)[number];
+
+export const MANUAL_SCORECARD_STATUS_STYLES: Record<ManualScorecardStatus, string> = {
+  Excellent: "bg-emerald-100 text-emerald-800",
+  Good: "bg-sky-100 text-sky-800",
+  "Needs Improvement": "bg-amber-100 text-amber-800",
+  "High Risk": "bg-rose-100 text-rose-800",
+};
+
+export function manualScorecardStatusLabel(score: number): ManualScorecardStatus {
+  if (score >= 85) return "Excellent";
+  if (score >= 65) return "Good";
+  if (score >= 40) return "Needs Improvement";
+  return "High Risk";
+}
+
+// Overall Provider Score (out of 100) - the average of whichever 1-5
+// quality ratings have been set so far, scaled to a 100-point scale, so
+// a partially-rated provider still gets a meaningful score instead of
+// being penalized for unrated categories. Returns null only when no
+// category has been rated yet at all.
+export function computeManualScorecardScore(ratings: ManualScorecardRatings): number | null {
+  const provided = MANUAL_SCORECARD_RATING_CATEGORIES.map((cat) => ratings[cat]).filter(
+    (v): v is number => v !== null && v !== undefined
+  );
+  if (provided.length === 0) return null;
+  const average = provided.reduce((sum, v) => sum + v, 0) / provided.length;
+  return Math.round((average / 5) * 100);
+}
 
 // Activity-type labels for the Provider Profile timeline only - a
 // superset of crm-types.ts's ACTIVITY_TYPE_LABELS that also covers the

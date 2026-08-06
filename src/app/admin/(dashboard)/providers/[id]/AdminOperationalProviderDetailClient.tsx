@@ -33,6 +33,7 @@ import {
   sendOperationalSmsAction,
   updateOperationalNoteAction,
   updateOperationalProfileAction,
+  updateOperationalScorecardAction,
   updateOperationalStatusAction,
   uploadOperationalDocumentAction,
 } from "../actions";
@@ -64,6 +65,7 @@ const actions: OperationalProviderDetailActions = {
   removeDocument: removeOperationalDocumentAction,
   addScoreAdjustment: addOperationalScoreAdjustmentAction,
   recalculateScore: recalculateOperationalScoreAction,
+  updateScorecard: updateOperationalScorecardAction,
   deleteProvider: deleteOperationalProviderAction,
 };
 
