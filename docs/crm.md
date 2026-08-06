@@ -289,6 +289,14 @@ just fire-and-forget:
   `/agent/dashboard` lead cards. A bounced or failed email highlights the panel with a banner
   telling the agent to verify/correct the address (bounced) or check the reason before retrying
   (failed); a complaint tells them to consider not emailing that lead again.
+- **Admin-wide view** — **`/admin/crm/emails`** ("Email Tracking" in the admin nav) lists every
+  quote-request/follow-up email sent to a customer lead, newest first: recipient name, email
+  address, type, sent agent, sent date/time, and current status badge, each linking back to the
+  lead. It's a second, read-only view over the same `crm_lead_emails` rows `EmailStatusPanel`
+  already reads (service-role, scoped to `lead_id is not null` so it only ever shows customer
+  emails, not the provider-targeted rows the same table also holds — see migrations 0026/0028) —
+  it doesn't add any new tracking, writes, or Resend/webhook behavior of its own. Same pattern as
+  the Lead Generation CRM's own `/leadgen/admin/emails` page.
 
 ### Setting up the Resend webhook
 
