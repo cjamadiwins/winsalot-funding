@@ -88,7 +88,7 @@ export async function recordCallOutcomeAction(leadId: string, formData: FormData
   const supabase = await createSupabaseServerClient();
   const { error: leadError } = await supabase
     .from("leadgen_leads")
-    .update({ status: callOutcome, last_contacted_at: now, next_follow_up_at: nextFollowUpAt ?? undefined, updated_at: now })
+    .update({ status: callOutcome, last_contacted_at: now, updated_at: now })
     .eq("id", leadId);
   if (leadError) return { error: "Failed to update the lead." };
 
@@ -100,6 +100,21 @@ export async function recordCallOutcomeAction(leadId: string, formData: FormData
     notes: notes ? `${notes}\n\n— logged by ${agent.full_name || agent.email}` : `Logged by ${agent.full_name || agent.email}.`,
   });
 
+  // Logging a call outcome supersedes whatever follow-up was pending
+  // before now, whether or not a new one is scheduled below - mark it
+  // completed (never deleted, so history/reporting is untouched) instead
+  // of leaving it stuck as an orphaned "pending" row that the dashboard's
+  // Overdue count would keep counting forever even after the Leads page
+  // filter (which reads next_follow_up_at, not this table directly) has
+  // already moved on. Must run before the insert below, since inserting
+  // first would otherwise mark the brand-new row completed too.
+  const { error: supersedeError } = await supabase
+    .from("leadgen_followups")
+    .update({ status: "completed", completed_at: now, completed_by: agent.id })
+    .eq("lead_id", leadId)
+    .eq("status", "pending");
+  if (supersedeError) return { error: "Failed to update the lead's prior follow-up." };
+
   if (nextFollowUpAt) {
     const { error: followUpError } = await supabase.from("leadgen_followups").insert({
       lead_id: leadId,
@@ -110,8 +125,15 @@ export async function recordCallOutcomeAction(leadId: string, formData: FormData
     if (followUpError) return { error: "Call outcome saved, but failed to schedule the follow-up." };
   }
 
+  // Recomputes leadgen_leads.next_follow_up_at from whatever is left
+  // pending (the new follow-up above, or null) - the single source of
+  // truth the Leads page filter and both dashboards' Overdue/Due Today
+  // counts read from.
+  await recomputeNextFollowUp(supabase, leadId);
+
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/leads");
   return {};
 }
 
@@ -155,6 +177,7 @@ export async function scheduleFollowUpAction(leadId: string, formData: FormData)
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/leads");
   return {};
 }
 
@@ -179,6 +202,7 @@ export async function completeFollowUpAction(followUpId: string, leadId: string)
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/leads");
   return {};
 }
 

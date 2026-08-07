@@ -214,7 +214,10 @@ export type LeadgenFollowUpRow = {
 };
 
 export type LeadgenFollowUpWithLead = LeadgenFollowUpRow & {
-  leadgen_leads: Pick<LeadgenLeadRow, "id" | "business_name" | "contact_name" | "phone" | "email" | "status"> | null;
+  leadgen_leads: Pick<
+    LeadgenLeadRow,
+    "id" | "business_name" | "contact_name" | "phone" | "email" | "status" | "next_follow_up_at"
+  > | null;
 };
 
 export const LEADGEN_APPOINTMENT_STATUSES = [

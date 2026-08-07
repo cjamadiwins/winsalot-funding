@@ -22,7 +22,7 @@ export default async function LeadgenAgentDashboardPage() {
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
       .from("leadgen_followups")
-      .select("*, leadgen_leads(id, business_name, contact_name, phone, email, status)")
+      .select("*, leadgen_leads(id, business_name, contact_name, phone, email, status, next_follow_up_at)")
       .eq("status", "pending")
       .order("scheduled_at", { ascending: true }),
     supabase
@@ -36,8 +36,17 @@ export default async function LeadgenAgentDashboardPage() {
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
-  const allFollowUps = (followUps ?? []) as LeadgenFollowUpWithLead[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as LeadgenAgentAttendanceRow | null);
+  // Only count/show a follow-up if it's still its lead's authoritative
+  // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
+  // the same source of truth the Leads page's Due Today/Overdue filters
+  // use (isLeadgenNextFollowUpDueToday/Overdue on next_follow_up_at), so
+  // this list and its count can never drift out of sync with the Leads
+  // page even if a stale "pending" row is ever left behind by a bug
+  // elsewhere.
+  const allFollowUps = ((followUps ?? []) as LeadgenFollowUpWithLead[]).filter(
+    (followUp) => followUp.leadgen_leads?.next_follow_up_at === followUp.scheduled_at
+  );
   const dueToday = allFollowUps.filter(isLeadgenFollowUpDueToday);
   const overdue = allFollowUps.filter(isLeadgenFollowUpOverdue);
 
