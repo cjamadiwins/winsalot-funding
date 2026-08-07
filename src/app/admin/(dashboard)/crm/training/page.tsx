@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmTrainingMaterialRow } from "@/lib/crm-types";
+import ConnectProposeCloseCourse from "@/components/ConnectProposeCloseCourse";
 import TrainingClient from "./TrainingClient";
 
 export default async function AdminCrmTrainingPage() {
@@ -32,6 +33,10 @@ export default async function AdminCrmTrainingPage() {
           <TrainingClient materials={(materials ?? []) as CrmTrainingMaterialRow[]} />
         </div>
       )}
+
+      <div className="mt-10">
+        <ConnectProposeCloseCourse crm="cleaning" />
+      </div>
     </div>
   );
 }
