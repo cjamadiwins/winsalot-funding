@@ -491,8 +491,28 @@ export const LEADGEN_PROVINCES = [
   "Yukon",
 ] as const;
 
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+// The Lead Generation CRM's operating timezone for Due Today/Overdue
+// day-boundary comparisons. This matters because the app runs on Vercel
+// serverless functions, whose Node process is UTC regardless of where
+// staff actually are - comparing calendar dates via Date's local-time
+// getters (getFullYear/getMonth/getDate) would silently use UTC's day
+// boundary instead of Toronto's, misclassifying anything scheduled in
+// the evening Toronto time (already "tomorrow" in UTC) as due the wrong
+// day. Overdue itself doesn't need this - "is this instant in the past"
+// is timezone-agnostic - only the "is this the same calendar day" check
+// does.
+const LEADGEN_TIMEZONE = "America/Toronto";
+
+// "YYYY-MM-DD" for `date` as it falls in LEADGEN_TIMEZONE, so two dates
+// can be compared for "same calendar day" correctly regardless of what
+// timezone the server process itself is running in.
+function leadgenDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: LEADGEN_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 export function isLeadgenFollowUpOverdue(followUp: Pick<LeadgenFollowUpRow, "scheduled_at" | "status">): boolean {
@@ -503,13 +523,13 @@ export function isLeadgenFollowUpOverdue(followUp: Pick<LeadgenFollowUpRow, "sch
 export function isLeadgenFollowUpDueToday(followUp: Pick<LeadgenFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
   if (isLeadgenFollowUpOverdue(followUp)) return false;
-  return startOfDay(new Date(followUp.scheduled_at)) === startOfDay(new Date());
+  return leadgenDateKey(new Date(followUp.scheduled_at)) === leadgenDateKey(new Date());
 }
 
 export function isLeadgenFollowUpUpcoming(followUp: Pick<LeadgenFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
   if (isLeadgenFollowUpOverdue(followUp)) return false;
-  return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
+  return leadgenDateKey(new Date(followUp.scheduled_at)) > leadgenDateKey(new Date());
 }
 
 // Same due-today/overdue rules as above, but operating directly on a
@@ -528,7 +548,7 @@ export function isLeadgenNextFollowUpOverdue(nextFollowUpAt: string | null): boo
 export function isLeadgenNextFollowUpDueToday(nextFollowUpAt: string | null): boolean {
   if (!nextFollowUpAt) return false;
   if (isLeadgenNextFollowUpOverdue(nextFollowUpAt)) return false;
-  return startOfDay(new Date(nextFollowUpAt)) === startOfDay(new Date());
+  return leadgenDateKey(new Date(nextFollowUpAt)) === leadgenDateKey(new Date());
 }
 
 export function leadgenOverdueDurationLabel(scheduledIso: string): string {
