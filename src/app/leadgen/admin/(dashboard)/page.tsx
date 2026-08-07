@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { LEADGEN_STAT_CARD_STYLES, isLeadgenFollowUpDueToday, isLeadgenFollowUpOverdue } from "@/lib/leadgen-types";
+import { LEADGEN_STAT_CARD_STYLES, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
 export default async function LeadgenAdminDashboardPage() {
   const admin = getSupabaseAdmin();
 
-  const [{ data: leads }, { data: appointments }, { data: followUps }, { data: clients }, { data: users }] = await Promise.all([
-    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id"),
+  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }] = await Promise.all([
+    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at"),
     admin.from("leadgen_appointments").select("status, client_id"),
-    admin.from("leadgen_followups").select("scheduled_at, status"),
     admin.from("leadgen_clients").select("id, name"),
     admin
       .from("leadgen_users")
@@ -22,15 +21,18 @@ export default async function LeadgenAdminDashboardPage() {
 
   const allLeads = leads ?? [];
   const allAppointments = appointments ?? [];
-  const allFollowUps = followUps ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
 
   const totalLeads = allLeads.length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
   const appointmentsBooked = allAppointments.length;
-  const followUpsDueToday = allFollowUps.filter(isLeadgenFollowUpDueToday).length;
-  const overdueFollowUps = allFollowUps.filter(isLeadgenFollowUpOverdue).length;
+  // Same source of truth as the Leads page's Due Today/Overdue filters
+  // (LeadsListClient.tsx) - each lead's own next_follow_up_at, not a raw
+  // scan of leadgen_followups rows, so these counts can never drift out
+  // of sync with what clicking through to the Leads page actually shows.
+  const followUpsDueToday = allLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)).length;
+  const overdueFollowUps = allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length;
 
   const byCampaignClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const client of allClients) byCampaignClient.set(client.id, { name: client.name, leads: 0, appointments: 0 });
