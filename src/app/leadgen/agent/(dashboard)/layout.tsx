@@ -38,6 +38,9 @@ export default async function LeadgenAgentLayout({ children }: { children: React
             <Link href="/leadgen/agent/training" className="text-sm font-medium text-slate-600 hover:text-sky-600">
               Training
             </Link>
+            <Link href="/leadgen/agent/pay" className="text-sm font-medium text-slate-600 hover:text-sky-600">
+              My Pay
+            </Link>
           </nav>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-slate-500 sm:inline">{user.full_name}</span>
