@@ -24,8 +24,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/admin" className="text-sm font-bold text-slate-900">
-              Quote Dashboard
+            <Link href="/admin" className="flex flex-col leading-tight">
+              <span className="text-sm font-bold text-slate-900">Winsalot Corp. Cleaning CRM</span>
+              <span className="text-xs font-medium text-slate-500">Empowering Businesses. One Solution at a Time.</span>
             </Link>
             <Link href="/admin" className="text-sm font-medium text-slate-600 hover:text-sky-600">
               Requests

@@ -25,11 +25,13 @@ export default async function AgentLayout({ children }: { children: ReactNode })
       <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-5">
-            <Link
-              href="/agent/dashboard"
-              className="font-heading text-[17px] font-bold text-[var(--color-ink-strong)]"
-            >
-              Winsalot CRM
+            <Link href="/agent/dashboard" className="flex flex-col leading-tight">
+              <span className="font-heading text-[17px] font-bold text-[var(--color-ink-strong)]">
+                Winsalot Corp. Cleaning CRM
+              </span>
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">
+                Empowering Businesses. One Solution at a Time.
+              </span>
             </Link>
             <Link
               href="/agent/opportunities"
