@@ -323,8 +323,31 @@ export type CrmActivityRow = {
   next_follow_up_at: string | null;
 };
 
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+// The Cleaning CRM's operating timezone for Due Today/Overdue
+// day-boundary comparisons. This matters because the app runs on Vercel
+// serverless functions, whose Node process is UTC regardless of where
+// staff actually are - comparing calendar dates via Date's local-time
+// getters (getFullYear/getMonth/getDate) would silently use UTC's day
+// boundary instead of Toronto's, misclassifying anything scheduled in
+// the evening Toronto time (already "tomorrow" in UTC) as due the wrong
+// day. Overdue itself doesn't need this - "is this instant in the past"
+// is timezone-agnostic - only the "is this the same calendar day" check
+// does. (Same fix as the Lead Generation CRM's leadgenDateKey in
+// leadgen-types.ts - duplicated rather than shared, matching this
+// codebase's existing convention of keeping the two CRMs' logic fully
+// independent.)
+const CRM_TIMEZONE = "America/Toronto";
+
+// "YYYY-MM-DD" for `date` as it falls in CRM_TIMEZONE, so two dates can
+// be compared for "same calendar day" correctly regardless of what
+// timezone the server process itself is running in.
+function crmDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: CRM_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 // Overdue is judged against the exact scheduled date *and time* - a
@@ -337,14 +360,15 @@ export function isOverdue(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">)
   return new Date(lead.next_follow_up_at).getTime() < Date.now();
 }
 
-// "Due today" means scheduled for today but not yet overdue - once the
-// scheduled time passes it moves into isOverdue() instead, so the two are
-// mutually exclusive rather than both being true for the rest of the day.
+// "Due today" means scheduled for today (in America/Toronto) but not yet
+// overdue - once the scheduled time passes it moves into isOverdue()
+// instead, so the two are mutually exclusive rather than both being true
+// for the rest of the day.
 export function isDueToday(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">): boolean {
   if (!lead.next_follow_up_at) return false;
   if (CLOSED_STAGES.includes(lead.stage)) return false;
   if (isOverdue(lead)) return false;
-  return startOfDay(new Date(lead.next_follow_up_at)) === startOfDay(new Date());
+  return crmDateKey(new Date(lead.next_follow_up_at)) === crmDateKey(new Date());
 }
 
 // "3 days overdue" / "5 hours overdue" / "12 minutes overdue" - used
@@ -400,13 +424,13 @@ export function isFollowUpOverdue(followUp: Pick<CrmFollowUpRow, "scheduled_at" 
 export function isFollowUpDueToday(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
   if (isFollowUpOverdue(followUp)) return false;
-  return startOfDay(new Date(followUp.scheduled_at)) === startOfDay(new Date());
+  return crmDateKey(new Date(followUp.scheduled_at)) === crmDateKey(new Date());
 }
 
 export function isFollowUpUpcoming(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
   if (isFollowUpOverdue(followUp)) return false;
-  return startOfDay(new Date(followUp.scheduled_at)) > startOfDay(new Date());
+  return crmDateKey(new Date(followUp.scheduled_at)) > crmDateKey(new Date());
 }
 
 // Sales Training & Call Scripts: read-only reference content for agents.
