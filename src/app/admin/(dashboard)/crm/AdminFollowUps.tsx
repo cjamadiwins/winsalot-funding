@@ -82,7 +82,7 @@ function Group({
       >
         {title} ({items.length})
       </h3>
-      <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>

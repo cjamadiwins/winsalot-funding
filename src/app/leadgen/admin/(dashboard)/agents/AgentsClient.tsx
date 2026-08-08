@@ -96,7 +96,7 @@ export default function AgentsClient({
       {showInvite && (
         <form
           action={(formData) => runAction(() => inviteLeadgenUserAction(formData), () => setShowInvite(false))}
-          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2"
+          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Full Name</span>
@@ -154,7 +154,7 @@ export default function AgentsClient({
         </form>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[760px] text-left text-[13.5px]">
           <thead>
             <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">

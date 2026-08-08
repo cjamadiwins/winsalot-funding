@@ -158,7 +158,7 @@ Winsalot Corp`;
       )}
 
       {/* Assignment */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Assign a Cleaning Provider
         </h2>
@@ -241,7 +241,7 @@ Winsalot Corp`;
 
       {/* Provider link */}
       {request.assigned_provider_id && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Provider Quote Link
           </h2>
@@ -261,7 +261,7 @@ Winsalot Corp`;
                 Copy this now — it won&apos;t be shown again.
               </p>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <code className="flex-1 overflow-x-auto rounded bg-white px-2 py-1.5 text-xs text-slate-800">
+                <code className="flex-1 overflow-x-auto rounded bg-[var(--crm-surface)] px-2 py-1.5 text-xs text-slate-800">
                   {typeof window !== "undefined" ? window.location.origin : ""}
                   {newLinkPath}
                 </code>
@@ -312,7 +312,7 @@ Winsalot Corp`;
 
       {/* Provider's submitted quote — private to Winsalot Corp, never shown to the customer */}
       {latestSubmission && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Provider&apos;s Submitted Price (Private)
           </h2>
@@ -357,7 +357,7 @@ Winsalot Corp`;
 
       {/* Review, edit, and approve the customer-facing quote — approving alone never sends anything */}
       {latestSubmission && !isSent && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Customer-Facing Quote
           </h2>

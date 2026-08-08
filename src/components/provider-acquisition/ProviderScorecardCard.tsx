@@ -52,7 +52,7 @@ export default function ProviderScorecardCard({
   const ratingStyle = label ? PROVIDER_SCORE_RATING_STYLES[label as keyof typeof PROVIDER_SCORE_RATING_STYLES] : undefined;
 
   return (
-    <section id="scorecard" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="scorecard" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Provider Scorecard</h2>
         {isAdmin && onRecalculate && (

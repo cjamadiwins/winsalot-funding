@@ -24,7 +24,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
   const tierStyle = TIER_STYLES[tier];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{agentName}</h2>
         <span className="text-[12px] text-slate-500">Week of {leadgenWeekRangeLabel(weekStart, weekEnd)}</span>
@@ -73,7 +73,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
         ) : (
           <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-100">
             <table className="w-full min-w-[520px] text-left text-[12.5px]">
-              <thead className="sticky top-0 bg-white">
+              <thead className="sticky top-0 bg-[var(--crm-surface)]">
                 <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                   <th className="p-2.5">Business Name</th>
                   <th className="p-2.5">Contact Name</th>

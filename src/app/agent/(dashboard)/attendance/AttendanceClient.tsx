@@ -39,7 +39,7 @@ export default function AttendanceClient({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--color-border)] bg-white p-5">
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-5">
         <div>
           <p className="text-sm font-medium text-[var(--color-ink-strong)]">{agentName}</p>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
@@ -74,7 +74,7 @@ export default function AttendanceClient({
         </p>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white">
+      <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)]">
         <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">

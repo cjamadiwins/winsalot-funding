@@ -24,7 +24,7 @@ export default async function AdminProvidersPage() {
         requests to. Providers approved from Provider Acquisition appear here automatically.
       </p>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Add a Provider</h2>
         <form action={createProviderAction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="companyName" placeholder="Company name" required className={inputClasses} />

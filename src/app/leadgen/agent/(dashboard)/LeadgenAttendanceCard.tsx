@@ -44,7 +44,7 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
   const error = clockInState.error ?? clockOutState.error;
 
   return (
-    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Attendance</h2>
 
       {!openShift && (

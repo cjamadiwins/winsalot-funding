@@ -281,7 +281,7 @@ export default function AdminPayrollClient({
               () => setShowAdd(false)
             )
           }
-          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6"
+          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
         >
           <PayrollFormFields agents={agents} defaultPayday={nextPayday} />
           <button type="submit" disabled={isPending} className={buttonClasses}>
@@ -302,7 +302,7 @@ export default function AdminPayrollClient({
               </h2>
               <div className="space-y-4">
                 {agentRecords.map((record) => (
-                  <div key={record.id} className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <div key={record.id} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
                     {editingId === record.id ? (
                       <form
                         action={(formData) =>
@@ -443,7 +443,7 @@ export default function AdminPayrollClient({
         })}
 
         {orderedAgentIds.length === 0 && (
-          <p className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-slate-500">
+          <p className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] px-4 py-8 text-center text-slate-500">
             No payroll records yet.
           </p>
         )}

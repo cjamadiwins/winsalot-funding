@@ -56,7 +56,7 @@ export default function CampaignDetailClient({
               else setEditing(false);
             });
           }}
-          className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2"
+          className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Campaign Name</span>
@@ -98,19 +98,19 @@ export default function CampaignDetailClient({
             { label: "Appointments Booked", value: String(appointmentsBooked) },
             { label: "Appointments Completed", value: String(appointmentsCompleted) },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-3.5">
+            <div key={stat.label} className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
               <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
               <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
             </div>
           ))}
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Conversion Rate</div>
             <div className="mt-1 text-[18px] font-bold text-slate-900">{conversionRate}%</div>
           </div>
         </div>
       )}
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Leads in this Campaign</h2>
         {leads.length === 0 ? (
           <p className="mt-3 text-[13.5px] text-slate-500">No leads assigned to this campaign yet.</p>

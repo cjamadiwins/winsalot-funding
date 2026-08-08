@@ -24,7 +24,7 @@ const TIER_STYLES: Record<LeadgenPerformanceTier, { bar: string; badge: string; 
   red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
-const selectClass = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13.5px] text-slate-900";
+const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-[13.5px] text-slate-900";
 
 // Table/history spans a lot of months for an old dataset - cap how far
 // back the month picker/history reach so both stay a manageable size.
@@ -114,7 +114,7 @@ export default function AgentMonthlyPerformanceCard({
   const barWidth = Math.min(100, monthly.percentage);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{agentName}</h2>
         <select className={selectClass} value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)}>

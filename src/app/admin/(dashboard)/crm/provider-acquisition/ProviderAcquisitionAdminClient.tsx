@@ -250,7 +250,7 @@ export default function ProviderAcquisitionAdminClient({
         </label>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -407,7 +407,7 @@ function groupCount<T>(items: T[], keyFn: (item: T) => string): Map<string, numb
 function BreakdownCard({ title, counts }: { title: string; counts: Map<string, number> }) {
   const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4">
       <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
       {entries.length === 0 ? (
         <p className="mt-2 text-xs text-slate-400">No data yet.</p>

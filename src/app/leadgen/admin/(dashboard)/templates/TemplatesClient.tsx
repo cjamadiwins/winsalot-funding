@@ -35,7 +35,7 @@ export default function TemplatesClient({ templates }: { templates: LeadgenEmail
       {showCreate && (
         <form
           action={(formData) => runAction(() => createTemplateAction(formData), () => setShowCreate(false))}
-          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5"
+          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
@@ -67,7 +67,7 @@ export default function TemplatesClient({ templates }: { templates: LeadgenEmail
 
       <div className="mt-4 space-y-3">
         {templates.map((template) => (
-          <div key={template.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div key={template.id} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="font-semibold text-slate-900">{template.name}</h3>

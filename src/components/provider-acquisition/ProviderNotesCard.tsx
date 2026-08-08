@@ -37,7 +37,7 @@ export default function ProviderNotesCard({
   }
 
   return (
-    <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="notes" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Internal Notes</h2>
       <p className="mt-1 text-[12px] text-slate-500">Visible to agents and administrators only.</p>
 
@@ -55,7 +55,7 @@ export default function ProviderNotesCard({
           placeholder="Add an internal note…"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] min-h-[70px]"
         />
-        <button type="submit" disabled={isPending} className="rounded-full bg-slate-800 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-700">
+        <button type="submit" disabled={isPending} className="rounded-full bg-slate-300 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-400">
           Add Note
         </button>
       </form>

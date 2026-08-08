@@ -46,7 +46,7 @@ export default function AttendanceCard({ openShift }: { openShift: AgentAttendan
   const error = clockInState.error ?? clockOutState.error;
 
   return (
-    <section className="mt-6 rounded-2xl border border-[var(--color-border)] bg-white p-5 shadow-sm">
+    <section className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-5 shadow-sm">
       <h2 className="font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">Attendance</h2>
 
       {!openShift && (

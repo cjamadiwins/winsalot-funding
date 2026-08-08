@@ -76,7 +76,7 @@ export default function ClientDetailClient({
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Client Information</h2>
             <button type="button" onClick={() => setEditingClient((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
@@ -197,7 +197,7 @@ export default function ClientDetailClient({
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaigns</h2>
             <button type="button" onClick={() => setShowCampaignForm((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
@@ -337,7 +337,7 @@ function CommunicationsSection({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications</h2>
         <button

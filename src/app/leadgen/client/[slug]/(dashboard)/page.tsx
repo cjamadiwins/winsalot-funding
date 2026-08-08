@@ -50,14 +50,14 @@ export default async function LeadgenClientDashboardPage({ params }: { params: P
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <div key={stat.label} className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
             <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
           </div>
         ))}
       </div>
 
-      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Upcoming Appointments</h2>
         {upcoming.length === 0 ? (
           <p className="mt-3 text-[13.5px] text-slate-500">No upcoming appointments.</p>

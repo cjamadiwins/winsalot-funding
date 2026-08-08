@@ -154,7 +154,7 @@ export default function LeadsListClient({
           action={(formData) =>
             runAction(() => createLeadAction(formData), () => setShowAddForm(false))
           }
-          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2"
+          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Business Name</span>
@@ -337,7 +337,7 @@ export default function LeadsListClient({
         </div>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {filtered.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No leads match your filters.</p>
         ) : (
@@ -445,7 +445,7 @@ function CsvUploadForm({
         onUpload(formData);
         formRef.current?.reset();
       }}
-      className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5"
+      className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"
     >
       <p className="text-[13px] text-slate-500">
         CSV columns (case-insensitive, any order): Business Name (required), Industry, Contact Name, Owner/Decision Maker,

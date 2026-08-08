@@ -45,7 +45,7 @@ export default function ProviderIntakeFormCard({
 
   if (!submission) {
     return (
-      <section id="intake-form" className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section id="intake-form" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Provider Intake Form</h2>
         <p className="mt-3 text-[13.5px] text-slate-500">Not completed yet.</p>
       </section>
@@ -53,7 +53,7 @@ export default function ProviderIntakeFormCard({
   }
 
   return (
-    <section id="intake-form" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="intake-form" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Provider Intake Form</h2>
       <p className="mt-1 text-[12px] text-slate-500">
         Completed On: {completedAt ? new Date(completedAt).toLocaleString() : "—"} · Completed By: Provider (self-submitted)

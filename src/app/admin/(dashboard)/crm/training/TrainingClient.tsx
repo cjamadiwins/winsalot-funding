@@ -55,7 +55,7 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
               () => setShowAdd(false)
             )
           }
-          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6"
+          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
         >
           <input name="title" placeholder="Title" required className={inputClasses} />
           <input name="category" placeholder="Category (optional, e.g. Cleaning Provider Recruitment)" className={inputClasses} />
@@ -78,7 +78,7 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
             <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">{category}</h2>
             <div className="space-y-4">
               {groupMaterials.map((material) => (
-                <div key={material.id} className="rounded-2xl border border-slate-200 bg-white p-6">
+                <div key={material.id} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
                   {editingId === material.id ? (
                     <form
                       action={(formData) =>
@@ -156,7 +156,7 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
         ))}
 
         {materials.length === 0 && (
-          <p className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-slate-500">
+          <p className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] px-4 py-8 text-center text-slate-500">
             No training materials yet.
           </p>
         )}

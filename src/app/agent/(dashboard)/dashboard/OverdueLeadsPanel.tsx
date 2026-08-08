@@ -87,7 +87,7 @@ export default function OverdueLeadsPanel({
       </h2>
 
       {error && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-white px-4 py-3 text-sm text-red-700">
+        <p className="mt-3 rounded-lg border border-red-200 bg-[var(--crm-surface)] px-4 py-3 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -96,7 +96,7 @@ export default function OverdueLeadsPanel({
         {overdueLeads.map((lead) => {
           const followUp = earliestFollowUpByLead.get(lead.id) ?? null;
           return (
-            <li key={lead.id} className="rounded-xl border border-red-200 bg-white p-4">
+            <li key={lead.id} className="rounded-xl border border-red-200 bg-[var(--crm-surface)] p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Link
                   href={`/agent/leads/${lead.id}`}
@@ -136,7 +136,7 @@ export default function OverdueLeadsPanel({
                   type="button"
                   disabled={isPending}
                   onClick={() => setClosingLeadId(lead.id)}
-                  className={`${bigButtonClass} bg-slate-800 hover:bg-slate-900`}
+                  className={`${bigButtonClass} bg-slate-300 hover:bg-slate-400`}
                 >
                   Close Lead
                 </button>

@@ -97,7 +97,7 @@ export default async function LeadgenAgentDashboardPage() {
         <FollowUpGroup title="Due Today" items={dueToday} emphasis="warn" />
       </div>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
         <p className="mt-2 text-[13.5px] text-slate-600">
           Keep the Brent&apos;s Essentials call script open while dialing to stay consistent on every call.
@@ -115,7 +115,7 @@ function FollowUpGroup({ title, items, emphasis }: { title: string; items: Leadg
   const titleStyle = emphasis === "danger" ? "text-rose-700" : "text-amber-700";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className={`text-[11.5px] font-semibold uppercase tracking-wide ${titleStyle}`}>
         {title} ({items.length})
       </h2>

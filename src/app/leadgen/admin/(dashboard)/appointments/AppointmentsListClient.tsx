@@ -73,7 +73,7 @@ export default function AppointmentsListClient({
       {showForm && (
         <form
           action={(formData) => runAction(() => bookAppointmentAction(formData), () => { setShowForm(false); setSelectedLeadId(""); })}
-          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2"
+          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5 sm:col-span-2">
             <span className="text-[13px] font-semibold text-slate-600">From an existing lead (optional)</span>
@@ -195,7 +195,7 @@ export default function AppointmentsListClient({
         </form>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {appointments.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No appointments booked yet.</p>
         ) : (

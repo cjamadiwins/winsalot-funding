@@ -33,7 +33,7 @@ const PERIOD_LABEL: Record<"current" | "future", string> = {
 };
 const PERIOD_BADGE_CLASS = "bg-slate-100 text-slate-500";
 
-const selectClass = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13.5px] text-slate-900";
+const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-[13.5px] text-slate-900";
 
 // Table/history spans a lot of months for an old dataset - cap how far
 // back the month picker/table reach so both stay a manageable size.
@@ -133,7 +133,7 @@ export default function CrmMonthlyPerformanceSection({
   const monthlyTierStyle = TIER_STYLES[monthly.monthlyTier];
 
   return (
-    <section className="mt-10 rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="mt-10 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
