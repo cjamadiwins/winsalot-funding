@@ -28,7 +28,7 @@ export default async function LeadgenAdminEmailsPage() {
       <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
       <p className="mt-1 text-sm text-slate-500">All Lead Generation CRM email delivery records across every agent and lead.</p>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         {!emails || emails.length === 0 ? (
           <p className="text-[13.5px] text-slate-500">No tracked emails yet.</p>
         ) : (

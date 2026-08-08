@@ -105,7 +105,7 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
           {byCampaignClient.size === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No clients yet.</p>
@@ -135,7 +135,7 @@ export default async function LeadgenAdminDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Results by Agent</h2>
           {byAgent.size === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No agents yet.</p>
@@ -160,7 +160,7 @@ export default async function LeadgenAdminDashboardPage() {
         </section>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
         <p className="mt-2 text-[13.5px] text-slate-600">
           Open the Brent&apos;s Essentials call script for a clear, read-only guide agents can use while calling.

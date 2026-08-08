@@ -31,7 +31,7 @@ export default function ProviderEmailHistoryCard({
   }
 
   return (
-    <section id="email-history" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="email-history" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Email History</h2>
       {error && <p className="mt-2 text-[13px] text-rose-600">{error}</p>}
 

@@ -17,7 +17,7 @@ import {
 export default function EmailStatusPanel({ latestEmail }: { latestEmail: LatestCrmLeadEmail | null }) {
   if (!latestEmail) {
     return (
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Email Status
         </h2>
@@ -34,7 +34,7 @@ export default function EmailStatusPanel({ latestEmail }: { latestEmail: LatestC
   ];
 
   return (
-    <section className="mt-6 rounded-2xl border-2 border-slate-200 bg-white p-5">
+    <section className="mt-6 rounded-2xl border-2 border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Email Status

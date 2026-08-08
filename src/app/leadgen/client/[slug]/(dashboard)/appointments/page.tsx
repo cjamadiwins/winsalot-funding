@@ -20,7 +20,7 @@ export default async function LeadgenClientAppointmentsPage({ params }: { params
       <h1 className="text-2xl font-bold text-slate-900">Appointments</h1>
       <p className="mt-1 text-sm text-slate-500">Every consultation booked for your campaigns.</p>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {rows.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No appointments booked yet.</p>
         ) : (

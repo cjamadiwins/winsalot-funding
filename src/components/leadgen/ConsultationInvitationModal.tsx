@@ -77,7 +77,7 @@ export default function ConsultationInvitationModal({
         aria-modal="true"
         aria-label="Send 15-Minute Consultation Invitation"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[17px] font-bold text-slate-900">Send 15-Minute Consultation Invitation</h2>

@@ -362,7 +362,7 @@ export default function LeadDetailClient({
       {showFollowUpForm && (
         <form
           action={(formData) => runAction(() => actions.scheduleFollowUp(lead.id, formData), () => setShowFollowUpForm(false))}
-          className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-4"
+          className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4"
         >
           <input type="datetime-local" name="scheduled_at" required className={`${inputClass} max-w-[220px]`} />
           <input name="note" placeholder="Note (optional)" className={`${inputClass} max-w-[240px]`} />
@@ -386,7 +386,7 @@ export default function LeadDetailClient({
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Lead Information</h2>
           {editing ? (
             <form
@@ -465,7 +465,7 @@ export default function LeadDetailClient({
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Record Call Outcome</h2>
           <form action={(formData) => runAction(() => actions.recordCallOutcome(lead.id, formData))} className="mt-4 space-y-3">
             <select name="call_outcome" required defaultValue="" className={inputClass}>
@@ -483,7 +483,7 @@ export default function LeadDetailClient({
               <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
             </label>
-            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-800 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-700">
+            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-300 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-400">
               Save Call Outcome
             </button>
           </form>
@@ -511,7 +511,7 @@ export default function LeadDetailClient({
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Follow-ups</h2>
           {followUps.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No follow-ups scheduled.</p>
@@ -540,7 +540,7 @@ export default function LeadDetailClient({
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Appointments</h2>
           {appointments.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No appointments booked for this lead yet.</p>
@@ -563,7 +563,7 @@ export default function LeadDetailClient({
       </div>
 
       <div className="mt-6">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
             <div className="flex flex-wrap gap-2.5">
@@ -665,7 +665,7 @@ function BookAppointmentInlineForm({
   onBook: (formData: FormData) => void;
 }) {
   return (
-    <form action={onBook} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
+    <form action={onBook} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4 sm:grid-cols-2">
       <input type="hidden" name="lead_id" value={lead.id} />
       <input type="hidden" name="client_id" value={client.id} />
       {campaign && <input type="hidden" name="campaign_id" value={campaign.id} />}

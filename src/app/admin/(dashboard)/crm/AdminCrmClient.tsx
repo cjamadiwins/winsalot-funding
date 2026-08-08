@@ -247,7 +247,7 @@ export default function AdminCrmClient({
         </label>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -332,7 +332,7 @@ export default function AdminCrmClient({
             <div
               key={agent.id}
               className={`rounded-xl border p-4 ${
-                overdueCount > 0 ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"
+                overdueCount > 0 ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-[var(--crm-surface)]"
               }`}
             >
               <div className="font-medium text-slate-900">{agent.full_name || agent.email}</div>
@@ -349,7 +349,7 @@ export default function AdminCrmClient({
           );
         })}
         {(byAgent.get("unassigned") ?? []).length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4">
             <div className="font-medium text-slate-900">Unassigned</div>
             <div className="text-sm text-slate-500">{byAgent.get("unassigned")!.length} leads</div>
           </div>

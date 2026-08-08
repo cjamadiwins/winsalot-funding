@@ -55,7 +55,7 @@ export default async function AdminRequestDetailPage({
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Customer Request
           </h2>

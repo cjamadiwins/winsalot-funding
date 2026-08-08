@@ -85,7 +85,7 @@ export default function CloseLeadPanel({
   }
 
   return (
-    <div className={embedded ? "" : "mt-6 rounded-2xl border border-slate-200 bg-white p-5"}>
+    <div className={embedded ? "" : "mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"}>
       {!embedded && (
         <>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Close Lead</h2>

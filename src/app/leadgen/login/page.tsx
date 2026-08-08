@@ -8,7 +8,7 @@ export default async function LeadgenLoginPage({
   const params = await searchParams;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
+    <div className="crm-theme flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 shadow-sm">
         <h1 className="font-heading text-xl font-bold text-[var(--color-ink-strong)]">Sign In</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">Winsalot Lead Generation CRM</p>

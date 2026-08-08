@@ -16,7 +16,7 @@ import {
 } from "@/lib/provider-invoice-types";
 
 const inputClass =
-  "w-full rounded-[10px] border border-slate-300 bg-white px-3.5 py-2.5 text-[14px] text-slate-900";
+  "w-full rounded-[10px] border border-slate-300 bg-[var(--crm-surface)] px-3.5 py-2.5 text-[14px] text-slate-900";
 
 type ActionResult = { error?: string; requiresOverpayConfirmation?: boolean; invoiceId?: string };
 
@@ -88,7 +88,7 @@ export default function ProviderInvoicesSection({
   const detailInvoice = detailInvoiceId ? invoices.find((i) => i.id === detailInvoiceId) ?? null : null;
 
   return (
-    <section id="invoices" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="invoices" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Invoices &amp; Payments</h2>
         <button
@@ -112,12 +112,12 @@ export default function ProviderInvoicesSection({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by invoice number or description..."
-          className="w-full max-w-xs rounded-[10px] border border-slate-300 bg-white px-3.5 py-2.5 text-[13.5px]"
+          className="w-full max-w-xs rounded-[10px] border border-slate-300 bg-[var(--crm-surface)] px-3.5 py-2.5 text-[13.5px]"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as InvoiceStatus | "all")}
-          className="rounded-[10px] border border-slate-300 bg-white px-3.5 py-2.5 text-[13.5px]"
+          className="rounded-[10px] border border-slate-300 bg-[var(--crm-surface)] px-3.5 py-2.5 text-[13.5px]"
         >
           <option value="all">All statuses</option>
           {INVOICE_STATUSES.map((status) => (
@@ -396,7 +396,7 @@ function InvoiceFormModal({
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[17px] font-bold text-slate-900">{title}</h2>
@@ -537,7 +537,7 @@ function InvoiceDetailModal({
         aria-modal="true"
         aria-label={`Invoice ${invoice.invoice_number}`}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div id="printable-invoice">
           <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
@@ -940,7 +940,7 @@ function CorrectPaymentForm({
       {overpayConfirm && (
         <p className="text-[12.5px] text-amber-700">Submitting again will confirm this as an intentional overpayment.</p>
       )}
-      <button type="submit" disabled={submitting || isPending} className="rounded-full bg-slate-800 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-700">
+      <button type="submit" disabled={submitting || isPending} className="rounded-full bg-slate-300 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-400">
         {submitting ? "Saving…" : overpayConfirm ? "Confirm & Save" : "Save Correction"}
       </button>
     </form>

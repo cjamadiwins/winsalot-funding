@@ -21,8 +21,8 @@ export default async function AgentLayout({ children }: { children: ReactNode })
     .limit(20);
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
-      <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur-md">
+    <div className="crm-theme min-h-screen bg-[var(--color-bg)]">
+      <header className="sticky top-0 z-50 border-b border-[var(--crm-border)] bg-[var(--crm-sidebar)]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-5">
             <Link href="/agent/dashboard" className="flex flex-col leading-tight">

@@ -28,7 +28,7 @@ import ProviderNotesCard from "@/components/provider-acquisition/ProviderNotesCa
 import ProviderEmailHistoryCard from "@/components/provider-acquisition/ProviderEmailHistoryCard";
 
 const inputClass =
-  "w-full rounded-[10px] border border-[var(--color-input-border,#d6dbe3)] bg-white px-3.5 py-2.5 text-[14.5px] text-slate-900";
+  "w-full rounded-[10px] border border-[var(--color-input-border,#d6dbe3)] bg-[var(--crm-surface)] px-3.5 py-2.5 text-[14.5px] text-slate-900";
 
 export type OperationalProviderDetailActions = {
   updateProfile: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
@@ -139,7 +139,7 @@ export default function OperationalProviderDetailClient({
         <div className="flex items-start gap-4">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl border border-slate-200 object-contain bg-white" />
+            <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl border border-slate-200 object-contain bg-[var(--crm-surface)]" />
           ) : (
             <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-lg font-bold text-slate-400">
               {provider.company_name.slice(0, 1).toUpperCase()}
@@ -301,7 +301,7 @@ export default function OperationalProviderDetailClient({
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">General Information</h2>
 
           {editing ? (
@@ -558,7 +558,7 @@ export default function OperationalProviderDetailClient({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Log Activity</h2>
           <form action={(formData) => runAction(() => actions.addActivity(provider.id, formData))} className="mt-4 space-y-3">
             <select name="activity_type" required className={inputClass} defaultValue="note">
@@ -573,7 +573,7 @@ export default function OperationalProviderDetailClient({
               <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
             </label>
-            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-800 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700">
+            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-300 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-400">
               Save Activity
             </button>
           </form>
@@ -670,7 +670,7 @@ function PerformanceMetricsCard({ quoteHistory }: { quoteHistory: ProviderQuoteH
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Provider Statistics</h2>
       <div className="mt-3 grid grid-cols-2 gap-3">
         {stats.map((stat) => (

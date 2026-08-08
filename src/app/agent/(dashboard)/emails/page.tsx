@@ -61,7 +61,7 @@ export default async function AgentEmailsPage() {
       )}
 
       {!leadsError && !emailsError && (
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           {!emails || emails.length === 0 ? (
             <p className="text-[13.5px] text-slate-500">No tracked emails yet.</p>
           ) : (

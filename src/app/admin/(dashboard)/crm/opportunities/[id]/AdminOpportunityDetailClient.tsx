@@ -122,7 +122,7 @@ export default function AdminOpportunityDetailClient({
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Details</h2>
               <button
@@ -205,7 +205,7 @@ export default function AdminOpportunityDetailClient({
                   <button
                     type="submit"
                     disabled={isPending}
-                    className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                    className="rounded-full bg-slate-300 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-400 disabled:opacity-50"
                   >
                     Save Changes
                   </button>
@@ -265,7 +265,7 @@ export default function AdminOpportunityDetailClient({
             </a>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Activity &amp; Notes</h2>
             <form
               action={(formData) => runAction(() => addOpportunityActivityAction(opportunity.id, formData))}
@@ -312,7 +312,7 @@ export default function AdminOpportunityDetailClient({
             </ul>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Scheduled Callbacks</h2>
               <button
@@ -336,7 +336,7 @@ export default function AdminOpportunityDetailClient({
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="rounded-full bg-slate-300 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-400 disabled:opacity-50"
                 >
                   Schedule
                 </button>
@@ -364,7 +364,7 @@ export default function AdminOpportunityDetailClient({
                         className={`w-56 ${inputClass}`}
                       />
                       <input name="note" defaultValue={followUp.note ?? ""} className={`w-56 ${inputClass}`} />
-                      <button type="submit" disabled={isPending} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+                      <button type="submit" disabled={isPending} className="rounded-full bg-slate-300 px-3 py-1 text-xs font-medium text-white">
                         Save
                       </button>
                       <button type="button" onClick={() => setReschedulingId(null)} className="text-xs text-slate-500">
@@ -408,7 +408,7 @@ export default function AdminOpportunityDetailClient({
         </div>
 
         <div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Assignment</h2>
             {assignedAgent && (
               <p className="mt-1 text-xs text-slate-500">Currently assigned to {assignedAgent.full_name || assignedAgent.email}</p>
@@ -462,7 +462,7 @@ export default function AdminOpportunityDetailClient({
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Audit Log</h2>
             <ul className="mt-3 space-y-2 text-xs">
               {auditLog.map((entry) => (

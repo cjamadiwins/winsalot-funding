@@ -21,7 +21,7 @@ export default async function LeadgenAgentAppointmentsPage() {
         lead&apos;s profile.
       </p>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {rows.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No appointments yet.</p>
         ) : (

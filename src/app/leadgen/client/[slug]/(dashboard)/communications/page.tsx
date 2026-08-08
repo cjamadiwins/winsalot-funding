@@ -31,7 +31,7 @@ export default async function LeadgenClientCommunicationsPage({ params }: { para
           </p>
         ) : (
           rows.map((email) => (
-            <div key={email.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div key={email.id} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-slate-900">{email.subject}</h3>
                 <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>

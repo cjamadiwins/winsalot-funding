@@ -44,7 +44,7 @@ export default function NotificationBell({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-[var(--crm-surface)] shadow-lg">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <span className="text-sm font-semibold text-slate-900">Notifications</span>
               {unreadCount > 0 && (

@@ -36,7 +36,7 @@ import ProviderIntakeFormCard from "./ProviderIntakeFormCard";
 import ProviderEmailHistoryCard from "./ProviderEmailHistoryCard";
 
 const inputClass =
-  "w-full rounded-[10px] border border-[var(--color-input-border,#d6dbe3)] bg-white px-3.5 py-2.5 text-[14.5px] text-slate-900";
+  "w-full rounded-[10px] border border-[var(--color-input-border,#d6dbe3)] bg-[var(--crm-surface)] px-3.5 py-2.5 text-[14.5px] text-slate-900";
 
 export type ProviderDetailActions = {
   updateProfile: (providerId: string, formData: FormData) => Promise<{ error?: string }>;
@@ -178,7 +178,7 @@ export default function ProviderDetailClient({
         <div className="flex items-start gap-4">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl border border-slate-200 object-contain bg-white" />
+            <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl border border-slate-200 object-contain bg-[var(--crm-surface)]" />
           ) : (
             <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-lg font-bold text-slate-400">
               {provider.business_name.slice(0, 1).toUpperCase()}
@@ -445,7 +445,7 @@ export default function ProviderDetailClient({
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
             General Information
           </h2>
@@ -715,7 +715,7 @@ export default function ProviderDetailClient({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           {addingCallNote && (
             <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-4">
               <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-800">Add Call Note</h2>
@@ -782,7 +782,7 @@ export default function ProviderDetailClient({
               <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
             </label>
-            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-800 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700">
+            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-300 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-400">
               Save Activity
             </button>
           </form>

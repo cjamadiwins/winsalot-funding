@@ -35,7 +35,7 @@ export default function ProviderQuoteHistoryCard({
   }
 
   return (
-    <section id="quote-history" className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section id="quote-history" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Quote History</h2>
         {isAdmin && onLink && (

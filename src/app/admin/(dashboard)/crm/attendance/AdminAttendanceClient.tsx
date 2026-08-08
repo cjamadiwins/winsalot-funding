@@ -116,7 +116,7 @@ export default function AdminAttendanceClient({
 
   return (
     <div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4">
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={agentFilter}
@@ -157,7 +157,7 @@ export default function AdminAttendanceClient({
         {agents.map((agent) => {
           const totals = totalsByAgent.get(agent.id) ?? { daily: 0, weekly: 0, monthly: 0 };
           return (
-            <div key={agent.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div key={agent.id} className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4">
               <div className="font-medium text-slate-900">{agent.full_name || agent.email}</div>
               <div className="mt-2 text-sm text-slate-600">Daily: {minutesToHoursLabel(totals.daily)} h</div>
               <div className="text-sm text-slate-600">Weekly: {minutesToHoursLabel(totals.weekly)} h</div>
@@ -167,7 +167,7 @@ export default function AdminAttendanceClient({
         })}
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>

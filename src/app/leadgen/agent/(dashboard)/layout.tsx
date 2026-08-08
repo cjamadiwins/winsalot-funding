@@ -6,8 +6,8 @@ export default async function LeadgenAgentLayout({ children }: { children: React
   const user = await requireLeadgenAgent();
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="crm-theme min-h-screen bg-slate-50">
+      <header className="border-b border-[var(--crm-border)] bg-[var(--crm-sidebar)]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link href="/leadgen/agent" className="flex flex-col leading-tight">

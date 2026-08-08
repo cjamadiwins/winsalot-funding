@@ -25,7 +25,7 @@ export default async function LeadgenAgentNewLeadPage({
       <h1 className="text-2xl font-bold text-slate-900">Add Lead</h1>
       <p className="mt-1 text-sm text-slate-500">Create a new lead and assign it to yourself.</p>
 
-      <form action={createAgentLeadAction} className="mt-6 max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      <form action={createAgentLeadAction} className="mt-6 max-w-3xl rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
         {params.error && (
           <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{params.error}</p>
         )}

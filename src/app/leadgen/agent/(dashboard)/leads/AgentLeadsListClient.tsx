@@ -101,7 +101,7 @@ export default function AgentLeadsListClient({
             <Link
               key={lead.id}
               href={`/leadgen/agent/leads/${lead.id}`}
-              className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-sky-300"
+              className="block rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4 transition hover:border-sky-300"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-slate-900">{lead.business_name}</span>

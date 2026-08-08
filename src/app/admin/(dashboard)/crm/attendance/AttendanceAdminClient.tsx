@@ -41,7 +41,7 @@ export default function AttendanceAdminClient({
         </select>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">

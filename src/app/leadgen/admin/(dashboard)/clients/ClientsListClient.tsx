@@ -109,7 +109,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
       {showForm && (
         <form
           action={handleSubmit}
-          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2"
+          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Client Name</span>
@@ -176,7 +176,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
           No clients yet. Add your first client to get started.
         </p>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
           <table className="w-full min-w-[680px] text-left text-[13.5px]">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">

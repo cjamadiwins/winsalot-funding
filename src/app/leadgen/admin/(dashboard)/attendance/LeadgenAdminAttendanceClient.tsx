@@ -69,7 +69,7 @@ export default function LeadgenAdminAttendanceClient({
 
   return (
     <div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4">
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={agentFilter}
@@ -93,7 +93,7 @@ export default function LeadgenAdminAttendanceClient({
         </div>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>

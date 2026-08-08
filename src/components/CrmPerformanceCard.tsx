@@ -24,7 +24,7 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
   const { current, history } = performance;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{agentName}</h2>
         <span className="text-[12px] text-slate-500">Period: {crmBiweeklyRangeLabel(current.periodStart, current.periodEnd)}</span>

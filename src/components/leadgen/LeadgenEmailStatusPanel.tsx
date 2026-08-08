@@ -11,7 +11,7 @@ import {
 export default function LeadgenEmailStatusPanel({ latestEmail }: { latestEmail: LeadgenEmailRow | null }) {
   if (!latestEmail) {
     return (
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Email Status</h2>
         <p className="mt-2 text-sm text-slate-500">No email sent to this lead yet.</p>
       </section>
@@ -36,7 +36,7 @@ export default function LeadgenEmailStatusPanel({ latestEmail }: { latestEmail: 
   const latestAt = leadgenEmailStatusAt(latestEmail);
 
   return (
-    <section className="mt-6 rounded-2xl border-2 border-slate-200 bg-white p-5">
+    <section className="mt-6 rounded-2xl border-2 border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Email Status</h2>
         <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[latestEmail.status]}`}>

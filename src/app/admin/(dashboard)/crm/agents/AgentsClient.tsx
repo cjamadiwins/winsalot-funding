@@ -89,7 +89,7 @@ export default function AgentsClient({
               }
             );
           }}
-          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-6"
+          className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input name="full_name" placeholder="Full name" required className={inputClasses} />
@@ -105,7 +105,7 @@ export default function AgentsClient({
         </form>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>

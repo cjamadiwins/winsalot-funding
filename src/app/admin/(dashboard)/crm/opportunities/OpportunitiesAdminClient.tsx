@@ -345,7 +345,7 @@ export default function OpportunitiesAdminClient({
                 ? "border-rose-200 bg-rose-50"
                 : stat.warn && stat.value > 0
                   ? "border-amber-200 bg-amber-50"
-                  : "border-slate-200 bg-white"
+                  : "border-slate-200 bg-[var(--crm-surface)]"
             }`}
           >
             <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
@@ -370,7 +370,7 @@ export default function OpportunitiesAdminClient({
           type="button"
           onClick={handleRunNow}
           disabled={isRunning}
-          className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
+          className="rounded-full bg-slate-300 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-slate-400 disabled:opacity-50"
         >
           {isRunning ? "Running collection..." : "Run Collection Now"}
         </button>
@@ -534,7 +534,7 @@ export default function OpportunitiesAdminClient({
             type="button"
             onClick={handleBulkArchive}
             disabled={isPending}
-            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+            className="rounded-full border border-slate-300 bg-[var(--crm-surface)] px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
           >
             Archive Selected
           </button>
@@ -542,7 +542,7 @@ export default function OpportunitiesAdminClient({
             type="button"
             onClick={handleBulkDelete}
             disabled={isPending}
-            className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-medium text-rose-700 hover:border-rose-400 disabled:opacity-50"
+            className="rounded-full border border-rose-300 bg-[var(--crm-surface)] px-3 py-1 text-xs font-medium text-rose-700 hover:border-rose-400 disabled:opacity-50"
           >
             Delete Selected
           </button>
@@ -566,7 +566,7 @@ export default function OpportunitiesAdminClient({
               type="button"
               onClick={handleMerge}
               disabled={isPending || !mergePrimaryId || selectedIds.size < 2}
-              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
+              className="rounded-full border border-slate-300 bg-[var(--crm-surface)] px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50"
             >
               Merge Into Primary
             </button>
@@ -583,7 +583,7 @@ export default function OpportunitiesAdminClient({
 
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <table className="w-full min-w-[1200px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -764,7 +764,7 @@ function RunSummaryPanel({ summary }: { summary: RunCollectionSummary }) {
   const acceptedCount = summary.newRecordsInserted + summary.duplicatesWithinRun + summary.duplicatesAlreadyStored;
 
   return (
-    <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+    <div className="mt-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4 text-sm">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         Collection Run — {new Date(summary.ranAt).toLocaleString()}
       </h3>
@@ -863,7 +863,7 @@ type TodayStats = {
 // produced them.
 function DailySummaryPanel({ stats }: { stats: TodayStats }) {
   return (
-    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4 text-sm">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         Today&apos;s Summary — {stats.total} record{stats.total === 1 ? "" : "s"} discovered
       </h3>
@@ -892,7 +892,7 @@ function DailySummaryPanel({ stats }: { stats: TodayStats }) {
 // and reflects the cron's own runs, not just manual ones.
 function LastSuccessfulSearchPanel({ run }: { run: OpportunityCollectionRunRow | null }) {
   return (
-    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4 text-sm">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         Last Successful Search — Qualified Prospects (OpenStreetMap)
       </h3>

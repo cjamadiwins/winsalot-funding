@@ -82,7 +82,7 @@ export default function NewProviderLeadForm({ agents }: { agents: CrmUserRow[] }
           e.preventDefault();
           submit(false);
         }}
-        className="mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-6"
+        className="mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Business Name" required>
