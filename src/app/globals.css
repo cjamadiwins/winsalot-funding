@@ -50,7 +50,7 @@
 }
 
 /* ---------------------------------------------------------------------
- * CRM dark navy/slate theme
+ * CRM light workspace / dark navy sidebar theme
  *
  * Scoped to `.crm-theme` (applied to the root of every logged-in CRM
  * screen - Cleaning CRM admin/agent, Lead Gen CRM admin/agent, and their
@@ -58,33 +58,44 @@
  * quote-request pages, which share some of the same token names and the
  * same default Tailwind palette, are completely unaffected.
  *
+ * The main working area (page background, panels, cards, text) is a
+ * soft white / cool light gray-blue, while the left sidebar nav keeps
+ * its own dedicated dark navy tokens (`--crm-sidebar*`) so it stays a
+ * strong dark anchor regardless of how light the workspace gets.
+ *
  * Tailwind v4 generates utilities like `bg-slate-50` / `text-emerald-800`
  * as `background-color: var(--color-slate-50)`, and the default palette
- * itself is just a `:root` custom-property block. Re-declaring the same
- * custom properties inside `.crm-theme` therefore reskins every existing
- * `bg-white`, `text-slate-900`, `border-emerald-200`, etc. class already
- * used throughout the CRM without editing hundreds of call sites. Each
- * hue keeps its original role (low numbers = surfaces/borders, high
- * numbers = text) but the lightness direction is inverted for a dark
- * background, and status-badge pairs (e.g. `bg-emerald-50 text-emerald-800`)
- * become a dark tinted chip with bright, readable text.
+ * itself is just a `:root` custom-property block - so simply *not*
+ * overriding the raw hue palette here (slate/sky/emerald/rose/amber/...)
+ * lets every existing `bg-white`, `text-slate-900`, `bg-emerald-100
+ * text-emerald-800`, etc. class already used throughout the CRM fall
+ * back to Tailwind's real default light-mode colors, which is exactly
+ * the light, vivid-on-white look this theme wants, without editing
+ * hundreds of call sites.
  * ------------------------------------------------------------------- */
 .crm-theme {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Semantic CRM tokens */
-  --crm-bg: #263b55;
-  --crm-bg-2: #2b415d;
-  --crm-surface: #304963;
-  --crm-surface-2: #35506c;
-  --crm-sidebar: #223a55;
-  --crm-border: #3d5878;
-  --crm-border-soft: #33496a;
-  --crm-text: #ffffff;
-  --crm-text-soft: #c3d0e3;
-  --crm-text-muted: #8ca1be;
+  /* Semantic CRM tokens - main workspace (light) */
+  --crm-bg: #f4f7fa;
+  --crm-bg-2: #eaf0f6;
+  --crm-surface: #ffffff;
+  --crm-surface-2: #f7fafc;
+  --crm-border: #dce4ec;
+  --crm-border-soft: #e7edf3;
+  --crm-text: #17283b;
+  --crm-text-soft: #4b5c71;
+  --crm-text-muted: #6b7c90;
   --crm-accent: #3e7ef7;
-  --crm-accent-hover: #6aa1fa;
+  --crm-accent-hover: #2e63d6;
+
+  /* Sidebar tokens - stays dark navy so the CRM keeps a strong anchor
+     and its Winsalot identity even though the workspace is now light. */
+  --crm-sidebar: #223a55;
+  --crm-sidebar-border: #33496a;
+  --crm-sidebar-text: #ffffff;
+  --crm-sidebar-text-soft: #c3d0e3;
+  --crm-sidebar-text-muted: #8ca1be;
 
   /* Re-theme the existing semantic tokens (used directly by the Cleaning
      agent dashboard and all three portals' auth pages) */
@@ -97,142 +108,29 @@
   --color-input-border: var(--crm-border);
   --color-input-bg: var(--crm-surface);
   --color-ink: var(--crm-text);
-  --color-ink-strong: #ffffff;
+  --color-ink-strong: var(--crm-text);
   --color-ink-soft: var(--crm-text-soft);
   --color-ink-mute: var(--crm-text-muted);
   --color-text-body: var(--crm-text-soft);
   --color-text-body-2: var(--crm-text-soft);
   --color-text-muted: var(--crm-text-muted);
   --color-text-muted-2: var(--crm-text-muted);
-  --color-text-faint: #7690af;
-  --color-text-on-dark: #ffffff;
-  --color-text-on-dark-soft: var(--crm-text-soft);
-  --color-text-on-dark-soft-2: var(--crm-text-soft);
+  --color-text-faint: #7c8da1;
+  --color-text-on-dark: var(--crm-sidebar-text);
+  --color-text-on-dark-soft: var(--crm-sidebar-text-soft);
+  --color-text-on-dark-soft-2: var(--crm-sidebar-text-soft);
   --color-accent: var(--crm-accent);
-  --color-accent-soft: #22314f;
-  --color-accent-soft-text: #9bc0fc;
-  --color-accent-soft-text-2: #c7dbfe;
-  --color-step-num: var(--crm-accent-hover);
-  --color-card-shadow: oklch(0 0 0 / 0.35);
-  --color-selection: oklch(0.62 0.15 250 / 0.35);
-  --color-green: #34d399;
-  --color-green-soft: #1d3a2e;
-  --color-green-soft-text: #7ff0b4;
-  --color-orange: #fbbf24;
-  --color-purple: #c4a8fa;
-
-  /* Re-theme the raw Tailwind palette so every existing bg-, text- and
-     border- utility in the CRM picks up the dark theme automatically. */
-  --color-slate-50: var(--crm-bg);
-  --color-slate-100: var(--crm-bg-2);
-  --color-slate-200: var(--crm-border);
-  --color-slate-300: #4e6c8e;
-  --color-slate-400: var(--crm-text-muted);
-  --color-slate-500: var(--crm-text-soft);
-  --color-slate-600: #cbd6e6;
-  --color-slate-700: #dee6f0;
-  --color-slate-800: #f0f3f8;
-  --color-slate-900: #ffffff;
-  --color-slate-950: #ffffff;
-
-  /* Status/pill hues: the "-50" shade is a subtler tinted panel wash,
-     "-100"/"-200" are the saturated, clearly-colored pill/badge
-     background (paired with a bright "-700"/"-800"/"-900" text color by
-     the call sites), tuned to visibly pop against the navy surfaces
-     instead of reading as a muddy near-black tint. */
-  --color-sky-50: #1d2c4a;
-  --color-sky-100: #29508f;
-  --color-sky-200: #2f4571;
-  --color-sky-300: #3b5690;
-  --color-sky-400: #5b93f9;
-  --color-sky-500: var(--crm-accent);
-  --color-sky-600: var(--crm-accent);
-  --color-sky-700: var(--crm-accent-hover);
-  --color-sky-800: #bcd6ff;
-  --color-sky-900: #dcebff;
-
-  --color-blue-50: #1d2c4a;
-  --color-blue-100: #29508f;
-  --color-blue-200: #2f4571;
-  --color-blue-600: var(--crm-accent);
-  --color-blue-700: var(--crm-accent-hover);
-  --color-blue-800: #bcd6ff;
-
-  --color-cyan-50: #123c47;
-  --color-cyan-100: #0e7c93;
-  --color-cyan-200: #145a6b;
-  --color-cyan-800: #a9ecfb;
-
-  --color-emerald-50: #17402d;
-  --color-emerald-100: #1c8f5a;
-  --color-emerald-200: #295843;
-  --color-emerald-300: #37725a;
-  --color-emerald-400: #4ade80;
-  --color-emerald-500: #34d399;
-  --color-emerald-600: #1fa866;
-  --color-emerald-700: #4edb90;
-  --color-emerald-800: #96f5c4;
-  --color-emerald-900: #cdfce3;
-
-  --color-green-50: #17402d;
-  --color-green-100: #1c8f5a;
-  --color-green-200: #29714f;
-  --color-green-700: #4edb90;
-  --color-green-800: #96f5c4;
-
-  --color-teal-100: #128077;
-  --color-teal-800: #94f2e6;
-
-  --color-rose-50: #4a2530;
-  --color-rose-100: #a02249;
-  --color-rose-200: #7a2c42;
-  --color-rose-300: #75384b;
-  --color-rose-400: #fb7185;
-  --color-rose-500: #f43f5e;
-  --color-rose-600: #e11d48;
-  --color-rose-700: #fb7185;
-  --color-rose-800: #ffc2cd;
-  --color-rose-900: #ffe0e6;
-
-  --color-red-50: #472322;
-  --color-red-100: #9a2e2c;
-  --color-red-200: #7a3230;
-  --color-red-300: #753b3b;
-  --color-red-600: #ef4444;
-  --color-red-700: #f87171;
-  --color-red-800: #ffc4c4;
-  --color-red-900: #ffdede;
-
-  --color-amber-50: #4a3a0f;
-  --color-amber-100: #92640c;
-  --color-amber-200: #6e5518;
-  --color-amber-300: #75631f;
-  --color-amber-500: #f5a70f;
-  --color-amber-600: #f59e0b;
-  --color-amber-700: #fbbf24;
-  --color-amber-800: #ffe8a8;
-  --color-amber-900: #fff2cc;
-  --color-amber-950: #fef3c7;
-
-  --color-orange-50: #4a2e12;
-  --color-orange-100: #b8500f;
-  --color-orange-200: #7a4318;
-  --color-orange-700: #ffb47a;
-  --color-orange-800: #ffd1a8;
-
-  --color-purple-50: #33245e;
-  --color-purple-100: #6c31d6;
-  --color-purple-200: #4a3b78;
-  --color-purple-700: #dac4ff;
-  --color-purple-800: #e8dcff;
-
-  --color-indigo-50: #29255e;
-  --color-indigo-100: #4239b8;
-  --color-indigo-200: #3a4680;
-  --color-indigo-600: #5b6ee8;
-  --color-indigo-700: #7b8cf5;
-  --color-indigo-800: #ccd3ff;
-  --color-indigo-900: #dfe3ff;
+  --color-accent-soft: #e7f0fe;
+  --color-accent-soft-text: #1d4fd6;
+  --color-accent-soft-text-2: #2c5fe0;
+  --color-step-num: var(--crm-accent);
+  --color-card-shadow: oklch(0.2 0.02 250 / 0.14);
+  --color-selection: oklch(0.62 0.15 250 / 0.25);
+  --color-green: #16a34a;
+  --color-green-soft: #dcfce7;
+  --color-green-soft-text: #15803d;
+  --color-orange: #ea580c;
+  --color-purple: #9333ea;
 }
 
 .crm-theme input:not([type="checkbox"]):not([type="radio"]),

@@ -137,7 +137,7 @@ export default function AdminOverdueLeadsPanel({
                   type="button"
                   disabled={isPending}
                   onClick={() => setClosingLeadId(lead.id)}
-                  className={`${bigButtonClass} bg-slate-300 hover:bg-slate-400`}
+                  className={`${bigButtonClass} bg-slate-500 hover:bg-slate-600`}
                 >
                   Close Lead
                 </button>

@@ -106,7 +106,7 @@ export default async function LeadgenAgentDashboardPage() {
           <PerformanceRing percentage={performance.percentage} tier={performanceTier} label="of weekly target" size={112} strokeWidth={10} />
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</div>
-            <div className="mt-1 text-[15px] font-bold text-white">{performance.bookedThisWeek} booked this week</div>
+            <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">{performance.bookedThisWeek} booked this week</div>
             <div className="mt-0.5 text-[12.5px] text-slate-500">Week of {leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd)}</div>
           </div>
         </div>
