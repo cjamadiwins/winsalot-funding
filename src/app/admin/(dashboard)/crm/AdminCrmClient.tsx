@@ -3,10 +3,23 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  Inbox,
+  Clock,
+  AlertTriangle,
+  Hourglass,
+  HardHat,
+  FileCheck,
+  Send,
+  ThumbsUp,
+  ThumbsDown,
+  CheckCircle2,
+  Trophy,
+  XCircle,
+} from "lucide-react";
+import {
   EMAIL_STATUS_LABELS,
   EMAIL_STATUS_STYLES,
   LEAD_STAGES,
-  LEAD_STAGE_STYLES,
   isOverdue,
   isDueToday,
   overdueDurationLabel,
@@ -16,6 +29,7 @@ import {
   type CrmUserRow,
   type LeadStage,
 } from "@/lib/crm-types";
+import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 
 export default function AdminCrmClient({
   leads,
@@ -50,7 +64,8 @@ export default function AdminCrmClient({
   const stats: {
     label: string;
     value: number;
-    colorClass: string;
+    tone: KpiTone;
+    icon: typeof Inbox;
     stageValue?: LeadStage;
     isOverdueTile?: boolean;
   }[] = [
@@ -58,63 +73,73 @@ export default function AdminCrmClient({
       label: "New Quote Request",
       value: leads.filter((l) => l.stage === "New interested lead").length,
       stageValue: "New interested lead",
-      colorClass: "bg-blue-100 text-blue-800",
+      tone: "blue",
+      icon: Inbox,
     },
-    { label: "Due Today", value: leads.filter(isDueToday).length, colorClass: "bg-amber-100 text-amber-800" },
-    { label: "Overdue", value: overdueLeads.length, isOverdueTile: true, colorClass: "bg-rose-100 text-rose-800" },
+    { label: "Due Today", value: leads.filter(isDueToday).length, tone: "amber", icon: Clock },
+    { label: "Overdue", value: overdueLeads.length, isOverdueTile: true, tone: "red", icon: AlertTriangle },
     {
       label: "Waiting on Customer",
       value: leads.filter((l) => l.stage === "Waiting for cleaning details").length,
       stageValue: "Waiting for cleaning details",
-      colorClass: "bg-orange-100 text-orange-800",
+      tone: "orange",
+      icon: Hourglass,
     },
     {
       label: "Waiting on Provider",
       value: leads.filter((l) => l.stage === "Quote requested from provider").length,
       stageValue: "Quote requested from provider",
-      colorClass: "bg-purple-100 text-purple-800",
+      tone: "purple",
+      icon: HardHat,
     },
     {
       label: "Quote Received",
       value: leads.filter((l) => l.stage === "Provider quote received").length,
       stageValue: "Provider quote received",
-      colorClass: "bg-teal-100 text-teal-800",
+      tone: "teal",
+      icon: FileCheck,
     },
     {
       label: "Quote Sent to Customer",
       value: leads.filter((l) => l.stage === "Quote sent to customer").length,
       stageValue: "Quote sent to customer",
-      colorClass: "bg-sky-100 text-sky-800",
+      tone: "blue",
+      icon: Send,
     },
     {
       label: "Customer Accepted",
       value: leads.filter((l) => l.stage === "Customer accepted").length,
       stageValue: "Customer accepted",
-      colorClass: "bg-green-100 text-green-800",
+      tone: "green",
+      icon: ThumbsUp,
     },
     {
       label: "Customer Declined",
       value: leads.filter((l) => l.stage === "Customer declined").length,
       stageValue: "Customer declined",
-      colorClass: "bg-red-100 text-red-800",
+      tone: "rose",
+      icon: ThumbsDown,
     },
     {
       label: "Job Completed",
       value: leads.filter((l) => l.stage === "Closed/completed").length,
       stageValue: "Closed/completed",
-      colorClass: "bg-emerald-200 text-emerald-900",
+      tone: "green",
+      icon: CheckCircle2,
     },
     {
       label: "Closed – Won",
       value: leads.filter((l) => l.stage === "Closed – Won").length,
       stageValue: "Closed – Won",
-      colorClass: LEAD_STAGE_STYLES["Closed – Won"],
+      tone: "green",
+      icon: Trophy,
     },
     {
       label: "Closed – Lost",
       value: leads.filter((l) => l.stage === "Closed – Lost").length,
       stageValue: "Closed – Lost",
-      colorClass: LEAD_STAGE_STYLES["Closed – Lost"],
+      tone: "rose",
+      icon: XCircle,
     },
   ];
 
@@ -180,19 +205,16 @@ export default function AdminCrmClient({
             }
           }
 
-          const Tag = clickable ? "button" : "div";
           return (
-            <Tag
+            <KpiCard
               key={stat.label}
-              type={clickable ? "button" : undefined}
+              label={stat.label}
+              value={stat.value}
+              tone={stat.tone}
+              icon={<stat.icon />}
               onClick={clickable ? handleClick : undefined}
-              className={`rounded-xl border p-4 text-left ${stat.colorClass} ${
-                clickable ? "cursor-pointer transition hover:opacity-90" : ""
-              } ${isActive ? "border-sky-500 ring-2 ring-sky-300" : "border-transparent"}`}
-            >
-              <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{stat.label}</div>
-              <div className="mt-1 text-xl font-bold">{stat.value}</div>
-            </Tag>
+              active={isActive}
+            />
           );
         })}
       </div>

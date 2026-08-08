@@ -3,6 +3,9 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import type { AgentAttendanceRow, CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
 import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
+import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
+import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel } from "@/lib/crm-performance";
+import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueLeadsPanel from "./OverdueLeadsPanel";
@@ -67,6 +70,14 @@ export default async function AgentDashboardPage({
   const providerFollowUps = (providerFollowUpsData ?? []) as ProviderFollowUpWithLead[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
 
+  // Same helpers /agent/performance uses (getCrmPerformanceRecords +
+  // computeCrmAgentPerformance) - reused here purely to surface a
+  // read-only ring summary on the dashboard; no calculation logic
+  // duplicated or changed.
+  const performanceRecords = await getCrmPerformanceRecords(crmUser.id);
+  const performance = computeCrmAgentPerformance(performanceRecords, crmUser.id);
+  const performanceTier = crmPerformanceTier(performance.current.overallPercentage);
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -85,6 +96,24 @@ export default async function AgentDashboardPage({
           + Add Lead
         </Link>
       </div>
+
+      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <PerformanceRing percentage={performance.current.overallPercentage} tier={performanceTier} label="of biweekly target" size={112} strokeWidth={10} />
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
+            <div className="mt-1 text-[15px] font-bold text-white">
+              {performance.current.quotesSent} quotes sent · {performance.current.quotesReceived} received
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-[var(--crm-text-muted)]">
+              Period: {crmBiweeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}
+            </div>
+          </div>
+        </div>
+        <Link href="/agent/performance" className="whitespace-nowrap text-[13.5px] font-semibold text-[var(--crm-accent)] hover:opacity-80">
+          View full report →
+        </Link>
+      </section>
 
       <AttendanceCard openShift={openShift} />
       {attendanceError && (

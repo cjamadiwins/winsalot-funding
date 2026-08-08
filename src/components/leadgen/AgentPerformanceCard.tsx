@@ -1,6 +1,7 @@
 import type { LeadgenAgentPerformance, LeadgenPerformanceTier } from "@/lib/leadgen-performance";
 import { LEADGEN_PERFORMANCE_TIER_LABEL, leadgenPerformanceTier, leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES } from "@/lib/leadgen-types";
+import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 
 // One color per tier, shared by the percentage badge, the progress bar,
 // and the performance status pill so all three always agree for a given
@@ -30,13 +31,16 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
         <span className="text-[12px] text-slate-500">Week of {leadgenWeekRangeLabel(weekStart, weekEnd)}</span>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Booked This Week" value={String(bookedThisWeek)} />
-        <Stat label="Weekly Target" value={String(target)} />
-        <Stat label="Performance" value={`${percentage}%`} badgeClassName={tierStyle.badge} />
-        <Stat label="Remaining to 100%" value={String(remainingToTarget)} />
-        <Stat label="Previous Week" value={String(previousWeekTotal)} />
-        <Stat label="Monthly Total" value={String(monthlyTotal)} />
+      <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+        <PerformanceRing percentage={percentage} tier={tier} label="of weekly target" />
+        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+          <Stat label="Booked This Week" value={String(bookedThisWeek)} />
+          <Stat label="Weekly Target" value={String(target)} />
+          <Stat label="Performance" value={`${percentage}%`} badgeClassName={tierStyle.badge} />
+          <Stat label="Remaining to 100%" value={String(remainingToTarget)} />
+          <Stat label="Previous Week" value={String(previousWeekTotal)} />
+          <Stat label="Monthly Total" value={String(monthlyTotal)} />
+        </div>
       </div>
 
       <div className="mt-4">

@@ -1,6 +1,8 @@
+import { Phone, UserCheck, Star, CalendarCheck, CheckCircle2, UserX } from "lucide-react";
 import { requireLeadgenClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
+import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 
 export default async function LeadgenClientDashboardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -34,13 +36,13 @@ export default async function LeadgenClientDashboardPage({ params }: { params: P
     .filter((a) => a.appointment_date >= today && a.status !== "Cancelled" && a.status !== "Completed")
     .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date));
 
-  const stats: { label: string; value: string }[] = [
-    { label: "Total Businesses Contacted", value: String(businessesContacted) },
-    { label: "Owners Reached", value: String(ownersReached) },
-    { label: "Interested Businesses", value: String(interestedBusinesses) },
-    { label: "Appointments Booked", value: String(appointmentsBooked) },
-    { label: "Completed Appointments", value: String(appointmentsCompleted) },
-    { label: "No-shows", value: String(noShows) },
+  const stats: { label: string; value: string; tone: KpiTone; icon: typeof Phone }[] = [
+    { label: "Total Businesses Contacted", value: String(businessesContacted), tone: "blue", icon: Phone },
+    { label: "Owners Reached", value: String(ownersReached), tone: "indigo", icon: UserCheck },
+    { label: "Interested Businesses", value: String(interestedBusinesses), tone: "green", icon: Star },
+    { label: "Appointments Booked", value: String(appointmentsBooked), tone: "green", icon: CalendarCheck },
+    { label: "Completed Appointments", value: String(appointmentsCompleted), tone: "teal", icon: CheckCircle2 },
+    { label: "No-shows", value: String(noShows), tone: "red", icon: UserX },
   ];
 
   return (
@@ -50,10 +52,7 @@ export default async function LeadgenClientDashboardPage({ params }: { params: P
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
-            <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
-          </div>
+          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
         ))}
       </div>
 
