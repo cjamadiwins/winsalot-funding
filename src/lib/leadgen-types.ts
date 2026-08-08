@@ -6,6 +6,8 @@
 // on that side, and vice versa. See supabase/migrations/0031_leadgen_crm.sql
 // for the schema this mirrors.
 
+import type { KpiTone } from "@/components/crm-ui/KpiCard";
+
 export const LEADGEN_ROLES = ["admin", "agent", "client"] as const;
 export type LeadgenRole = (typeof LEADGEN_ROLES)[number];
 
@@ -110,17 +112,17 @@ export const LEADGEN_LEAD_STATUS_STYLES: Record<LeadgenLeadStatus, string> = {
   "Consultation Information Sent": "bg-indigo-100 text-indigo-800",
 };
 
-// Shared dashboard stat-card colour palette (New Lead=blue, Interested=
+// Shared dashboard KPI-card tone palette (New Lead=blue, Interested=
 // indigo, Appointment Booked=green, Due Today=yellow, Overdue=red) - the
-// admin and agent Lead Gen dashboards both import these same classes so
+// admin and agent Lead Gen dashboards both import these same tones so
 // equivalent cards can never display different colours.
-export const LEADGEN_STAT_CARD_STYLES = {
-  leads: "border-blue-200 bg-blue-50 text-blue-700",
-  interested: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  appointments: "border-green-200 bg-green-50 text-green-700",
-  dueToday: "border-amber-200 bg-amber-50 text-amber-700",
-  overdue: "border-red-200 bg-red-50 text-red-700",
-} as const;
+export const LEADGEN_STAT_CARD_STYLES: Record<"leads" | "interested" | "appointments" | "dueToday" | "overdue", KpiTone> = {
+  leads: "blue",
+  interested: "indigo",
+  appointments: "green",
+  dueToday: "amber",
+  overdue: "red",
+};
 
 // Statuses that mean this lead is done being actively worked - used to
 // decide whether it should still be eligible for an overdue-follow-up

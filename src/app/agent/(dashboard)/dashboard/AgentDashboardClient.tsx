@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Users, UserPlus, Clock, AlertTriangle, ClipboardList } from "lucide-react";
 import {
   CRM_LEAD_DASHBOARD_CARD_STYLES,
   EMAIL_STATUS_LABELS,
@@ -15,6 +15,7 @@ import {
   type CrmLeadRow,
   type LeadStage,
 } from "@/lib/crm-types";
+import KpiCard from "@/components/crm-ui/KpiCard";
 
 type FollowUpFilter = "all" | "due_today" | "overdue";
 
@@ -50,31 +51,35 @@ export default function AgentDashboardClient({
   const newLeads = leads.filter((l) => l.stage === "New interested lead").length;
   const followUpRequired = leads.filter((l) => l.stage === "Follow-up required").length;
 
-  const stats: { label: string; value: number; href: string; colorClass: string }[] = [
-    { label: "Total Leads", value: leads.length, href: "/agent/dashboard#my-leads", colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.total },
+  const stats = [
+    { label: "Total Leads", value: leads.length, href: "/agent/dashboard#my-leads", tone: CRM_LEAD_DASHBOARD_CARD_STYLES.total, icon: Users },
     {
       label: "New Leads",
       value: newLeads,
       href: `/agent/dashboard?stage=${encodeURIComponent("New interested lead")}#my-leads`,
-      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.newLead,
+      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.newLead,
+      icon: UserPlus,
     },
     {
       label: "Due Today",
       value: dueToday,
       href: "/agent/dashboard?followup=due_today#my-leads",
-      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.dueToday,
+      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.dueToday,
+      icon: Clock,
     },
     {
       label: "Overdue",
       value: overdue,
       href: "/agent/dashboard?followup=overdue#my-leads",
-      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.overdue,
+      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.overdue,
+      icon: AlertTriangle,
     },
     {
       label: "Follow-up Required",
       value: followUpRequired,
       href: `/agent/dashboard?stage=${encodeURIComponent("Follow-up required")}#my-leads`,
-      colorClass: CRM_LEAD_DASHBOARD_CARD_STYLES.followUp,
+      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.followUp,
+      icon: ClipboardList,
     },
   ];
 
@@ -99,7 +104,7 @@ export default function AgentDashboardClient({
     <div>
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map((stat) => (
-          <StatCard key={stat.label} href={stat.href} label={stat.label} value={stat.value} colorClass={stat.colorClass} />
+          <KpiCard key={stat.label} href={stat.href} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
         ))}
       </div>
 
@@ -203,29 +208,5 @@ export default function AgentDashboardClient({
         </div>
       )}
     </div>
-  );
-}
-
-// Whole-card clickable stat tile. A plain <Link> already gets Enter-key
-// activation and pointer/focus semantics for free from the browser -
-// this only adds explicit Space-key support (anchors don't activate on
-// Space natively) so both keys work.
-function StatCard({ href, label, value, colorClass }: { href: string; label: string; value: number; colorClass: string }) {
-  const router = useRouter();
-
-  return (
-    <Link
-      href={href}
-      onKeyDown={(e) => {
-        if (e.key === " ") {
-          e.preventDefault();
-          router.push(href);
-        }
-      }}
-      className={`block cursor-pointer rounded-xl border p-4 transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${colorClass}`}
-    >
-      <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
-      <div className="mt-1 font-heading text-[22px] font-bold">{value}</div>
-    </Link>
   );
 }

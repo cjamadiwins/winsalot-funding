@@ -1,58 +1,45 @@
-import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
+import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
+import {
+  LayoutDashboard,
+  Users,
+  UserPlus,
+  CalendarCheck,
+  Mail,
+  BarChart3,
+  TrendingUp,
+  GraduationCap,
+  Wallet,
+} from "lucide-react";
 import { signOutLeadgenAgentAction } from "./actions";
+
+const NAV_ITEMS: CrmNavItem[] = [
+  { label: "Dashboard", href: "/leadgen/agent", icon: <LayoutDashboard /> },
+  { label: "My Leads", href: "/leadgen/agent/leads", icon: <Users /> },
+  { label: "Add Lead", href: "/leadgen/agent/leads/new", icon: <UserPlus /> },
+  { label: "My Appointments", href: "/leadgen/agent/appointments", icon: <CalendarCheck /> },
+  { label: "Email Tracking", href: "/leadgen/agent/emails", icon: <Mail /> },
+  { label: "My Performance", href: "/leadgen/agent/performance", icon: <BarChart3 /> },
+  { label: "Monthly Performance", href: "/leadgen/agent/performance/monthly", icon: <TrendingUp /> },
+  { label: "Training", href: "/leadgen/agent/training", icon: <GraduationCap /> },
+  { label: "My Pay", href: "/leadgen/agent/pay", icon: <Wallet /> },
+];
 
 export default async function LeadgenAgentLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAgent();
 
   return (
-    <div className="crm-theme min-h-screen bg-slate-50">
-      <header className="border-b border-[var(--crm-border)] bg-[var(--crm-sidebar)]">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/leadgen/agent" className="flex flex-col leading-tight">
-              <span className="text-sm font-bold text-slate-900">Winsalot Corp. Lead Gen CRM</span>
-              <span className="text-xs font-medium text-slate-500">Empowering Businesses. One Solution at a Time.</span>
-            </Link>
-            <Link href="/leadgen/agent" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Dashboard
-            </Link>
-            <Link href="/leadgen/agent/leads" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              My Leads
-            </Link>
-            <Link href="/leadgen/agent/leads/new" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Add Lead
-            </Link>
-            <Link href="/leadgen/agent/appointments" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              My Appointments
-            </Link>
-            <Link href="/leadgen/agent/emails" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Email Tracking
-            </Link>
-            <Link href="/leadgen/agent/performance" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              My Performance
-            </Link>
-            <Link href="/leadgen/agent/performance/monthly" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Monthly Performance
-            </Link>
-            <Link href="/leadgen/agent/training" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Training
-            </Link>
-            <Link href="/leadgen/agent/pay" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              My Pay
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-slate-500 sm:inline">{user.full_name}</span>
-            <form action={signOutLeadgenAgentAction}>
-              <button type="submit" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-400">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">{children}</main>
+    <div className="crm-theme">
+      <CrmShell
+        brandTitle="Winsalot Corp. Lead Gen CRM"
+        brandSubtitle="Empowering Businesses. One Solution at a Time."
+        homeHref="/leadgen/agent"
+        navItems={NAV_ITEMS}
+        userLabel={user.full_name}
+        signOutAction={signOutLeadgenAgentAction}
+      >
+        {children}
+      </CrmShell>
     </div>
   );
 }

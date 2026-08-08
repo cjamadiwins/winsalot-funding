@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Users, Clock, AlertTriangle, UserCheck } from "lucide-react";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
@@ -10,7 +11,9 @@ import {
   type LeadgenFollowUpWithLead,
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
-import ClickableStatCard from "@/components/leadgen/ClickableStatCard";
+import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
+import KpiCard from "@/components/crm-ui/KpiCard";
+import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 
@@ -18,7 +21,7 @@ export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: leads }, { data: followUps }, { data: attendanceData, error: attendanceError }] = await Promise.all([
+  const [{ data: leads }, { data: followUps }, { data: attendanceData, error: attendanceError }, { data: appointments }] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
       .from("leadgen_followups")
@@ -33,9 +36,18 @@ export default async function LeadgenAgentDashboardPage() {
       .order("clock_in", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Same source /leadgen/agent/performance reads, reused here only to
+    // surface a read-only ring summary on the dashboard - no calculation
+    // logic duplicated or changed.
+    supabase
+      .from("leadgen_appointments")
+      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
+      .order("appointment_date", { ascending: false }),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
+  const performance = computeLeadgenAgentPerformance((appointments ?? []) as LeadgenPerformanceAppointment[], agent.id);
+  const performanceTier = leadgenPerformanceTier(performance.percentage);
   const openShift = attendanceError ? null : ((attendanceData ?? null) as LeadgenAgentAttendanceRow | null);
   // Only count/show a follow-up if it's still its lead's authoritative
   // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
@@ -59,31 +71,49 @@ export default async function LeadgenAgentDashboardPage() {
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <ClickableStatCard
+        <KpiCard
           href="/leadgen/agent/leads"
           label="My Leads"
           value={String(myLeads.length)}
-          colorClass={LEADGEN_STAT_CARD_STYLES.leads}
+          tone={LEADGEN_STAT_CARD_STYLES.leads}
+          icon={<Users />}
         />
-        <ClickableStatCard
+        <KpiCard
           href="/leadgen/agent/leads?followup=due_today"
           label="Due Today"
           value={String(dueToday.length)}
-          colorClass={LEADGEN_STAT_CARD_STYLES.dueToday}
+          tone={LEADGEN_STAT_CARD_STYLES.dueToday}
+          icon={<Clock />}
         />
-        <ClickableStatCard
+        <KpiCard
           href="/leadgen/agent/leads?followup=overdue"
           label="Overdue"
           value={String(overdue.length)}
-          colorClass={LEADGEN_STAT_CARD_STYLES.overdue}
+          tone={LEADGEN_STAT_CARD_STYLES.overdue}
+          icon={<AlertTriangle />}
         />
-        <ClickableStatCard
+        <KpiCard
           href={`/leadgen/agent/leads?status=${encodeURIComponent("Interested")}`}
           label="Interested"
           value={String(statusCounts.get("Interested") ?? 0)}
-          colorClass={LEADGEN_STAT_CARD_STYLES.interested}
+          tone={LEADGEN_STAT_CARD_STYLES.interested}
+          icon={<UserCheck />}
         />
       </div>
+
+      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <PerformanceRing percentage={performance.percentage} tier={performanceTier} label="of weekly target" size={112} strokeWidth={10} />
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</div>
+            <div className="mt-1 text-[15px] font-bold text-white">{performance.bookedThisWeek} booked this week</div>
+            <div className="mt-0.5 text-[12.5px] text-slate-500">Week of {leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd)}</div>
+          </div>
+        </div>
+        <Link href="/leadgen/agent/performance" className="whitespace-nowrap text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+          View full report →
+        </Link>
+      </section>
 
       <LeadgenAttendanceCard openShift={openShift} />
       {attendanceError && (

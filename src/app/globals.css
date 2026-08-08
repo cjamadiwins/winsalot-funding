@@ -135,86 +135,104 @@
   --color-slate-900: #ffffff;
   --color-slate-950: #ffffff;
 
-  --color-sky-50: #202f4c;
-  --color-sky-100: #26375c;
+  /* Status/pill hues: the "-50" shade is a subtler tinted panel wash,
+     "-100"/"-200" are the saturated, clearly-colored pill/badge
+     background (paired with a bright "-700"/"-800"/"-900" text color by
+     the call sites), tuned to visibly pop against the navy surfaces
+     instead of reading as a muddy near-black tint. */
+  --color-sky-50: #1d2c4a;
+  --color-sky-100: #29508f;
   --color-sky-200: #2f4571;
   --color-sky-300: #3b5690;
   --color-sky-400: #5b93f9;
   --color-sky-500: var(--crm-accent);
   --color-sky-600: var(--crm-accent);
   --color-sky-700: var(--crm-accent-hover);
-  --color-sky-800: #9bc0fc;
-  --color-sky-900: #c7dbfe;
+  --color-sky-800: #bcd6ff;
+  --color-sky-900: #dcebff;
 
-  --color-blue-50: #202f4c;
-  --color-blue-100: #263f63;
+  --color-blue-50: #1d2c4a;
+  --color-blue-100: #29508f;
   --color-blue-200: #2f4571;
   --color-blue-600: var(--crm-accent);
   --color-blue-700: var(--crm-accent-hover);
-  --color-blue-800: #9dc2fd;
+  --color-blue-800: #bcd6ff;
 
-  --color-emerald-50: #1d3a2e;
-  --color-emerald-100: #214636;
+  --color-cyan-50: #123c47;
+  --color-cyan-100: #0e7c93;
+  --color-cyan-200: #145a6b;
+  --color-cyan-800: #a9ecfb;
+
+  --color-emerald-50: #17402d;
+  --color-emerald-100: #1c8f5a;
   --color-emerald-200: #295843;
   --color-emerald-300: #37725a;
   --color-emerald-400: #4ade80;
   --color-emerald-500: #34d399;
-  --color-emerald-600: #22b573;
+  --color-emerald-600: #1fa866;
   --color-emerald-700: #4edb90;
-  --color-emerald-800: #7ff0b4;
-  --color-emerald-900: #acf6ce;
+  --color-emerald-800: #96f5c4;
+  --color-emerald-900: #cdfce3;
 
-  --color-green-100: #21463a;
+  --color-green-50: #17402d;
+  --color-green-100: #1c8f5a;
+  --color-green-200: #29714f;
   --color-green-700: #4edb90;
-  --color-green-800: #7ff0b4;
+  --color-green-800: #96f5c4;
 
-  --color-teal-100: #1d4a46;
-  --color-teal-800: #7deae0;
+  --color-teal-100: #128077;
+  --color-teal-800: #94f2e6;
 
-  --color-rose-50: #3d1e28;
-  --color-rose-100: #47232f;
-  --color-rose-200: #592b3a;
+  --color-rose-50: #4a2530;
+  --color-rose-100: #a02249;
+  --color-rose-200: #7a2c42;
   --color-rose-300: #75384b;
   --color-rose-400: #fb7185;
   --color-rose-500: #f43f5e;
   --color-rose-600: #e11d48;
   --color-rose-700: #fb7185;
-  --color-rose-800: #fda4af;
-  --color-rose-900: #fecdd3;
+  --color-rose-800: #ffc2cd;
+  --color-rose-900: #ffe0e6;
 
-  --color-red-50: #3d1f1f;
-  --color-red-100: #472525;
-  --color-red-200: #592e2e;
+  --color-red-50: #472322;
+  --color-red-100: #9a2e2c;
+  --color-red-200: #7a3230;
   --color-red-300: #753b3b;
   --color-red-600: #ef4444;
   --color-red-700: #f87171;
-  --color-red-800: #fca5a5;
-  --color-red-900: #fec9c9;
+  --color-red-800: #ffc4c4;
+  --color-red-900: #ffdede;
 
-  --color-amber-50: #3d330f;
-  --color-amber-100: #473c13;
-  --color-amber-200: #594b18;
+  --color-amber-50: #4a3a0f;
+  --color-amber-100: #92640c;
+  --color-amber-200: #6e5518;
   --color-amber-300: #75631f;
+  --color-amber-500: #f5a70f;
   --color-amber-600: #f59e0b;
   --color-amber-700: #fbbf24;
-  --color-amber-800: #fcd34d;
-  --color-amber-900: #fde68a;
+  --color-amber-800: #ffe8a8;
+  --color-amber-900: #fff2cc;
   --color-amber-950: #fef3c7;
 
-  --color-orange-100: #4a3418;
-  --color-orange-800: #fbc490;
+  --color-orange-50: #4a2e12;
+  --color-orange-100: #b8500f;
+  --color-orange-200: #7a4318;
+  --color-orange-700: #ffb47a;
+  --color-orange-800: #ffd1a8;
 
-  --color-purple-50: #2e2350;
-  --color-purple-100: #362a5c;
+  --color-purple-50: #33245e;
+  --color-purple-100: #6c31d6;
   --color-purple-200: #4a3b78;
-  --color-purple-700: #c4a8fa;
-  --color-purple-800: #d8c2fc;
+  --color-purple-700: #dac4ff;
+  --color-purple-800: #e8dcff;
 
-  --color-indigo-50: #262f58;
+  --color-indigo-50: #29255e;
+  --color-indigo-100: #4239b8;
   --color-indigo-200: #3a4680;
   --color-indigo-600: #5b6ee8;
   --color-indigo-700: #7b8cf5;
-  --color-indigo-900: #c7cffc;
+  --color-indigo-800: #ccd3ff;
+  --color-indigo-900: #dfe3ff;
 }
 
 .crm-theme input:not([type="checkbox"]):not([type="radio"]),

@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
+import KpiCard from "@/components/crm-ui/KpiCard";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -58,31 +60,35 @@ export default async function LeadgenAdminDashboardPage() {
   // initialFollowUpFilter props), so clicking a number is never a dead
   // end - every row on the landed page already links to that lead's own
   // profile, where the admin can act immediately.
-  const stats: { label: string; value: string; href: string; colorClass: string }[] = [
-    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads", colorClass: LEADGEN_STAT_CARD_STYLES.leads },
+  const stats = [
+    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads", tone: LEADGEN_STAT_CARD_STYLES.leads, icon: Users },
     {
       label: "Interested Leads",
       value: String(interestedLeads),
       href: "/leadgen/admin/leads?status=Interested",
-      colorClass: LEADGEN_STAT_CARD_STYLES.interested,
+      tone: LEADGEN_STAT_CARD_STYLES.interested,
+      icon: UserCheck,
     },
     {
       label: "Appointments Booked",
       value: String(appointmentsBooked),
       href: `/leadgen/admin/leads?status=${encodeURIComponent("Appointment booked")}`,
-      colorClass: LEADGEN_STAT_CARD_STYLES.appointments,
+      tone: LEADGEN_STAT_CARD_STYLES.appointments,
+      icon: CalendarCheck,
     },
     {
       label: "Follow-ups Due Today",
       value: String(followUpsDueToday),
       href: "/leadgen/admin/leads?followup=due_today",
-      colorClass: LEADGEN_STAT_CARD_STYLES.dueToday,
+      tone: LEADGEN_STAT_CARD_STYLES.dueToday,
+      icon: Clock,
     },
     {
       label: "Overdue Follow-ups",
       value: String(overdueFollowUps),
       href: "/leadgen/admin/leads?followup=overdue",
-      colorClass: LEADGEN_STAT_CARD_STYLES.overdue,
+      tone: LEADGEN_STAT_CARD_STYLES.overdue,
+      icon: AlertTriangle,
     },
   ];
 
@@ -93,14 +99,7 @@ export default async function LeadgenAdminDashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className={`rounded-xl border p-3.5 transition hover:shadow-sm ${stat.colorClass}`}
-          >
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">{stat.label}</div>
-            <div className="mt-1 text-[18px] font-bold">{stat.value}</div>
-          </Link>
+          <KpiCard key={stat.label} label={stat.label} value={stat.value} href={stat.href} tone={stat.tone} icon={<stat.icon />} />
         ))}
       </div>
 

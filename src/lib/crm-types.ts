@@ -1,3 +1,5 @@
+import type { KpiTone } from "@/components/crm-ui/KpiCard";
+
 export type CrmRole = "admin" | "agent";
 
 export type CrmUserRow = {
@@ -87,16 +89,16 @@ export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
   "Closed – Lost": "bg-rose-100 text-rose-800",
 };
 
-// Shared colour palette for the agent dashboard's 5 "My Leads" stat
+// Shared tone palette for the agent dashboard's 5 "My Leads" KPI
 // cards - a single source of truth so the cards, and anything else that
 // wants to reference the same concept, can never diverge in colour.
-export const CRM_LEAD_DASHBOARD_CARD_STYLES = {
-  total: "border-blue-200 bg-blue-50 text-blue-700",
-  newLead: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  dueToday: "border-amber-200 bg-amber-50 text-amber-700",
-  overdue: "border-red-200 bg-red-50 text-red-700",
-  followUp: "border-orange-200 bg-orange-50 text-orange-700",
-} as const;
+export const CRM_LEAD_DASHBOARD_CARD_STYLES: Record<"total" | "newLead" | "dueToday" | "overdue" | "followUp", KpiTone> = {
+  total: "blue",
+  newLead: "indigo",
+  dueToday: "amber",
+  overdue: "red",
+  followUp: "orange",
+};
 
 // ---------------------------------------------------------------------
 // Quote Fulfillment display labels/colors: a clearer, customer/provider-

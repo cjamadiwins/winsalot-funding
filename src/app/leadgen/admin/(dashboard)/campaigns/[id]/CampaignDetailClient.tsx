@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { Users, Star, CalendarCheck, CheckCircle2, Percent } from "lucide-react";
 import { LEADGEN_LEAD_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
+import KpiCard from "@/components/crm-ui/KpiCard";
 import { updateCampaignAction } from "../../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -91,22 +93,16 @@ export default function CampaignDetailClient({
           </button>
         </form>
       ) : (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
-            { label: "Leads", value: String(leads.length) },
-            { label: "Interested", value: String(interested) },
-            { label: "Appointments Booked", value: String(appointmentsBooked) },
-            { label: "Appointments Completed", value: String(appointmentsCompleted) },
+            { label: "Leads", value: String(leads.length), tone: "blue" as const, icon: Users },
+            { label: "Interested", value: String(interested), tone: "indigo" as const, icon: Star },
+            { label: "Appointments Booked", value: String(appointmentsBooked), tone: "green" as const, icon: CalendarCheck },
+            { label: "Appointments Completed", value: String(appointmentsCompleted), tone: "teal" as const, icon: CheckCircle2 },
+            { label: "Conversion Rate", value: `${conversionRate}%`, tone: "purple" as const, icon: Percent },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
-              <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</div>
-              <div className="mt-1 text-[18px] font-bold text-slate-900">{stat.value}</div>
-            </div>
+            <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
           ))}
-          <div className="rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-3.5">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Conversion Rate</div>
-            <div className="mt-1 text-[18px] font-bold text-slate-900">{conversionRate}%</div>
-          </div>
         </div>
       )}
 

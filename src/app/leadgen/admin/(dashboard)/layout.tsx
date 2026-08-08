@@ -1,67 +1,49 @@
-import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
+import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  CalendarCheck,
+  BarChart3,
+  Clock,
+  Mail,
+  UserCog,
+  Wallet,
+  FileText,
+  GraduationCap,
+} from "lucide-react";
 import { signOutLeadgenAction } from "./actions";
+
+const NAV_ITEMS: CrmNavItem[] = [
+  { label: "Dashboard", href: "/leadgen/admin", icon: <LayoutDashboard /> },
+  { label: "Clients", href: "/leadgen/admin/clients", icon: <Building2 /> },
+  { label: "Leads", href: "/leadgen/admin/leads", icon: <Users /> },
+  { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
+  { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
+  { label: "Attendance", href: "/leadgen/admin/attendance", icon: <Clock /> },
+  { label: "Email Tracking", href: "/leadgen/admin/emails", icon: <Mail /> },
+  { label: "Agents", href: "/leadgen/admin/agents", icon: <UserCog /> },
+  { label: "Payroll", href: "/leadgen/admin/payroll", icon: <Wallet /> },
+  { label: "Templates", href: "/leadgen/admin/templates", icon: <FileText /> },
+  { label: "Training", href: "/leadgen/admin/training", icon: <GraduationCap /> },
+];
 
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
 
   return (
-    <div className="crm-theme min-h-screen bg-slate-50">
-      <header className="border-b border-[var(--crm-border)] bg-[var(--crm-sidebar)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/leadgen/admin" className="flex flex-col leading-tight">
-              <span className="text-sm font-bold text-slate-900">Winsalot Corp. Lead Gen CRM</span>
-              <span className="text-xs font-medium text-slate-500">Empowering Businesses. One Solution at a Time.</span>
-            </Link>
-            <Link href="/leadgen/admin" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Dashboard
-            </Link>
-            <Link href="/leadgen/admin/clients" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Clients
-            </Link>
-            <Link href="/leadgen/admin/leads" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Leads
-            </Link>
-            <Link href="/leadgen/admin/appointments" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Appointments
-            </Link>
-            <Link href="/leadgen/admin/performance" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Performance
-            </Link>
-            <Link href="/leadgen/admin/attendance" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Attendance
-            </Link>
-            <Link href="/leadgen/admin/emails" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Email Tracking
-            </Link>
-            <Link href="/leadgen/admin/agents" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Agents
-            </Link>
-            <Link href="/leadgen/admin/payroll" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Payroll
-            </Link>
-            <Link href="/leadgen/admin/templates" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Templates
-            </Link>
-            <Link href="/leadgen/admin/training" className="text-sm font-medium text-slate-600 hover:text-sky-600">
-              Training
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-slate-500 sm:inline">{user.email}</span>
-            <form action={signOutLeadgenAction}>
-              <button
-                type="submit"
-                className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-400"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+    <div className="crm-theme">
+      <CrmShell
+        brandTitle="Winsalot Corp. Lead Gen CRM"
+        brandSubtitle="Empowering Businesses. One Solution at a Time."
+        homeHref="/leadgen/admin"
+        navItems={NAV_ITEMS}
+        userLabel={user.email}
+        signOutAction={signOutLeadgenAction}
+      >
+        {children}
+      </CrmShell>
     </div>
   );
 }

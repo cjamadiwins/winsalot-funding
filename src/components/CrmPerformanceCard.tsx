@@ -1,5 +1,6 @@
 import type { CrmAgentPerformance, CrmBiweeklyPeriodPerformance, CrmPerformanceTier } from "@/lib/crm-performance";
 import { CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET, CRM_BIWEEKLY_QUOTES_SENT_TARGET, crmBiweeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
+import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 
 // One color per tier, shared by every percentage badge, progress bar, and
 // status pill for a given metric so they never disagree (brief: "Use these
@@ -81,12 +82,16 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
 
   return (
     <>
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Quotes Sent" value={`${period.quotesSent}/${CRM_BIWEEKLY_QUOTES_SENT_TARGET}`} />
-        <Stat label="Quotes Received" value={`${period.quotesReceived}/${CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET}`} />
-        <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
+      <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+        <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" />
+        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+          <Stat label="Quotes Sent" value={`${period.quotesSent}/${CRM_BIWEEKLY_QUOTES_SENT_TARGET}`} />
+          <Stat label="Quotes Received" value={`${period.quotesReceived}/${CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET}`} />
+          <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
+        </div>
       </div>
 
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Progress</div>
       <ProgressGoal label="Quotes Sent Progress" percentage={period.sentPercentage} tier={sentTier} />
       <ProgressGoal label="Quotes Received Progress" percentage={period.receivedPercentage} tier={receivedTier} />
 
