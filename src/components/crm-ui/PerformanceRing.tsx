@@ -44,7 +44,7 @@ export default function PerformanceRing({
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="var(--crm-border, #3d5878)"
+            stroke="var(--crm-border, #dce4ec)"
             strokeWidth={strokeWidth}
           />
           <circle
@@ -61,9 +61,9 @@ export default function PerformanceRing({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[26px] font-extrabold leading-none text-white">{percentage}%</span>
+          <span className="text-[26px] font-extrabold leading-none text-[var(--crm-text,#17283b)]">{percentage}%</span>
           {label && (
-            <span className="mt-1 max-w-[80px] text-center text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-[var(--crm-text-muted,#8ca1be)]">
+            <span className="mt-1 max-w-[80px] text-center text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
               {label}
             </span>
           )}

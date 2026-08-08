@@ -48,7 +48,7 @@ function SidebarNav({
             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition ${
               active
                 ? "bg-[var(--crm-accent,#3e7ef7)] text-white shadow-sm"
-                : "text-[var(--crm-text-soft,#c3d0e3)] hover:bg-white/[0.06] hover:text-white"
+                : "text-[var(--crm-sidebar-text-soft,#c3d0e3)] hover:bg-white/[0.06] hover:text-white"
             }`}
           >
             {iconEl}
@@ -65,7 +65,7 @@ function SignOutButton({ signOutAction }: { signOutAction: () => void | Promise<
     <form action={signOutAction}>
       <button
         type="submit"
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-[13px] font-medium text-[var(--crm-text-soft,#c3d0e3)] transition hover:bg-white/[0.06] hover:text-white"
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-[13px] font-medium text-[var(--crm-sidebar-text-soft,#c3d0e3)] transition hover:bg-white/[0.06] hover:text-white"
       >
         <LogOut className="h-4 w-4" strokeWidth={2} />
         Sign out
@@ -104,17 +104,17 @@ export default function CrmShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-[var(--crm-bg,#263b55)]">
+    <div className="flex min-h-screen bg-[var(--crm-bg,#f4f7fa)]">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--crm-border,#3d5878)] bg-[var(--crm-sidebar,#223a55)] lg:flex">
-        <Link href={homeHref} className="flex flex-col gap-0.5 border-b border-[var(--crm-border,#3d5878)] px-5 py-5 leading-tight">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] lg:flex">
+        <Link href={homeHref} className="flex flex-col gap-0.5 border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-5 leading-tight">
           <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
-          {brandSubtitle && <span className="text-[10.5px] font-medium text-[var(--crm-text-muted,#8ca1be)]">{brandSubtitle}</span>}
+          {brandSubtitle && <span className="text-[10.5px] font-medium text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandSubtitle}</span>}
         </Link>
         <SidebarNav navItems={navItems} pathname={pathname} homeHref={homeHref} />
-        <div className="border-t border-[var(--crm-border,#3d5878)] px-3 py-3">
+        <div className="border-t border-[var(--crm-sidebar-border,#33496a)] px-3 py-3">
           {userLabel && (
-            <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-text-muted,#8ca1be)]">{userLabel}</div>
+            <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-sidebar-text-muted,#8ca1be)]">{userLabel}</div>
           )}
           <SignOutButton signOutAction={signOutAction} />
         </div>
@@ -125,21 +125,21 @@ export default function CrmShell({
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} aria-hidden="true" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-[var(--crm-sidebar,#223a55)] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--crm-border,#3d5878)] px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-4">
               <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
-                className="text-[var(--crm-text-soft,#c3d0e3)] hover:text-white"
+                className="text-[var(--crm-sidebar-text-soft,#c3d0e3)] hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <SidebarNav navItems={navItems} pathname={pathname} homeHref={homeHref} onNavigate={() => setMobileOpen(false)} />
-            <div className="border-t border-[var(--crm-border,#3d5878)] px-3 py-3">
+            <div className="border-t border-[var(--crm-sidebar-border,#33496a)] px-3 py-3">
               {userLabel && (
-                <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-text-muted,#8ca1be)]">{userLabel}</div>
+                <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-sidebar-text-muted,#8ca1be)]">{userLabel}</div>
               )}
               <SignOutButton signOutAction={signOutAction} />
             </div>
@@ -149,7 +149,7 @@ export default function CrmShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile / tablet top bar */}
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--crm-border,#3d5878)] bg-[var(--crm-sidebar,#223a55)] px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] px-4 py-3 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -164,7 +164,7 @@ export default function CrmShell({
 
         {/* Desktop top bar - only rendered when there's something to show there */}
         {rightSlot && (
-          <header className="sticky top-0 z-30 hidden items-center justify-end gap-4 border-b border-[var(--crm-border,#3d5878)] bg-[var(--crm-bg,#263b55)] px-6 py-3 lg:flex">
+          <header className="sticky top-0 z-30 hidden items-center justify-end gap-4 border-b border-[var(--crm-border,#dce4ec)] bg-[var(--crm-bg,#f4f7fa)] px-6 py-3 lg:flex">
             {rightSlot}
           </header>
         )}

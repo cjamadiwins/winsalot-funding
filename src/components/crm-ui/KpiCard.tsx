@@ -68,17 +68,17 @@ export default function KpiCard({
       >
         {iconEl}
       </span>
-      <div className="mt-3 text-[26px] font-extrabold leading-none tracking-tight text-white">{value}</div>
-      <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--crm-text-soft,#c3d0e3)]">
+      <div className="mt-3 text-[26px] font-extrabold leading-none tracking-tight text-[var(--crm-text,#17283b)]">{value}</div>
+      <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--crm-text-soft,#4b5c71)]">
         {label}
       </div>
     </>
   );
 
   const activeClass = active ? "border-[var(--crm-accent,#3e7ef7)] ring-2 ring-[var(--crm-accent,#3e7ef7)]/40" : "";
-  const baseClass = `flex flex-col rounded-2xl border border-[var(--crm-border,#3d5878)] bg-[var(--crm-surface,#304963)] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition ${activeClass}`;
+  const baseClass = `flex flex-col rounded-2xl border border-[var(--crm-border,#dce4ec)] bg-[var(--crm-surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition ${activeClass}`;
   const interactiveClass =
-    "cursor-pointer hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crm-accent,#3e7ef7)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--crm-bg,#263b55)]";
+    "cursor-pointer hover:-translate-y-0.5 hover:border-[var(--crm-accent,#3e7ef7)]/30 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crm-accent,#3e7ef7)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--crm-bg,#f4f7fa)]";
 
   if (href) {
     return (

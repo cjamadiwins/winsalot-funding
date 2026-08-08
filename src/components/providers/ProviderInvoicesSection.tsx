@@ -940,7 +940,7 @@ function CorrectPaymentForm({
       {overpayConfirm && (
         <p className="text-[12.5px] text-amber-700">Submitting again will confirm this as an intentional overpayment.</p>
       )}
-      <button type="submit" disabled={submitting || isPending} className="rounded-full bg-slate-300 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-400">
+      <button type="submit" disabled={submitting || isPending} className="rounded-full bg-slate-500 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-600">
         {submitting ? "Saving…" : overpayConfirm ? "Confirm & Save" : "Save Correction"}
       </button>
     </form>

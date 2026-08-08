@@ -205,7 +205,7 @@ export default function AdminOpportunityDetailClient({
                   <button
                     type="submit"
                     disabled={isPending}
-                    className="rounded-full bg-slate-300 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-400 disabled:opacity-50"
+                    className="rounded-full bg-slate-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50"
                   >
                     Save Changes
                   </button>
@@ -336,7 +336,7 @@ export default function AdminOpportunityDetailClient({
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="rounded-full bg-slate-300 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-400 disabled:opacity-50"
+                  className="rounded-full bg-slate-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-slate-600 disabled:opacity-50"
                 >
                   Schedule
                 </button>
@@ -364,7 +364,7 @@ export default function AdminOpportunityDetailClient({
                         className={`w-56 ${inputClass}`}
                       />
                       <input name="note" defaultValue={followUp.note ?? ""} className={`w-56 ${inputClass}`} />
-                      <button type="submit" disabled={isPending} className="rounded-full bg-slate-300 px-3 py-1 text-xs font-medium text-white">
+                      <button type="submit" disabled={isPending} className="rounded-full bg-slate-500 px-3 py-1 text-xs font-medium text-white">
                         Save
                       </button>
                       <button type="button" onClick={() => setReschedulingId(null)} className="text-xs text-slate-500">

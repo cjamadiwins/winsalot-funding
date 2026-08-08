@@ -370,7 +370,7 @@ export default function OpportunitiesAdminClient({
           type="button"
           onClick={handleRunNow}
           disabled={isRunning}
-          className="rounded-full bg-slate-300 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-slate-400 disabled:opacity-50"
+          className="rounded-full bg-slate-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-slate-600 disabled:opacity-50"
         >
           {isRunning ? "Running collection..." : "Run Collection Now"}
         </button>

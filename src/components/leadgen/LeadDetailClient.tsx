@@ -483,7 +483,7 @@ export default function LeadDetailClient({
               <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
             </label>
-            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-300 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-400">
+            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-500 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-600">
               Save Call Outcome
             </button>
           </form>

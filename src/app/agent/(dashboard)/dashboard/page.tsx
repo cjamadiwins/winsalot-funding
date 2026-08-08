@@ -102,7 +102,7 @@ export default async function AgentDashboardPage({
           <PerformanceRing percentage={performance.current.overallPercentage} tier={performanceTier} label="of biweekly target" size={112} strokeWidth={10} />
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
-            <div className="mt-1 text-[15px] font-bold text-white">
+            <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
               {performance.current.quotesSent} quotes sent · {performance.current.quotesReceived} received
             </div>
             <div className="mt-0.5 text-[12.5px] text-[var(--crm-text-muted)]">
