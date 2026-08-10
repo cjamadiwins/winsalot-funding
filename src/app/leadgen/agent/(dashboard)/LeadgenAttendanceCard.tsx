@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
 import {
@@ -82,6 +83,10 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
       {error && (
         <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
       )}
+
+      <Link href="/leadgen/agent/my-attendance" className="mt-3 inline-block text-sm font-semibold text-sky-600 hover:text-sky-700">
+        View My Attendance →
+      </Link>
     </section>
   );
 }
