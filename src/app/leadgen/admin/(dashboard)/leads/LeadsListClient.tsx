@@ -6,40 +6,58 @@ import { useRouter } from "next/navigation";
 import {
   isLeadgenNextFollowUpDueToday,
   isLeadgenNextFollowUpOverdue,
+  LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
+  type LeadgenAppointmentStatus,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
   type LeadgenLeadRow,
   type LeadgenLeadStatus,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import { leadgenDateKey } from "@/lib/leadgen-performance";
 import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, deleteLeadgenLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
-type FollowUpFilter = "all" | "due_today" | "overdue";
+type FollowUpFilter = "all" | "due_today" | "due" | "overdue";
 
 export default function LeadsListClient({
   leads,
   clients,
   campaigns,
   agents,
+  appointmentStatusByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
   initialFollowUpFilter,
+  initialAgentFilter,
+  initialDueFrom,
+  initialDueTo,
 }: {
   leads: LeadgenLeadRow[];
   clients: LeadgenClientRow[];
   campaigns: LeadgenCampaignRow[];
   agents: LeadgenUserRow[];
+  // Most recent appointment status per lead_id, for the Appointment
+  // Status column - a lead with no appointment simply has no entry here.
+  appointmentStatusByLeadId?: Record<string, LeadgenAppointmentStatus>;
   initialSuccessMessage?: string | null;
   // Pre-select a filter when landing here from the admin dashboard's
-  // clickable stat cards (see /leadgen/admin/(dashboard)/page.tsx) -
-  // ignored (falls back to "all") if not a recognized value, so a
-  // stale/tampered URL never crashes this page.
+  // clickable stat cards or Results by Agent chart (see
+  // /leadgen/admin/(dashboard)/page.tsx and ResultsByAgentChart.tsx) -
+  // ignored (falls back to "all"/unfiltered) if not a recognized value,
+  // so a stale/tampered URL never crashes this page.
   initialStatusFilter?: string;
-  initialFollowUpFilter?: "due_today" | "overdue";
+  initialFollowUpFilter?: "due_today" | "due" | "overdue";
+  initialAgentFilter?: string;
+  // Only meaningful alongside initialFollowUpFilter "due"/"overdue" -
+  // the Results by Agent chart's active date range (YYYY-MM-DD,
+  // inclusive), so "Follow-ups Due this week" on the chart shows exactly
+  // that same week's due leads here, not every upcoming one.
+  initialDueFrom?: string;
+  initialDueTo?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -54,7 +72,11 @@ export default function LeadsListClient({
 
   const [clientFilter, setClientFilter] = useState("all");
   const [campaignFilter, setCampaignFilter] = useState("all");
-  const [agentFilter, setAgentFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useState(
+    initialAgentFilter && (initialAgentFilter === "unassigned" || agents.some((a) => a.id === initialAgentFilter))
+      ? initialAgentFilter
+      : "all"
+  );
   const [statusFilter, setStatusFilter] = useState<string>(
     initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
   );
@@ -67,6 +89,18 @@ export default function LeadsListClient({
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
+
+    // Only relevant when followUpFilter is "due"/"overdue" and the
+    // chart passed a due_from/due_to range - true (no restriction)
+    // otherwise.
+    function isWithinDueRange(nextFollowUpAt: string): boolean {
+      if (!initialDueFrom && !initialDueTo) return true;
+      const key = leadgenDateKey(new Date(nextFollowUpAt));
+      if (initialDueFrom && key < initialDueFrom) return false;
+      if (initialDueTo && key > initialDueTo) return false;
+      return true;
+    }
+
     return leads.filter((lead) => {
       if (clientFilter !== "all" && lead.client_id !== clientFilter) return false;
       if (campaignFilter !== "all" && lead.campaign_id !== campaignFilter) return false;
@@ -74,7 +108,14 @@ export default function LeadsListClient({
       if (agentFilter !== "all" && agentFilter !== "unassigned" && lead.assigned_agent_id !== agentFilter) return false;
       if (statusFilter !== "all" && lead.status !== statusFilter) return false;
       if (followUpFilter === "due_today" && !isLeadgenNextFollowUpDueToday(lead.next_follow_up_at)) return false;
-      if (followUpFilter === "overdue" && !isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
+      if (followUpFilter === "due") {
+        if (!lead.next_follow_up_at || isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
+        if (!isWithinDueRange(lead.next_follow_up_at)) return false;
+      }
+      if (followUpFilter === "overdue") {
+        if (!isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
+        if (lead.next_follow_up_at && !isWithinDueRange(lead.next_follow_up_at)) return false;
+      }
       if (!query) return true;
       return (
         lead.business_name.toLowerCase().includes(query) ||
@@ -83,7 +124,7 @@ export default function LeadsListClient({
         (lead.email ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, followUpFilter, search]);
+  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, followUpFilter, search, initialDueFrom, initialDueTo]);
 
   function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
     setError(null);
@@ -302,6 +343,7 @@ export default function LeadsListClient({
         >
           <option value="all">All follow-ups</option>
           <option value="due_today">Due today</option>
+          <option value="due">Due (not yet overdue)</option>
           <option value="overdue">Overdue</option>
         </select>
       </div>
@@ -341,7 +383,7 @@ export default function LeadsListClient({
         {filtered.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No leads match your filters.</p>
         ) : (
-          <table className="w-full min-w-[880px] text-left text-[13px]">
+          <table className="w-full min-w-[1180px] text-left text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
                 <th className="p-3">
@@ -358,7 +400,9 @@ export default function LeadsListClient({
                 <th className="p-3">Campaign</th>
                 <th className="p-3">Agent</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Appointment Status</th>
                 <th className="p-3">Next Follow-up</th>
+                <th className="p-3">Last Activity</th>
                 <th className="p-3">Actions</th>
               </tr>
             </thead>
@@ -399,8 +443,22 @@ export default function LeadsListClient({
                       {lead.status}
                     </span>
                   </td>
+                  <td className="p-3">
+                    {appointmentStatusByLeadId?.[lead.id] ? (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
+                      >
+                        {appointmentStatusByLeadId[lead.id]}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="p-3 text-slate-600">
                     {lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="p-3 text-slate-600">
+                    {lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : "—"}
                   </td>
                   <td className="p-3">
                     <button

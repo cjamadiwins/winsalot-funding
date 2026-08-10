@@ -3,6 +3,7 @@ import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle } from "lucide-re
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 import KpiCard from "@/components/crm-ui/KpiCard";
+import ResultsByAgentChart from "./ResultsByAgentChart";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -10,7 +11,7 @@ export default async function LeadgenAdminDashboardPage() {
   const admin = getSupabaseAdmin();
 
   const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }] = await Promise.all([
-    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at"),
+    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
     admin.from("leadgen_appointments").select("status, client_id"),
     admin.from("leadgen_clients").select("id, name"),
     admin
@@ -45,14 +46,6 @@ export default async function LeadgenAdminDashboardPage() {
   for (const appt of allAppointments) {
     const entry = byCampaignClient.get(appt.client_id);
     if (entry) entry.appointments++;
-  }
-
-  const byAgent = new Map<string, { name: string; leads: number }>();
-  for (const agent of agents) byAgent.set(agent.id, { name: agent.full_name, leads: 0 });
-  for (const lead of allLeads) {
-    if (!lead.assigned_agent_id) continue;
-    const entry = byAgent.get(lead.assigned_agent_id);
-    if (entry) entry.leads++;
   }
 
   // Each card links straight into the Leads page pre-filtered to that
@@ -103,61 +96,40 @@ export default async function LeadgenAdminDashboardPage() {
         ))}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
-          {byCampaignClient.size === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No clients yet.</p>
-          ) : (
-            <table className="mt-3 w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                  <th className="py-2">Client</th>
-                  <th className="py-2 text-right">Leads</th>
-                  <th className="py-2 text-right">Appointments</th>
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
+        {byCampaignClient.size === 0 ? (
+          <p className="mt-3 text-[13.5px] text-slate-500">No clients yet.</p>
+        ) : (
+          <table className="mt-3 w-full text-left text-[13px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                <th className="py-2">Client</th>
+                <th className="py-2 text-right">Leads</th>
+                <th className="py-2 text-right">Appointments</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(byCampaignClient.entries()).map(([id, row]) => (
+                <tr key={id} className="border-b border-slate-100">
+                  <td className="py-2">
+                    <Link href={`/leadgen/admin/clients/${id}`} className="font-medium text-sky-600 hover:text-sky-700">
+                      {row.name}
+                    </Link>
+                  </td>
+                  <td className="py-2 text-right">{row.leads}</td>
+                  <td className="py-2 text-right">{row.appointments}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {Array.from(byCampaignClient.entries()).map(([id, row]) => (
-                  <tr key={id} className="border-b border-slate-100">
-                    <td className="py-2">
-                      <Link href={`/leadgen/admin/clients/${id}`} className="font-medium text-sky-600 hover:text-sky-700">
-                        {row.name}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-right">{row.leads}</td>
-                    <td className="py-2 text-right">{row.appointments}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Results by Agent</h2>
-          {byAgent.size === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No agents yet.</p>
-          ) : (
-            <table className="mt-3 w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                  <th className="py-2">Agent</th>
-                  <th className="py-2 text-right">Assigned Leads</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(byAgent.entries()).map(([id, row]) => (
-                  <tr key={id} className="border-b border-slate-100">
-                    <td className="py-2 font-medium text-slate-900">{row.name}</td>
-                    <td className="py-2 text-right">{row.leads}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Results by Agent</h2>
+        <ResultsByAgentChart agents={agents} leads={allLeads} serverNowIso={new Date().toISOString()} />
+      </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
