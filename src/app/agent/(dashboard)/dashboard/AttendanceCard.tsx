@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 import {
@@ -91,6 +92,13 @@ export default function AttendanceCard({ openShift }: { openShift: AgentAttendan
           {error}
         </p>
       )}
+
+      <Link
+        href="/agent/my-attendance"
+        className="mt-4 inline-block text-sm font-semibold text-[var(--color-accent)] hover:underline"
+      >
+        View My Attendance →
+      </Link>
     </section>
   );
 }
