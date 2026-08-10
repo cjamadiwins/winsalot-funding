@@ -60,11 +60,28 @@ export function leadgenResultsDateRange(
   return null;
 }
 
-function isoInRange(iso: string | null, range: LeadgenResultsDateRange): boolean {
+// Exported so any UI that needs to build its own drilldown list (e.g. the
+// exact leads behind a rate for the current filter/agent) can reuse the
+// identical in-range rule this file's own counts already use, instead of
+// re-implementing it and risking drift.
+export function isoInRange(iso: string | null, range: LeadgenResultsDateRange): boolean {
   if (!range) return true;
   if (!iso) return false;
   const key = leadgenDateKey(new Date(iso));
   return key >= range.start && key <= range.end;
+}
+
+// Lead-to-Appointment Rate = Appointments Booked / Total Leads * 100 for
+// the same cohort (leads created within the active date range) - 0 with
+// no leads in that cohort, never NaN/Infinity.
+export function leadToAppointmentRate(appointmentsBooked: number, totalLeads: number): number {
+  if (totalLeads <= 0) return 0;
+  return (appointmentsBooked / totalLeads) * 100;
+}
+
+// "13.3%" - one decimal place, per brief.
+export function formatConversionRate(rate: number): string {
+  return `${rate.toFixed(1)}%`;
 }
 
 export type LeadgenAgentResultsRow = {
@@ -75,6 +92,7 @@ export type LeadgenAgentResultsRow = {
   appointmentsBooked: number;
   followUpsDue: number;
   overdueFollowUps: number;
+  leadToAppointmentRate: number;
 };
 
 export function buildLeadgenAgentResults(
@@ -95,6 +113,7 @@ export function buildLeadgenAgentResults(
       appointmentsBooked: 0,
       followUpsDue: 0,
       overdueFollowUps: 0,
+      leadToAppointmentRate: 0,
     });
   }
 
@@ -121,5 +140,38 @@ export function buildLeadgenAgentResults(
     }
   }
 
+  for (const row of byAgent.values()) {
+    row.leadToAppointmentRate = leadToAppointmentRate(row.appointmentsBooked, row.assignedLeads);
+  }
+
   return Array.from(byAgent.values());
+}
+
+export type LeadgenOverallConversion = {
+  totalLeads: number;
+  appointmentsBooked: number;
+  rate: number;
+};
+
+// Same "leads created in this date range, and of those how many are
+// currently Appointment booked" cohort rule as buildLeadgenAgentResults
+// above, just summed across every lead (assigned or not) instead of
+// grouped by agent - this is what backs the admin dashboard's overall
+// Lead-to-Appointment Rate KPI card.
+export function computeLeadgenOverallConversion(
+  leads: Pick<LeadgenLeadRow, "status" | "created_at">[],
+  filter: LeadgenResultsDateFilter,
+  now: Date = new Date()
+): LeadgenOverallConversion {
+  const range = leadgenResultsDateRange(filter, now);
+  let totalLeads = 0;
+  let appointmentsBooked = 0;
+
+  for (const lead of leads) {
+    if (!isoInRange(lead.created_at, range)) continue;
+    totalLeads++;
+    if (lead.status === "Appointment booked") appointmentsBooked++;
+  }
+
+  return { totalLeads, appointmentsBooked, rate: leadToAppointmentRate(appointmentsBooked, totalLeads) };
 }

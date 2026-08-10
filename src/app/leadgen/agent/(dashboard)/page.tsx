@@ -16,6 +16,7 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
+import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -114,6 +115,11 @@ export default async function LeadgenAgentDashboardPage() {
           View full report →
         </Link>
       </section>
+
+      <LeadToAppointmentRateCard
+        leads={myLeads.map((lead) => ({ id: lead.id, business_name: lead.business_name, status: lead.status, created_at: lead.created_at }))}
+        serverNowIso={new Date().toISOString()}
+      />
 
       <LeadgenAttendanceCard openShift={openShift} />
       {attendanceError && (

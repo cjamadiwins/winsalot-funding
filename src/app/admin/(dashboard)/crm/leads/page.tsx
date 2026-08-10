@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmFollowUpWithLead, CrmLeadRow, CrmUserRow } from "@/lib/crm-types";
+import { getCrmLeadToQuoteRecords } from "@/lib/crm-conversion-data";
 import AdminCrmClient from "../AdminCrmClient";
 import AdminFollowUps from "../AdminFollowUps";
 import AdminOverdueLeadsPanel from "../AdminOverdueLeadsPanel";
+import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 
 // Quote Fulfillment - customer leads, their stage pipeline, and
 // follow-ups. Moved here (previously the content of /admin/crm itself)
@@ -25,6 +27,7 @@ export default async function AdminCrmLeadsPage() {
     { data: leads, error: leadsError },
     { data: agents, error: agentsError },
     { data: followUps, error: followUpsError },
+    conversionRecords,
   ] = await Promise.all([
     supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -38,7 +41,14 @@ export default async function AdminCrmLeadsPage() {
       // alone (which permits all three target types).
       .not("lead_id", "is", null)
       .order("scheduled_at", { ascending: true }),
+    // Lead-to-Quote Rate KPI (Results by Agent, below) - a separate
+    // service-role read since quote_requests has no RLS policies of its
+    // own (see getCrmLeadToQuoteRecords), same as the existing biweekly
+    // Agent Performance Report's getCrmPerformanceRecords().
+    getCrmLeadToQuoteRecords(),
   ]);
+
+  const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
 
   return (
     <div>
@@ -71,6 +81,15 @@ export default async function AdminCrmLeadsPage() {
             agents={(agents ?? []) as CrmUserRow[]}
           />
         </div>
+      )}
+
+      {!agentsError && (
+        <ResultsByAgentConversion
+          agents={activeAgents}
+          records={conversionRecords}
+          serverNowIso={new Date().toISOString()}
+          leadHrefBase="/admin/crm/leads"
+        />
       )}
 
       <h2 className="mt-10 text-lg font-bold text-slate-900">All Agents&apos; Follow-Ups</h2>
