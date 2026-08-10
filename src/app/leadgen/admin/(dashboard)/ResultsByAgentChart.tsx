@@ -2,15 +2,22 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { TrendingUp } from "lucide-react";
 import {
   LEADGEN_RESULTS_DATE_FILTERS,
   LEADGEN_RESULTS_DATE_FILTER_LABEL,
   buildLeadgenAgentResults,
+  computeLeadgenOverallConversion,
+  formatConversionRate,
+  isoInRange,
   leadgenResultsDateRange,
   type LeadgenAgentResultsRow,
   type LeadgenResultsDateFilter,
 } from "@/lib/leadgen-agent-results";
+import KpiCard from "@/components/crm-ui/KpiCard";
 import type { LeadgenLeadRow } from "@/lib/leadgen-types";
+
+type LeadSummary = Pick<LeadgenLeadRow, "id" | "business_name">;
 
 type MetricKey = "assignedLeads" | "interestedLeads" | "appointmentsBooked" | "followUpsDue" | "overdueFollowUps";
 
@@ -52,16 +59,34 @@ export default function ResultsByAgentChart({
   serverNowIso,
 }: {
   agents: { id: string; full_name: string }[];
-  leads: Pick<LeadgenLeadRow, "assigned_agent_id" | "status" | "created_at" | "next_follow_up_at">[];
+  leads: Pick<LeadgenLeadRow, "id" | "business_name" | "assigned_agent_id" | "status" | "created_at" | "next_follow_up_at">[];
   serverNowIso: string;
 }) {
   const [filter, setFilter] = useState<LeadgenResultsDateFilter>("all");
+  // "overall" for the summary card, an agent id for that agent's row, or
+  // null when nothing is expanded - only one drilldown open at a time.
+  const [expanded, setExpanded] = useState<string | null>(null);
   const now = useMemo(() => new Date(serverNowIso), [serverNowIso]);
 
   const rows: LeadgenAgentResultsRow[] = useMemo(
     () => buildLeadgenAgentResults(agents, leads, filter, now),
     [agents, leads, filter, now]
   );
+
+  const overall = useMemo(() => computeLeadgenOverallConversion(leads, filter, now), [leads, filter, now]);
+
+  // The exact leads behind a rate (Appointment booked, created within the
+  // active date range) - same in-range rule buildLeadgenAgentResults uses
+  // internally, so this list can never disagree with the rate/count shown
+  // above it. agentId omitted = every agent (the overall card).
+  const range = useMemo(() => leadgenResultsDateRange(filter, now), [filter, now]);
+  function bookedLeadsInRange(agentId?: string): LeadSummary[] {
+    return leads
+      .filter((lead) => lead.status === "Appointment booked")
+      .filter((lead) => isoInRange(lead.created_at, range))
+      .filter((lead) => !agentId || lead.assigned_agent_id === agentId)
+      .map((lead) => ({ id: lead.id, business_name: lead.business_name }));
+  }
 
   const maxValue = useMemo(() => {
     let max = 0;
@@ -103,6 +128,26 @@ export default function ResultsByAgentChart({
         </div>
       </div>
 
+      <div className="mt-4 max-w-xs">
+        <KpiCard
+          label="Lead-to-Appointment Rate"
+          value={formatConversionRate(overall.rate)}
+          icon={<TrendingUp />}
+          tone="cyan"
+          active={expanded === "overall"}
+          onClick={() => setExpanded((current) => (current === "overall" ? null : "overall"))}
+        />
+      </div>
+      {expanded === "overall" && (
+        <ConversionDrilldown
+          title={`Appointments booked — ${LEADGEN_RESULTS_DATE_FILTER_LABEL[filter]}`}
+          count={overall.appointmentsBooked}
+          totalLeads={overall.totalLeads}
+          leadHref={(id) => `/leadgen/admin/leads/${id}`}
+          leads={bookedLeadsInRange()}
+        />
+      )}
+
       <div className="mt-5 space-y-4">
         {rows.map((row) => {
           const total =
@@ -110,13 +155,37 @@ export default function ResultsByAgentChart({
 
           return (
             <div key={row.agentId} className="rounded-xl border border-slate-200 p-4">
-              <Link
-                href={buildLeadsHref(row.agentId)}
-                className="cursor-pointer text-[14px] font-semibold text-slate-900 hover:text-sky-600"
-                title={`${row.agentName} — ${row.assignedLeads} assigned, ${row.interestedLeads} interested, ${row.appointmentsBooked} booked, ${row.followUpsDue} due, ${row.overdueFollowUps} overdue`}
-              >
-                {row.agentName}
-              </Link>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Link
+                  href={buildLeadsHref(row.agentId)}
+                  className="cursor-pointer text-[14px] font-semibold text-slate-900 hover:text-sky-600"
+                  title={`${row.agentName} — ${row.assignedLeads} assigned, ${row.interestedLeads} interested, ${row.appointmentsBooked} booked, ${row.followUpsDue} due, ${row.overdueFollowUps} overdue`}
+                >
+                  {row.agentName}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setExpanded((current) => (current === row.agentId ? null : row.agentId))}
+                  title={`${row.agentName} — Lead-to-Appointment Rate: ${formatConversionRate(row.leadToAppointmentRate)}`}
+                  className={`cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition ${
+                    expanded === row.agentId
+                      ? "bg-cyan-600 text-white"
+                      : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                  }`}
+                >
+                  {formatConversionRate(row.leadToAppointmentRate)} Lead-to-Appt
+                </button>
+              </div>
+
+              {expanded === row.agentId && (
+                <ConversionDrilldown
+                  title={`${row.agentName} — Appointments booked (${LEADGEN_RESULTS_DATE_FILTER_LABEL[filter]})`}
+                  count={row.appointmentsBooked}
+                  totalLeads={row.assignedLeads}
+                  leadHref={(id) => `/leadgen/admin/leads/${id}`}
+                  leads={bookedLeadsInRange(row.agentId)}
+                />
+              )}
 
               {total === 0 ? (
                 <p className="mt-2 text-[12.5px] text-slate-400">No results for this period.</p>
@@ -153,6 +222,48 @@ export default function ResultsByAgentChart({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// The exact leads a Lead-to-Appointment Rate card/badge is counting -
+// shown inline (not a separate page) so clicking the rate always opens
+// something, even for a date range/agent combination the Leads page has
+// no query-param filter for.
+function ConversionDrilldown({
+  title,
+  count,
+  totalLeads,
+  leads,
+  leadHref,
+}: {
+  title: string;
+  count: number;
+  totalLeads: number;
+  leads: LeadSummary[];
+  leadHref: (id: string) => string;
+}) {
+  return (
+    <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50/50 p-3.5">
+      <div className="flex items-center justify-between text-[12px] font-semibold text-cyan-800">
+        <span>{title}</span>
+        <span className="tabular-nums">
+          {count} / {totalLeads}
+        </span>
+      </div>
+      {leads.length === 0 ? (
+        <p className="mt-2 text-[12.5px] text-slate-500">No appointments booked in this period.</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {leads.map((lead) => (
+            <li key={lead.id}>
+              <Link href={leadHref(lead.id)} className="text-[12.5px] font-medium text-sky-700 hover:text-sky-900 hover:underline">
+                {lead.business_name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

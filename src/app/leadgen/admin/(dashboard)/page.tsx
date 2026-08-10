@@ -11,7 +11,7 @@ export default async function LeadgenAdminDashboardPage() {
   const admin = getSupabaseAdmin();
 
   const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }] = await Promise.all([
-    admin.from("leadgen_leads").select("id, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
+    admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
     admin.from("leadgen_appointments").select("status, client_id"),
     admin.from("leadgen_clients").select("id, name"),
     admin

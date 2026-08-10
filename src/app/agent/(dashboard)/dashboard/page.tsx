@@ -4,8 +4,10 @@ import { requireCrmUser } from "@/lib/crm-auth";
 import type { AgentAttendanceRow, CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
 import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
+import { getCrmLeadToQuoteRecords } from "@/lib/crm-conversion-data";
 import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel } from "@/lib/crm-performance";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueLeadsPanel from "./OverdueLeadsPanel";
@@ -78,6 +80,12 @@ export default async function AgentDashboardPage({
   const performance = computeCrmAgentPerformance(performanceRecords, crmUser.id);
   const performanceTier = crmPerformanceTier(performance.current.overallPercentage);
 
+  // Lead-to-Quote Rate (Results by Agent) - scoped to just this agent's
+  // own leads (getCrmLeadToQuoteRecords(crmUser.id) never even receives
+  // another agent's rows over the wire), so an agent only ever sees their
+  // own rate here.
+  const conversionRecords = await getCrmLeadToQuoteRecords(crmUser.id);
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -114,6 +122,13 @@ export default async function AgentDashboardPage({
           View full report →
         </Link>
       </section>
+
+      <ResultsByAgentConversion
+        agents={[{ id: crmUser.id, full_name: crmUser.full_name, email: crmUser.email }]}
+        records={conversionRecords}
+        serverNowIso={new Date().toISOString()}
+        leadHrefBase="/agent/leads"
+      />
 
       <AttendanceCard openShift={openShift} />
       {attendanceError && (
