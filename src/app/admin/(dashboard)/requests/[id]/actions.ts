@@ -6,7 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { generateProviderToken, hashProviderToken } from "@/lib/tokens";
 import { getResendClient } from "@/lib/resend";
 import { getSiteUrl } from "@/lib/site-url";
-import { PRICE_TYPE_LABELS, type PriceType } from "@/lib/admin-types";
+import { PRICE_TYPE_LABELS, QUOTE_INCENTIVE_STATUSES, type PriceType, type QuoteIncentiveStatus } from "@/lib/admin-types";
 import {
   buildCustomerQuoteEmailHtml,
   buildCustomerQuoteEmailText,
@@ -250,4 +250,45 @@ export async function sendQuoteToCustomerAction(
   revalidatePath(`/admin/requests/${requestId}`);
 
   return { path: `/customer-quote/${token}` };
+}
+
+// Weekly Incentive qualification review (brief: "Admin must be able to
+// verify or reject the qualifying records") - sets quote_requests.
+// incentive_status, entirely separate from the `status` pipeline column
+// above (see migration 0058's header comment for why). Uses
+// requireAdminUser(), the same guard every other action in this file
+// already uses, and the service-role client, since quote_requests has
+// RLS enabled with zero policies (migration 0004) - no session client
+// can read or write it at all. Throws on failure, matching every other
+// action in this file (RequestWorkflowPanel's runAction() catches it).
+export async function setQuoteIncentiveStatusAction(requestId: string, formData: FormData): Promise<void> {
+  const user = await requireAdminUser();
+
+  const raw = String(formData.get("incentive_status") ?? "").trim();
+  if (raw && !QUOTE_INCENTIVE_STATUSES.includes(raw as QuoteIncentiveStatus)) {
+    throw new Error("Invalid incentive status.");
+  }
+  const incentiveStatus: QuoteIncentiveStatus | null = raw ? (raw as QuoteIncentiveStatus) : null;
+
+  const supabase = getSupabaseAdmin();
+
+  // incentive_status_set_by references crm_users(id) - only fill it in
+  // when this admin also happens to have a crm_users row; the column is
+  // nullable precisely because this quote dashboard's admins
+  // (requireAdminUser()) aren't required to have one.
+  const { data: crmUser } = await supabase.from("crm_users").select("id").eq("id", user.id).maybeSingle();
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({
+      incentive_status: incentiveStatus,
+      incentive_status_set_by: crmUser?.id ?? null,
+      incentive_status_set_at: new Date().toISOString(),
+    })
+    .eq("id", requestId);
+
+  if (error) throw new Error("Failed to update the incentive review status.");
+
+  revalidatePath(`/admin/requests/${requestId}`);
+  revalidatePath("/admin/crm/incentives");
 }

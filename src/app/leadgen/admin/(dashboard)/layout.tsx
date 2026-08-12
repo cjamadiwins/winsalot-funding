@@ -12,6 +12,7 @@ import {
   Wallet,
   FileText,
   GraduationCap,
+  Gift,
 } from "lucide-react";
 import { signOutLeadgenAction } from "./actions";
 
@@ -21,6 +22,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Leads", href: "/leadgen/admin/leads", icon: <Users /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
+  { label: "Incentives", href: "/leadgen/admin/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/leadgen/admin/attendance", icon: <Clock /> },
   { label: "Email Tracking", href: "/leadgen/admin/emails", icon: <Mail /> },
   { label: "Agents", href: "/leadgen/admin/agents", icon: <UserCog /> },

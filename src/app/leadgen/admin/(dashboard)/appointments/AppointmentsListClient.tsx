@@ -2,6 +2,10 @@
 
 import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import {
+  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL,
+  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
+  LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
+  LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES,
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_MEETING_TYPES,
@@ -207,6 +211,7 @@ export default function AppointmentsListClient({
                 <th className="p-3">Date/Time</th>
                 <th className="p-3">Type</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Incentive</th>
                 <th className="p-3">Actions</th>
               </tr>
             </thead>
@@ -229,6 +234,15 @@ export default function AppointmentsListClient({
                       </span>
                     </td>
                     <td className="p-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                        }`}
+                      >
+                        {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
+                      </span>
+                    </td>
+                    <td className="p-3">
                       <button
                         type="button"
                         onClick={() => setEditingId(editingId === appt.id ? null : appt.id)}
@@ -240,7 +254,7 @@ export default function AppointmentsListClient({
                   </tr>
                   {editingId === appt.id && (
                     <tr>
-                      <td colSpan={6} className="bg-slate-50 p-4">
+                      <td colSpan={7} className="bg-slate-50 p-4">
                         <form
                           action={(formData) => runAction(() => updateAppointmentAction(appt.id, formData))}
                           className="grid grid-cols-1 gap-3 sm:grid-cols-2"
@@ -249,6 +263,17 @@ export default function AppointmentsListClient({
                             <span className="text-[12.5px] font-semibold text-slate-600">Status</span>
                             <select name="status" defaultValue={appt.status} className={inputClass}>
                               {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Incentive Status</span>
+                            <select name="incentive_status" defaultValue={appt.incentive_status ?? ""} className={inputClass}>
+                              <option value="">{LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}</option>
+                              {LEADGEN_APPOINTMENT_INCENTIVE_STATUSES.map((s) => (
                                 <option key={s} value={s}>
                                   {s}
                                 </option>

@@ -5,7 +5,14 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import { LEADGEN_APPOINTMENT_STATUSES, LEADGEN_MEETING_TYPES, type LeadgenAppointmentStatus, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import {
+  LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
+  LEADGEN_APPOINTMENT_STATUSES,
+  LEADGEN_MEETING_TYPES,
+  type LeadgenAppointmentIncentiveStatus,
+  type LeadgenAppointmentStatus,
+  type LeadgenMeetingType,
+} from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
 
@@ -168,11 +175,27 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
 }
 
 export async function updateAppointmentAction(appointmentId: string, formData: FormData): Promise<ActionResult> {
-  await requireLeadgenAdmin();
+  const adminUser = await requireLeadgenAdmin();
   const status = String(formData.get("status") ?? "").trim();
   if (!LEADGEN_APPOINTMENT_STATUSES.includes(status as LeadgenAppointmentStatus)) return { error: "Invalid status." };
 
+  const incentiveStatusRaw = String(formData.get("incentive_status") ?? "").trim();
+  if (incentiveStatusRaw && !LEADGEN_APPOINTMENT_INCENTIVE_STATUSES.includes(incentiveStatusRaw as LeadgenAppointmentIncentiveStatus)) {
+    return { error: "Invalid incentive status." };
+  }
+  const incentiveStatus: LeadgenAppointmentIncentiveStatus | null = incentiveStatusRaw
+    ? (incentiveStatusRaw as LeadgenAppointmentIncentiveStatus)
+    : null;
+
   const supabase = await createSupabaseServerClient();
+
+  // Only stamp incentive_status_set_by/at when the reviewed value is
+  // actually changing - otherwise every unrelated "Save" on this form
+  // (e.g. editing the meeting link) would keep resetting "when this was
+  // reviewed", which would misrepresent the incentive audit trail.
+  const { data: existing } = await supabase.from("leadgen_appointments").select("incentive_status").eq("id", appointmentId).maybeSingle();
+  const incentiveStatusChanged = (existing?.incentive_status ?? null) !== incentiveStatus;
+
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .update({
@@ -184,6 +207,10 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
       appointment_notes: textOrNull(formData, "appointment_notes"),
       client_feedback: textOrNull(formData, "client_feedback"),
       confirmation_sent: formData.get("confirmation_sent") === "true",
+      incentive_status: incentiveStatus,
+      ...(incentiveStatusChanged
+        ? { incentive_status_set_by: adminUser.id, incentive_status_set_at: new Date().toISOString() }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", appointmentId)
@@ -203,5 +230,9 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
 
   revalidatePath("/leadgen/admin/appointments");
   if (appointment?.lead_id) revalidatePath(`/leadgen/admin/leads/${appointment.lead_id}`);
+  if (incentiveStatusChanged) {
+    revalidatePath("/leadgen/admin/incentives");
+    revalidatePath("/leadgen/agent");
+  }
   return {};
 }

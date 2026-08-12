@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users, Clock, AlertTriangle, UserCheck } from "lucide-react";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   LEADGEN_LEAD_STATUS_STYLES,
   LEADGEN_STAT_CARD_STYLES,
@@ -12,8 +13,12 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
+import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
+import { monthStartOfWeek, winsalotIncentivePeriodStatus } from "@/lib/agent-incentive-shared";
+import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
@@ -21,8 +26,20 @@ import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
+  const admin = getSupabaseAdmin();
 
-  const [{ data: leads }, { data: followUps }, { data: attendanceData, error: attendanceError }, { data: appointments }] = await Promise.all([
+  const { weekStart, weekEnd } = leadgenCurrentIncentiveWeek();
+  const monthStart = monthStartOfWeek(weekStart);
+
+  const [
+    { data: leads },
+    { data: followUps },
+    { data: attendanceData, error: attendanceError },
+    { data: appointments },
+    settings,
+    ledgerRow,
+    monthToDateApproved,
+  ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
       .from("leadgen_followups")
@@ -39,17 +56,35 @@ export default async function LeadgenAgentDashboardPage() {
       .maybeSingle(),
     // Same source /leadgen/agent/performance reads, reused here only to
     // surface a read-only ring summary on the dashboard - no calculation
-    // logic duplicated or changed.
+    // logic duplicated or changed. incentive_status is additionally
+    // selected for the Weekly Incentive card below.
     supabase
       .from("leadgen_appointments")
-      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
+      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, incentive_status")
       .order("appointment_date", { ascending: false }),
+    fetchWinsalotIncentiveSettings(supabase),
+    fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
+    // Service-role, narrowly filtered to this signed-in agent's own
+    // email - see the header comment on fetchAgentMonthToDateApproved
+    // for why RLS alone can't serve a cross-CRM total.
+    fetchAgentMonthToDateApproved(admin, agent.email, monthStart),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
   const performance = computeLeadgenAgentPerformance((appointments ?? []) as LeadgenPerformanceAppointment[], agent.id);
   const performanceTier = leadgenPerformanceTier(performance.percentage);
   const openShift = attendanceError ? null : ((attendanceData ?? null) as LeadgenAgentAttendanceRow | null);
+  const weeklyIncentive = computeLeadgenWeeklyIncentive(
+    (appointments ?? []) as LeadgenIncentiveAppointment[],
+    agent.id,
+    weekStart,
+    weekEnd,
+    settings.leadgenWeeklyQuota,
+    settings.leadgenWeeklyBonusAmount
+  );
+  const periodStatus = winsalotIncentivePeriodStatus(ledgerRow);
+  const remainingToCap = Math.max(0, settings.monthlyCap - monthToDateApproved);
+  const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   // Only count/show a follow-up if it's still its lead's authoritative
   // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
   // the same source of truth the Leads page's Due Today/Overdue filters
@@ -119,6 +154,21 @@ export default async function LeadgenAgentDashboardPage() {
       <LeadToAppointmentRateCard
         leads={myLeads.map((lead) => ({ id: lead.id, business_name: lead.business_name, status: lead.status, created_at: lead.created_at }))}
         serverNowIso={new Date().toISOString()}
+      />
+
+      <AgentWeeklyIncentiveCard
+        weekLabel={leadgenWeekRangeLabel(weekStart, weekEnd)}
+        recordLabel="qualified appointments"
+        qualifiedCount={weeklyIncentive.qualifiedCount}
+        quota={weeklyIncentive.quota}
+        percentage={weeklyIncentive.percentage}
+        quotaMet={weeklyIncentive.quotaMet}
+        calculatedBonus={weeklyIncentive.calculatedBonus}
+        periodStatus={periodStatus}
+        monthLabel={monthLabel}
+        monthToDateApproved={monthToDateApproved}
+        monthlyCap={settings.monthlyCap}
+        remainingToCap={remainingToCap}
       />
 
       <LeadgenAttendanceCard openShift={openShift} />

@@ -17,6 +17,7 @@ import {
   UserPlus,
   GraduationCap,
   Mail,
+  Gift,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 
@@ -29,6 +30,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
   { label: "Payroll", href: "/admin/crm/payroll", icon: <Wallet /> },
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },
+  { label: "Incentives", href: "/admin/crm/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/admin/crm/attendance", icon: <Clock /> },
   { label: "Cleaning Opportunities", href: "/admin/crm/opportunities", icon: <Search /> },
   { label: "Provider Acquisition", href: "/admin/crm/provider-acquisition", icon: <UserPlus /> },
