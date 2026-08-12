@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
 import type { AgentAttendanceRow, CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
 import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
+import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
 import { getCrmLeadToQuoteRecords } from "@/lib/crm-conversion-data";
-import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel } from "@/lib/crm-performance";
+import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
+import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
+import { monthStartOfWeek, winsalotIncentivePeriodStatus } from "@/lib/agent-incentive-shared";
+import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
@@ -24,7 +30,12 @@ export default async function AgentDashboardPage({
 }) {
   const crmUser = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
+  const admin = getSupabaseAdmin();
   const { stage, followup } = await searchParams;
+
+  const weekStart = crmMondayOf(crmDateKey(new Date()));
+  const weekEnd = crmAddDays(weekStart, 6);
+  const incentiveMonthStart = monthStartOfWeek(weekStart);
 
   // RLS (crm_leads_agent_select_own / crm_followups_agent_select_own_lead)
   // already restricts both of these to leads assigned to the signed-in
@@ -86,6 +97,32 @@ export default async function AgentDashboardPage({
   // own rate here.
   const conversionRecords = await getCrmLeadToQuoteRecords(crmUser.id);
 
+  // Weekly Agent Incentive - scoped to just this agent's own quotes
+  // (getCrmIncentiveQuotes(crmUser.id) never even receives another
+  // agent's rows over the wire, same pattern as getCrmPerformanceRecords
+  // above). Settings/ledger reads go through the session client (RLS:
+  // winsalot_incentive_settings_agent_select /
+  // winsalot_agent_incentive_ledger_agent_select_own); the cross-CRM
+  // month-to-date total is the one deliberate service-role exception -
+  // see fetchAgentMonthToDateApproved's header comment.
+  const [incentiveQuotes, incentiveSettings, incentiveLedgerRow, incentiveMonthToDateApproved] = await Promise.all([
+    getCrmIncentiveQuotes(crmUser.id),
+    fetchWinsalotIncentiveSettings(supabase),
+    fetchLedgerRow(supabase, "cleaning", crmUser.email, weekStart),
+    fetchAgentMonthToDateApproved(admin, crmUser.email, incentiveMonthStart),
+  ]);
+  const weeklyIncentive = computeCrmWeeklyIncentive(
+    incentiveQuotes,
+    crmUser.id,
+    weekStart,
+    weekEnd,
+    incentiveSettings.crmWeeklyQuota,
+    incentiveSettings.crmWeeklyBonusAmount
+  );
+  const incentivePeriodStatus = winsalotIncentivePeriodStatus(incentiveLedgerRow);
+  const incentiveRemainingToCap = Math.max(0, incentiveSettings.monthlyCap - incentiveMonthToDateApproved);
+  const incentiveMonthLabel = new Date(`${incentiveMonthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -128,6 +165,21 @@ export default async function AgentDashboardPage({
         records={conversionRecords}
         serverNowIso={new Date().toISOString()}
         leadHrefBase="/agent/leads"
+      />
+
+      <AgentWeeklyIncentiveCard
+        weekLabel={formatIncentiveWeekLabel(weekStart, weekEnd)}
+        recordLabel="qualified quotes"
+        qualifiedCount={weeklyIncentive.qualifiedCount}
+        quota={weeklyIncentive.quota}
+        percentage={weeklyIncentive.percentage}
+        quotaMet={weeklyIncentive.quotaMet}
+        calculatedBonus={weeklyIncentive.calculatedBonus}
+        periodStatus={incentivePeriodStatus}
+        monthLabel={incentiveMonthLabel}
+        monthToDateApproved={incentiveMonthToDateApproved}
+        monthlyCap={incentiveSettings.monthlyCap}
+        remainingToCap={incentiveRemainingToCap}
       />
 
       <AttendanceCard openShift={openShift} />
@@ -195,4 +247,12 @@ export default async function AgentDashboardPage({
       )}
     </div>
   );
+}
+
+function formatIncentiveWeekLabel(weekStart: string, weekEnd: string): string {
+  const [sy, sm, sd] = weekStart.split("-").map(Number);
+  const [ey, em, ed] = weekEnd.split("-").map(Number);
+  const start = new Date(sy, sm - 1, sd).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const end = new Date(ey, em - 1, ed).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${start} – ${end}`;
 }

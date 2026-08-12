@@ -245,6 +245,35 @@ export const LEADGEN_APPOINTMENT_STATUS_STYLES: Record<LeadgenAppointmentStatus,
 export const LEADGEN_MEETING_TYPES = ["Phone Call", "Video Call", "In Person"] as const;
 export type LeadgenMeetingType = (typeof LEADGEN_MEETING_TYPES)[number];
 
+// Weekly Incentive qualification review state (supabase/migrations/
+// 0057_leadgen_appointment_incentives.sql) - a separate axis from
+// `status` above. `status` tracks the scheduling state (Booked/
+// Confirmed/.../Cancelled); incentive_status tracks whether an admin has
+// reviewed this appointment as a *qualified* appointment toward the
+// booking agent's Weekly Incentive quota. Null means "not yet reviewed" -
+// never counts toward anything (see lib/leadgen-incentives.ts).
+export const LEADGEN_APPOINTMENT_INCENTIVE_STATUSES = [
+  "Qualified",
+  "Cancelled",
+  "Invalid",
+  "Duplicate",
+  "Unqualified",
+] as const;
+
+export type LeadgenAppointmentIncentiveStatus = (typeof LEADGEN_APPOINTMENT_INCENTIVE_STATUSES)[number];
+
+export const LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES: Record<LeadgenAppointmentIncentiveStatus, string> = {
+  Qualified: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-slate-200 text-slate-500",
+  Invalid: "bg-rose-100 text-rose-800",
+  Duplicate: "bg-amber-100 text-amber-800",
+  Unqualified: "bg-rose-100 text-rose-800",
+};
+
+// Shown for a null incentive_status (not yet reviewed by an admin).
+export const LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL = "Not Reviewed";
+export const LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE = "bg-slate-100 text-slate-600";
+
 export type LeadgenAppointmentRow = {
   id: string;
   created_at: string;
@@ -274,6 +303,10 @@ export type LeadgenAppointmentRow = {
   // lib/leadgen-performance.ts) - set automatically at insert time, never
   // written directly by application code.
   booking_agent_id: string | null;
+  // Appointment Incentive review state - see the enum/comment above.
+  incentive_status: LeadgenAppointmentIncentiveStatus | null;
+  incentive_status_set_by: string | null;
+  incentive_status_set_at: string | null;
 };
 
 // Shared literal button text for the consultation booking button, used

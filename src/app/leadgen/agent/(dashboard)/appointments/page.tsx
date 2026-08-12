@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow } from "@/lib/leadgen-types";
+import {
+  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL,
+  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
+  LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES,
+  LEADGEN_APPOINTMENT_STATUS_STYLES,
+  type LeadgenAppointmentRow,
+} from "@/lib/leadgen-types";
 
 export default async function LeadgenAgentAppointmentsPage() {
   await requireLeadgenAgent();
@@ -32,6 +38,7 @@ export default async function LeadgenAgentAppointmentsPage() {
                 <th className="p-3">Date/Time</th>
                 <th className="p-3">Type</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Incentive</th>
                 <th className="p-3">Lead</th>
               </tr>
             </thead>
@@ -45,6 +52,15 @@ export default async function LeadgenAgentAppointmentsPage() {
                   <td className="p-3 text-slate-600">{appt.meeting_type}</td>
                   <td className="p-3">
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                  </td>
+                  <td className="p-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                      }`}
+                    >
+                      {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
+                    </span>
                   </td>
                   <td className="p-3">
                     {appt.lead_id && (

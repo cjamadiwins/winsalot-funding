@@ -9,9 +9,14 @@ import {
   revokeProviderLinkAction,
   approveCustomerQuoteAction,
   sendQuoteToCustomerAction,
+  setQuoteIncentiveStatusAction,
 } from "./actions";
 import {
   PRICE_TYPE_LABELS,
+  QUOTE_INCENTIVE_PENDING_LABEL,
+  QUOTE_INCENTIVE_PENDING_STYLE,
+  QUOTE_INCENTIVE_STATUSES,
+  QUOTE_INCENTIVE_STATUS_STYLES,
   QUOTE_STATUS_LABELS,
   QUOTE_STATUS_STYLES,
   isTokenActive,
@@ -156,6 +161,43 @@ Winsalot Corp`;
           {error}
         </div>
       )}
+
+      {/* Weekly Incentive qualification review */}
+      <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Weekly Incentive Review</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Only a quote sent to the customer and marked Qualified here counts toward the assigned agent&apos;s Weekly
+          Incentive quota.
+        </p>
+        <div className="mt-3">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+              request.incentive_status ? QUOTE_INCENTIVE_STATUS_STYLES[request.incentive_status] : QUOTE_INCENTIVE_PENDING_STYLE
+            }`}
+          >
+            {request.incentive_status ?? QUOTE_INCENTIVE_PENDING_LABEL}
+          </span>
+        </div>
+        <form
+          action={(formData) => runAction(() => setQuoteIncentiveStatusAction(request.id, formData))}
+          className="mt-3 flex flex-wrap items-end gap-3"
+        >
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-600">Incentive Status</span>
+            <select name="incentive_status" defaultValue={request.incentive_status ?? ""} className={`${inputClasses} w-56`}>
+              <option value="">{QUOTE_INCENTIVE_PENDING_LABEL}</option>
+              {QUOTE_INCENTIVE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" disabled={isPending} className={secondaryButtonClasses}>
+            Save Review
+          </button>
+        </form>
+      </section>
 
       {/* Assignment */}
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
