@@ -6,7 +6,13 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeCrmWeeklyIncentive } from "@/lib/crm-incentives";
 import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
-import { approveWeeklyIncentiveBonus, fetchWinsalotIncentiveSettings, markIncentiveBonusPaid, updateWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
+import {
+  approveWeeklyIncentiveBonus,
+  fetchWinsalotIncentiveSettings,
+  markIncentiveBonusPaid,
+  rejectWeeklyIncentiveBonus,
+  updateWinsalotIncentiveSettings,
+} from "@/lib/agent-incentive-ledger";
 
 type ActionResult = { error?: string };
 
@@ -57,11 +63,54 @@ export async function approveCrmWeeklyBonusAction(weekStart: string, weekEnd: st
   return {};
 }
 
-export async function markCrmBonusPaidAction(ledgerId: string): Promise<ActionResult> {
+// Bound with (weekStart, weekEnd) via .bind(), same shape as
+// approveCrmWeeklyBonusAction above.
+export async function rejectCrmWeeklyBonusAction(weekStart: string, weekEnd: string, agentId: string, formData: FormData): Promise<ActionResult> {
+  const adminUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  const admin = getSupabaseAdmin();
+
+  const [{ data: agent }, quotes, settings] = await Promise.all([
+    admin.from("crm_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
+    getCrmIncentiveQuotes(agentId),
+    fetchWinsalotIncentiveSettings(supabase),
+  ]);
+
+  if (!agent) return { error: "Agent not found." };
+
+  const calc = computeCrmWeeklyIncentive(quotes, agentId, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
+  const reason = String(formData.get("rejection_reason") ?? "").trim();
+
+  const result = await rejectWeeklyIncentiveBonus(supabase, {
+    crm: "cleaning",
+    sourceLeadgenUserId: null,
+    sourceCrmUserId: agentId,
+    agentEmail: agent.email,
+    agentName: agent.full_name || agent.email,
+    weekStart,
+    weekEnd,
+    qualifiedCount: calc.qualifiedCount,
+    weeklyQuota: settings.crmWeeklyQuota,
+    calculatedBonus: calc.calculatedBonus,
+    reason,
+    performedByName: adminUser.full_name || adminUser.email,
+  });
+
+  if (result.error) return result;
+
+  revalidatePath("/admin/crm/incentives");
+  revalidatePath("/agent/dashboard");
+  return {};
+}
+
+export async function markCrmBonusPaidAction(ledgerId: string, formData: FormData): Promise<ActionResult> {
   const adminUser = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const result = await markIncentiveBonusPaid(supabase, ledgerId, adminUser.full_name || adminUser.email);
+  const paymentDate = String(formData.get("payment_date") ?? "").trim() || null;
+  const paymentReference = String(formData.get("payment_reference") ?? "").trim() || null;
+
+  const result = await markIncentiveBonusPaid(supabase, ledgerId, adminUser.full_name || adminUser.email, paymentDate, paymentReference);
   if (result.error) return result;
 
   revalidatePath("/admin/crm/incentives");

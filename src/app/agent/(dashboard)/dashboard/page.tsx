@@ -9,7 +9,7 @@ import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
 import { getCrmLeadToQuoteRecords } from "@/lib/crm-conversion-data";
 import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
-import { monthStartOfWeek, winsalotIncentivePeriodStatus } from "@/lib/agent-incentive-shared";
+import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
@@ -119,7 +119,8 @@ export default async function AgentDashboardPage({
     incentiveSettings.crmWeeklyQuota,
     incentiveSettings.crmWeeklyBonusAmount
   );
-  const incentivePeriodStatus = winsalotIncentivePeriodStatus(incentiveLedgerRow);
+  const incentiveDisplayStatus = deriveWeeklyIncentiveDisplayStatus(weeklyIncentive.qualifiedCount, weeklyIncentive.quota, incentiveLedgerRow);
+  const incentiveCapReached = isMonthlyIncentiveCapReached(incentiveMonthToDateApproved, incentiveSettings.monthlyCap);
   const incentiveRemainingToCap = Math.max(0, incentiveSettings.monthlyCap - incentiveMonthToDateApproved);
   const incentiveMonthLabel = new Date(`${incentiveMonthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -168,6 +169,7 @@ export default async function AgentDashboardPage({
       />
 
       <AgentWeeklyIncentiveCard
+        crm="cleaning"
         weekLabel={formatIncentiveWeekLabel(weekStart, weekEnd)}
         recordLabel="qualified quotes"
         qualifiedCount={weeklyIncentive.qualifiedCount}
@@ -175,11 +177,14 @@ export default async function AgentDashboardPage({
         percentage={weeklyIncentive.percentage}
         quotaMet={weeklyIncentive.quotaMet}
         calculatedBonus={weeklyIncentive.calculatedBonus}
-        periodStatus={incentivePeriodStatus}
+        weeklyBonusAmount={incentiveSettings.crmWeeklyBonusAmount}
+        displayStatus={incentiveDisplayStatus}
         monthLabel={incentiveMonthLabel}
         monthToDateApproved={incentiveMonthToDateApproved}
         monthlyCap={incentiveSettings.monthlyCap}
         remainingToCap={incentiveRemainingToCap}
+        capReached={incentiveCapReached}
+        historyHref="/agent/incentives/history"
       />
 
       <AttendanceCard openShift={openShift} />

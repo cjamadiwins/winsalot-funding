@@ -1,11 +1,11 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDays, leadgenDateKey, leadgenMondayOf, leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
-import { computeLeadgenWeeklyIncentive, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
+import { computeLeadgenWeeklyIncentive, computeLeadgenWeeklyRecordCounts, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
 import { monthStartOfWeek, normalizeIncentiveEmail, toWinsalotIncentiveSettings, type WinsalotAgentIncentiveLedgerRow, type WinsalotIncentiveSettingsRow } from "@/lib/agent-incentive-shared";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
 import AdminWeeklyIncentivesClient, { type AdminIncentiveRow, type AuditRow } from "@/components/crm-ui/AdminWeeklyIncentivesClient";
-import { approveLeadgenWeeklyBonusAction, markLeadgenBonusPaidAction, updateLeadgenIncentiveSettingsAction } from "./actions";
+import { approveLeadgenWeeklyBonusAction, markLeadgenBonusPaidAction, rejectLeadgenWeeklyBonusAction, updateLeadgenIncentiveSettingsAction } from "./actions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -62,11 +62,14 @@ export default async function LeadgenAdminIncentivesPage({ searchParams }: { sea
 
   const rows: AdminIncentiveRow[] = allAgents.map((agent) => {
     const calc = computeLeadgenWeeklyIncentive(allAppointments, agent.id, weekStart, weekEnd, settings.leadgenWeeklyQuota, settings.leadgenWeeklyBonusAmount);
+    const counts = computeLeadgenWeeklyRecordCounts(allAppointments, agent.id, weekStart, weekEnd);
     const email = normalizeIncentiveEmail(agent.email);
     return {
       agentId: agent.id,
       agentName: agent.full_name || agent.email,
+      rawCount: counts.rawCount,
       qualifiedCount: calc.qualifiedCount,
+      rejectedCount: counts.rejectedCount,
       quota: calc.quota,
       quotaMet: calc.quotaMet,
       calculatedBonus: calc.calculatedBonus,
@@ -84,7 +87,9 @@ export default async function LeadgenAdminIncentivesPage({ searchParams }: { sea
       </p>
 
       <AdminWeeklyIncentivesClient
+        crm="leadgen"
         recordLabel="Qualified Appointments"
+        recordsHref="/leadgen/admin/appointments"
         weekLabel={leadgenWeekRangeLabel(weekStart, weekEnd)}
         prevWeekHref={`?week=${addDays(weekStart, -7)}`}
         nextWeekHref={`?week=${addDays(weekStart, 7)}`}
@@ -95,6 +100,7 @@ export default async function LeadgenAdminIncentivesPage({ searchParams }: { sea
         rows={rows}
         auditRows={(auditRows ?? []) as AuditRow[]}
         approveAction={approveLeadgenWeeklyBonusAction.bind(null, weekStart, weekEnd)}
+        rejectAction={rejectLeadgenWeeklyBonusAction.bind(null, weekStart, weekEnd)}
         markPaidAction={markLeadgenBonusPaidAction}
         updateSettingsAction={updateLeadgenIncentiveSettingsAction}
       />

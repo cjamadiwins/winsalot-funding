@@ -187,6 +187,16 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
     ? (incentiveStatusRaw as LeadgenAppointmentIncentiveStatus)
     : null;
 
+  // Brief: "Reject invalid records using a required reason." Only
+  // required when the record is being marked as something other than
+  // Qualified (i.e. rejected) - a plain Qualified marking, or clearing
+  // back to unreviewed, never needs one.
+  const incentiveStatusReasonRaw = String(formData.get("incentive_status_reason") ?? "").trim() || null;
+  if (incentiveStatus && incentiveStatus !== "Qualified" && !incentiveStatusReasonRaw) {
+    return { error: "A reason is required when marking an appointment as anything other than Qualified." };
+  }
+  const incentiveStatusReason = incentiveStatus && incentiveStatus !== "Qualified" ? incentiveStatusReasonRaw : null;
+
   const supabase = await createSupabaseServerClient();
 
   // Only stamp incentive_status_set_by/at when the reviewed value is
@@ -208,6 +218,7 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
       client_feedback: textOrNull(formData, "client_feedback"),
       confirmation_sent: formData.get("confirmation_sent") === "true",
       incentive_status: incentiveStatus,
+      incentive_status_reason: incentiveStatusReason,
       ...(incentiveStatusChanged
         ? { incentive_status_set_by: adminUser.id, incentive_status_set_at: new Date().toISOString() }
         : {}),

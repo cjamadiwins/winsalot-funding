@@ -55,6 +55,7 @@ export default async function LeadgenAgentAppointmentsPage() {
                   </td>
                   <td className="p-3">
                     <span
+                      title={appt.incentive_status_reason ?? undefined}
                       className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                         appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                       }`}

@@ -104,3 +104,33 @@ export function crmCurrentIncentiveWeek(now: Date = new Date()): { weekStart: st
   const weekStart = crmMondayOf(crmDateKey(now));
   return { weekStart, weekEnd: addDays(weekStart, 6) };
 }
+
+export type CrmWeeklyRecordCounts = {
+  rawCount: number; // every quote credited to this agent and sent during the week, any review status
+  rejectedCount: number; // sent during the week and explicitly reviewed as a non-Qualified value
+};
+
+// Admin table's "Raw Total"/"Rejected" columns - purely descriptive
+// counts alongside computeCrmWeeklyIncentive's qualifiedCount (the
+// "Verified" column); never feeds into the bonus calculation. Bucketed
+// the same way as computeCrmWeeklyIncentive (customerQuoteSentAt within
+// the week) - a quote that was never sent has no sent date and so
+// cannot belong to any week here, consistent with "does not count when
+// it was prepared but never sent to the customer."
+export function computeCrmWeeklyRecordCounts(
+  quotes: CrmIncentiveQuote[],
+  agentId: string,
+  weekStart: string,
+  weekEnd: string
+): CrmWeeklyRecordCounts {
+  const inWeek = creditedTo(quotes, agentId).filter((quote) => {
+    if (!quote.customerQuoteSentAt) return false;
+    const key = crmDateKey(quote.customerQuoteSentAt);
+    return key >= weekStart && key <= weekEnd;
+  });
+  let rejectedCount = 0;
+  for (const quote of inWeek) {
+    if (quote.incentiveStatus !== null && quote.incentiveStatus !== "Qualified") rejectedCount++;
+  }
+  return { rawCount: inWeek.length, rejectedCount };
+}
