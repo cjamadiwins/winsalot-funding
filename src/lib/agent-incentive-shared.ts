@@ -72,9 +72,10 @@ export function toWinsalotIncentiveSettings(row: WinsalotIncentiveSettingsRow | 
 
 export type WinsalotIncentiveCrm = "leadgen" | "cleaning";
 
-export type WinsalotLedgerRowStatus = "pending" | "approved" | "paid";
+export type WinsalotLedgerRowStatus = "pending" | "approved" | "rejected" | "paid";
 
-// Shape of a row in winsalot_agent_incentive_ledger (migration 0059).
+// Shape of a row in winsalot_agent_incentive_ledger (migration 0059,
+// extended by 0060 with rejection/payment fields).
 export type WinsalotAgentIncentiveLedgerRow = {
   id: string;
   crm: WinsalotIncentiveCrm;
@@ -90,19 +91,30 @@ export type WinsalotAgentIncentiveLedgerRow = {
   quota_met: boolean;
   calculated_bonus: number;
   approved_total: number | null;
+  // Mandatory reason for either an adjustment (approved_total !=
+  // calculated_bonus) or a rejection (status = 'rejected') - see
+  // migration 0060's comment on this column.
   adjustment_reason: string | null;
   status: WinsalotLedgerRowStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  rejected_by_name: string | null;
+  rejected_at: string | null;
   paid_by_name: string | null;
   paid_at: string | null;
+  payment_date: string | null;
+  payment_reference: string | null;
   created_at: string;
   updated_at: string;
 };
 
 // Display status for a period, layering "no admin action has happened
 // yet for this period" (not_calculated - no ledger row exists) on top of
-// the database's own status values.
+// the database's own status values. Kept for callers that only need the
+// raw ledger-row lifecycle (e.g. gating which admin actions are
+// available); use deriveWeeklyIncentiveDisplayStatus below for anything
+// shown directly to an agent or in the admin summary table - it folds
+// in the "quota not yet met" case the brief specifically calls out.
 export type WinsalotIncentivePeriodStatus = "not_calculated" | WinsalotLedgerRowStatus;
 
 export function winsalotIncentivePeriodStatus(
@@ -115,6 +127,7 @@ export const WINSALOT_INCENTIVE_STATUS_LABEL: Record<WinsalotIncentivePeriodStat
   not_calculated: "Awaiting Admin Review",
   pending: "Pending Approval",
   approved: "Approved",
+  rejected: "Rejected",
   paid: "Paid",
 };
 
@@ -122,8 +135,63 @@ export const WINSALOT_INCENTIVE_STATUS_STYLES: Record<WinsalotIncentivePeriodSta
   not_calculated: "bg-slate-100 text-slate-600",
   pending: "bg-amber-100 text-amber-800",
   approved: "bg-sky-100 text-sky-800",
+  rejected: "bg-rose-100 text-rose-800",
   paid: "bg-emerald-100 text-emerald-800",
 };
+
+// The five week-level lifecycle states a Weekly Incentive can be shown
+// in (brief "STATUS DEFINITIONS", minus "Cap Reached" - see
+// isMonthlyIncentiveCapReached below for why that one is a separate,
+// month-level flag rather than a sixth value here).
+export type WeeklyIncentiveDisplayStatus = "in_progress" | "awaiting_review" | "approved" | "rejected" | "paid";
+
+export const WEEKLY_INCENTIVE_DISPLAY_STATUS_LABEL: Record<WeeklyIncentiveDisplayStatus, string> = {
+  in_progress: "In Progress",
+  awaiting_review: "Quota Met — Awaiting Review",
+  approved: "Approved",
+  rejected: "Rejected",
+  paid: "Paid",
+};
+
+export const WEEKLY_INCENTIVE_DISPLAY_STATUS_STYLES: Record<WeeklyIncentiveDisplayStatus, string> = {
+  in_progress: "bg-slate-100 text-slate-600",
+  awaiting_review: "bg-amber-100 text-amber-800",
+  approved: "bg-sky-100 text-sky-800",
+  rejected: "bg-rose-100 text-rose-800",
+  paid: "bg-emerald-100 text-emerald-800",
+};
+
+// Pure display-layer derivation - never reads or influences
+// calculatedBonus/qualifiedCount (computeWeeklyIncentiveBonus above is
+// the only place that math happens). Brief: "Do not display 'Awaiting
+// Admin Review' when the agent has zero results or has not reached the
+// quota. Display 'In Progress' instead. 'Awaiting Admin Review' should
+// appear only after the quota... has been reached." - so unlike
+// winsalotIncentivePeriodStatus above, this takes the live
+// qualifiedCount/weeklyQuota into account, not just whether a ledger row
+// exists yet.
+export function deriveWeeklyIncentiveDisplayStatus(
+  qualifiedCount: number,
+  weeklyQuota: number,
+  ledgerRow: Pick<WinsalotAgentIncentiveLedgerRow, "status"> | null | undefined
+): WeeklyIncentiveDisplayStatus {
+  if (ledgerRow?.status === "paid") return "paid";
+  if (ledgerRow?.status === "rejected") return "rejected";
+  if (ledgerRow?.status === "approved") return "approved";
+  if (qualifiedCount >= weeklyQuota) return "awaiting_review";
+  return "in_progress";
+}
+
+// Brief: "Cap Reached: The agent has reached the ₦25,000 monthly
+// maximum." Deliberately a separate boolean rather than folded into
+// WeeklyIncentiveDisplayStatus above - it's a month-level condition that
+// can coexist with any of that week's own states (e.g. an agent can have
+// this week's bonus Approved while their month is already at the cap
+// from earlier weeks), so callers show it as an additional banner/
+// message alongside the week's own status badge, not in place of it.
+export function isMonthlyIncentiveCapReached(monthToDateApproved: number, monthlyCap: number): boolean {
+  return monthToDateApproved >= monthlyCap;
+}
 
 export function normalizeIncentiveEmail(email: string): string {
   return email.trim().toLowerCase();

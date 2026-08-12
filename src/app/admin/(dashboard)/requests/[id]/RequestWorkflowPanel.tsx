@@ -171,6 +171,7 @@ Winsalot Corp`;
         </p>
         <div className="mt-3">
           <span
+            title={request.incentive_status_reason ?? undefined}
             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
               request.incentive_status ? QUOTE_INCENTIVE_STATUS_STYLES[request.incentive_status] : QUOTE_INCENTIVE_PENDING_STYLE
             }`}
@@ -192,6 +193,10 @@ Winsalot Corp`;
                 </option>
               ))}
             </select>
+          </label>
+          <label className="flex flex-1 min-w-[220px] flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-600">Reason (required unless Qualified/Not Reviewed)</span>
+            <input name="incentive_status_reason" type="text" defaultValue={request.incentive_status_reason ?? ""} className={inputClasses} />
           </label>
           <button type="submit" disabled={isPending} className={secondaryButtonClasses}>
             Save Review

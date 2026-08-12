@@ -307,6 +307,9 @@ export type LeadgenAppointmentRow = {
   incentive_status: LeadgenAppointmentIncentiveStatus | null;
   incentive_status_set_by: string | null;
   incentive_status_set_at: string | null;
+  // Mandatory reason when incentive_status is anything other than
+  // Qualified (migration 0061) - null for Qualified or unreviewed.
+  incentive_status_reason: string | null;
 };
 
 // Shared literal button text for the consultation booking button, used

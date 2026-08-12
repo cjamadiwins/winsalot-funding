@@ -91,6 +91,17 @@ export async function approveWeeklyIncentiveBonus(
     return { error: "Approved bonus must be zero or a positive number." };
   }
 
+  // Brief: "Approve the weekly ₦5,000 incentive only after at least 4
+  // results are verified." qualifiedCount is already the *verified*
+  // total (only appointments/quotes an admin marked Qualified count at
+  // all - see computeLeadgenWeeklyIncentive/computeCrmWeeklyIncentive),
+  // so this is a pure workflow gate on top of unchanged math: a below-
+  // quota week already calculates to a ₦0 bonus, this just also refuses
+  // to let an admin record an "approval" for it.
+  if (params.qualifiedCount < params.weeklyQuota) {
+    return { error: "Cannot approve: the weekly quota has not been met yet." };
+  }
+
   const email = normalizeIncentiveEmail(params.agentEmail);
   const monthStart = monthStartOfWeek(params.weekStart);
   const isAdjustment = params.requestedApprovedTotal !== params.calculatedBonus;
@@ -157,6 +168,13 @@ export async function approveWeeklyIncentiveBonus(
         status: "approved",
         approved_by_name: params.performedByName,
         approved_at: now,
+        // Explicitly cleared in case this row was previously rejected -
+        // an upsert only touches the columns listed here, so a prior
+        // rejected_by_name/rejected_at would otherwise survive and
+        // violate the rejection-pairing constraint (status != 'rejected'
+        // requires both null).
+        rejected_by_name: null,
+        rejected_at: null,
         updated_at: now,
       },
       { onConflict: "crm,agent_email,week_start" }
@@ -183,7 +201,108 @@ export async function approveWeeklyIncentiveBonus(
   return {};
 }
 
-export async function markIncentiveBonusPaid(supabase: SupabaseClient, ledgerId: string, performedByName: string): Promise<{ error?: string }> {
+export type RejectWeeklyIncentiveBonusParams = {
+  crm: WinsalotIncentiveCrm;
+  sourceLeadgenUserId: string | null;
+  sourceCrmUserId: string | null;
+  agentEmail: string;
+  agentName: string;
+  weekStart: string;
+  weekEnd: string;
+  qualifiedCount: number;
+  weeklyQuota: number;
+  calculatedBonus: number;
+  reason: string;
+  performedByName: string;
+};
+
+// Brief: "Reject the weekly incentive with a required explanation." Like
+// approveWeeklyIncentiveBonus, recomputes nothing - qualifiedCount/
+// calculatedBonus are only recorded for the audit trail, never
+// recalculated here. A rejected week has no approved_total (never paid),
+// but can still be later approved if an admin reverses the decision
+// (approveWeeklyIncentiveBonus explicitly clears rejected_by_name/at
+// when that happens).
+export async function rejectWeeklyIncentiveBonus(
+  supabase: SupabaseClient,
+  params: RejectWeeklyIncentiveBonusParams
+): Promise<{ error?: string }> {
+  if (!params.reason.trim()) {
+    return { error: "A reason is required to reject this week's incentive." };
+  }
+
+  const email = normalizeIncentiveEmail(params.agentEmail);
+  const monthStart = monthStartOfWeek(params.weekStart);
+
+  const { data: existing } = await supabase
+    .from(LEDGER_TABLE)
+    .select("id, approved_total, status")
+    .eq("crm", params.crm)
+    .eq("agent_email", email)
+    .eq("week_start", params.weekStart)
+    .maybeSingle();
+
+  if (existing?.status === "paid") {
+    return { error: "This bonus has already been paid and can no longer be rejected." };
+  }
+
+  const now = new Date().toISOString();
+  const { data: saved, error } = await supabase
+    .from(LEDGER_TABLE)
+    .upsert(
+      {
+        crm: params.crm,
+        source_leadgen_user_id: params.sourceLeadgenUserId,
+        source_crm_user_id: params.sourceCrmUserId,
+        agent_email: email,
+        agent_name: params.agentName,
+        week_start: params.weekStart,
+        week_end: params.weekEnd,
+        month_start: monthStart,
+        qualified_count: params.qualifiedCount,
+        weekly_quota: params.weeklyQuota,
+        quota_met: params.qualifiedCount >= params.weeklyQuota,
+        calculated_bonus: params.calculatedBonus,
+        approved_total: null,
+        adjustment_reason: params.reason,
+        status: "rejected",
+        approved_by_name: null,
+        approved_at: null,
+        rejected_by_name: params.performedByName,
+        rejected_at: now,
+        updated_at: now,
+      },
+      { onConflict: "crm,agent_email,week_start" }
+    )
+    .select("id")
+    .single();
+
+  if (error || !saved) return { error: "Failed to reject this week's incentive." };
+
+  await supabase.from(AUDIT_TABLE).insert({
+    ledger_id: saved.id,
+    crm: params.crm,
+    agent_email: email,
+    agent_name: params.agentName,
+    week_start: params.weekStart,
+    week_end: params.weekEnd,
+    action: "rejected",
+    previous_total: existing?.approved_total ?? null,
+    new_total: 0,
+    reason: params.reason,
+    performed_by_name: params.performedByName,
+  });
+
+  return {};
+}
+
+export async function markIncentiveBonusPaid(
+  supabase: SupabaseClient,
+  ledgerId: string,
+  performedByName: string,
+  paymentDate: string | null,
+  paymentReference: string | null
+): Promise<{ error?: string }> {
   const { data: existing } = await supabase
     .from(LEDGER_TABLE)
     .select("id, crm, agent_email, agent_name, week_start, week_end, approved_total, status")
@@ -196,7 +315,14 @@ export async function markIncentiveBonusPaid(supabase: SupabaseClient, ledgerId:
   const now = new Date().toISOString();
   const { error } = await supabase
     .from(LEDGER_TABLE)
-    .update({ status: "paid", paid_by_name: performedByName, paid_at: now, updated_at: now })
+    .update({
+      status: "paid",
+      paid_by_name: performedByName,
+      paid_at: now,
+      payment_date: paymentDate,
+      payment_reference: paymentReference,
+      updated_at: now,
+    })
     .eq("id", ledgerId);
 
   if (error) return { error: "Failed to mark this bonus as paid." };

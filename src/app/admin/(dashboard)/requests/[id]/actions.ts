@@ -270,6 +270,16 @@ export async function setQuoteIncentiveStatusAction(requestId: string, formData:
   }
   const incentiveStatus: QuoteIncentiveStatus | null = raw ? (raw as QuoteIncentiveStatus) : null;
 
+  // Brief: "Reject invalid records using a required reason." Only
+  // required when the record is being marked as something other than
+  // Qualified (i.e. rejected) - a plain Qualified marking, or clearing
+  // back to unreviewed, never needs one.
+  const incentiveStatusReasonRaw = String(formData.get("incentive_status_reason") ?? "").trim() || null;
+  if (incentiveStatus && incentiveStatus !== "Qualified" && !incentiveStatusReasonRaw) {
+    throw new Error("A reason is required when marking a quote as anything other than Qualified.");
+  }
+  const incentiveStatusReason = incentiveStatus && incentiveStatus !== "Qualified" ? incentiveStatusReasonRaw : null;
+
   const supabase = getSupabaseAdmin();
 
   // incentive_status_set_by references crm_users(id) - only fill it in
@@ -282,6 +292,7 @@ export async function setQuoteIncentiveStatusAction(requestId: string, formData:
     .from("quote_requests")
     .update({
       incentive_status: incentiveStatus,
+      incentive_status_reason: incentiveStatusReason,
       incentive_status_set_by: crmUser?.id ?? null,
       incentive_status_set_at: new Date().toISOString(),
     })

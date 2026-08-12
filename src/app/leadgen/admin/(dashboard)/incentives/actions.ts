@@ -5,7 +5,13 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeLeadgenWeeklyIncentive, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
-import { approveWeeklyIncentiveBonus, fetchWinsalotIncentiveSettings, markIncentiveBonusPaid, updateWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
+import {
+  approveWeeklyIncentiveBonus,
+  fetchWinsalotIncentiveSettings,
+  markIncentiveBonusPaid,
+  rejectWeeklyIncentiveBonus,
+  updateWinsalotIncentiveSettings,
+} from "@/lib/agent-incentive-ledger";
 
 type ActionResult = { error?: string };
 
@@ -66,11 +72,53 @@ export async function approveLeadgenWeeklyBonusAction(
   return {};
 }
 
-export async function markLeadgenBonusPaidAction(ledgerId: string): Promise<ActionResult> {
+// Bound with (weekStart, weekEnd) via .bind(), same shape as
+// approveLeadgenWeeklyBonusAction above.
+export async function rejectLeadgenWeeklyBonusAction(weekStart: string, weekEnd: string, agentId: string, formData: FormData): Promise<ActionResult> {
   const adminUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const result = await markIncentiveBonusPaid(supabase, ledgerId, adminUser.full_name || adminUser.email);
+  const [{ data: agent }, appointments, settings] = await Promise.all([
+    supabase.from("leadgen_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
+    fetchIncentiveAppointments(),
+    fetchWinsalotIncentiveSettings(supabase),
+  ]);
+
+  if (!agent) return { error: "Agent not found." };
+
+  const calc = computeLeadgenWeeklyIncentive(appointments, agentId, weekStart, weekEnd, settings.leadgenWeeklyQuota, settings.leadgenWeeklyBonusAmount);
+  const reason = String(formData.get("rejection_reason") ?? "").trim();
+
+  const result = await rejectWeeklyIncentiveBonus(supabase, {
+    crm: "leadgen",
+    sourceLeadgenUserId: agentId,
+    sourceCrmUserId: null,
+    agentEmail: agent.email,
+    agentName: agent.full_name || agent.email,
+    weekStart,
+    weekEnd,
+    qualifiedCount: calc.qualifiedCount,
+    weeklyQuota: settings.leadgenWeeklyQuota,
+    calculatedBonus: calc.calculatedBonus,
+    reason,
+    performedByName: adminUser.full_name || adminUser.email,
+  });
+
+  if (result.error) return result;
+
+  revalidatePath("/leadgen/admin/incentives");
+  revalidatePath("/leadgen/agent");
+  return {};
+}
+
+export async function markLeadgenBonusPaidAction(ledgerId: string, formData: FormData): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const paymentDate = String(formData.get("payment_date") ?? "").trim() || null;
+  const paymentReference = String(formData.get("payment_reference") ?? "").trim() || null;
+
+  const result = await markIncentiveBonusPaid(supabase, ledgerId, adminUser.full_name || adminUser.email, paymentDate, paymentReference);
   if (result.error) return result;
 
   revalidatePath("/leadgen/admin/incentives");

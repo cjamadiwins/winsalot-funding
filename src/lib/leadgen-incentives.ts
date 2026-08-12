@@ -95,3 +95,28 @@ export function leadgenCurrentIncentiveWeek(now: Date = new Date()): { weekStart
   const weekStart = leadgenMondayOf(leadgenDateKey(now));
   return { weekStart, weekEnd: addDays(weekStart, 6) };
 }
+
+export type LeadgenWeeklyRecordCounts = {
+  rawCount: number; // every appointment credited to this agent in the week, any review status
+  rejectedCount: number; // explicitly reviewed and marked as a non-Qualified value
+};
+
+// Admin table's "Raw Total"/"Rejected" columns - purely descriptive
+// counts alongside computeLeadgenWeeklyIncentive's qualifiedCount
+// (the "Verified" column); never feeds into the bonus calculation.
+export function computeLeadgenWeeklyRecordCounts(
+  appointments: LeadgenIncentiveAppointment[],
+  agentId: string,
+  weekStart: string,
+  weekEnd: string
+): LeadgenWeeklyRecordCounts {
+  const inWeek = creditedTo(appointments, agentId).filter((appt) => {
+    const key = leadgenDateKey(appt.created_at);
+    return key >= weekStart && key <= weekEnd;
+  });
+  let rejectedCount = 0;
+  for (const appt of inWeek) {
+    if (appt.incentive_status !== null && appt.incentive_status !== "Qualified") rejectedCount++;
+  }
+  return { rawCount: inWeek.length, rejectedCount };
+}

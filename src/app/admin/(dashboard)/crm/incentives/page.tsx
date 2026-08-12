@@ -1,7 +1,7 @@
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDays, crmDateKey } from "@/lib/crm-performance";
-import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
+import { computeCrmWeeklyIncentive, computeCrmWeeklyRecordCounts, crmMondayOf } from "@/lib/crm-incentives";
 import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
 import {
   monthStartOfWeek,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/agent-incentive-shared";
 import type { CrmUserRow } from "@/lib/crm-types";
 import AdminWeeklyIncentivesClient, { type AdminIncentiveRow, type AuditRow } from "@/components/crm-ui/AdminWeeklyIncentivesClient";
-import { approveCrmWeeklyBonusAction, markCrmBonusPaidAction, updateCrmIncentiveSettingsAction } from "./actions";
+import { approveCrmWeeklyBonusAction, markCrmBonusPaidAction, rejectCrmWeeklyBonusAction, updateCrmIncentiveSettingsAction } from "./actions";
 
 function formatDateRangeLabel(startKey: string, endKey: string): string {
   const [sy, sm, sd] = startKey.split("-").map(Number);
@@ -63,11 +63,14 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
 
   const rows: AdminIncentiveRow[] = allAgents.map((agent) => {
     const calc = computeCrmWeeklyIncentive(quotes, agent.id, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
+    const counts = computeCrmWeeklyRecordCounts(quotes, agent.id, weekStart, weekEnd);
     const email = normalizeIncentiveEmail(agent.email);
     return {
       agentId: agent.id,
       agentName: agent.full_name || agent.email,
+      rawCount: counts.rawCount,
       qualifiedCount: calc.qualifiedCount,
+      rejectedCount: counts.rejectedCount,
       quota: calc.quota,
       quotaMet: calc.quotaMet,
       calculatedBonus: calc.calculatedBonus,
@@ -87,7 +90,9 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
       </p>
 
       <AdminWeeklyIncentivesClient
+        crm="cleaning"
         recordLabel="Qualified Quotes"
+        recordsHref="/admin"
         weekLabel={weekLabel}
         prevWeekHref={`?week=${addDays(weekStart, -7)}`}
         nextWeekHref={`?week=${addDays(weekStart, 7)}`}
@@ -98,6 +103,7 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
         rows={rows}
         auditRows={(auditRows ?? []) as AuditRow[]}
         approveAction={approveCrmWeeklyBonusAction.bind(null, weekStart, weekEnd)}
+        rejectAction={rejectCrmWeeklyBonusAction.bind(null, weekStart, weekEnd)}
         markPaidAction={markCrmBonusPaidAction}
         updateSettingsAction={updateCrmIncentiveSettingsAction}
       />

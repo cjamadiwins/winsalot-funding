@@ -235,6 +235,7 @@ export default function AppointmentsListClient({
                     </td>
                     <td className="p-3">
                       <span
+                        title={appt.incentive_status_reason ?? undefined}
                         className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                           appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                         }`}
@@ -279,6 +280,17 @@ export default function AppointmentsListClient({
                                 </option>
                               ))}
                             </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">
+                              Incentive Reason (required unless Qualified/Not Reviewed)
+                            </span>
+                            <input
+                              name="incentive_status_reason"
+                              type="text"
+                              defaultValue={appt.incentive_status_reason ?? ""}
+                              className={inputClass}
+                            />
                           </label>
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>

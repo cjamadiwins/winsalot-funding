@@ -40,6 +40,9 @@ export type QuoteRequestRow = {
   incentive_status: QuoteIncentiveStatus | null;
   incentive_status_set_by: string | null;
   incentive_status_set_at: string | null;
+  // Mandatory reason when incentive_status is anything other than
+  // Qualified (migration 0062) - null for Qualified or unreviewed.
+  incentive_status_reason: string | null;
 };
 
 export const QUOTE_INCENTIVE_STATUSES = ["Qualified", "Draft", "Cancelled", "Invalid", "Duplicate", "Test"] as const;

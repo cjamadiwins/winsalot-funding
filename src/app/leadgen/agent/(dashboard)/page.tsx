@@ -14,7 +14,7 @@ import {
 } from "@/lib/leadgen-types";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
-import { monthStartOfWeek, winsalotIncentivePeriodStatus } from "@/lib/agent-incentive-shared";
+import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
@@ -82,7 +82,8 @@ export default async function LeadgenAgentDashboardPage() {
     settings.leadgenWeeklyQuota,
     settings.leadgenWeeklyBonusAmount
   );
-  const periodStatus = winsalotIncentivePeriodStatus(ledgerRow);
+  const displayStatus = deriveWeeklyIncentiveDisplayStatus(weeklyIncentive.qualifiedCount, weeklyIncentive.quota, ledgerRow);
+  const capReached = isMonthlyIncentiveCapReached(monthToDateApproved, settings.monthlyCap);
   const remainingToCap = Math.max(0, settings.monthlyCap - monthToDateApproved);
   const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   // Only count/show a follow-up if it's still its lead's authoritative
@@ -157,6 +158,7 @@ export default async function LeadgenAgentDashboardPage() {
       />
 
       <AgentWeeklyIncentiveCard
+        crm="leadgen"
         weekLabel={leadgenWeekRangeLabel(weekStart, weekEnd)}
         recordLabel="qualified appointments"
         qualifiedCount={weeklyIncentive.qualifiedCount}
@@ -164,11 +166,14 @@ export default async function LeadgenAgentDashboardPage() {
         percentage={weeklyIncentive.percentage}
         quotaMet={weeklyIncentive.quotaMet}
         calculatedBonus={weeklyIncentive.calculatedBonus}
-        periodStatus={periodStatus}
+        weeklyBonusAmount={settings.leadgenWeeklyBonusAmount}
+        displayStatus={displayStatus}
         monthLabel={monthLabel}
         monthToDateApproved={monthToDateApproved}
         monthlyCap={settings.monthlyCap}
         remainingToCap={remainingToCap}
+        capReached={capReached}
+        historyHref="/leadgen/agent/incentives/history"
       />
 
       <LeadgenAttendanceCard openShift={openShift} />
