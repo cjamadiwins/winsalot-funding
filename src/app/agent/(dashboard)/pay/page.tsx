@@ -31,7 +31,13 @@ export default async function AgentPayPage() {
 
       {!error && (
         <div className="mt-6">
-          <MyPayView nextPayday={getNextPayday()} records={(records ?? []) as PayrollRecord[]} />
+          <MyPayView
+            companyName="Winsalot Corp"
+            crmLabel="Cleaning CRM"
+            agentName={agent.full_name}
+            nextPayday={getNextPayday()}
+            records={(records ?? []) as PayrollRecord[]}
+          />
         </div>
       )}
     </div>

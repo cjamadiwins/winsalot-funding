@@ -175,6 +175,65 @@ export function buildWeeklyView(rows: AgentAttendanceRow[], weekStart: string, t
   };
 }
 
+// Payroll integration (see supabase/migrations/0063_payroll_attendance_
+// integration.sql and src/app/admin/(dashboard)/crm/payroll/actions.ts):
+// a per-weekday breakdown of an agent's attendance across an arbitrary
+// pay period (14 days, not necessarily calendar-week-aligned like
+// buildWeeklyView above). This is only ever used to compute a *suggested*
+// days_present/flagged-dates starting point for an admin building a
+// payroll record - the admin can freely override every count before
+// saving, and once saved, the payroll row's own columns are the source of
+// truth (attendance changes afterward never retroactively alter a saved
+// record, let alone a finalized one).
+export type PayPeriodAttendanceDay = {
+  dateKey: string;
+  isWeekday: boolean;
+  status: AttendanceStatus | null; // null = no session that day
+  minutes: number;
+};
+
+export type PayPeriodAttendanceSummary = {
+  periodStart: string;
+  periodEnd: string;
+  days: PayPeriodAttendanceDay[]; // every calendar day in the period, in order
+  weekdayCount: number; // standard working days suggestion (Mon-Fri only)
+  daysPresent: number; // weekdays with a completed (clocked out) session
+  // Weekdays with a clock-in but no clock-out that isn't today's still-live
+  // session - "Flag attendance records with a clock-in but no clock-out
+  // for admin review."
+  flaggedDates: string[];
+  // A weekday currently mid-shift (Clocked In, today only) - informational,
+  // not flagged as a problem and not yet counted present.
+  openTodayDate: string | null;
+};
+
+export function buildPayPeriodAttendanceSummary(
+  rows: AgentAttendanceRow[],
+  periodStart: string,
+  periodEnd: string,
+  todayKey: string
+): PayPeriodAttendanceSummary {
+  const days: PayPeriodAttendanceDay[] = [];
+  for (let dateKey = periodStart; dateKey <= periodEnd; dateKey = addDays(dateKey, 1)) {
+    const [y, m, d] = dateKey.split("-").map(Number);
+    const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday .. 6 = Saturday
+    const entry = buildDayEntry(rows, dateKey, todayKey);
+    days.push({ dateKey, isWeekday: dow !== 0 && dow !== 6, status: entry.status, minutes: entry.minutes });
+  }
+
+  const weekdays = days.filter((d) => d.isWeekday);
+
+  return {
+    periodStart,
+    periodEnd,
+    days,
+    weekdayCount: weekdays.length,
+    daysPresent: weekdays.filter((d) => d.status === "Clocked Out" || d.status === "Admin Clock-Out").length,
+    flaggedDates: weekdays.filter((d) => d.status === "Incomplete").map((d) => d.dateKey),
+    openTodayDate: weekdays.find((d) => d.status === "Clocked In")?.dateKey ?? null,
+  };
+}
+
 export type MonthlyAttendanceView = {
   year: number;
   month: number; // 1-12

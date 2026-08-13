@@ -13,28 +13,220 @@ const PAY_PERIOD_DAYS = 14;
 // every future payday computed by this module.
 export const PAYROLL_ANCHOR_PAYDAY = "2026-08-06";
 
-export type PayrollStatus = "pending" | "paid";
+// Draft: admin is still building the record, freely editable.
+// Approved: admin has signed off on the payable-day count and amounts -
+// still editable, but the UI requires a confirmation step to change it.
+// Paid: locked at the database level (crm_payroll_prevent_paid_edit /
+// leadgen_payroll_prevent_paid_edit triggers, migration 0063) - can only
+// be changed by an explicit Reopen action, which takes it back to Draft.
+// Cancelled: terminal, this pay period was voided and never paid out.
+export type PayrollStatus = "draft" | "approved" | "paid" | "cancelled";
+
+export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {
+  draft: "Draft",
+  approved: "Approved",
+  paid: "Paid",
+  cancelled: "Cancelled",
+};
+
+// Winsalot Corp's standard biweekly pay structure (see AGENTS.md-adjacent
+// payroll spec): every agent's base pay period is 10 working days at a
+// flat daily rate derived from the biweekly base. These are the defaults
+// written onto every new payroll record (crm_payroll.standard_biweekly_pay
+// / standard_working_days, migration 0063) - stored per-record, not just
+// read from here, so a future rate change never silently rewrites the
+// daily rate on an already-created record.
+export const STANDARD_BIWEEKLY_PAY = 75_000;
+export const STANDARD_WORKING_DAYS = 10;
+export const STANDARD_DAILY_RATE = STANDARD_BIWEEKLY_PAY / STANDARD_WORKING_DAYS;
+
+export function dailyRate(standardBiweeklyPay: number, standardWorkingDays: number): number {
+  if (standardWorkingDays <= 0) return 0;
+  return standardBiweeklyPay / standardWorkingDays;
+}
+
+// Base Pay Earned = Payable Working Days x Daily Rate. Rounded to the
+// nearest cent (Naira has 2 decimal places, same as every other amount
+// column here) so this always matches what total_pay's generated column
+// computes from the value this function's caller writes to the database.
+export function calculateBasePayEarned(payableDays: number, standardBiweeklyPay: number, standardWorkingDays: number): number {
+  const rate = dailyRate(standardBiweeklyPay, standardWorkingDays);
+  return Math.round(payableDays * rate * 100) / 100;
+}
+
+// Final Pay = Base Pay Earned + Incentives + Other Additions - Deductions.
+// Mirrors total_pay's generated-column expression exactly (base_pay_earned
+// + internet_allowance + bonus_commission + other_additions - deductions -
+// internet_allowance folds into "other additions" for display purposes but
+// is kept as its own legacy column at the database level, see migration
+// 0063's header comment) so a preview computed here before saving always
+// matches what the database will actually store.
+export function calculateFinalPay(parts: {
+  basePayEarned: number;
+  internetAllowance: number;
+  incentiveBonus: number;
+  otherAdditions: number;
+  deductions: number;
+}): number {
+  const total =
+    parts.basePayEarned + parts.internetAllowance + parts.incentiveBonus + parts.otherAdditions - parts.deductions;
+  return Math.round(total * 100) / 100;
+}
 
 // The shape of a row in crm_payroll / leadgen_payroll - identical columns
-// in both tables (see supabase/migrations/0054_crm_payroll.sql and
-// 0055_leadgen_payroll.sql).
+// in both tables (see supabase/migrations/0054_crm_payroll.sql,
+// 0055_leadgen_payroll.sql, and 0063_payroll_attendance_integration.sql).
 export type PayrollRecord = {
   id: string;
   agent_id: string;
   pay_period_start: string;
   pay_period_end: string;
   payday: string;
-  base_salary: number;
+  standard_biweekly_pay: number;
+  standard_working_days: number;
+  days_present: number;
+  approved_paid_days: number;
+  unpaid_absence_days: number;
+  total_payable_days: number;
+  base_pay_earned: number;
   internet_allowance: number;
   bonus_commission: number;
+  other_additions: number;
   deductions: number;
   total_pay: number;
   status: PayrollStatus;
   actual_payment_date: string | null;
+  payment_method: string | null;
   admin_notes: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  reopen_reason: string | null;
   created_at: string;
   updated_at: string;
 };
+
+// One row of crm_payroll_audit_log / leadgen_payroll_audit_log.
+export type PayrollAuditAction =
+  | "created"
+  | "attendance_loaded"
+  | "days_adjusted"
+  | "incentive_changed"
+  | "deduction_changed"
+  | "addition_changed"
+  | "notes_updated"
+  | "approved"
+  | "marked_paid"
+  | "cancelled"
+  | "reopened";
+
+export const PAYROLL_AUDIT_ACTION_LABELS: Record<PayrollAuditAction, string> = {
+  created: "Payroll record created",
+  attendance_loaded: "Attendance loaded",
+  days_adjusted: "Payable days adjusted",
+  incentive_changed: "Incentive/bonus changed",
+  deduction_changed: "Deduction changed",
+  addition_changed: "Other addition changed",
+  notes_updated: "Notes updated",
+  approved: "Payroll approved",
+  marked_paid: "Marked as paid",
+  cancelled: "Payroll cancelled",
+  reopened: "Finalized payroll reopened",
+};
+
+export type PayrollAuditLogRow = {
+  id: string;
+  created_at: string;
+  payroll_id: string;
+  agent_id: string;
+  action: PayrollAuditAction;
+  performed_by: string | null;
+  performed_by_name: string;
+  reason: string | null;
+  details: Record<string, unknown> | null;
+};
+
+// The subset of PayrollRecord that a create/update save can change and
+// that the audit log cares about distinguishing ("Attendance adjusted" vs
+// "Incentive added" vs "Deduction added", per the spec's audit log
+// requirements). Used by buildPayrollAdjustmentAuditRows below.
+export type PayrollAdjustableFields = Pick<
+  PayrollRecord,
+  | "days_present"
+  | "approved_paid_days"
+  | "unpaid_absence_days"
+  | "total_payable_days"
+  | "bonus_commission"
+  | "other_additions"
+  | "internet_allowance"
+  | "deductions"
+  | "admin_notes"
+>;
+
+// Diffs an update's before/after values into one audit-log entry per
+// distinct kind of change - a single Save can touch days, incentives,
+// deductions, additions, and notes all at once, and each gets its own
+// row so "what changed" is legible later without parsing a combined blob.
+// Returns [] when nothing changed (e.g. a Save with no edits).
+export function buildPayrollAdjustmentAuditRows(
+  before: PayrollAdjustableFields,
+  after: PayrollAdjustableFields
+): { action: PayrollAuditAction; details: Record<string, unknown> }[] {
+  const rows: { action: PayrollAuditAction; details: Record<string, unknown> }[] = [];
+
+  if (
+    before.days_present !== after.days_present ||
+    before.approved_paid_days !== after.approved_paid_days ||
+    before.unpaid_absence_days !== after.unpaid_absence_days ||
+    before.total_payable_days !== after.total_payable_days
+  ) {
+    rows.push({
+      action: "days_adjusted",
+      details: {
+        from: {
+          days_present: before.days_present,
+          approved_paid_days: before.approved_paid_days,
+          unpaid_absence_days: before.unpaid_absence_days,
+          total_payable_days: before.total_payable_days,
+        },
+        to: {
+          days_present: after.days_present,
+          approved_paid_days: after.approved_paid_days,
+          unpaid_absence_days: after.unpaid_absence_days,
+          total_payable_days: after.total_payable_days,
+        },
+      },
+    });
+  }
+
+  if (before.bonus_commission !== after.bonus_commission) {
+    rows.push({
+      action: "incentive_changed",
+      details: { from: before.bonus_commission, to: after.bonus_commission },
+    });
+  }
+
+  if (before.deductions !== after.deductions) {
+    rows.push({ action: "deduction_changed", details: { from: before.deductions, to: after.deductions } });
+  }
+
+  if (before.other_additions !== after.other_additions || before.internet_allowance !== after.internet_allowance) {
+    rows.push({
+      action: "addition_changed",
+      details: {
+        from: { other_additions: before.other_additions, internet_allowance: before.internet_allowance },
+        to: { other_additions: after.other_additions, internet_allowance: after.internet_allowance },
+      },
+    });
+  }
+
+  if (before.admin_notes !== after.admin_notes) {
+    rows.push({ action: "notes_updated", details: { from: before.admin_notes, to: after.admin_notes } });
+  }
+
+  return rows;
+}
 
 function parseIsoDateUtc(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -83,11 +275,15 @@ export function getPayPeriodForPayday(paydayIso: string): { start: string; end: 
   return { start: toIsoDate(start), end: paydayIso };
 }
 
+// "₦75,000" for whole amounts, "₦7,500.50" when there are cents - matches
+// the payroll spec's own examples ("₦75,000 and ₦7,500"), which never show
+// a trailing ".00".
 export function formatNgn(amount: number): string {
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -114,4 +310,33 @@ export function formatDateShort(iso: string): string {
 // "Aug 7 - Aug 20, 2026"
 export function formatPayPeriodLabel(start: string, end: string): string {
   return `${formatDateShort(start)} - ${formatDateShort(end)}`;
+}
+
+// Every "YYYY-MM-DD" calendar date from start through end, inclusive.
+// Weekend-ness is judged from the plain Y/M/D triple (local Date getDay()),
+// which is timezone-independent for that purpose - a calendar date is a
+// Saturday everywhere regardless of what timezone evaluates it.
+export function datesInRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  let cursor = parseIsoDateUtc(start);
+  const endDate = parseIsoDateUtc(end);
+  while (cursor.getTime() <= endDate.getTime()) {
+    dates.push(toIsoDate(cursor));
+    cursor = new Date(cursor.getTime() + MS_PER_DAY);
+  }
+  return dates;
+}
+
+function isWeekday(dateIso: string): boolean {
+  const day = parseIsoDateUtc(dateIso).getUTCDay();
+  return day !== 0 && day !== 6;
+}
+
+// The standard working days (Mon-Fri) within a pay period - always exactly
+// 10 for a normal 14-day biweekly period (2 weeks x 5 weekdays), which is
+// exactly the STANDARD_WORKING_DAYS constant. Weekends are excluded here,
+// not deducted as absences later - "Do not automatically penalize an agent
+// for weekends."
+export function weekdaysInRange(start: string, end: string): string[] {
+  return datesInRange(start, end).filter(isWeekday);
 }
