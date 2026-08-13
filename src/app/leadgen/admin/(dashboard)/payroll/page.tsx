@@ -1,27 +1,40 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
-import { getNextPayday, getUpcomingPaydays, type PayrollRecord } from "@/lib/payroll";
+import { getNextPayday, getUpcomingPaydays, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
 import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
-import { createLeadgenPayrollAction, markLeadgenPayrollPaidAction, updateLeadgenPayrollAction } from "./actions";
+import {
+  approveLeadgenPayrollAction,
+  cancelLeadgenPayrollAction,
+  createLeadgenPayrollAction,
+  loadLeadgenAttendanceSummaryAction,
+  markLeadgenPayrollPaidAction,
+  reopenLeadgenPayrollAction,
+  updateLeadgenPayrollAction,
+} from "./actions";
 
 export default async function LeadgenAdminPayrollPage() {
   await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: agents, error: agentsError }, { data: records, error: recordsError }] = await Promise.all([
+  const [
+    { data: agents, error: agentsError },
+    { data: records, error: recordsError },
+    { data: auditLog, error: auditLogError },
+  ] = await Promise.all([
     supabase.from("leadgen_users").select("*").eq("role", "agent").order("full_name"),
     supabase.from("leadgen_payroll").select("*").order("payday", { ascending: false }),
+    supabase.from("leadgen_payroll_audit_log").select("*").order("created_at", { ascending: false }),
   ]);
 
-  const error = agentsError ?? recordsError;
+  const error = agentsError ?? recordsError ?? auditLogError;
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Payroll</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Manage biweekly pay records for Lead Generation CRM agents. Paid every 14 days in Nigerian
-        Naira (₦).
+        Manage biweekly pay records for Lead Generation CRM agents. Paid every 14 days in Nigerian Naira
+        (₦), driven by attendance and admin-approved day counts.
       </p>
 
       {error && (
@@ -33,17 +46,24 @@ export default async function LeadgenAdminPayrollPage() {
       {!error && (
         <div className="mt-6">
           <AdminPayrollClient
+            companyName="Winsalot Corp"
+            crmLabel="Lead Generation CRM"
             agents={((agents ?? []) as LeadgenUserRow[]).map((a) => ({
               id: a.id,
               full_name: a.full_name,
               email: a.email,
             }))}
             records={(records ?? []) as PayrollRecord[]}
+            auditLog={(auditLog ?? []) as PayrollAuditLogRow[]}
             nextPayday={getNextPayday()}
             upcomingPaydays={getUpcomingPaydays(4)}
+            loadAttendanceAction={loadLeadgenAttendanceSummaryAction}
             createAction={createLeadgenPayrollAction}
             updateAction={updateLeadgenPayrollAction}
+            approveAction={approveLeadgenPayrollAction}
             markPaidAction={markLeadgenPayrollPaidAction}
+            cancelAction={cancelLeadgenPayrollAction}
+            reopenAction={reopenLeadgenPayrollAction}
           />
         </div>
       )}
