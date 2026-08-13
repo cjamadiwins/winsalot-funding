@@ -7,11 +7,13 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const PAY_PERIOD_DAYS = 14;
 
-// Winsalot Corp pays agents biweekly. This is the last confirmed, already
-// PAID payday - every other payday (past or future) is this date plus a
-// whole number of 14-day increments. Changing this constant reschedules
-// every future payday computed by this module.
-export const PAYROLL_ANCHOR_PAYDAY = "2026-08-06";
+// Winsalot Corp pays agents biweekly, every second Friday. This is the
+// last confirmed, already PAID payday - every other payday (past or
+// future) is this date plus a whole number of 14-day increments.
+// Changing this constant reschedules every future payday computed by
+// this module. Schedule anchored so the next payday lands on Friday,
+// August 21, 2026 (then Sep 4, Sep 18, Oct 2, ...).
+export const PAYROLL_ANCHOR_PAYDAY = "2026-08-07";
 
 // Draft: admin is still building the record, freely editable.
 // Approved: admin has signed off on the payable-day count and amounts -
@@ -268,7 +270,7 @@ export function getUpcomingPaydays(count: number, from: Date = new Date()): stri
 
 // The 14-day pay period a given payday closes out: 13 days before the
 // payday through the payday itself, inclusive (matches the anchor: the
-// period ending on the Aug 6, 2026 payday is Jul 24 - Aug 6, 2026).
+// period ending on the Aug 7, 2026 payday is Jul 25 - Aug 7, 2026).
 export function getPayPeriodForPayday(paydayIso: string): { start: string; end: string } {
   const payday = parseIsoDateUtc(paydayIso);
   const start = new Date(payday.getTime() - (PAY_PERIOD_DAYS - 1) * MS_PER_DAY);
@@ -287,7 +289,7 @@ export function formatNgn(amount: number): string {
   }).format(amount);
 }
 
-// "August 20, 2026"
+// "August 21, 2026"
 export function formatDateLong(iso: string): string {
   return parseIsoDateUtc(iso).toLocaleDateString("en-US", {
     year: "numeric",
@@ -297,7 +299,7 @@ export function formatDateLong(iso: string): string {
   });
 }
 
-// "Aug 20, 2026"
+// "Aug 21, 2026"
 export function formatDateShort(iso: string): string {
   return parseIsoDateUtc(iso).toLocaleDateString("en-US", {
     year: "numeric",
@@ -307,7 +309,7 @@ export function formatDateShort(iso: string): string {
   });
 }
 
-// "Aug 7 - Aug 20, 2026"
+// "Aug 8 - Aug 21, 2026"
 export function formatPayPeriodLabel(start: string, end: string): string {
   return `${formatDateShort(start)} - ${formatDateShort(end)}`;
 }
