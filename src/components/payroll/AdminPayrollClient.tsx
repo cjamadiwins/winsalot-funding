@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
 import {
   calculateBasePayEarned,
   calculateFinalPay,
@@ -149,13 +149,29 @@ function PayrollFormFields({
       setAttendance(result.summary);
       setField("daysPresent", String(result.summary.daysPresent));
       setField("standardWorkingDays", String(result.summary.weekdayCount || STANDARD_WORKING_DAYS));
-      const approved = Number(values.approvedPaidDays) || 0;
-      const suggestedAbsence = Math.max(result.summary.weekdayCount - result.summary.daysPresent - approved, 0);
-      setField("unpaidAbsenceDays", String(suggestedAbsence));
+      setValues((v) => {
+        const approved = Number(v.approvedPaidDays) || 0;
+        const suggestedAbsence = Math.max(result.summary!.weekdayCount - result.summary!.daysPresent - approved, 0);
+        return { ...v, unpaidAbsenceDays: String(suggestedAbsence) };
+      });
     } finally {
       setLoadingAttendance(false);
     }
   }
+
+  // Auto-load attendance as soon as an agent + payday are both picked, so
+  // the admin never has to remember to click "Load Attendance" - it stays
+  // around only as a manual refresh. Re-fires whenever the agent or the
+  // pay period (payday) changes; approved-paid-days edits are read from
+  // the latest state inside handleLoadAttendance itself, so they don't
+  // need to be a dependency here.
+  useEffect(() => {
+    if (!agentId || !payday) return;
+    startTransition(() => {
+      handleLoadAttendance();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId, payday]);
 
   const daysPresent = Number(values.daysPresent) || 0;
   const approvedPaidDays = Number(values.approvedPaidDays) || 0;
@@ -221,7 +237,7 @@ function PayrollFormFields({
             disabled={!agentId || !payday || loadingAttendance}
             className="rounded-full border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loadingAttendance ? "Loading..." : "Load Attendance"}
+            {loadingAttendance ? "Loading..." : "Refresh Attendance"}
           </button>
         </div>
         {attendanceError && <p className="mt-2 text-xs text-rose-600">{attendanceError}</p>}
