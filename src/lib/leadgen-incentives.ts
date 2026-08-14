@@ -24,9 +24,9 @@
 
 import { addDays, leadgenDateKey, leadgenMondayOf, type LeadgenPerformanceAppointment } from "./leadgen-performance";
 import { computeWeeklyIncentiveBonus } from "./agent-incentive-shared";
-import type { LeadgenAppointmentIncentiveStatus } from "./leadgen-types";
+import { isLeadgenAppointmentCountable, type LeadgenAppointmentIncentiveStatus } from "./leadgen-types";
 
-export type LeadgenIncentiveAppointment = Pick<LeadgenPerformanceAppointment, "id" | "created_at" | "booking_agent_id"> & {
+export type LeadgenIncentiveAppointment = Pick<LeadgenPerformanceAppointment, "id" | "created_at" | "booking_agent_id" | "status"> & {
   incentive_status: LeadgenAppointmentIncentiveStatus | null;
 };
 
@@ -53,8 +53,12 @@ export type LeadgenWeeklyIncentive = {
 // what the given agent was credited with booking, the same
 // booking_agent_id rule computeLeadgenAgentPerformance uses, so this
 // feature's counts can never drift from the Agent Performance Report's.
+// Also excludes Cancelled/Replaced appointments (isLeadgenAppointmentCountable,
+// leadgen-types.ts) - a corrected or cancelled appointment can never
+// qualify for an incentive bonus, even if it was reviewed as "Qualified"
+// before the correction happened.
 function creditedTo(appointments: LeadgenIncentiveAppointment[], agentId: string): LeadgenIncentiveAppointment[] {
-  return appointments.filter((appt) => appt.booking_agent_id === agentId);
+  return appointments.filter((appt) => appt.booking_agent_id === agentId && isLeadgenAppointmentCountable(appt.status));
 }
 
 // One agent's weekly incentive snapshot for [weekStart, weekEnd]

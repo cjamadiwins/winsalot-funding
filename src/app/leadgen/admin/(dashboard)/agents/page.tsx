@@ -1,6 +1,6 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenClientRow, LeadgenUserRow } from "@/lib/leadgen-types";
+import { isLeadgenAppointmentCountable, type LeadgenClientRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import AgentsClient from "./AgentsClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -40,7 +40,7 @@ export default async function LeadgenAgentsPage() {
   for (const appt of appointments ?? []) {
     if (!appt.assigned_specialist_id) continue;
     const entry = performanceByAgent.get(appt.assigned_specialist_id) ?? { leads: 0, calls: 0, appointments: 0, completed: 0 };
-    entry.appointments++;
+    if (isLeadgenAppointmentCountable(appt.status)) entry.appointments++;
     if (appt.status === "Completed") entry.completed++;
     performanceByAgent.set(appt.assigned_specialist_id, entry);
   }

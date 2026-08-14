@@ -229,6 +229,7 @@ export const LEADGEN_APPOINTMENT_STATUSES = [
   "No-show",
   "Rescheduled",
   "Cancelled",
+  "Replaced",
 ] as const;
 
 export type LeadgenAppointmentStatus = (typeof LEADGEN_APPOINTMENT_STATUSES)[number];
@@ -240,7 +241,24 @@ export const LEADGEN_APPOINTMENT_STATUS_STYLES: Record<LeadgenAppointmentStatus,
   "No-show": "bg-rose-100 text-rose-800",
   Rescheduled: "bg-amber-100 text-amber-800",
   Cancelled: "bg-slate-200 text-slate-500",
+  Replaced: "bg-violet-100 text-violet-700",
 };
+
+// Statuses that no longer represent a valid, currently-scheduled
+// appointment - a genuine cancellation, or the original half of a
+// correction (e.g. rebooked after the original email bounced - see the
+// "Cancel/Replace Appointment" admin action). Excluded from every
+// appointment total across the CRM (dashboard KPI, Results by
+// Client/Agent, weekly/monthly performance and incentive calculations)
+// so a corrected duplicate never inflates a count - the record itself is
+// always kept (never deleted) for lead history/auditing, just left out
+// of totals. Centralized here as isLeadgenAppointmentCountable so every
+// call site shares the exact same rule instead of re-deriving it.
+export const LEADGEN_APPOINTMENT_EXCLUDED_STATUSES: readonly LeadgenAppointmentStatus[] = ["Cancelled", "Replaced"];
+
+export function isLeadgenAppointmentCountable(status: LeadgenAppointmentStatus): boolean {
+  return !LEADGEN_APPOINTMENT_EXCLUDED_STATUSES.includes(status);
+}
 
 export const LEADGEN_MEETING_TYPES = ["Phone Call", "Video Call", "In Person"] as const;
 export type LeadgenMeetingType = (typeof LEADGEN_MEETING_TYPES)[number];
@@ -310,6 +328,13 @@ export type LeadgenAppointmentRow = {
   // Mandatory reason when incentive_status is anything other than
   // Qualified (migration 0061) - null for Qualified or unreviewed.
   incentive_status_reason: string | null;
+  // Optional reason plus who/when for the current `status` value,
+  // captured by the "Cancel/Replace Appointment" admin action (migration
+  // 0064) - e.g. "Incorrect email—appointment rebooked." Null unless
+  // that action has been used on this appointment.
+  status_reason: string | null;
+  status_set_by: string | null;
+  status_set_at: string | null;
 };
 
 // Shared literal button text for the consultation booking button, used

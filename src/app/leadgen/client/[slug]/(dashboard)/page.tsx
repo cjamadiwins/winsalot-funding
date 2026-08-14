@@ -1,7 +1,7 @@
 import { Phone, UserCheck, Star, CalendarCheck, CheckCircle2, UserX } from "lucide-react";
 import { requireLeadgenClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
+import { isLeadgenAppointmentCountable, LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 
 export default async function LeadgenClientDashboardPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -28,12 +28,12 @@ export default async function LeadgenClientDashboardPage({ params }: { params: P
   // client policy on leadgen_lead_activities at all).
   const ownersReached = allLeads.filter((l) => l.status === "Owner reached").length;
   const interestedBusinesses = allLeads.filter((l) => l.status === "Interested").length;
-  const appointmentsBooked = allAppointments.length;
+  const appointmentsBooked = allAppointments.filter((a) => isLeadgenAppointmentCountable(a.status)).length;
   const appointmentsCompleted = allAppointments.filter((a) => a.status === "Completed").length;
   const noShows = allAppointments.filter((a) => a.status === "No-show").length;
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = allAppointments
-    .filter((a) => a.appointment_date >= today && a.status !== "Cancelled" && a.status !== "Completed")
+    .filter((a) => a.appointment_date >= today && isLeadgenAppointmentCountable(a.status) && a.status !== "Completed")
     .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date));
 
   const stats: { label: string; value: string; tone: KpiTone; icon: typeof Phone }[] = [

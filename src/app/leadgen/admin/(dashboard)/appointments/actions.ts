@@ -247,3 +247,62 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
   }
   return {};
 }
+
+// Dedicated "Cancel/Replace Appointment" admin action (distinct from the
+// general status editor above) - the clear, purpose-built way to correct
+// an invalid appointment (e.g. rebooked because the original contact
+// email bounced) so it stops counting toward the dashboard total,
+// Results by Client/Agent, and weekly/monthly performance/incentive
+// calculations (isLeadgenAppointmentCountable, leadgen-types.ts), while
+// keeping the record itself - and the lead's activity history - fully
+// intact for auditing. The reason is optional (brief: "require an
+// optional reason"), e.g. "Incorrect email—appointment rebooked."
+export async function cancelOrReplaceAppointmentAction(appointmentId: string, formData: FormData): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+
+  const newStatus = String(formData.get("status") ?? "").trim();
+  if (newStatus !== "Cancelled" && newStatus !== "Replaced") {
+    return { error: "Choose Cancelled or Replaced." };
+  }
+  const reason = textOrNull(formData, "reason");
+
+  const supabase = await createSupabaseServerClient();
+  const { data: appointment, error } = await supabase
+    .from("leadgen_appointments")
+    .update({
+      status: newStatus,
+      status_reason: reason,
+      status_set_by: adminUser.id,
+      status_set_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appointmentId)
+    .select("lead_id")
+    .single();
+
+  if (error) return { error: "Failed to update the appointment." };
+
+  if (appointment?.lead_id) {
+    await supabase.from("leadgen_lead_activities").insert({
+      lead_id: appointment.lead_id,
+      agent_id: null,
+      activity_type: "appointment_updated",
+      notes: reason
+        ? `Appointment marked "${newStatus}" by ${adminUser.full_name || adminUser.email}. Reason: ${reason}`
+        : `Appointment marked "${newStatus}" by ${adminUser.full_name || adminUser.email}.`,
+    });
+  }
+
+  // Every place an appointment total/report is computed from this table
+  // (see isLeadgenAppointmentCountable call sites) - so the correction is
+  // reflected immediately on next navigation, no deploy or manual
+  // browser refresh needed.
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin");
+  revalidatePath("/leadgen/admin/performance");
+  revalidatePath("/leadgen/admin/incentives");
+  revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/performance");
+  if (appointment?.lead_id) revalidatePath(`/leadgen/admin/leads/${appointment.lead_id}`);
+  return {};
+}

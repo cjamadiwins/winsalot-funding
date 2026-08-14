@@ -9,11 +9,12 @@
 // is what every count below is keyed on - it's set once, automatically,
 // at the moment an appointment is booked, to whichever agent was
 // responsible for the lead at that time (see that migration for why).
-// A cancelled appointment is excluded from every total here, so
-// cancelling one immediately corrects an agent's counts without any
+// A cancelled or replaced appointment (isLeadgenAppointmentCountable,
+// leadgen-types.ts) is excluded from every total here, so cancelling or
+// replacing one immediately corrects an agent's counts without any
 // separate "undo" bookkeeping.
 
-import type { LeadgenAppointmentStatus } from "./leadgen-types";
+import { isLeadgenAppointmentCountable, type LeadgenAppointmentStatus } from "./leadgen-types";
 
 export const LEADGEN_WEEKLY_APPOINTMENT_TARGET = 4;
 
@@ -143,7 +144,7 @@ export function computeLeadgenAgentPerformance(
   // "Do not count the same appointment twice" - each row is credited to
   // at most one agent (booking_agent_id), so a simple filter here can
   // never double-count an appointment across two agents' reports.
-  const credited = appointments.filter((appt) => appt.booking_agent_id === agentId && appt.status !== "Cancelled");
+  const credited = appointments.filter((appt) => appt.booking_agent_id === agentId && isLeadgenAppointmentCountable(appt.status));
 
   for (const appt of credited) {
     const key = leadgenDateKey(appt.created_at);
@@ -183,7 +184,7 @@ export function computeLeadgenAgentPerformance(
 }
 
 // Same "credited to this agent" rule as computeLeadgenAgentPerformance
-// above (booking_agent_id match, status not Cancelled) - pulled out so
+// above (booking_agent_id match, isLeadgenAppointmentCountable) - pulled out so
 // the Monthly Performance history (leadgen-performance-history.ts) can
 // count an arbitrary Monday-Sunday week the same way the live weekly
 // report does, without duplicating or drifting from this filter.
@@ -191,10 +192,10 @@ export function leadgenCreditedAppointments(
   appointments: LeadgenPerformanceAppointment[],
   agentId: string
 ): LeadgenPerformanceAppointment[] {
-  return appointments.filter((appt) => appt.booking_agent_id === agentId && appt.status !== "Cancelled");
+  return appointments.filter((appt) => appt.booking_agent_id === agentId && isLeadgenAppointmentCountable(appt.status));
 }
 
-// Count of an agent's valid (credited, non-cancelled) appointments whose
+// Count of an agent's valid (credited, countable) appointments whose
 // created_at - the same "booked on" date the live weekly report buckets
 // by - falls within [weekStart, weekEnd] (inclusive, both YYYY-MM-DD).
 export function computeLeadgenWeekBookedCount(
