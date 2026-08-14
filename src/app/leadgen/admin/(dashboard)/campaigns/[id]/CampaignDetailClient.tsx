@@ -3,7 +3,14 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Users, Star, CalendarCheck, CheckCircle2, Percent } from "lucide-react";
-import { LEADGEN_LEAD_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow } from "@/lib/leadgen-types";
+import {
+  isLeadgenAppointmentCountable,
+  LEADGEN_LEAD_STATUS_STYLES,
+  type LeadgenAppointmentRow,
+  type LeadgenCampaignRow,
+  type LeadgenClientRow,
+  type LeadgenLeadRow,
+} from "@/lib/leadgen-types";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { updateCampaignAction } from "../../actions";
 
@@ -25,7 +32,7 @@ export default function CampaignDetailClient({
   const [error, setError] = useState<string | null>(null);
 
   const interested = leads.filter((l) => l.status === "Interested").length;
-  const appointmentsBooked = appointments.length;
+  const appointmentsBooked = appointments.filter((a) => isLeadgenAppointmentCountable(a.status)).length;
   const appointmentsCompleted = appointments.filter((a) => a.status === "Completed").length;
   const conversionRate = leads.length > 0 ? Math.round((appointmentsBooked / leads.length) * 100) : 0;
 

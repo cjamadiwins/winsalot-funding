@@ -34,7 +34,7 @@ export default async function LeadgenAdminIncentivesPage({ searchParams }: { sea
         .eq("active", true)
         .neq("email", DEACTIVATED_TEST_AGENT_EMAIL)
         .order("full_name"),
-      admin.from("leadgen_appointments").select("id, created_at, booking_agent_id, incentive_status"),
+      admin.from("leadgen_appointments").select("id, created_at, booking_agent_id, incentive_status, status"),
       admin.from("winsalot_incentive_settings").select("*").maybeSingle(),
       admin.from("winsalot_agent_incentive_ledger").select("*").eq("crm", "leadgen").eq("week_start", weekStart),
       admin.from("winsalot_agent_incentive_ledger").select("agent_email, crm, week_start, approved_total, status").eq("month_start", monthStart),

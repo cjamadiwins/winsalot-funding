@@ -15,7 +15,7 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
-import { bookAppointmentAction, updateAppointmentAction } from "./actions";
+import { bookAppointmentAction, cancelOrReplaceAppointmentAction, updateAppointmentAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -40,6 +40,7 @@ export default function AppointmentsListClient({
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const highlightRef = useRef<HTMLTableRowElement>(null);
 
@@ -229,7 +230,10 @@ export default function AppointmentsListClient({
                     </td>
                     <td className="p-3 text-slate-600">{appt.meeting_type}</td>
                     <td className="p-3">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                      <span
+                        title={appt.status_reason ?? undefined}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
+                      >
                         {appt.status}
                       </span>
                     </td>
@@ -244,15 +248,67 @@ export default function AppointmentsListClient({
                       </span>
                     </td>
                     <td className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(editingId === appt.id ? null : appt.id)}
-                        className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
-                      >
-                        {editingId === appt.id ? "Close" : "Manage"}
-                      </button>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(editingId === appt.id ? null : appt.id)}
+                          className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
+                        >
+                          {editingId === appt.id ? "Close" : "Manage"}
+                        </button>
+                        {appt.status !== "Cancelled" && appt.status !== "Replaced" && (
+                          <button
+                            type="button"
+                            onClick={() => setCancelingId(cancelingId === appt.id ? null : appt.id)}
+                            className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
+                          >
+                            {cancelingId === appt.id ? "Close" : "Cancel/Replace"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
+                  {cancelingId === appt.id && (
+                    <tr>
+                      <td colSpan={7} className="bg-rose-50 p-4">
+                        <form
+                          action={(formData) =>
+                            runAction(() => cancelOrReplaceAppointmentAction(appt.id, formData), () => setCancelingId(null))
+                          }
+                          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                        >
+                          <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                            Use this to correct an invalid appointment (e.g. rebooked because the original contact email
+                            bounced) without deleting the record - it&apos;s excluded from every appointment total, but the
+                            lead and activity history are kept.
+                          </p>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">New Status</span>
+                            <select name="status" defaultValue="Replaced" className={inputClass}>
+                              <option value="Replaced">Replaced (a corrected appointment exists)</option>
+                              <option value="Cancelled">Cancelled (no replacement)</option>
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Reason (optional)</span>
+                            <input
+                              name="reason"
+                              type="text"
+                              placeholder="e.g. Incorrect email—appointment rebooked."
+                              className={inputClass}
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            disabled={isPending}
+                            className="rounded-full bg-rose-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-rose-700 sm:col-span-2 sm:w-fit"
+                          >
+                            Cancel/Replace Appointment
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
                   {editingId === appt.id && (
                     <tr>
                       <td colSpan={7} className="bg-slate-50 p-4">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { LEADGEN_STAT_CARD_STYLES, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
+import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 
@@ -29,7 +29,12 @@ export default async function LeadgenAdminDashboardPage() {
 
   const totalLeads = allLeads.length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
-  const appointmentsBooked = allAppointments.length;
+  // Cancelled/Replaced appointments (isLeadgenAppointmentCountable,
+  // leadgen-types.ts) never count toward the total - a corrected
+  // duplicate (see the "Cancel/Replace Appointment" admin action) counts
+  // once, via the appointment that replaced it, not twice.
+  const countableAppointments = allAppointments.filter((a) => isLeadgenAppointmentCountable(a.status));
+  const appointmentsBooked = countableAppointments.length;
   // Same source of truth as the Leads page's Due Today/Overdue filters
   // (LeadsListClient.tsx) - each lead's own next_follow_up_at, not a raw
   // scan of leadgen_followups rows, so these counts can never drift out
@@ -43,7 +48,7 @@ export default async function LeadgenAdminDashboardPage() {
     const entry = byCampaignClient.get(lead.client_id);
     if (entry) entry.leads++;
   }
-  for (const appt of allAppointments) {
+  for (const appt of countableAppointments) {
     const entry = byCampaignClient.get(appt.client_id);
     if (entry) entry.appointments++;
   }

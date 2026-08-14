@@ -17,7 +17,7 @@ type ActionResult = { error?: string };
 
 async function fetchIncentiveAppointments(): Promise<LeadgenIncentiveAppointment[]> {
   const admin = getSupabaseAdmin();
-  const { data } = await admin.from("leadgen_appointments").select("id, created_at, booking_agent_id, incentive_status");
+  const { data } = await admin.from("leadgen_appointments").select("id, created_at, booking_agent_id, incentive_status, status");
   return (data ?? []) as LeadgenIncentiveAppointment[];
 }
 
