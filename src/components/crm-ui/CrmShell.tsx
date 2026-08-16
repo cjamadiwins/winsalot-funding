@@ -4,6 +4,7 @@ import { cloneElement, isValidElement, useState, type ReactElement, type ReactNo
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
+import DualTimeClock from "./DualTimeClock";
 
 // `icon` takes an already-rendered element (e.g. `<Users />`), not a
 // component reference - every layout using CrmShell is a Server
@@ -168,6 +169,8 @@ export default function CrmShell({
             {rightSlot}
           </header>
         )}
+
+        <DualTimeClock />
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
