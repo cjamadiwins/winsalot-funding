@@ -52,34 +52,37 @@ export default function DualTimeClock() {
   const now = nowMs === null ? null : new Date(nowMs);
 
   return (
-    <div className="border-b border-[var(--crm-border,#dce4ec)] bg-[var(--crm-surface,#ffffff)] px-4 py-3 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-6">
-        <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
-          <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
-          Client Local Time
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6">
-          {CLOCKS.map((clock) => {
-            const formatted = now ? formatClock(now, clock.timeZone) : null;
-            return (
-              <div key={clock.timeZone} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-[12.5px] font-semibold text-[var(--crm-text,#17283b)]">
-                  {clock.city}
-                  <span className="ml-1 font-normal text-[var(--crm-text-muted,#6b7c90)]">({clock.region})</span>
-                </span>
-                <span
-                  className="font-mono text-lg font-bold tabular-nums text-[var(--crm-accent,#3e7ef7)] sm:text-xl"
-                  suppressHydrationWarning
-                >
-                  {formatted ? formatted.time : "--:--:-- --"}
-                </span>
-                <span className="text-[11.5px] text-[var(--crm-text-muted,#6b7c90)]" suppressHydrationWarning>
-                  {formatted ? formatted.dateLabel : ""}
+    <div className="border-b border-[var(--crm-border,#dce4ec)] bg-[var(--crm-surface,#ffffff)] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+      <div className="mb-3 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-[var(--crm-text-soft,#4b5c71)]">
+        <Clock3 className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+        Client Local Time
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+        {CLOCKS.map((clock) => {
+          const formatted = now ? formatClock(now, clock.timeZone) : null;
+          return (
+            <div
+              key={clock.timeZone}
+              className="rounded-2xl border-2 border-[var(--crm-border,#dce4ec)] bg-[var(--crm-bg-2,#eaf0f6)] px-4 py-3 shadow-md sm:px-5 sm:py-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                <span className="text-sm font-extrabold text-[var(--crm-text,#17283b)] sm:text-base">{clock.city}</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
+                  {clock.region}
                 </span>
               </div>
-            );
-          })}
-        </div>
+              <div
+                className="mt-1 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[var(--crm-accent,#3e7ef7)] sm:text-[32px]"
+                suppressHydrationWarning
+              >
+                {formatted ? formatted.time : "--:--:-- --"}
+              </div>
+              <div className="mt-1.5 text-xs font-medium text-[var(--crm-text-muted,#6b7c90)] sm:text-sm" suppressHydrationWarning>
+                {formatted ? formatted.dateLabel : ""}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
