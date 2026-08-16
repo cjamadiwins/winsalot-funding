@@ -20,6 +20,7 @@ import {
   Gift,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
+import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Requests", href: "/admin", icon: <ClipboardList /> },
@@ -52,6 +53,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .order("created_at", { ascending: false })
     .limit(20);
 
+  const timeZonePreferences = await getUserTimeZonePreferences();
+
   return (
     <div className="crm-theme">
       <CrmShell
@@ -61,6 +64,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         navItems={NAV_ITEMS}
         userLabel={user.email}
         signOutAction={signOutAction}
+        clientLocalTime={{
+          initialPreferences: timeZonePreferences,
+          saveLocationsAction: saveUserTimeZonePreferences,
+          resetLocationsAction: resetUserTimeZonePreferences,
+        }}
         rightSlot={
           <NotificationBell
             notifications={(notifications ?? []) as CrmNotificationRow[]}

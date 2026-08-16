@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { signOutLeadgenAgentAction } from "./actions";
+import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/agent", icon: <LayoutDashboard /> },
@@ -29,6 +30,7 @@ const NAV_ITEMS: CrmNavItem[] = [
 
 export default async function LeadgenAgentLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAgent();
+  const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
     <div className="crm-theme">
@@ -39,6 +41,11 @@ export default async function LeadgenAgentLayout({ children }: { children: React
         navItems={NAV_ITEMS}
         userLabel={user.full_name}
         signOutAction={signOutLeadgenAgentAction}
+        clientLocalTime={{
+          initialPreferences: timeZonePreferences,
+          saveLocationsAction: saveUserTimeZonePreferences,
+          resetLocationsAction: resetUserTimeZonePreferences,
+        }}
       >
         {children}
       </CrmShell>
