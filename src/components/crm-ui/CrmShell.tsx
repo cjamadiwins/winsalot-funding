@@ -4,7 +4,9 @@ import { cloneElement, isValidElement, useState, type ReactElement, type ReactNo
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
-import DualTimeClock from "./DualTimeClock";
+import ClientLocalTimePanel from "./ClientLocalTimePanel";
+import type { LocationCountry } from "@/lib/timezone-locations";
+import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 // `icon` takes an already-rendered element (e.g. `<Users />`), not a
 // component reference - every layout using CrmShell is a Server
@@ -90,6 +92,7 @@ export default function CrmShell({
   userLabel,
   signOutAction,
   rightSlot,
+  clientLocalTime,
   children,
 }: {
   brandTitle: string;
@@ -99,6 +102,14 @@ export default function CrmShell({
   userLabel?: string;
   signOutAction: () => void | Promise<void>;
   rightSlot?: ReactNode;
+  clientLocalTime: {
+    initialPreferences: TimeZonePreferences;
+    saveLocationsAction: (
+      location1: { country: LocationCountry; regionCode: string; city: string },
+      location2: { country: LocationCountry; regionCode: string; city: string }
+    ) => Promise<{ error?: string }>;
+    resetLocationsAction: () => Promise<{ error?: string }>;
+  };
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -170,7 +181,11 @@ export default function CrmShell({
           </header>
         )}
 
-        <DualTimeClock />
+        <ClientLocalTimePanel
+          initialPreferences={clientLocalTime.initialPreferences}
+          saveLocationsAction={clientLocalTime.saveLocationsAction}
+          resetLocationsAction={clientLocalTime.resetLocationsAction}
+        />
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>

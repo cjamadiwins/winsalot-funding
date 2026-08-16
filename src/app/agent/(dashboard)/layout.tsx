@@ -22,6 +22,7 @@ import {
   markNotificationReadAction,
   markAllNotificationsReadAction,
 } from "./actions";
+import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: <LayoutDashboard /> },
@@ -47,6 +48,8 @@ export default async function AgentLayout({ children }: { children: ReactNode })
     .order("created_at", { ascending: false })
     .limit(20);
 
+  const timeZonePreferences = await getUserTimeZonePreferences();
+
   return (
     <div className="crm-theme">
       <CrmShell
@@ -56,6 +59,11 @@ export default async function AgentLayout({ children }: { children: ReactNode })
         navItems={NAV_ITEMS}
         userLabel={crmUser.full_name || crmUser.email}
         signOutAction={agentSignOutAction}
+        clientLocalTime={{
+          initialPreferences: timeZonePreferences,
+          saveLocationsAction: saveUserTimeZonePreferences,
+          resetLocationsAction: resetUserTimeZonePreferences,
+        }}
         rightSlot={
           <NotificationBell
             notifications={(notifications ?? []) as CrmNotificationRow[]}

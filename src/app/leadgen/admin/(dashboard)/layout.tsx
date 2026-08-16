@@ -15,6 +15,7 @@ import {
   Gift,
 } from "lucide-react";
 import { signOutLeadgenAction } from "./actions";
+import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/admin", icon: <LayoutDashboard /> },
@@ -33,6 +34,7 @@ const NAV_ITEMS: CrmNavItem[] = [
 
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
+  const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
     <div className="crm-theme">
@@ -43,6 +45,11 @@ export default async function LeadgenAdminLayout({ children }: { children: React
         navItems={NAV_ITEMS}
         userLabel={user.email}
         signOutAction={signOutLeadgenAction}
+        clientLocalTime={{
+          initialPreferences: timeZonePreferences,
+          saveLocationsAction: saveUserTimeZonePreferences,
+          resetLocationsAction: resetUserTimeZonePreferences,
+        }}
       >
         {children}
       </CrmShell>
