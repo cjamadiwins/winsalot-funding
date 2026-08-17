@@ -7,7 +7,6 @@ import {
   findCity,
   findRegion,
   countryName,
-  countryFlag,
   type LocationCountry,
   type SavedLocation,
 } from "@/lib/timezone-locations";
@@ -15,6 +14,7 @@ import { getNigeriaTimeDiffLabel, getCallingStatus, BUSINESS_HOURS_LABEL, type C
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 import EditLocationsModal from "./EditLocationsModal";
 import CitySkyline from "./CitySkyline";
+import FlagIcon from "./FlagIcon";
 
 // Configurable "Client Local Time" panel shown at the top of every
 // logged-in CRM dashboard (Cleaning + Lead Gen, admin + agent). Each user
@@ -94,9 +94,7 @@ function LocationCard({ location, now }: { location: SavedLocation; now: Date | 
 
       <div className="px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="text-base leading-none">
-            {countryFlag(location.country)}
-          </span>
+          <FlagIcon country={location.country} className="h-4 w-6" />
           <span className="text-sm font-extrabold text-[var(--crm-text,#17283b)] sm:text-base">{location.city}</span>
         </div>
         <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]">

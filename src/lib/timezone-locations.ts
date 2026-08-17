@@ -41,18 +41,15 @@ export const COUNTRY_NAMES: Record<LocationCountry, string> = {
   US: "United States",
 };
 
-export const COUNTRY_FLAGS: Record<LocationCountry, string> = {
-  CA: "🇨🇦",
-  US: "🇺🇸",
-};
-
 export function countryName(country: LocationCountry): string {
   return COUNTRY_NAMES[country];
 }
 
-export function countryFlag(country: LocationCountry): string {
-  return COUNTRY_FLAGS[country];
-}
+// The country flag itself is rendered as an SVG icon, not a Unicode flag
+// emoji - see src/components/crm-ui/FlagIcon.tsx. Windows' Chrome/Edge
+// (no OS-level flag emoji font) renders flag emoji as the two-letter
+// region code text ("CA", "US") instead of a flag, so an emoji can't be
+// used here if the flag needs to reliably look like a flag everywhere.
 
 export const CA_REGIONS: RegionOption[] = [
   { code: "AB", name: "Alberta", country: "CA" },
