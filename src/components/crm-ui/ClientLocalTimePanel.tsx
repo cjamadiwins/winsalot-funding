@@ -13,7 +13,7 @@ import {
 import { getNigeriaTimeDiffLabel, getCallingStatus, BUSINESS_HOURS_LABEL, type CallingStatusLevel } from "@/lib/market-snapshot";
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 import EditLocationsModal from "./EditLocationsModal";
-import CitySkyline from "./CitySkyline";
+import CitySkyline, { isNightAt } from "./CitySkyline";
 import FlagIcon from "./FlagIcon";
 
 // Configurable "Client Local Time" panel shown at the top of every
@@ -90,7 +90,11 @@ function LocationCard({ location, now }: { location: SavedLocation; now: Date | 
 
   return (
     <div className="overflow-hidden rounded-2xl border-2 border-[var(--crm-border,#dce4ec)] bg-[var(--crm-bg-2,#eaf0f6)] shadow-md">
-      <CitySkyline seed={`${location.country}-${location.regionCode}-${location.city}`} className="h-12 w-full sm:h-14" />
+      <CitySkyline
+        seed={`${location.country}-${location.regionCode}-${location.city}`}
+        night={now ? isNightAt(now, location.timeZone) : false}
+        className="h-14 w-full sm:h-16"
+      />
 
       <div className="px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-1.5">

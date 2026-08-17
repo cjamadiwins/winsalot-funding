@@ -1,86 +1,59 @@
-// Small skyline illustration for each Market Snapshot card. Deliberately
-// a procedurally generated inline SVG, not a fetched photo: every city
-// always renders something (no broken-image state to handle, no network
+// Skyline illustration for each Market Snapshot card. Deliberately a
+// hand-authored, procedurally-laid-out inline SVG, not a fetched photo:
+// every city always renders something (no broken-image state, no network
 // request, no per-image licensing to track down for 90+ cities), and the
-// silhouette is seeded from the city's own name so the same city always
-// looks the same while different cities look distinct from one another.
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (Math.imul(hash, 31) + str.charCodeAt(i)) | 0;
-  }
-  return hash >>> 0;
+// layout is seeded from the city's own name so the same city always
+// looks the same while different cities look distinct.
+//
+// A handful of major cities (Toronto, Vancouver, and a dozen others -
+// see skylines/scenes.tsx) get hand-drawn recognizable artwork (CN
+// Tower, Space Needle, mountains behind Vancouver, ...); every other
+// city gets a detailed generic North American skyline built from the
+// same reusable building/window pieces. Colours (not geometry) swap
+// between a daytime and a night palette based on the selected city's
+// own local hour, so the illustration reflects whether it's actually
+// day or night there right now.
+import { hashString } from "./skylines/random";
+import { DAY_PALETTE, NIGHT_PALETTE, isNightHour } from "./skylines/palette";
+import { VIEW_WIDTH, VIEW_HEIGHT } from "./skylines/viewport";
+import { Stars } from "./skylines/pieces";
+import { CUSTOM_SCENES, GenericSkyline } from "./skylines/scenes";
+
+export function isNightAt(date: Date, timeZone: string): boolean {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(date)
+  );
+  return isNightHour(hour);
 }
 
-// Deterministic PRNG (mulberry32) seeded from the hash above - same
-// input seed always produces the same sequence, unlike Math.random().
-function createRandom(seed: number): () => number {
-  let state = seed;
-  return function random() {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const VIEW_WIDTH = 300;
-const VIEW_HEIGHT = 60;
-
-function buildSkyline(seed: string) {
-  const random = createRandom(hashString(seed));
-  const buildings: { x: number; width: number; height: number; opacity: number; window: boolean }[] = [];
-
-  let x = -4;
-  while (x < VIEW_WIDTH + 4) {
-    const width = 14 + Math.floor(random() * 16);
-    const height = 18 + Math.floor(random() * 36);
-    buildings.push({
-      x,
-      width,
-      height,
-      opacity: 0.55 + random() * 0.4,
-      window: random() > 0.55,
-    });
-    x += width + 1 + Math.floor(random() * 4);
-  }
-
-  return buildings;
-}
-
-export default function CitySkyline({ seed, className }: { seed: string; className?: string }) {
-  const buildings = buildSkyline(seed);
+export default function CitySkyline({ seed, night, className }: { seed: string; night: boolean; className?: string }) {
+  const palette = night ? NIGHT_PALETTE : DAY_PALETTE;
+  const Scene = CUSTOM_SCENES[seed] ?? GenericSkyline;
+  // SVG `id`/`url(#id)` references must be well-formed CSS identifiers -
+  // a raw city-name seed like "US-NY-New York City" contains spaces that
+  // break the url() fragment syntax (the browser can't parse it and
+  // falls back to fill's initial value, which is *black*, silently
+  // painting the whole card night-black in the middle of the day). A
+  // short hashed, alphanumeric-only token sidesteps that entirely while
+  // staying stable per seed.
+  const domId = hashString(`${seed}-${night}`).toString(36);
 
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-      preserveAspectRatio="none"
-      role="presentation"
-      aria-hidden="true"
-      className={className}
-    >
+    <svg viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} preserveAspectRatio="none" role="presentation" aria-hidden="true" className={className}>
       <defs>
-        <linearGradient id={`sky-${seed}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#dbe8fb" />
-          <stop offset="100%" stopColor="#f4f7fa" />
+        <linearGradient id={`sky-${domId}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={palette.skyTop} />
+          <stop offset="100%" stopColor={palette.skyBottom} />
         </linearGradient>
+        <radialGradient id={`glow-${domId}`} cx="50%" cy="100%" r="75%">
+          <stop offset="0%" stopColor={palette.skyGlow} stopOpacity={night ? 0.35 : 0.5} />
+          <stop offset="100%" stopColor={palette.skyGlow} stopOpacity={0} />
+        </radialGradient>
       </defs>
-      <rect x="0" y="0" width={VIEW_WIDTH} height={VIEW_HEIGHT} fill={`url(#sky-${seed})`} />
-      {buildings.map((b, i) => (
-        <g key={i}>
-          <rect
-            x={b.x}
-            y={VIEW_HEIGHT - b.height}
-            width={b.width}
-            height={b.height}
-            fill="#223a55"
-            opacity={b.opacity}
-          />
-          {b.window && (
-            <rect x={b.x + b.width / 2 - 1.5} y={VIEW_HEIGHT - b.height + 6} width={3} height={5} fill="#f4f7fa" opacity={0.55} />
-          )}
-        </g>
-      ))}
+      <rect x="0" y="0" width={VIEW_WIDTH} height={VIEW_HEIGHT} fill={`url(#sky-${domId})`} />
+      <Stars seed={`${seed}-stars`} count={18} width={VIEW_WIDTH} height={VIEW_HEIGHT} opacity={palette.starOpacity} />
+      <rect x="0" y="0" width={VIEW_WIDTH} height={VIEW_HEIGHT} fill={`url(#glow-${domId})`} />
+      <Scene palette={palette} seed={seed} />
     </svg>
   );
 }
