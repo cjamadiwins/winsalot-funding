@@ -14,7 +14,11 @@
 // selectors) and the server action (validating a saved selection) read
 // from - a client can only ever save a {country, region, city} triple
 // that exists here, and the time zone always comes from this table, never
-// from client input.
+// from client input. Each city also carries a one-line `fact` about its
+// major business sectors, shown in the "Market Snapshot" section of that
+// city's Client Local Time card (src/components/crm-ui/ClientLocalTimePanel.tsx)
+// - kept here, not the persisted preference, since it's derived content
+// looked up by {country, regionCode, city}, not something a user chooses.
 
 export type LocationCountry = "CA" | "US";
 
@@ -29,7 +33,26 @@ export type CityOption = {
   regionCode: string;
   country: LocationCountry;
   timeZone: string;
+  fact: string;
 };
+
+export const COUNTRY_NAMES: Record<LocationCountry, string> = {
+  CA: "Canada",
+  US: "United States",
+};
+
+export const COUNTRY_FLAGS: Record<LocationCountry, string> = {
+  CA: "🇨🇦",
+  US: "🇺🇸",
+};
+
+export function countryName(country: LocationCountry): string {
+  return COUNTRY_NAMES[country];
+}
+
+export function countryFlag(country: LocationCountry): string {
+  return COUNTRY_FLAGS[country];
+}
 
 export const CA_REGIONS: RegionOption[] = [
   { code: "AB", name: "Alberta", country: "CA" },
@@ -105,190 +128,190 @@ export const REGIONS: RegionOption[] = [...CA_REGIONS, ...US_REGIONS];
 
 export const CITIES: CityOption[] = [
   // --- Canada ---------------------------------------------------------
-  { city: "Calgary", regionCode: "AB", country: "CA", timeZone: "America/Edmonton" },
-  { city: "Edmonton", regionCode: "AB", country: "CA", timeZone: "America/Edmonton" },
+  { city: "Calgary", regionCode: "AB", country: "CA", timeZone: "America/Edmonton", fact: "Energy sector hub — oil, gas, and pipeline headquarters." },
+  { city: "Edmonton", regionCode: "AB", country: "CA", timeZone: "America/Edmonton", fact: "Petrochemical processing and manufacturing hub." },
 
-  { city: "Vancouver", regionCode: "BC", country: "CA", timeZone: "America/Vancouver" },
-  { city: "Victoria", regionCode: "BC", country: "CA", timeZone: "America/Vancouver" },
-  { city: "Kelowna", regionCode: "BC", country: "CA", timeZone: "America/Vancouver" },
+  { city: "Vancouver", regionCode: "BC", country: "CA", timeZone: "America/Vancouver", fact: "Film production, technology, and Asia-Pacific trade gateway." },
+  { city: "Victoria", regionCode: "BC", country: "CA", timeZone: "America/Vancouver", fact: "Government, tourism, and marine technology center." },
+  { city: "Kelowna", regionCode: "BC", country: "CA", timeZone: "America/Vancouver", fact: "Wine industry, tourism, and a growing tech sector." },
   // Fort St. John / the northeast corner of B.C. stays on Mountain
   // Standard Time year-round (no DST) - the "different time rules" area
   // the panel is required to be able to represent.
-  { city: "Fort St. John", regionCode: "BC", country: "CA", timeZone: "America/Dawson_Creek" },
+  { city: "Fort St. John", regionCode: "BC", country: "CA", timeZone: "America/Dawson_Creek", fact: "Natural gas and energy services hub for northeastern B.C." },
 
-  { city: "Winnipeg", regionCode: "MB", country: "CA", timeZone: "America/Winnipeg" },
-  { city: "Brandon", regionCode: "MB", country: "CA", timeZone: "America/Winnipeg" },
+  { city: "Winnipeg", regionCode: "MB", country: "CA", timeZone: "America/Winnipeg", fact: "Aerospace manufacturing, agribusiness, and transportation hub." },
+  { city: "Brandon", regionCode: "MB", country: "CA", timeZone: "America/Winnipeg", fact: "Agriculture and food processing center." },
 
-  { city: "Moncton", regionCode: "NB", country: "CA", timeZone: "America/Moncton" },
-  { city: "Fredericton", regionCode: "NB", country: "CA", timeZone: "America/Moncton" },
+  { city: "Moncton", regionCode: "NB", country: "CA", timeZone: "America/Moncton", fact: "Distribution, logistics, and bilingual customer service hub." },
+  { city: "Fredericton", regionCode: "NB", country: "CA", timeZone: "America/Moncton", fact: "Government, education, and cybersecurity sector." },
 
-  { city: "St. John's", regionCode: "NL", country: "CA", timeZone: "America/St_Johns" },
+  { city: "St. John's", regionCode: "NL", country: "CA", timeZone: "America/St_Johns", fact: "Offshore oil and gas, and marine research hub." },
   // Labrador observes Atlantic Time, a full hour off Newfoundland Time on
   // the rest of the island - same province, different zone.
-  { city: "Happy Valley-Goose Bay", regionCode: "NL", country: "CA", timeZone: "America/Goose_Bay" },
+  { city: "Happy Valley-Goose Bay", regionCode: "NL", country: "CA", timeZone: "America/Goose_Bay", fact: "Defense, aviation, and regional resource services." },
 
-  { city: "Halifax", regionCode: "NS", country: "CA", timeZone: "America/Halifax" },
-  { city: "Sydney", regionCode: "NS", country: "CA", timeZone: "America/Halifax" },
+  { city: "Halifax", regionCode: "NS", country: "CA", timeZone: "America/Halifax", fact: "Shipping, defense, and financial services hub." },
+  { city: "Sydney", regionCode: "NS", country: "CA", timeZone: "America/Halifax", fact: "Call center services and offshore energy support." },
 
-  { city: "Yellowknife", regionCode: "NT", country: "CA", timeZone: "America/Edmonton" },
-  { city: "Inuvik", regionCode: "NT", country: "CA", timeZone: "America/Inuvik" },
+  { city: "Yellowknife", regionCode: "NT", country: "CA", timeZone: "America/Edmonton", fact: "Diamond mining and territorial government center." },
+  { city: "Inuvik", regionCode: "NT", country: "CA", timeZone: "America/Inuvik", fact: "Arctic research and oil/gas exploration support." },
 
-  { city: "Iqaluit", regionCode: "NU", country: "CA", timeZone: "America/Iqaluit" },
-  { city: "Rankin Inlet", regionCode: "NU", country: "CA", timeZone: "America/Rankin_Inlet" },
-  { city: "Cambridge Bay", regionCode: "NU", country: "CA", timeZone: "America/Cambridge_Bay" },
+  { city: "Iqaluit", regionCode: "NU", country: "CA", timeZone: "America/Iqaluit", fact: "Territorial government and mining logistics hub." },
+  { city: "Rankin Inlet", regionCode: "NU", country: "CA", timeZone: "America/Rankin_Inlet", fact: "Regional mining services and government hub." },
+  { city: "Cambridge Bay", regionCode: "NU", country: "CA", timeZone: "America/Cambridge_Bay", fact: "Arctic research and marine navigation support." },
 
-  { city: "Toronto", regionCode: "ON", country: "CA", timeZone: "America/Toronto" },
-  { city: "Ottawa", regionCode: "ON", country: "CA", timeZone: "America/Toronto" },
-  { city: "Hamilton", regionCode: "ON", country: "CA", timeZone: "America/Toronto" },
-  { city: "London", regionCode: "ON", country: "CA", timeZone: "America/Toronto" },
+  { city: "Toronto", regionCode: "ON", country: "CA", timeZone: "America/Toronto", fact: "Canada's financial capital — banking, finance, and technology." },
+  { city: "Ottawa", regionCode: "ON", country: "CA", timeZone: "America/Toronto", fact: "Federal government, technology, and defense sector hub." },
+  { city: "Hamilton", regionCode: "ON", country: "CA", timeZone: "America/Toronto", fact: "Steel manufacturing and a growing healthcare sector." },
+  { city: "London", regionCode: "ON", country: "CA", timeZone: "America/Toronto", fact: "Insurance, healthcare, and manufacturing hub." },
 
-  { city: "Charlottetown", regionCode: "PE", country: "CA", timeZone: "America/Halifax" },
+  { city: "Charlottetown", regionCode: "PE", country: "CA", timeZone: "America/Halifax", fact: "Bioscience, tourism, and government services hub." },
 
-  { city: "Montreal", regionCode: "QC", country: "CA", timeZone: "America/Toronto" },
-  { city: "Quebec City", regionCode: "QC", country: "CA", timeZone: "America/Toronto" },
+  { city: "Montreal", regionCode: "QC", country: "CA", timeZone: "America/Toronto", fact: "Aerospace, AI research, and finance hub." },
+  { city: "Quebec City", regionCode: "QC", country: "CA", timeZone: "America/Toronto", fact: "Insurance, tourism, and provincial government hub." },
 
   // Saskatchewan does not observe DST - it stays on Central Standard
   // Time all year, another required regional exception.
-  { city: "Regina", regionCode: "SK", country: "CA", timeZone: "America/Regina" },
-  { city: "Saskatoon", regionCode: "SK", country: "CA", timeZone: "America/Regina" },
+  { city: "Regina", regionCode: "SK", country: "CA", timeZone: "America/Regina", fact: "Agriculture, potash mining, and energy hub." },
+  { city: "Saskatoon", regionCode: "SK", country: "CA", timeZone: "America/Regina", fact: "Mining, agriculture technology, and biotech hub." },
 
   // Yukon has observed permanent Mountain Standard Time (no DST) since
   // November 2020 - the third required Canadian DST exception.
-  { city: "Whitehorse", regionCode: "YT", country: "CA", timeZone: "America/Whitehorse" },
-  { city: "Dawson City", regionCode: "YT", country: "CA", timeZone: "America/Dawson" },
+  { city: "Whitehorse", regionCode: "YT", country: "CA", timeZone: "America/Whitehorse", fact: "Mining services, tourism, and territorial government." },
+  { city: "Dawson City", regionCode: "YT", country: "CA", timeZone: "America/Dawson", fact: "Gold mining heritage and tourism hub." },
 
   // --- United States ----------------------------------------------------
-  { city: "Birmingham", regionCode: "AL", country: "US", timeZone: "America/Chicago" },
+  { city: "Birmingham", regionCode: "AL", country: "US", timeZone: "America/Chicago", fact: "Banking, healthcare, and steel manufacturing hub." },
 
-  { city: "Anchorage", regionCode: "AK", country: "US", timeZone: "America/Anchorage" },
-  { city: "Adak", regionCode: "AK", country: "US", timeZone: "America/Adak" },
+  { city: "Anchorage", regionCode: "AK", country: "US", timeZone: "America/Anchorage", fact: "Oil, transportation, and fishing industry hub." },
+  { city: "Adak", regionCode: "AK", country: "US", timeZone: "America/Adak", fact: "Fishing industry and remote logistics support." },
 
   // Arizona does not observe DST (outside the Navajo Nation) - the
   // canonical required exception.
-  { city: "Phoenix", regionCode: "AZ", country: "US", timeZone: "America/Phoenix" },
+  { city: "Phoenix", regionCode: "AZ", country: "US", timeZone: "America/Phoenix", fact: "Semiconductor manufacturing and a growing tech sector." },
 
-  { city: "Little Rock", regionCode: "AR", country: "US", timeZone: "America/Chicago" },
+  { city: "Little Rock", regionCode: "AR", country: "US", timeZone: "America/Chicago", fact: "Distribution, healthcare, and government services hub." },
 
-  { city: "Los Angeles", regionCode: "CA", country: "US", timeZone: "America/Los_Angeles" },
-  { city: "San Francisco", regionCode: "CA", country: "US", timeZone: "America/Los_Angeles" },
+  { city: "Los Angeles", regionCode: "CA", country: "US", timeZone: "America/Los_Angeles", fact: "Entertainment, media, and international trade hub." },
+  { city: "San Francisco", regionCode: "CA", country: "US", timeZone: "America/Los_Angeles", fact: "Technology, venture capital, and finance hub." },
 
-  { city: "Denver", regionCode: "CO", country: "US", timeZone: "America/Denver" },
+  { city: "Denver", regionCode: "CO", country: "US", timeZone: "America/Denver", fact: "Energy, aerospace, and finance hub." },
 
-  { city: "Hartford", regionCode: "CT", country: "US", timeZone: "America/New_York" },
+  { city: "Hartford", regionCode: "CT", country: "US", timeZone: "America/New_York", fact: "Insurance industry headquarters hub." },
 
-  { city: "Wilmington", regionCode: "DE", country: "US", timeZone: "America/New_York" },
+  { city: "Wilmington", regionCode: "DE", country: "US", timeZone: "America/New_York", fact: "Banking, finance, and corporate law hub." },
 
-  { city: "Washington", regionCode: "DC", country: "US", timeZone: "America/New_York" },
+  { city: "Washington", regionCode: "DC", country: "US", timeZone: "America/New_York", fact: "Federal government, policy, and defense contracting hub." },
 
-  { city: "Miami", regionCode: "FL", country: "US", timeZone: "America/New_York" },
+  { city: "Miami", regionCode: "FL", country: "US", timeZone: "America/New_York", fact: "International trade, finance, and tourism hub." },
   // The Florida Panhandle west of the Apalachicola River is Central Time.
-  { city: "Pensacola", regionCode: "FL", country: "US", timeZone: "America/Chicago" },
+  { city: "Pensacola", regionCode: "FL", country: "US", timeZone: "America/Chicago", fact: "Defense, aviation, and tourism hub." },
 
-  { city: "Atlanta", regionCode: "GA", country: "US", timeZone: "America/New_York" },
+  { city: "Atlanta", regionCode: "GA", country: "US", timeZone: "America/New_York", fact: "Logistics, media, and corporate headquarters hub." },
 
   // Hawaii does not observe DST - the other canonical required exception.
-  { city: "Honolulu", regionCode: "HI", country: "US", timeZone: "Pacific/Honolulu" },
+  { city: "Honolulu", regionCode: "HI", country: "US", timeZone: "Pacific/Honolulu", fact: "Tourism, military, and Pacific trade hub." },
 
-  { city: "Boise", regionCode: "ID", country: "US", timeZone: "America/Boise" },
+  { city: "Boise", regionCode: "ID", country: "US", timeZone: "America/Boise", fact: "Technology, agriculture, and food processing hub." },
   // The Idaho Panhandle is Pacific Time.
-  { city: "Coeur d'Alene", regionCode: "ID", country: "US", timeZone: "America/Los_Angeles" },
+  { city: "Coeur d'Alene", regionCode: "ID", country: "US", timeZone: "America/Los_Angeles", fact: "Tourism, mining, and manufacturing hub." },
 
-  { city: "Chicago", regionCode: "IL", country: "US", timeZone: "America/Chicago" },
+  { city: "Chicago", regionCode: "IL", country: "US", timeZone: "America/Chicago", fact: "Finance, trading, and transportation hub." },
 
-  { city: "Indianapolis", regionCode: "IN", country: "US", timeZone: "America/Indianapolis" },
+  { city: "Indianapolis", regionCode: "IN", country: "US", timeZone: "America/Indianapolis", fact: "Logistics, motorsports, and life sciences hub." },
   // A handful of northwest/southwest Indiana counties are Central Time.
-  { city: "Gary", regionCode: "IN", country: "US", timeZone: "America/Chicago" },
+  { city: "Gary", regionCode: "IN", country: "US", timeZone: "America/Chicago", fact: "Steel manufacturing and logistics hub." },
 
-  { city: "Des Moines", regionCode: "IA", country: "US", timeZone: "America/Chicago" },
+  { city: "Des Moines", regionCode: "IA", country: "US", timeZone: "America/Chicago", fact: "Insurance and agribusiness hub." },
 
-  { city: "Wichita", regionCode: "KS", country: "US", timeZone: "America/Chicago" },
+  { city: "Wichita", regionCode: "KS", country: "US", timeZone: "America/Chicago", fact: "Aircraft manufacturing hub." },
   // Western Kansas is Mountain Time.
-  { city: "Goodland", regionCode: "KS", country: "US", timeZone: "America/Denver" },
+  { city: "Goodland", regionCode: "KS", country: "US", timeZone: "America/Denver", fact: "Agriculture and grain trading hub." },
 
-  { city: "Louisville", regionCode: "KY", country: "US", timeZone: "America/New_York" },
+  { city: "Louisville", regionCode: "KY", country: "US", timeZone: "America/New_York", fact: "Logistics, healthcare, and bourbon industry hub." },
   // Western Kentucky is Central Time.
-  { city: "Bowling Green", regionCode: "KY", country: "US", timeZone: "America/Chicago" },
+  { city: "Bowling Green", regionCode: "KY", country: "US", timeZone: "America/Chicago", fact: "Automotive manufacturing hub." },
 
-  { city: "New Orleans", regionCode: "LA", country: "US", timeZone: "America/Chicago" },
+  { city: "New Orleans", regionCode: "LA", country: "US", timeZone: "America/Chicago", fact: "Shipping, energy, and tourism hub." },
 
-  { city: "Portland", regionCode: "ME", country: "US", timeZone: "America/New_York" },
+  { city: "Portland", regionCode: "ME", country: "US", timeZone: "America/New_York", fact: "Fishing, tourism, and healthcare hub." },
 
-  { city: "Baltimore", regionCode: "MD", country: "US", timeZone: "America/New_York" },
+  { city: "Baltimore", regionCode: "MD", country: "US", timeZone: "America/New_York", fact: "Shipping, healthcare, and finance hub." },
 
-  { city: "Boston", regionCode: "MA", country: "US", timeZone: "America/New_York" },
+  { city: "Boston", regionCode: "MA", country: "US", timeZone: "America/New_York", fact: "Biotech, education, and finance hub." },
 
-  { city: "Detroit", regionCode: "MI", country: "US", timeZone: "America/Detroit" },
+  { city: "Detroit", regionCode: "MI", country: "US", timeZone: "America/Detroit", fact: "Automotive manufacturing and mobility tech hub." },
   // The western Upper Peninsula is Central Time.
-  { city: "Ironwood", regionCode: "MI", country: "US", timeZone: "America/Menominee" },
+  { city: "Ironwood", regionCode: "MI", country: "US", timeZone: "America/Menominee", fact: "Forestry and tourism hub." },
 
-  { city: "Minneapolis", regionCode: "MN", country: "US", timeZone: "America/Chicago" },
+  { city: "Minneapolis", regionCode: "MN", country: "US", timeZone: "America/Chicago", fact: "Healthcare, retail, and finance hub." },
 
-  { city: "Jackson", regionCode: "MS", country: "US", timeZone: "America/Chicago" },
+  { city: "Jackson", regionCode: "MS", country: "US", timeZone: "America/Chicago", fact: "Healthcare, government, and manufacturing hub." },
 
-  { city: "Kansas City", regionCode: "MO", country: "US", timeZone: "America/Chicago" },
+  { city: "Kansas City", regionCode: "MO", country: "US", timeZone: "America/Chicago", fact: "Logistics, agribusiness, and finance hub." },
 
-  { city: "Billings", regionCode: "MT", country: "US", timeZone: "America/Denver" },
+  { city: "Billings", regionCode: "MT", country: "US", timeZone: "America/Denver", fact: "Energy, agriculture, and healthcare hub." },
 
-  { city: "Omaha", regionCode: "NE", country: "US", timeZone: "America/Chicago" },
+  { city: "Omaha", regionCode: "NE", country: "US", timeZone: "America/Chicago", fact: "Insurance, finance, and food processing hub." },
   // The Nebraska Panhandle is Mountain Time.
-  { city: "Scottsbluff", regionCode: "NE", country: "US", timeZone: "America/Denver" },
+  { city: "Scottsbluff", regionCode: "NE", country: "US", timeZone: "America/Denver", fact: "Agriculture and livestock trading hub." },
 
-  { city: "Las Vegas", regionCode: "NV", country: "US", timeZone: "America/Los_Angeles" },
+  { city: "Las Vegas", regionCode: "NV", country: "US", timeZone: "America/Los_Angeles", fact: "Tourism, hospitality, and entertainment hub." },
 
-  { city: "Manchester", regionCode: "NH", country: "US", timeZone: "America/New_York" },
+  { city: "Manchester", regionCode: "NH", country: "US", timeZone: "America/New_York", fact: "Healthcare, manufacturing, and technology hub." },
 
-  { city: "Newark", regionCode: "NJ", country: "US", timeZone: "America/New_York" },
+  { city: "Newark", regionCode: "NJ", country: "US", timeZone: "America/New_York", fact: "Shipping, logistics, and finance hub." },
 
-  { city: "Albuquerque", regionCode: "NM", country: "US", timeZone: "America/Denver" },
+  { city: "Albuquerque", regionCode: "NM", country: "US", timeZone: "America/Denver", fact: "Aerospace, defense, and research hub." },
 
-  { city: "New York City", regionCode: "NY", country: "US", timeZone: "America/New_York" },
+  { city: "New York City", regionCode: "NY", country: "US", timeZone: "America/New_York", fact: "Global finance, media, and corporate headquarters hub." },
 
-  { city: "Charlotte", regionCode: "NC", country: "US", timeZone: "America/New_York" },
+  { city: "Charlotte", regionCode: "NC", country: "US", timeZone: "America/New_York", fact: "Banking and finance headquarters hub." },
 
-  { city: "Fargo", regionCode: "ND", country: "US", timeZone: "America/Chicago" },
+  { city: "Fargo", regionCode: "ND", country: "US", timeZone: "America/Chicago", fact: "Agriculture, technology, and finance hub." },
   // Western North Dakota (around Williston) is Mountain Time.
-  { city: "Williston", regionCode: "ND", country: "US", timeZone: "America/Denver" },
+  { city: "Williston", regionCode: "ND", country: "US", timeZone: "America/Denver", fact: "Oil and gas production hub." },
 
-  { city: "Columbus", regionCode: "OH", country: "US", timeZone: "America/New_York" },
+  { city: "Columbus", regionCode: "OH", country: "US", timeZone: "America/New_York", fact: "Insurance, logistics, and technology hub." },
 
-  { city: "Oklahoma City", regionCode: "OK", country: "US", timeZone: "America/Chicago" },
+  { city: "Oklahoma City", regionCode: "OK", country: "US", timeZone: "America/Chicago", fact: "Energy and aviation manufacturing hub." },
 
-  { city: "Portland", regionCode: "OR", country: "US", timeZone: "America/Los_Angeles" },
+  { city: "Portland", regionCode: "OR", country: "US", timeZone: "America/Los_Angeles", fact: "Technology, apparel, and manufacturing hub." },
   // Malheur County (around Ontario, OR) is Mountain Time.
-  { city: "Ontario", regionCode: "OR", country: "US", timeZone: "America/Boise" },
+  { city: "Ontario", regionCode: "OR", country: "US", timeZone: "America/Boise", fact: "Agriculture and food processing hub." },
 
-  { city: "Philadelphia", regionCode: "PA", country: "US", timeZone: "America/New_York" },
+  { city: "Philadelphia", regionCode: "PA", country: "US", timeZone: "America/New_York", fact: "Healthcare, finance, and education hub." },
 
-  { city: "Providence", regionCode: "RI", country: "US", timeZone: "America/New_York" },
+  { city: "Providence", regionCode: "RI", country: "US", timeZone: "America/New_York", fact: "Healthcare, education, and jewelry manufacturing hub." },
 
-  { city: "Charleston", regionCode: "SC", country: "US", timeZone: "America/New_York" },
+  { city: "Charleston", regionCode: "SC", country: "US", timeZone: "America/New_York", fact: "Shipping, aerospace, and tourism hub." },
 
-  { city: "Sioux Falls", regionCode: "SD", country: "US", timeZone: "America/Chicago" },
+  { city: "Sioux Falls", regionCode: "SD", country: "US", timeZone: "America/Chicago", fact: "Banking and finance hub." },
   // Western South Dakota is Mountain Time.
-  { city: "Rapid City", regionCode: "SD", country: "US", timeZone: "America/Denver" },
+  { city: "Rapid City", regionCode: "SD", country: "US", timeZone: "America/Denver", fact: "Tourism and defense hub." },
 
   // Tennessee splits roughly down the middle: Nashville/Memphis are
   // Central, Knoxville/Chattanooga are Eastern.
-  { city: "Nashville", regionCode: "TN", country: "US", timeZone: "America/Chicago" },
-  { city: "Knoxville", regionCode: "TN", country: "US", timeZone: "America/New_York" },
+  { city: "Nashville", regionCode: "TN", country: "US", timeZone: "America/Chicago", fact: "Music industry, healthcare, and tourism hub." },
+  { city: "Knoxville", regionCode: "TN", country: "US", timeZone: "America/New_York", fact: "Energy research and manufacturing hub." },
 
-  { city: "Houston", regionCode: "TX", country: "US", timeZone: "America/Chicago" },
+  { city: "Houston", regionCode: "TX", country: "US", timeZone: "America/Chicago", fact: "Energy, aerospace, and shipping hub." },
   // Far West Texas (El Paso) is Mountain Time.
-  { city: "El Paso", regionCode: "TX", country: "US", timeZone: "America/Denver" },
+  { city: "El Paso", regionCode: "TX", country: "US", timeZone: "America/Denver", fact: "Manufacturing, trade, and logistics hub." },
 
-  { city: "Salt Lake City", regionCode: "UT", country: "US", timeZone: "America/Denver" },
+  { city: "Salt Lake City", regionCode: "UT", country: "US", timeZone: "America/Denver", fact: "Finance, technology, and outdoor recreation hub." },
 
-  { city: "Burlington", regionCode: "VT", country: "US", timeZone: "America/New_York" },
+  { city: "Burlington", regionCode: "VT", country: "US", timeZone: "America/New_York", fact: "Healthcare, technology, and tourism hub." },
 
-  { city: "Virginia Beach", regionCode: "VA", country: "US", timeZone: "America/New_York" },
+  { city: "Virginia Beach", regionCode: "VA", country: "US", timeZone: "America/New_York", fact: "Defense, tourism, and logistics hub." },
 
-  { city: "Seattle", regionCode: "WA", country: "US", timeZone: "America/Los_Angeles" },
+  { city: "Seattle", regionCode: "WA", country: "US", timeZone: "America/Los_Angeles", fact: "Technology, aerospace, and e-commerce hub." },
 
-  { city: "Charleston", regionCode: "WV", country: "US", timeZone: "America/New_York" },
+  { city: "Charleston", regionCode: "WV", country: "US", timeZone: "America/New_York", fact: "Chemical manufacturing and government hub." },
 
-  { city: "Milwaukee", regionCode: "WI", country: "US", timeZone: "America/Chicago" },
+  { city: "Milwaukee", regionCode: "WI", country: "US", timeZone: "America/Chicago", fact: "Manufacturing and financial services hub." },
 
-  { city: "Cheyenne", regionCode: "WY", country: "US", timeZone: "America/Denver" },
+  { city: "Cheyenne", regionCode: "WY", country: "US", timeZone: "America/Denver", fact: "Energy, government, and rail logistics hub." },
 ];
 
 export function regionsForCountry(country: LocationCountry): RegionOption[] {

@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock3, Pencil, RotateCcw } from "lucide-react";
-import { resolveLocation, type LocationCountry, type SavedLocation } from "@/lib/timezone-locations";
+import { Clock3, Pencil, RotateCcw, Globe2, Briefcase } from "lucide-react";
+import {
+  resolveLocation,
+  findCity,
+  findRegion,
+  countryName,
+  countryFlag,
+  type LocationCountry,
+  type SavedLocation,
+} from "@/lib/timezone-locations";
+import { getNigeriaTimeDiffLabel, getCallingStatus, BUSINESS_HOURS_LABEL, type CallingStatusLevel } from "@/lib/market-snapshot";
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 import EditLocationsModal from "./EditLocationsModal";
+import CitySkyline from "./CitySkyline";
 
 // Configurable "Client Local Time" panel shown at the top of every
 // logged-in CRM dashboard (Cleaning + Lead Gen, admin + agent). Each user
@@ -57,25 +67,77 @@ function useTickingClock(): Date | null {
   return now;
 }
 
+const CALLING_STATUS_BADGE_CLASSES: Record<CallingStatusLevel, string> = {
+  green: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  yellow: "bg-amber-100 text-amber-800 border-amber-300",
+  red: "bg-rose-100 text-rose-700 border-rose-300",
+  weekend: "bg-slate-100 text-slate-600 border-slate-300",
+};
+
+const CALLING_STATUS_DOT_CLASSES: Record<CallingStatusLevel, string> = {
+  green: "bg-emerald-500",
+  yellow: "bg-amber-500",
+  red: "bg-rose-500",
+  weekend: "bg-slate-400",
+};
+
 function LocationCard({ location, now }: { location: SavedLocation; now: Date | null }) {
   const formatted = now ? formatClock(now, location.timeZone) : null;
+  const region = findRegion(location.country, location.regionCode);
+  const city = findCity(location.country, location.regionCode, location.city);
+  const callingStatus = now ? getCallingStatus(now, location.timeZone) : null;
+  const nigeriaDiff = now ? getNigeriaTimeDiffLabel(now, location.timeZone) : null;
+
   return (
-    <div className="rounded-2xl border-2 border-[var(--crm-border,#dce4ec)] bg-[var(--crm-bg-2,#eaf0f6)] px-4 py-3 shadow-md sm:px-5 sm:py-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <span className="text-sm font-extrabold text-[var(--crm-text,#17283b)] sm:text-base">{location.city}</span>
-        <span className="text-xs font-bold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
-          {location.regionCode}
-          {formatted?.zoneAbbr ? ` · ${formatted.zoneAbbr}` : ""}
-        </span>
-      </div>
-      <div
-        className="mt-1 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[var(--crm-accent,#3e7ef7)] sm:text-[32px]"
-        suppressHydrationWarning
-      >
-        {formatted ? formatted.time : "--:--:-- --"}
-      </div>
-      <div className="mt-1.5 text-xs font-medium text-[var(--crm-text-muted,#6b7c90)] sm:text-sm" suppressHydrationWarning>
-        {formatted ? formatted.dateLabel : ""}
+    <div className="overflow-hidden rounded-2xl border-2 border-[var(--crm-border,#dce4ec)] bg-[var(--crm-bg-2,#eaf0f6)] shadow-md">
+      <CitySkyline seed={`${location.country}-${location.regionCode}-${location.city}`} className="h-12 w-full sm:h-14" />
+
+      <div className="px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="text-base leading-none">
+            {countryFlag(location.country)}
+          </span>
+          <span className="text-sm font-extrabold text-[var(--crm-text,#17283b)] sm:text-base">{location.city}</span>
+        </div>
+        <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
+          {region?.name ?? location.regionCode}, {countryName(location.country)}
+        </div>
+
+        <div
+          className="mt-2 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[var(--crm-accent,#3e7ef7)] sm:text-[32px]"
+          suppressHydrationWarning
+        >
+          {formatted ? formatted.time : "--:--:-- --"}
+        </div>
+        <div className="mt-1.5 text-xs font-medium text-[var(--crm-text-muted,#6b7c90)] sm:text-sm" suppressHydrationWarning>
+          {formatted ? `${formatted.dateLabel} · ${formatted.zoneAbbr}` : ""}
+        </div>
+
+        {/* Market Snapshot - compact, no weather/population/long copy per spec */}
+        <div className="mt-3 space-y-1.5 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
+            <Globe2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+            {nigeriaDiff ?? "—"}
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
+            <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+            {BUSINESS_HOURS_LABEL}
+          </div>
+          {callingStatus && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-bold sm:text-[11px] ${CALLING_STATUS_BADGE_CLASSES[callingStatus.level]}`}
+            >
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CALLING_STATUS_DOT_CLASSES[callingStatus.level]}`} aria-hidden="true" />
+              {callingStatus.label}
+            </span>
+          )}
+          {city?.fact && (
+            <p className="flex items-start gap-1.5 text-[11px] leading-snug text-[var(--crm-text-muted,#6b7c90)] sm:text-xs">
+              <Briefcase className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+              <span>{city.fact}</span>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
