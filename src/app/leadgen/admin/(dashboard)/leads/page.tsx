@@ -26,6 +26,7 @@ export default async function LeadgenLeadsPage({
   searchParams: Promise<{
     deleted?: string;
     status?: string;
+    appointment_status?: string;
     followup?: string;
     agent?: string;
     due_from?: string;
@@ -34,7 +35,7 @@ export default async function LeadgenLeadsPage({
 }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
-  const { deleted, status, followup, agent, due_from, due_to } = await searchParams;
+  const { deleted, status, appointment_status, followup, agent, due_from, due_to } = await searchParams;
 
   const [{ data: leads }, { data: clients }, { data: campaigns }, { data: agents }, { data: appointments }] = await Promise.all([
     admin.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
@@ -75,6 +76,7 @@ export default async function LeadgenLeadsPage({
         appointmentStatusByLeadId={appointmentStatusByLeadId}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
         initialStatusFilter={status}
+        initialAppointmentStatusFilter={appointment_status}
         initialFollowUpFilter={followup === "due_today" || followup === "due" || followup === "overdue" ? followup : undefined}
         initialAgentFilter={agent}
         initialDueFrom={due_from}

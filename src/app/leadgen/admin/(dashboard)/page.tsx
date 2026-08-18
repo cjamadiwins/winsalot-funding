@@ -70,7 +70,12 @@ export default async function LeadgenAdminDashboardPage() {
     {
       label: "Appointments Booked",
       value: String(appointmentsBooked),
-      href: `/leadgen/admin/leads?status=${encodeURIComponent("Appointment booked")}`,
+      // Filters by the appointment record's own status (source of
+      // truth), not the lead's main status - a lead whose appointment is
+      // genuinely Booked must show up here even if its main status
+      // hasn't caught up (e.g. still "Consultation Information Sent").
+      // See LeadsListClient's appointmentStatusFilter.
+      href: `/leadgen/admin/leads?appointment_status=${encodeURIComponent("Booked")}`,
       tone: LEADGEN_STAT_CARD_STYLES.appointments,
       icon: CalendarCheck,
     },

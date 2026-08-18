@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -102,5 +103,35 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
 
   revalidatePath("/leadgen/agent/appointments");
   if (leadId) revalidatePath(`/leadgen/agent/leads/${leadId}`);
+  return {};
+}
+
+// "Resend Appointment Notification" / "Send Appointment Reminder" (brief
+// EMAIL FEATURES #4/#5) - agents may only use these for a lead assigned
+// to them (or an appointment where they're the assigned specialist),
+// enforced by the same RLS this session-scoped client already applies to
+// every other agent action in this CRM (leadgen_appointments_agent_
+// select_own / leadgen_emails_agent_insert_own_lead): an appointment that
+// isn't theirs simply isn't visible here, so sendLeadgenAppointmentEmail
+// fails closed with "Appointment not found." rather than leaking it.
+export async function resendAppointmentNotificationAction(appointmentId: string): Promise<ActionResult> {
+  const agent = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "resend_confirmation");
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/leadgen/agent/appointments");
+  if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
+  return {};
+}
+
+export async function sendAppointmentReminderAction(appointmentId: string): Promise<ActionResult> {
+  const agent = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "reminder");
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/leadgen/agent/appointments");
+  if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
   return {};
 }

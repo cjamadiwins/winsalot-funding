@@ -14,7 +14,7 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
-import { bookAppointmentAction } from "../../appointments/actions";
+import { bookAppointmentAction, resendAppointmentNotificationAction, sendAppointmentReminderAction } from "../../appointments/actions";
 import {
   completeFollowUpAction,
   recordCallOutcomeAction,
@@ -36,6 +36,8 @@ const actions: LeadDetailActions = {
   sendConsultationFollowUp: sendConsultationFollowUpAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
   // email (admin-only per the brief) or reassign a lead.
+  resendAppointmentNotification: resendAppointmentNotificationAction,
+  sendAppointmentReminder: sendAppointmentReminderAction,
 };
 
 export default async function LeadgenAgentLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {

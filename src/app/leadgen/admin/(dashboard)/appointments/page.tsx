@@ -1,6 +1,6 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
+import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import AppointmentsListClient from "./AppointmentsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -10,13 +10,25 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
   const admin = getSupabaseAdmin();
   const { highlight } = await searchParams;
 
-  const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }] = await Promise.all([
+  const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }, { data: appointmentEmails }] = await Promise.all([
     admin.from("leadgen_appointments").select("*").order("appointment_date", { ascending: false }),
     admin.from("leadgen_clients").select("*").order("name"),
     admin.from("leadgen_campaigns").select("*").order("name"),
     admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
     admin.from("leadgen_leads").select("id, business_name, client_id, campaign_id, contact_name, phone, email").order("business_name"),
+    // Most recent leadgen_emails row per appointment - for the "Resend
+    // Appointment Notification" / "Send Appointment Reminder" status
+    // badge (brief: "Show the most recent appointment-email status to
+    // both administrators and the assigned agent").
+    admin.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
   ]);
+
+  const latestEmailByAppointmentId: Record<string, LeadgenEmailRow> = {};
+  for (const email of appointmentEmails ?? []) {
+    if (email.appointment_id && !(email.appointment_id in latestEmailByAppointmentId)) {
+      latestEmailByAppointmentId[email.appointment_id] = email as LeadgenEmailRow;
+    }
+  }
 
   return (
     <div>
@@ -29,6 +41,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
         campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         leads={(leads ?? []) as Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">[]}
+        latestEmailByAppointmentId={latestEmailByAppointmentId}
         highlightId={highlight}
       />
     </div>

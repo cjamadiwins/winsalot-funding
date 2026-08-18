@@ -172,6 +172,8 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "consultation_email_sent",
   "consultation_invitation_sent",
   "consultation_follow_up_sent",
+  "appointment_confirmation_resent",
+  "appointment_reminder_sent",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -190,6 +192,8 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   consultation_email_sent: "Consultation email sent",
   consultation_invitation_sent: "15-min consultation invitation sent",
   consultation_follow_up_sent: "Consultation follow-up email sent",
+  appointment_confirmation_resent: "Appointment confirmation resent",
+  appointment_reminder_sent: "Appointment reminder sent",
 };
 
 export type LeadgenLeadActivityRow = {

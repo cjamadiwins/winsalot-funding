@@ -12,10 +12,12 @@ import {
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
+  type LeadgenEmailRow,
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
-import { bookAppointmentAction, cancelOrReplaceAppointmentAction, updateAppointmentAction } from "./actions";
+import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
+import { bookAppointmentAction, cancelOrReplaceAppointmentAction, resendAppointmentNotificationAction, sendAppointmentReminderAction, updateAppointmentAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -27,6 +29,7 @@ export default function AppointmentsListClient({
   campaigns,
   agents,
   leads,
+  latestEmailByAppointmentId,
   highlightId,
 }: {
   appointments: LeadgenAppointmentRow[];
@@ -34,6 +37,10 @@ export default function AppointmentsListClient({
   campaigns: LeadgenCampaignRow[];
   agents: LeadgenUserRow[];
   leads: LeadOption[];
+  // Most recent leadgen_emails row per appointment id (if any) - for the
+  // "Resend Appointment Notification" / "Send Appointment Reminder"
+  // status badge.
+  latestEmailByAppointmentId?: Record<string, LeadgenEmailRow>;
   highlightId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -266,6 +273,22 @@ export default function AppointmentsListClient({
                           </button>
                         )}
                       </div>
+                      {appt.status === "Booked" && (
+                        <div className="mt-2.5">
+                          <AppointmentEmailActions
+                            appointmentId={appt.id}
+                            businessName={appt.business_name}
+                            contactName={leadById.get(appt.lead_id ?? "")?.contact_name ?? appt.contact_name}
+                            email={leadById.get(appt.lead_id ?? "")?.email ?? appt.email}
+                            appointmentDate={appt.appointment_date}
+                            appointmentTime={appt.appointment_time}
+                            timezone={appt.timezone}
+                            latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
+                            onResend={resendAppointmentNotificationAction}
+                            onReminder={sendAppointmentReminderAction}
+                          />
+                        </div>
+                      )}
                     </td>
                   </tr>
                   {cancelingId === appt.id && (
