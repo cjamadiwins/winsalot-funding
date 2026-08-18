@@ -1,6 +1,7 @@
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { LeadgenAppointmentRow, LeadgenEmailRow } from "@/lib/leadgen-types";
+import { fetchLeadgenAppointmentReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import AgentAppointmentsListClient from "./AgentAppointmentsListClient";
 
 export default async function LeadgenAgentAppointmentsPage() {
@@ -38,6 +39,8 @@ export default async function LeadgenAgentAppointmentsPage() {
     }
   }
 
+  const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(supabase, rows);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">My Appointments</h1>
@@ -46,7 +49,12 @@ export default async function LeadgenAgentAppointmentsPage() {
         lead&apos;s profile.
       </p>
 
-      <AgentAppointmentsListClient appointments={rows} leadContactByLeadId={leadContactByLeadId} latestEmailByAppointmentId={latestEmailByAppointmentId} />
+      <AgentAppointmentsListClient
+        appointments={rows}
+        leadContactByLeadId={leadContactByLeadId}
+        latestEmailByAppointmentId={latestEmailByAppointmentId}
+        automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
+      />
     </div>
   );
 }

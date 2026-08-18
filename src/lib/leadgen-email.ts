@@ -21,6 +21,19 @@ export function getLeadgenReplyToEmail(): string {
   return process.env.LEADGEN_EMAIL_REPLY_TO || "info@winsalotcorp.com";
 }
 
+// Swaps only the display-name portion of the sender ("Winsalot Corp" in
+// "Winsalot Corp <info@winsalotcorp.com>") for an admin-configured one
+// (brief ADMIN SETTINGS: "Sender name... using existing approved
+// addresses") - the actual verified address itself is never
+// admin-editable, only its display name, so this can never send from an
+// unverified domain.
+export function buildLeadgenSenderWithDisplayName(displayName: string): string {
+  const baseSender = getLeadgenSenderEmail();
+  const match = baseSender.match(/<([^>]+)>/);
+  const verifiedAddress = match ? match[1] : baseSender;
+  return `${displayName} <${verifiedAddress}>`;
+}
+
 // Exported so the consultation-invitation/follow-up send actions can
 // build a custom HTML body that swaps the plain-text booking marker for
 // a real, styled <a> button (see leadgenButtonHtml below) while still
@@ -205,6 +218,13 @@ export type SendLeadgenEmailInput = {
   // surfaces it - see the callers in leadgen actions files for the
   // per-email-type decision.
   clientVisible: boolean;
+  // Admin-configured overrides (leadgen_appointment_reminder_settings,
+  // brief ADMIN SETTINGS "Sender name and reply-to address, using
+  // existing approved addresses") - used only by the automatic
+  // appointment reminder job today. Omitted, every other caller keeps
+  // exactly the env-configured sender/reply-to it always had.
+  senderDisplayNameOverride?: string | null;
+  replyToOverride?: string | null;
 };
 
 export type SendLeadgenEmailResult = { emailId: string; error?: string };
@@ -227,7 +247,8 @@ export async function sendLeadgenEmail(
   supabase: SupabaseClient,
   input: SendLeadgenEmailInput
 ): Promise<SendLeadgenEmailResult> {
-  const senderEmail = getLeadgenSenderEmail();
+  const senderEmail = input.senderDisplayNameOverride ? buildLeadgenSenderWithDisplayName(input.senderDisplayNameOverride) : getLeadgenSenderEmail();
+  const replyToEmail = input.replyToOverride || getLeadgenReplyToEmail();
   const finalText = sanitizePlainEmailBody(input.text ?? input.body);
   const finalHtml = input.html ?? textToSimpleHtml(input.body);
 
@@ -295,7 +316,7 @@ export async function sendLeadgenEmail(
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: senderEmail,
       to: input.toEmail,
-      replyTo: getLeadgenReplyToEmail(),
+      replyTo: replyToEmail,
       subject: input.subject,
       text: finalText,
       html: finalHtml,

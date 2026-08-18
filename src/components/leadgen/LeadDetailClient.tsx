@@ -56,7 +56,7 @@ export type LeadDetailActions = {
   // leads by RLS, same as every other agent action here), so they're
   // always present, unlike the admin-only actions above.
   resendAppointmentNotification: (appointmentId: string) => Promise<{ error?: string } | void>;
-  sendAppointmentReminder: (appointmentId: string) => Promise<{ error?: string } | void>;
+  sendAppointmentReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
 };
 
 // Shared Lead Generation CRM lead profile - identical between
@@ -75,6 +75,7 @@ export default function LeadDetailClient({
   activities,
   followUps,
   appointments,
+  automaticReminderStatusByAppointmentId,
   emails,
   consultationTemplate,
   consultationInvitationTemplate,
@@ -97,6 +98,10 @@ export default function LeadDetailClient({
   activities: LeadgenLeadActivityRow[];
   followUps: LeadgenFollowUpRow[];
   appointments: LeadgenAppointmentRow[];
+  // Server-computed "Automatic reminder: Scheduled/Sent/Delivered/.../
+  // Not scheduled" label per appointment id (see
+  // fetchLeadgenAppointmentReminderStatusMap in lib/leadgen-appointment-reminders.ts).
+  automaticReminderStatusByAppointmentId?: Record<string, string>;
   emails: LeadgenEmailRow[];
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
@@ -562,7 +567,7 @@ export default function LeadDetailClient({
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
                   </div>
                   <p className="mt-1 text-slate-600">{appt.meeting_type}{appt.meeting_link ? ` · ${appt.meeting_link}` : ""}</p>
-                  {appt.status === "Booked" && (
+                  {(appt.status === "Booked" || appt.status === "Confirmed") && (
                     <div className="mt-2.5 border-t border-slate-100 pt-2.5">
                       <AppointmentEmailActions
                         appointmentId={appt.id}
@@ -573,6 +578,8 @@ export default function LeadDetailClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={emails.find((e) => e.appointment_id === appt.id) ?? null}
+                        automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]}
+                        isAdmin={isAdmin}
                         onResend={actions.resendAppointmentNotification}
                         onReminder={actions.sendAppointmentReminder}
                       />

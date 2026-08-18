@@ -125,7 +125,12 @@ export async function resendAppointmentNotificationAction(appointmentId: string)
   return {};
 }
 
-export async function sendAppointmentReminderAction(appointmentId: string): Promise<ActionResult> {
+// Second parameter accepted only so this matches sendAppointmentReminderAction's
+// admin-side signature for LeadDetailActions/AppointmentEmailActions -
+// "Count this as the 24-hour reminder" is an admin-only affordance (the
+// agent UI never renders that checkbox, so this is never actually true
+// in practice), and is deliberately ignored here regardless.
+export async function sendAppointmentReminderAction(appointmentId: string, _countAsAutomaticReminder?: boolean): Promise<ActionResult> {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
   const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "reminder");

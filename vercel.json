@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/leadgen-appointment-reminders",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

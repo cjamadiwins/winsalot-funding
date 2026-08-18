@@ -1,6 +1,7 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
+import { fetchLeadgenAppointmentReminderSettings, fetchLeadgenAppointmentReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import AppointmentsListClient from "./AppointmentsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -10,7 +11,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
   const admin = getSupabaseAdmin();
   const { highlight } = await searchParams;
 
-  const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }, { data: appointmentEmails }] = await Promise.all([
+  const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }, { data: appointmentEmails }, reminderSettings] = await Promise.all([
     admin.from("leadgen_appointments").select("*").order("appointment_date", { ascending: false }),
     admin.from("leadgen_clients").select("*").order("name"),
     admin.from("leadgen_campaigns").select("*").order("name"),
@@ -21,6 +22,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
     // badge (brief: "Show the most recent appointment-email status to
     // both administrators and the assigned agent").
     admin.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
+    fetchLeadgenAppointmentReminderSettings(admin),
   ]);
 
   const latestEmailByAppointmentId: Record<string, LeadgenEmailRow> = {};
@@ -29,6 +31,8 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
       latestEmailByAppointmentId[email.appointment_id] = email as LeadgenEmailRow;
     }
   }
+
+  const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
 
   return (
     <div>
@@ -42,6 +46,8 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
         agents={(agents ?? []) as LeadgenUserRow[]}
         leads={(leads ?? []) as Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">[]}
         latestEmailByAppointmentId={latestEmailByAppointmentId}
+        automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
+        reminderSettings={reminderSettings}
         highlightId={highlight}
       />
     </div>
