@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { generateLeadgenBookingDays, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
+import { generateLeadgenBookingDays, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import BookingPageClient from "./BookingPageClient";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function LeadgenBookingPage({ params }: { params: Promise<{
     .select("appointment_date, appointment_time")
     .eq("client_id", client.id)
     .neq("status", "Cancelled");
-  const bookedSlots = new Set((existing ?? []).map((a) => `${a.appointment_date}|${a.appointment_time}`));
+  const bookedSlots = new Set((existing ?? []).map((a) => `${a.appointment_date}|${normalizeLeadgenAppointmentTime(a.appointment_time)}`));
 
   const days = generateLeadgenBookingDays(bookedSlots);
 
