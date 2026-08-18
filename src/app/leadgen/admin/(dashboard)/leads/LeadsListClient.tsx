@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   isLeadgenNextFollowUpDueToday,
   isLeadgenNextFollowUpOverdue,
+  LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
@@ -31,6 +32,7 @@ export default function LeadsListClient({
   appointmentStatusByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
+  initialAppointmentStatusFilter,
   initialFollowUpFilter,
   initialAgentFilter,
   initialDueFrom,
@@ -50,6 +52,14 @@ export default function LeadsListClient({
   // ignored (falls back to "all"/unfiltered) if not a recognized value,
   // so a stale/tampered URL never crashes this page.
   initialStatusFilter?: string;
+  // The "Appointments Booked" dashboard card links here with
+  // ?appointment_status=Booked instead of the main-status filter above -
+  // this is the actual appointment-status column's source of truth
+  // (leadgen_appointments.status via appointmentStatusByLeadId), so a
+  // lead whose main status hasn't caught up yet (e.g. still
+  // "Consultation Information Sent") still shows up when its appointment
+  // is genuinely Booked.
+  initialAppointmentStatusFilter?: string;
   initialFollowUpFilter?: "due_today" | "due" | "overdue";
   initialAgentFilter?: string;
   // Only meaningful alongside initialFollowUpFilter "due"/"overdue" -
@@ -80,6 +90,11 @@ export default function LeadsListClient({
   const [statusFilter, setStatusFilter] = useState<string>(
     initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
   );
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState<string>(
+    initialAppointmentStatusFilter && LEADGEN_APPOINTMENT_STATUSES.includes(initialAppointmentStatusFilter as LeadgenAppointmentStatus)
+      ? initialAppointmentStatusFilter
+      : "all"
+  );
   const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
   const [search, setSearch] = useState("");
 
@@ -107,6 +122,12 @@ export default function LeadsListClient({
       if (agentFilter === "unassigned" && lead.assigned_agent_id) return false;
       if (agentFilter !== "all" && agentFilter !== "unassigned" && lead.assigned_agent_id !== agentFilter) return false;
       if (statusFilter !== "all" && lead.status !== statusFilter) return false;
+      // Source of truth is the appointment record itself
+      // (appointmentStatusByLeadId, built from leadgen_appointments.status
+      // on the server), never the lead's main status - a lead can be
+      // genuinely "Appointment Status: Booked" while its main status is
+      // still something else (e.g. "Consultation Information Sent").
+      if (appointmentStatusFilter !== "all" && appointmentStatusByLeadId?.[lead.id] !== appointmentStatusFilter) return false;
       if (followUpFilter === "due_today" && !isLeadgenNextFollowUpDueToday(lead.next_follow_up_at)) return false;
       if (followUpFilter === "due") {
         if (!lead.next_follow_up_at || isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
@@ -124,7 +145,7 @@ export default function LeadsListClient({
         (lead.email ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, followUpFilter, search, initialDueFrom, initialDueTo]);
+  }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, appointmentStatusFilter, appointmentStatusByLeadId, followUpFilter, search, initialDueFrom, initialDueTo]);
 
   function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
     setError(null);
@@ -333,6 +354,14 @@ export default function LeadsListClient({
           {LEADGEN_LEAD_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select value={appointmentStatusFilter} onChange={(e) => setAppointmentStatusFilter(e.target.value)} className={`${inputClass} w-auto`}>
+          <option value="all">All appointment statuses</option>
+          {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              Appointment: {s}
             </option>
           ))}
         </select>

@@ -1,13 +1,7 @@
-import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import {
-  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL,
-  LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
-  LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES,
-  LEADGEN_APPOINTMENT_STATUS_STYLES,
-  type LeadgenAppointmentRow,
-} from "@/lib/leadgen-types";
+import type { LeadgenAppointmentRow, LeadgenEmailRow } from "@/lib/leadgen-types";
+import AgentAppointmentsListClient from "./AgentAppointmentsListClient";
 
 export default async function LeadgenAgentAppointmentsPage() {
   await requireLeadgenAgent();
@@ -18,6 +12,31 @@ export default async function LeadgenAgentAppointmentsPage() {
     .order("appointment_date", { ascending: false });
 
   const rows = (appointments ?? []) as LeadgenAppointmentRow[];
+  const leadIds = Array.from(new Set(rows.map((appt) => appt.lead_id).filter((id): id is string => !!id)));
+
+  const [{ data: leads }, { data: appointmentEmails }] = await Promise.all([
+    leadIds.length
+      ? supabase.from("leadgen_leads").select("id, email, contact_name").in("id", leadIds)
+      : Promise.resolve({ data: [] as { id: string; email: string | null; contact_name: string | null }[] }),
+    // RLS (leadgen_emails_agent_select_own) already scopes this to
+    // emails this agent sent or that belong to a lead assigned to them -
+    // for the "most recent appointment-email status" badge (brief: "Show
+    // the most recent appointment-email status to both administrators
+    // and the assigned agent").
+    supabase.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
+  ]);
+
+  const leadContactByLeadId: Record<string, { email: string | null; contact_name: string | null }> = {};
+  for (const lead of leads ?? []) {
+    leadContactByLeadId[lead.id] = { email: lead.email, contact_name: lead.contact_name };
+  }
+
+  const latestEmailByAppointmentId: Record<string, LeadgenEmailRow> = {};
+  for (const email of appointmentEmails ?? []) {
+    if (email.appointment_id && !(email.appointment_id in latestEmailByAppointmentId)) {
+      latestEmailByAppointmentId[email.appointment_id] = email as LeadgenEmailRow;
+    }
+  }
 
   return (
     <div>
@@ -27,55 +46,7 @@ export default async function LeadgenAgentAppointmentsPage() {
         lead&apos;s profile.
       </p>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        {rows.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">No appointments yet.</p>
-        ) : (
-          <table className="w-full min-w-[600px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                <th className="p-3">Business</th>
-                <th className="p-3">Date/Time</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Incentive</th>
-                <th className="p-3">Lead</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((appt) => (
-                <tr key={appt.id} className="border-b border-slate-100">
-                  <td className="p-3 font-semibold text-slate-900">{appt.business_name}</td>
-                  <td className="p-3 text-slate-600">
-                    {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
-                  </td>
-                  <td className="p-3 text-slate-600">{appt.meeting_type}</td>
-                  <td className="p-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
-                  </td>
-                  <td className="p-3">
-                    <span
-                      title={appt.incentive_status_reason ?? undefined}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                        appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
-                      }`}
-                    >
-                      {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    {appt.lead_id && (
-                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="font-semibold text-sky-600 hover:text-sky-700">
-                        View Lead
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <AgentAppointmentsListClient appointments={rows} leadContactByLeadId={leadContactByLeadId} latestEmailByAppointmentId={latestEmailByAppointmentId} />
     </div>
   );
 }

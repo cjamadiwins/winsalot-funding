@@ -5,6 +5,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
   LEADGEN_APPOINTMENT_STATUSES,
@@ -304,5 +305,32 @@ export async function cancelOrReplaceAppointmentAction(appointmentId: string, fo
   revalidatePath("/leadgen/agent");
   revalidatePath("/leadgen/agent/performance");
   if (appointment?.lead_id) revalidatePath(`/leadgen/admin/leads/${appointment.lead_id}`);
+  return {};
+}
+
+// "Resend Appointment Notification" / "Send Appointment Reminder" (brief
+// EMAIL FEATURES #4/#5) - admins may use both for every booked
+// appointment. Shared send/log logic lives in sendLeadgenAppointmentEmail
+// (lib/leadgen-appointment-emails.ts) so the admin and agent action files
+// can never drift out of sync on what gets sent or logged.
+export async function resendAppointmentNotificationAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "resend_confirmation");
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/leadgen/admin/appointments");
+  if (result.leadId) revalidatePath(`/leadgen/admin/leads/${result.leadId}`);
+  return {};
+}
+
+export async function sendAppointmentReminderAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "reminder");
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/leadgen/admin/appointments");
+  if (result.leadId) revalidatePath(`/leadgen/admin/leads/${result.leadId}`);
   return {};
 }

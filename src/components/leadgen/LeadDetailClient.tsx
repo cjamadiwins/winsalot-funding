@@ -34,6 +34,7 @@ import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
 import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
+import AppointmentEmailActions from "./AppointmentEmailActions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -50,6 +51,12 @@ export type LeadDetailActions = {
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
   deleteLead?: (leadId: string) => Promise<{ error?: string } | void>;
+  // "Resend Appointment Notification" / "Send Appointment Reminder" -
+  // both admin and agent wire these (agents are scoped to their own
+  // leads by RLS, same as every other agent action here), so they're
+  // always present, unlike the admin-only actions above.
+  resendAppointmentNotification: (appointmentId: string) => Promise<{ error?: string } | void>;
+  sendAppointmentReminder: (appointmentId: string) => Promise<{ error?: string } | void>;
 };
 
 // Shared Lead Generation CRM lead profile - identical between
@@ -555,6 +562,22 @@ export default function LeadDetailClient({
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
                   </div>
                   <p className="mt-1 text-slate-600">{appt.meeting_type}{appt.meeting_link ? ` · ${appt.meeting_link}` : ""}</p>
+                  {appt.status === "Booked" && (
+                    <div className="mt-2.5 border-t border-slate-100 pt-2.5">
+                      <AppointmentEmailActions
+                        appointmentId={appt.id}
+                        businessName={lead.business_name}
+                        contactName={lead.contact_name}
+                        email={lead.email}
+                        appointmentDate={appt.appointment_date}
+                        appointmentTime={appt.appointment_time}
+                        timezone={appt.timezone}
+                        latestEmail={emails.find((e) => e.appointment_id === appt.id) ?? null}
+                        onResend={actions.resendAppointmentNotification}
+                        onReminder={actions.sendAppointmentReminder}
+                      />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
