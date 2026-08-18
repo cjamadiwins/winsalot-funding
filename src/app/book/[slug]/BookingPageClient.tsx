@@ -1,11 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { formatLeadgenBookingSlot, LEADGEN_BOOKING_TIMEZONE_LABEL, type LeadgenBookingDay } from "@/lib/leadgen-booking";
 import { isValidEmail } from "@/lib/leadgen-types";
 import { bookLeadgenAppointmentAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14.5px] text-slate-900";
+
+// If the visitor has had this page open since before a new deployment went
+// out, the Server Action reference baked into their already-loaded bundle
+// no longer exists in the new build's action manifest, and Next.js rejects
+// the request with "Failed to find Server Action ... This request might be
+// from an older or newer deployment." (see
+// https://nextjs.org/docs/messages/failed-to-find-server-action). That
+// throws instead of resolving normally, so it needs its own message
+// pointing the visitor at the actual fix (reload), not the generic one.
+const STALE_ACTION_PATTERN = /failed to find server action/i;
+
+// Bounds how long the button waits before giving up and letting the
+// visitor retry, in case the request hangs instead of erroring outright.
+// Does not (and cannot) cancel the in-flight request - the requestToken
+// check below discards a late response after this fires instead of acting
+// on it.
+const SUBMIT_TIMEOUT_MS = 20_000;
 
 export default function BookingPageClient({ slug, clientName, days }: { slug: string; clientName: string; days: LeadgenBookingDay[] }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(days[0]?.date ?? null);
@@ -17,6 +34,7 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ date: string; time: string } | null>(null);
+  const requestToken = useRef(0);
 
   const selectedDay = useMemo(() => days.find((d) => d.date === selectedDate) ?? null, [days, selectedDate]);
   const emailValid = !email || isValidEmail(email);
@@ -24,6 +42,7 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
 
   async function handleSubmit() {
     if (submitting || !canSubmit || !selectedDate || !selectedTime) return;
+    const thisToken = ++requestToken.current;
     setSubmitting(true);
     setError(null);
 
@@ -35,15 +54,38 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
     formData.set("email", email.trim());
     formData.set("phone", phone.trim());
 
-    const result = await bookLeadgenAppointmentAction(slug, formData);
-    setSubmitting(false);
+    try {
+      const result = await Promise.race([
+        bookLeadgenAppointmentAction(slug, formData),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("TIMEOUT")), SUBMIT_TIMEOUT_MS);
+        }),
+      ]);
 
-    if (result.error) {
-      setError(result.error);
-      return;
+      // A stale timeout (or a stale success/failure that finally resolves
+      // after the visitor already retried) no longer applies - only the
+      // most recent attempt is allowed to update the UI.
+      if (requestToken.current !== thisToken) return;
+
+      if (result.error) {
+        setError(result.error);
+        setSubmitting(false);
+        return;
+      }
+
+      setBooked({ date: selectedDate, time: selectedTime });
+      setSubmitting(false);
+    } catch (err) {
+      if (requestToken.current !== thisToken) return;
+      if (err instanceof Error && err.message === "TIMEOUT") {
+        setError("This is taking longer than expected. Please check your connection and try again - you have not been booked yet.");
+      } else if (err instanceof Error && STALE_ACTION_PATTERN.test(err.message)) {
+        setError("This page was updated since you opened it. Please refresh the page and try booking again.");
+      } else {
+        setError("Something went wrong booking your appointment. Please try again.");
+      }
+      setSubmitting(false);
     }
-
-    setBooked({ date: selectedDate, time: selectedTime });
   }
 
   if (days.length === 0) {
