@@ -13,12 +13,23 @@ import { runLeadgenAppointmentReminderJob } from "@/lib/leadgen-appointment-remi
 // This one route.ts is shared by both Vercel projects deployed from this
 // repo (cleaning.winsalotcorp.com and leads.winsalotcorp.com - see the
 // header comment on src/app/api/webhooks/resend/route.ts for the same
-// two-projects-one-repo situation) - if vercel.json's `crons` entry ends
-// up registered on both, a second concurrent invocation is harmless: the
-// database-level atomic claim in runLeadgenAppointmentReminderJob (see
-// lib/leadgen-appointment-reminders.ts) guarantees only one ever actually
-// sends a given appointment's reminder.
+// two-projects-one-repo situation). Vercel has no way to give the two
+// projects different `crons` entries from one shared vercel.json, so both
+// projects register this schedule. LEADGEN_REMINDER_CRON_ENABLED gates the
+// route itself: it must be set to exactly "true" as a project env var on
+// winsalot-leadgen-crm (Production) only, never on winsalot-funding. Every
+// invocation on winsalot-funding hits the guard below and returns
+// immediately - no Supabase read, no Resend call, no claim row - which is
+// the practical equivalent of "not registered" on that project. As a
+// second, independent line of defense, the database-level atomic claim in
+// runLeadgenAppointmentReminderJob (see lib/leadgen-appointment-reminders.ts)
+// would also make a second concurrent invocation harmless even without
+// this guard.
 export const maxDuration = 60;
+
+function isEnabledOnThisProject(): boolean {
+  return process.env.LEADGEN_REMINDER_CRON_ENABLED === "true";
+}
 
 function isAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
@@ -27,6 +38,13 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  if (!isEnabledOnThisProject()) {
+    return NextResponse.json(
+      { skipped: true, reason: "LEADGEN_REMINDER_CRON_ENABLED is not set to true on this Vercel project." },
+      { status: 200 }
+    );
+  }
+
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
