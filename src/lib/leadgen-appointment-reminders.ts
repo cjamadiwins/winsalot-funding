@@ -19,9 +19,20 @@ const SETTINGS_ID = "00000000-0000-0000-0000-000000000101";
 const MAX_ATTEMPTS = 3;
 // Half the eligibility window's slack either side of the target hour
 // (brief: "identify appointments between 23 hours 45 minutes and 24
-// hours 15 minutes away") - 15 minutes matches a 15-minute cron cadence
-// with margin for a delayed run.
-const WINDOW_SLACK_MINUTES = 15;
+// hours 15 minutes away... a safe time window so appointments are not
+// missed if a cron execution is delayed"). The brief's own example (15
+// minutes) assumes a 15-minute cron cadence - this Vercel account is on
+// the Hobby plan, which only permits a *daily* cron (see vercel.json:
+// "0 13 * * *"), so the window is widened to 12 hours instead: with a
+// once-a-day cron, consecutive days' windows must tile the timeline with
+// no gaps (today's ends where tomorrow's begins) or an appointment could
+// be skipped entirely. The trade-off is precision (a reminder can land
+// anywhere from ~12 to ~36 hours before the appointment) rather than the
+// tight ~24-hour target a sub-daily cadence would give. If this project
+// upgrades to Pro, tighten both this constant (back to 15) and the
+// vercel.json schedule (back to "*/15 * * * *") together - the claim
+// logic's duplicate prevention is unaffected either way.
+const WINDOW_SLACK_MINUTES = 12 * 60;
 
 // ---------------------------------------------------------------------
 // Time-zone-safe UTC conversion
