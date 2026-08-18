@@ -134,6 +134,17 @@ export function isLeadgenBookingSlotOffered(date: string, time: string, excludeB
   return !!day && day.times.includes(time);
 }
 
+// leadgen_appointments.appointment_time is a Postgres `time` column and
+// comes back from Supabase as "HH:MM:SS" (e.g. "14:00:00"), while every
+// slot this file generates/compares is "HH:MM" (e.g. "14:00" - see
+// allSlotsForDay above). Both callers building a booked-slot exclusion set
+// (the public booking page and its server action) must normalize through
+// this before keying into that set, or an already-booked slot silently
+// keeps showing as available since "14:00:00" !== "14:00".
+export function normalizeLeadgenAppointmentTime(time: string): string {
+  return time.slice(0, 5);
+}
+
 export function formatLeadgenBookingSlot(date: string, time: string): string {
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = time.split(":").map(Number);

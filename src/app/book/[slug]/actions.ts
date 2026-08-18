@@ -9,7 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
+import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import { isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
 
 export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: string };
@@ -48,7 +48,7 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
     .select("appointment_date, appointment_time")
     .eq("client_id", client.id)
     .neq("status", "Cancelled");
-  const bookedSlots = new Set((existingForClient ?? []).map((a) => `${a.appointment_date}|${a.appointment_time}`));
+  const bookedSlots = new Set((existingForClient ?? []).map((a) => `${a.appointment_date}|${normalizeLeadgenAppointmentTime(a.appointment_time)}`));
 
   if (!isLeadgenBookingSlotOffered(date, time, bookedSlots)) {
     return { error: "That time is no longer available. Please choose another date or time." };
