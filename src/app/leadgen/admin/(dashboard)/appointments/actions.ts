@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
+import { claimManualAppointmentReminderSlot, updateLeadgenAppointmentReminderSettings } from "@/lib/leadgen-appointment-reminders";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
   LEADGEN_APPOINTMENT_STATUSES,
@@ -324,13 +325,70 @@ export async function resendAppointmentNotificationAction(appointmentId: string)
   return {};
 }
 
-export async function sendAppointmentReminderAction(appointmentId: string): Promise<ActionResult> {
+// countAsAutomaticReminder (brief MANUAL CONTROLS: "unless the
+// administrator explicitly chooses 'Count this as the 24-hour
+// reminder'") claims this occurrence's automatic-reminder slot after a
+// successful send, so the cron job skips it later - admin-only by
+// construction (only the admin appointments/lead-detail UI ever renders
+// the checkbox that sets this true; the agent action below never
+// forwards it).
+export async function sendAppointmentReminderAction(appointmentId: string, countAsAutomaticReminder?: boolean): Promise<ActionResult> {
   const adminUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
   const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "reminder");
   if (result.error) return { error: result.error };
 
+  if (countAsAutomaticReminder && result.appointmentId && result.occurrenceKey && result.recipientEmail) {
+    const { data: appointment } = await supabase.from("leadgen_appointments").select("appointment_date, appointment_time, timezone").eq("id", result.appointmentId).maybeSingle();
+    if (appointment) {
+      await claimManualAppointmentReminderSlot(supabase, {
+        appointmentId: result.appointmentId,
+        leadId: result.leadId ?? null,
+        appointmentDate: appointment.appointment_date,
+        appointmentTime: appointment.appointment_time,
+        timezone: appointment.timezone,
+        recipientEmail: result.recipientEmail,
+        emailId: result.emailId ?? null,
+        createdBy: adminUser.id,
+      });
+    }
+  }
+
   revalidatePath("/leadgen/admin/appointments");
   if (result.leadId) revalidatePath(`/leadgen/admin/leads/${result.leadId}`);
+  return {};
+}
+
+// "ADMIN SETTINGS" (brief): a small on/off toggle plus the reminder
+// timing and sender/reply-to display values, backed by the
+// leadgen_appointment_reminder_settings singleton row the cron job reads
+// on every run (lib/leadgen-appointment-reminders.ts).
+export async function updateLeadgenAppointmentReminderSettingsAction(formData: FormData): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const hoursBeforeRaw = String(formData.get("reminder_hours_before") ?? "").trim();
+  const hoursBefore = Number(hoursBeforeRaw);
+  if (!hoursBeforeRaw || !Number.isFinite(hoursBefore) || hoursBefore <= 0) return { error: "Reminder timing must be a positive number of hours." };
+
+  const senderName = String(formData.get("sender_name") ?? "").trim();
+  if (!senderName) return { error: "Sender name is required." };
+
+  const replyToEmail = String(formData.get("reply_to_email") ?? "").trim();
+  if (!replyToEmail) return { error: "Reply-to address is required." };
+
+  const result = await updateLeadgenAppointmentReminderSettings(
+    supabase,
+    {
+      automatic_reminders_enabled: formData.get("automatic_reminders_enabled") === "true",
+      reminder_hours_before: hoursBefore,
+      sender_name: senderName,
+      reply_to_email: replyToEmail,
+    },
+    adminUser.full_name || adminUser.email
+  );
+  if (result.error) return result;
+
+  revalidatePath("/leadgen/admin/appointments");
   return {};
 }

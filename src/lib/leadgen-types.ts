@@ -174,6 +174,7 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "consultation_follow_up_sent",
   "appointment_confirmation_resent",
   "appointment_reminder_sent",
+  "appointment_reminder_auto_sent",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -194,6 +195,7 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   consultation_follow_up_sent: "Consultation follow-up email sent",
   appointment_confirmation_resent: "Appointment confirmation resent",
   appointment_reminder_sent: "Appointment reminder sent",
+  appointment_reminder_auto_sent: "Automatic 24-hour appointment reminder sent",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -539,6 +541,89 @@ export type LeadgenBouncedEmailRow = {
   cleared_at: string | null;
   cleared_by: string | null;
 };
+
+// Automatic 24-hour appointment reminders (supabase/migrations/0067_
+// leadgen_appointment_reminders.sql) - see lib/leadgen-appointment-reminders.ts
+// for the eligibility/claim/send logic that reads and writes this table.
+export const LEADGEN_APPOINTMENT_REMINDER_TYPES = ["24_hour_reminder"] as const;
+export type LeadgenAppointmentReminderType = (typeof LEADGEN_APPOINTMENT_REMINDER_TYPES)[number];
+
+export const LEADGEN_APPOINTMENT_REMINDER_STATUSES = ["sending", "sent", "failed"] as const;
+export type LeadgenAppointmentReminderStatus = (typeof LEADGEN_APPOINTMENT_REMINDER_STATUSES)[number];
+
+export type LeadgenAppointmentReminderRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  appointment_id: string;
+  lead_id: string | null;
+  reminder_type: LeadgenAppointmentReminderType;
+  occurrence_key: string;
+  scheduled_appointment_at: string;
+  status: LeadgenAppointmentReminderStatus;
+  recipient_email: string | null;
+  email_id: string | null;
+  resend_message_id: string | null;
+  error_detail: string | null;
+  attempt_count: number;
+  sent_at: string | null;
+  source: "automatic" | "manual";
+  created_by: string | null;
+};
+
+export type LeadgenAppointmentReminderSettingsRow = {
+  id: string;
+  automatic_reminders_enabled: boolean;
+  reminder_hours_before: number;
+  sender_name: string;
+  reply_to_email: string;
+  updated_at: string;
+  updated_by_name: string | null;
+};
+
+// occurrence_key is the appointment's own date+time at the moment a
+// reminder is claimed - a reschedule naturally produces a new key, which
+// is what lets a rescheduled appointment become eligible for a brand new
+// reminder while every prior occurrence's history stays intact (brief:
+// "use an appointment occurrence/version identifier").
+export function leadgenAppointmentOccurrenceKey(appointmentDate: string, appointmentTime: string): string {
+  return `${appointmentDate}T${appointmentTime}`;
+}
+
+// Displayed status for the "Automatic Reminder" badge shown to both
+// admins and the assigned agent (brief: "Show: Scheduled / Sent /
+// Delivered / Bounced / Failed"). Sent/Delivered/Bounced/Failed come from
+// the linked leadgen_emails row (the existing tracked-email pipeline,
+// updated by the Resend webhook) once one exists; "Scheduled" is derived
+// - there is deliberately no row in leadgen_appointment_reminders until
+// the reminder is actually claimed, so an eligible, not-yet-claimed
+// appointment shows "Scheduled" purely because no row (and no linked
+// email) exists yet.
+export type LeadgenAppointmentReminderDisplayStatus =
+  | "Scheduled"
+  | "Sending"
+  | "Sent"
+  | "Delivered"
+  | "Bounced"
+  | "Failed"
+  | "Not scheduled";
+
+export function leadgenAppointmentReminderDisplayStatus(
+  reminder: LeadgenAppointmentReminderRow | null,
+  linkedEmail: LeadgenEmailRow | null,
+  isEligibleForFutureReminder: boolean
+): LeadgenAppointmentReminderDisplayStatus {
+  if (!reminder) return isEligibleForFutureReminder ? "Scheduled" : "Not scheduled";
+  if (linkedEmail) {
+    if (linkedEmail.status === "delivered") return "Delivered";
+    if (linkedEmail.status === "bounced" || linkedEmail.status === "complained") return "Bounced";
+    if (linkedEmail.status === "failed") return "Failed";
+    if (linkedEmail.status === "sent" || linkedEmail.status === "opened" || linkedEmail.status === "clicked" || linkedEmail.status === "delayed") return "Sent";
+  }
+  if (reminder.status === "failed") return "Failed";
+  if (reminder.status === "sent") return "Sent";
+  return "Sending";
+}
 
 // Small, self-contained province list (deliberately not shared with the
 // cleaning CRM's lib/provider-types.ts - see file header).

@@ -18,6 +18,7 @@ import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/L
 import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
 import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
 import { bookAppointmentAction, resendAppointmentNotificationAction, sendAppointmentReminderAction } from "../../appointments/actions";
+import { fetchLeadgenAppointmentReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import {
   completeFollowUpAction,
   recordCallOutcomeAction,
@@ -84,6 +85,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
   ]);
 
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
+  const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
 
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
   const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
@@ -101,6 +103,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       activities={(activities ?? []) as LeadgenLeadActivityRow[]}
       followUps={(followUps ?? []) as LeadgenFollowUpRow[]}
       appointments={(appointments ?? []) as LeadgenAppointmentRow[]}
+      automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
       emails={(emails ?? []) as LeadgenEmailRow[]}
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}

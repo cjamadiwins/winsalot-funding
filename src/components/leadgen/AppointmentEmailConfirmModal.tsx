@@ -17,6 +17,10 @@ export default function AppointmentEmailConfirmModal({
   appointmentDate,
   appointmentTime,
   timezone,
+  // Only offered for mode "reminder", and only to admins (brief MANUAL
+  // CONTROLS: "unless the administrator explicitly chooses 'Count this
+  // as the 24-hour reminder.'") - agents never see this checkbox.
+  showCountAsAutomaticReminder,
   onClose,
   onConfirm,
   onSent,
@@ -28,12 +32,14 @@ export default function AppointmentEmailConfirmModal({
   appointmentDate: string;
   appointmentTime: string;
   timezone: string;
+  showCountAsAutomaticReminder?: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<{ error?: string } | void>;
+  onConfirm: (countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
   onSent: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [countAsAutomaticReminder, setCountAsAutomaticReminder] = useState(false);
 
   const title = mode === "reminder" ? "Send Appointment Reminder" : "Resend Appointment Notification";
   const actionLabel = mode === "reminder" ? "Send Reminder" : "Resend Notification";
@@ -42,7 +48,7 @@ export default function AppointmentEmailConfirmModal({
     if (submitting) return; // belt-and-suspenders against a double-click racing state updates
     setSubmitting(true);
     setError(null);
-    const result = await onConfirm();
+    const result = await onConfirm(countAsAutomaticReminder);
     setSubmitting(false);
     if (result && "error" in result && result.error) {
       setError(result.error);
@@ -90,6 +96,18 @@ export default function AppointmentEmailConfirmModal({
             <p>No email address is on file for this lead - add one before sending.</p>
           )}
         </div>
+
+        {mode === "reminder" && showCountAsAutomaticReminder && (
+          <label className="mt-3 flex items-start gap-2 text-[12.5px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={countAsAutomaticReminder}
+              onChange={(e) => setCountAsAutomaticReminder(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Count this as the 24-hour reminder (skip the automatic reminder for this appointment).</span>
+          </label>
+        )}
 
         {error && <p className="mt-3 text-[13px] font-medium text-rose-600">{error}</p>}
 

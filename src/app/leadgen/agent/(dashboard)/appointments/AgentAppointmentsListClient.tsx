@@ -18,6 +18,7 @@ export default function AgentAppointmentsListClient({
   appointments,
   leadContactByLeadId,
   latestEmailByAppointmentId,
+  automaticReminderStatusByAppointmentId,
 }: {
   appointments: LeadgenAppointmentRow[];
   // The lead's currently saved email/contact name, keyed by lead_id - the
@@ -26,6 +27,7 @@ export default function AgentAppointmentsListClient({
   // email address").
   leadContactByLeadId: Record<string, LeadContact>;
   latestEmailByAppointmentId: Record<string, LeadgenEmailRow>;
+  automaticReminderStatusByAppointmentId: Record<string, string>;
 }) {
   return (
     <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
@@ -75,7 +77,7 @@ export default function AgentAppointmentsListClient({
                     )}
                   </td>
                   <td className="p-3">
-                    {appt.status === "Booked" && (
+                    {(appt.status === "Booked" || appt.status === "Confirmed") && (
                       <AppointmentEmailActions
                         appointmentId={appt.id}
                         businessName={appt.business_name}
@@ -85,6 +87,7 @@ export default function AgentAppointmentsListClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={latestEmailByAppointmentId[appt.id] ?? null}
+                        automaticReminderStatus={automaticReminderStatusByAppointmentId[appt.id]}
                         onResend={resendAppointmentNotificationAction}
                         onReminder={sendAppointmentReminderAction}
                       />

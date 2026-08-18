@@ -21,6 +21,8 @@ export default function AppointmentEmailActions({
   appointmentTime,
   timezone,
   latestEmail,
+  automaticReminderStatus,
+  isAdmin,
   onResend,
   onReminder,
 }: {
@@ -37,8 +39,17 @@ export default function AppointmentEmailActions({
   // most recent appointment-email status to both administrators and the
   // assigned agent").
   latestEmail?: LeadgenEmailRow | null;
+  // Server-computed label for the automatic 24-hour reminder (brief
+  // "EMAIL TRACKING": "Show: Scheduled / Sent / Delivered / Bounced /
+  // Failed") - "Scheduled" means eligible and not yet claimed, "Not
+  // scheduled" means automatic reminders are off or this appointment
+  // isn't eligible (already past, too far out, or not Booked/Confirmed).
+  automaticReminderStatus?: string | null;
+  // Gates the "Count this as the 24-hour reminder" checkbox (brief
+  // MANUAL CONTROLS: admin-only).
+  isAdmin?: boolean;
   onResend: (appointmentId: string) => Promise<{ error?: string } | void>;
-  onReminder: (appointmentId: string) => Promise<{ error?: string } | void>;
+  onReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
 }) {
   const [mode, setMode] = useState<"resend" | "reminder" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -74,6 +85,12 @@ export default function AppointmentEmailActions({
         </span>
       )}
 
+      {automaticReminderStatus && (
+        <span className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+          Automatic reminder: {automaticReminderStatus}
+        </span>
+      )}
+
       {message && <span className="text-[11.5px] font-medium text-emerald-700">{message}</span>}
 
       {mode && (
@@ -85,8 +102,9 @@ export default function AppointmentEmailActions({
           appointmentDate={appointmentDate}
           appointmentTime={appointmentTime}
           timezone={timezone}
+          showCountAsAutomaticReminder={isAdmin}
           onClose={() => setMode(null)}
-          onConfirm={() => (mode === "reminder" ? onReminder(appointmentId) : onResend(appointmentId))}
+          onConfirm={(countAsAutomaticReminder) => (mode === "reminder" ? onReminder(appointmentId, countAsAutomaticReminder) : onResend(appointmentId))}
           onSent={() => {
             setMessage(mode === "reminder" ? "Reminder sent." : "Confirmation resent.");
             setMode(null);

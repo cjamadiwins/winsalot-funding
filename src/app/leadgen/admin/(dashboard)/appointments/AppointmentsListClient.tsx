@@ -9,6 +9,7 @@ import {
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_MEETING_TYPES,
+  type LeadgenAppointmentReminderSettingsRow,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -17,7 +18,14 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
-import { bookAppointmentAction, cancelOrReplaceAppointmentAction, resendAppointmentNotificationAction, sendAppointmentReminderAction, updateAppointmentAction } from "./actions";
+import {
+  bookAppointmentAction,
+  cancelOrReplaceAppointmentAction,
+  resendAppointmentNotificationAction,
+  sendAppointmentReminderAction,
+  updateAppointmentAction,
+  updateLeadgenAppointmentReminderSettingsAction,
+} from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -30,6 +38,8 @@ export default function AppointmentsListClient({
   agents,
   leads,
   latestEmailByAppointmentId,
+  automaticReminderStatusByAppointmentId,
+  reminderSettings,
   highlightId,
 }: {
   appointments: LeadgenAppointmentRow[];
@@ -41,11 +51,18 @@ export default function AppointmentsListClient({
   // "Resend Appointment Notification" / "Send Appointment Reminder"
   // status badge.
   latestEmailByAppointmentId?: Record<string, LeadgenEmailRow>;
+  // "Automatic reminder: Scheduled/Sent/Delivered/.../Not scheduled"
+  // label per appointment id (brief EMAIL TRACKING).
+  automaticReminderStatusByAppointmentId?: Record<string, string>;
+  // Current leadgen_appointment_reminder_settings row (brief "ADMIN
+  // SETTINGS").
+  reminderSettings: LeadgenAppointmentReminderSettingsRow;
   highlightId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
@@ -74,13 +91,64 @@ export default function AppointmentsListClient({
 
   return (
     <div>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-3">
         <button type="button" onClick={() => setShowForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
           {showForm ? "Cancel" : "+ Book Appointment"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowReminderSettings((v) => !v)}
+          className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
+        >
+          {showReminderSettings ? "Close" : "Appointment Reminder Settings"}
         </button>
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      {showReminderSettings && (
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-base font-bold text-slate-900">Appointment Reminder Settings</h2>
+          <p className="mt-1 text-[12.5px] text-slate-500">
+            Controls the automatic 24-hour reminder cron job. Off by default until you&apos;ve verified it against real
+            appointments.
+          </p>
+          <form
+            action={(formData) => runAction(() => updateLeadgenAppointmentReminderSettingsAction(formData), () => setShowReminderSettings(false))}
+            className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
+            <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+              <input type="hidden" name="automatic_reminders_enabled" value={reminderSettings.automatic_reminders_enabled ? "true" : "false"} />
+              <input
+                type="checkbox"
+                defaultChecked={reminderSettings.automatic_reminders_enabled}
+                onChange={(e) => {
+                  const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                  hidden.value = e.currentTarget.checked ? "true" : "false";
+                }}
+              />
+              Automatic 24-hour reminders: {reminderSettings.automatic_reminders_enabled ? "On" : "Off"}
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-slate-600">Reminder Timing (hours before appointment)</span>
+              <input name="reminder_hours_before" type="number" min={1} step={1} defaultValue={reminderSettings.reminder_hours_before} required className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-slate-600">Sender Name</span>
+              <input name="sender_name" type="text" defaultValue={reminderSettings.sender_name} required className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="text-[12.5px] font-semibold text-slate-600">Reply-To Address (must already be an approved sending address)</span>
+              <input name="reply_to_email" type="email" defaultValue={reminderSettings.reply_to_email} required className={inputClass} />
+            </label>
+            <div className="sm:col-span-2">
+              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+                Save Reminder Settings
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       {showForm && (
         <form
@@ -273,7 +341,7 @@ export default function AppointmentsListClient({
                           </button>
                         )}
                       </div>
-                      {appt.status === "Booked" && (
+                      {(appt.status === "Booked" || appt.status === "Confirmed") && (
                         <div className="mt-2.5">
                           <AppointmentEmailActions
                             appointmentId={appt.id}
@@ -284,6 +352,8 @@ export default function AppointmentsListClient({
                             appointmentTime={appt.appointment_time}
                             timezone={appt.timezone}
                             latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
+                            automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]}
+                            isAdmin
                             onResend={resendAppointmentNotificationAction}
                             onReminder={sendAppointmentReminderAction}
                           />
