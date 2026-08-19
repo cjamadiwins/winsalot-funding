@@ -1,7 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock3, Pencil, RotateCcw, Globe2, Briefcase } from "lucide-react";
+import {
+  Clock3,
+  Pencil,
+  RotateCcw,
+  Globe2,
+  Briefcase,
+  Sun,
+  Moon,
+  CloudSun,
+  CloudMoon,
+  Cloud,
+  CloudDrizzle,
+  CloudRain,
+  CloudLightning,
+  Snowflake,
+  CloudFog,
+  type LucideIcon,
+} from "lucide-react";
 import {
   resolveLocation,
   findCity,
@@ -15,6 +32,113 @@ import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 import EditLocationsModal from "./EditLocationsModal";
 import CitySkyline, { isNightAt } from "./CitySkyline";
 import FlagIcon from "./FlagIcon";
+
+// Refresh interval for each card's live weather - "a sensible interval,
+// such as every 30 minutes," not every second.
+const WEATHER_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+type WeatherIconKind = "sun" | "moon" | "partly-cloudy-day" | "partly-cloudy-night" | "cloudy" | "drizzle" | "rain" | "thunderstorm" | "snow" | "fog";
+
+const WEATHER_ICONS: Record<WeatherIconKind, LucideIcon> = {
+  sun: Sun,
+  moon: Moon,
+  "partly-cloudy-day": CloudSun,
+  "partly-cloudy-night": CloudMoon,
+  cloudy: Cloud,
+  drizzle: CloudDrizzle,
+  rain: CloudRain,
+  thunderstorm: CloudLightning,
+  snow: Snowflake,
+  fog: CloudFog,
+};
+
+// WMO weather codes (https://open-meteo.com/en/docs, "WMO Weather
+// interpretation codes") mapped to the plain-language condition labels
+// this card shows and one icon from the small set above.
+function mapWeatherCode(code: number, isDay: boolean): { condition: string; icon: WeatherIconKind } {
+  if (code === 0) return isDay ? { condition: "Sunny", icon: "sun" } : { condition: "Clear", icon: "moon" };
+  if (code === 1 || code === 2) return { condition: "Partly Cloudy", icon: isDay ? "partly-cloudy-day" : "partly-cloudy-night" };
+  if (code === 3) return { condition: "Cloudy", icon: "cloudy" };
+  if (code === 45 || code === 48) return { condition: "Foggy", icon: "fog" };
+  if ([51, 53, 55, 56, 57].includes(code)) return { condition: "Drizzle", icon: "drizzle" };
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { condition: "Rainy", icon: "rain" };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { condition: "Snowing", icon: "snow" };
+  if ([95, 96, 99].includes(code)) return { condition: "Thunderstorms", icon: "thunderstorm" };
+  return { condition: "Cloudy", icon: "cloudy" };
+}
+
+type CityWeather = { condition: string; icon: WeatherIconKind; tempC: number };
+
+// Open-Meteo (https://open-meteo.com) - free, no API key, so there's
+// nothing to keep out of browser-side code and no server route needed;
+// the browser calls it directly. Fetches on mount, whenever the city
+// itself changes (this hook is keyed by lat/lon), and every 30 minutes
+// after that. Keeps the last good reading on screen while a refresh is
+// in flight rather than flashing a loading state every 30 minutes, and
+// only shows the graceful fallback when a fetch actually fails.
+function useCityWeather(lat: number, lon: number): { data: CityWeather | null; error: boolean } {
+  const [data, setData] = useState<CityWeather | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&temperature_unit=celsius&timezone=auto`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Open-Meteo request failed");
+        const json = await response.json();
+        const current = json?.current;
+        if (typeof current?.temperature_2m !== "number" || typeof current?.weather_code !== "number") {
+          throw new Error("Unexpected Open-Meteo response shape");
+        }
+        if (cancelled) return;
+        const { condition, icon } = mapWeatherCode(current.weather_code, current.is_day === 1);
+        setError(false);
+        setData({ condition, icon, tempC: current.temperature_2m });
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    }
+
+    load();
+    const id = setInterval(load, WEATHER_REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [lat, lon]);
+
+  return { data, error };
+}
+
+// The weather line within each Client Local Time card, under the clock:
+// icon + condition + current temperature in Celsius. Deliberately just
+// these three - kept simple, not crowding the card's existing clock,
+// skyline, and Market Snapshot content. Given its own `key` by the
+// caller (city triple), so switching cities via Edit Locations remounts
+// this fresh instead of showing the previous city's reading.
+function WeatherLine({ lat, lon }: { lat: number; lon: number }) {
+  const { data, error } = useCityWeather(lat, lon);
+  const Icon = data ? WEATHER_ICONS[data.icon] : null;
+
+  if (error) {
+    return <p className="mt-1.5 text-[11px] font-medium text-[var(--crm-text-muted,#6b7c90)]">Weather temporarily unavailable</p>;
+  }
+
+  if (!data || !Icon) {
+    return <div className="mt-1.5 h-5 w-32 animate-pulse rounded bg-[var(--crm-bg-2,#eaf0f6)]" aria-hidden="true" />;
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5" suppressHydrationWarning>
+      <Icon className="h-5 w-5 shrink-0 text-[var(--crm-accent,#3e7ef7)]" strokeWidth={2} aria-hidden="true" />
+      <span className="text-[13px] font-bold text-[var(--crm-text,#17283b)]">{Math.round(data.tempC)}°C</span>
+      <span className="text-[12px] font-semibold text-[var(--crm-text-soft,#4b5c71)]">{data.condition}</span>
+    </div>
+  );
+}
 
 // Configurable "Client Local Time" panel shown at the top of every
 // logged-in CRM dashboard (Cleaning + Lead Gen, admin + agent). Each user
@@ -115,7 +239,9 @@ function LocationCard({ location, now }: { location: SavedLocation; now: Date | 
           {formatted ? `${formatted.dateLabel} · ${formatted.zoneAbbr}` : ""}
         </div>
 
-        {/* Market Snapshot - compact, no weather/population/long copy per spec */}
+        {city && <WeatherLine key={`${location.country}-${location.regionCode}-${location.city}`} lat={city.lat} lon={city.lon} />}
+
+        {/* Market Snapshot */}
         <div className="mt-3 space-y-1.5 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
             <Globe2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
