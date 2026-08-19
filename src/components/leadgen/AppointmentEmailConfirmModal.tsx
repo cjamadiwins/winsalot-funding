@@ -21,6 +21,7 @@ export default function AppointmentEmailConfirmModal({
   // CONTROLS: "unless the administrator explicitly chooses 'Count this
   // as the 24-hour reminder.'") - agents never see this checkbox.
   showCountAsAutomaticReminder,
+  note,
   onClose,
   onConfirm,
   onSent,
@@ -33,6 +34,12 @@ export default function AppointmentEmailConfirmModal({
   appointmentTime: string;
   timezone: string;
   showCountAsAutomaticReminder?: boolean;
+  // Optional extra context line shown under the send notice - used when
+  // this modal is reused as a pre-submit confirmation step for a form
+  // that also saves other edits (the admin "Manage" edit panel), so the
+  // admin knows saving and sending happen together. Omitted (no visual
+  // change) by every other caller.
+  note?: string;
   onClose: () => void;
   onConfirm: (countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
   onSent: () => void;
@@ -96,6 +103,8 @@ export default function AppointmentEmailConfirmModal({
             <p>No email address is on file for this lead - add one before sending.</p>
           )}
         </div>
+
+        {note && <p className="mt-2 text-[12px] text-slate-500">{note}</p>}
 
         {mode === "reminder" && showCountAsAutomaticReminder && (
           <label className="mt-3 flex items-start gap-2 text-[12.5px] text-slate-600">
