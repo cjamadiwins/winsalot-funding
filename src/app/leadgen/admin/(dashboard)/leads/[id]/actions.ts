@@ -5,6 +5,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import {
+  isLeadgenAppointmentCountable,
   isValidEmail,
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_CONSULTATION_CTA_LABEL,
@@ -12,6 +13,7 @@ import {
   LEADGEN_PROVINCES,
   leadgenServicesButtonLabel,
   resolveLeadgenEmailBranding,
+  type LeadgenAppointmentStatus,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
 
@@ -20,6 +22,23 @@ type ActionResult = { error?: string };
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
   return value ? value : null;
+}
+
+// Both "Send Consultation Email" and "Send 15-Minute Consultation
+// Invitation" unconditionally set the lead's status to "Consultation
+// Information Sent" after sending - correct for a lead still early in the
+// pipeline, but wrong the moment the lead already has a real booked
+// appointment (e.g. a follow-up/re-send after booking): it would silently
+// downgrade the lead's status out of sync with its actual appointment,
+// which is exactly the bug that made Gloss Electric Inc. show
+// "Consultation Information Sent" while its appointment was "Booked".
+// Checked against leadgen_appointments itself (never the lead's own
+// status field) since the appointment record is the source of truth here -
+// reuses isLeadgenAppointmentCountable so this shares the exact same
+// Cancelled/Replaced exclusion rule as every count/report/incentive.
+async function leadHasActiveAppointment(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, leadId: string): Promise<boolean> {
+  const { data } = await supabase.from("leadgen_appointments").select("status").eq("lead_id", leadId);
+  return (data ?? []).some((a) => isLeadgenAppointmentCountable(a.status as LeadgenAppointmentStatus));
 }
 
 export async function updateLeadAction(leadId: string, formData: FormData): Promise<ActionResult> {
@@ -261,7 +280,10 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
+    ? { last_contacted_at: now, updated_at: now }
+    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;
@@ -332,7 +354,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
+    ? { last_contacted_at: now, updated_at: now }
+    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;

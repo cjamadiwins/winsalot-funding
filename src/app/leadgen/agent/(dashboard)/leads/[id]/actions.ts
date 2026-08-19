@@ -5,6 +5,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import {
+  isLeadgenAppointmentCountable,
   isValidEmail,
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_CONSULTATION_CTA_LABEL,
@@ -12,10 +13,21 @@ import {
   LEADGEN_PROVINCES,
   leadgenServicesButtonLabel,
   resolveLeadgenEmailBranding,
+  type LeadgenAppointmentStatus,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
+
+// Mirrors the same helper/guard in the admin actions file above - "Send
+// Consultation Email"/"Send Consultation Invitation" must not downgrade a
+// lead's status back to "Consultation Information Sent" once it already
+// has a real booked appointment (checked against leadgen_appointments
+// itself, the source of truth - never the lead's own status field).
+async function leadHasActiveAppointment(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, leadId: string): Promise<boolean> {
+  const { data } = await supabase.from("leadgen_appointments").select("status").eq("lead_id", leadId);
+  return (data ?? []).some((a) => isLeadgenAppointmentCountable(a.status as LeadgenAppointmentStatus));
+}
 
 // Agent-scoped mirror of the admin lead-detail actions
 // (../../../admin/(dashboard)/leads/[id]/actions.ts) - deliberately a
@@ -271,7 +283,10 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
+    ? { last_contacted_at: now, updated_at: now }
+    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
@@ -343,7 +358,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ status: "Consultation Information Sent", last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
+    ? { last_contacted_at: now, updated_at: now }
+    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
