@@ -409,12 +409,70 @@ export default function AppointmentsListClient({
                           action={(formData) => runAction(() => updateAppointmentAction(appt.id, formData))}
                           className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                         >
+                          <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                            Edits save to this same appointment record - it&apos;s never re-created, so the appointment
+                            count, agent attribution, and any already-reviewed incentive can&apos;t duplicate. Every
+                            changed field is logged to this lead&apos;s activity timeline with its old and new value.
+                          </p>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Business Name</span>
+                            <input name="business_name" required defaultValue={appt.business_name} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Contact Name</span>
+                            <input name="contact_name" defaultValue={appt.contact_name ?? ""} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Phone</span>
+                            <input name="phone" defaultValue={appt.phone ?? ""} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
+                            <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
+                            <input name="appointment_date" type="date" required defaultValue={appt.appointment_date} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Time</span>
+                            <input name="appointment_time" type="time" required defaultValue={appt.appointment_time} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Time Zone</span>
+                            <input name="timezone" required defaultValue={appt.timezone} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Meeting Type</span>
+                            <select name="meeting_type" defaultValue={appt.meeting_type} className={inputClass}>
+                              {LEADGEN_MEETING_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
+                            <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
+                          </label>
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Status</span>
                             <select name="status" defaultValue={appt.status} className={inputClass}>
                               {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
                                 <option key={s} value={s}>
                                   {s}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
+                            <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
+                              <option value="">Unassigned</option>
+                              {agents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.full_name}
                                 </option>
                               ))}
                             </select>
@@ -441,29 +499,6 @@ export default function AppointmentsListClient({
                               className={inputClass}
                             />
                           </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
-                            <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
-                            <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
-                              <option value="">Unassigned</option>
-                              {agents.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.full_name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
-                            <input name="appointment_date" type="date" defaultValue={appt.appointment_date} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Time</span>
-                            <input name="appointment_time" type="time" defaultValue={appt.appointment_time} className={inputClass} />
-                          </label>
                           <label className="flex flex-col gap-1.5 sm:col-span-2">
                             <span className="text-[12.5px] font-semibold text-slate-600">Appointment Notes</span>
                             <textarea name="appointment_notes" defaultValue={appt.appointment_notes ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
@@ -484,8 +519,19 @@ export default function AppointmentsListClient({
                             />
                             Confirmation sent
                           </label>
+                          <label className="flex items-center gap-2 text-[13px]">
+                            <input type="hidden" name="send_updated_confirmation" value="false" />
+                            <input
+                              type="checkbox"
+                              onChange={(e) => {
+                                const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                hidden.value = e.currentTarget.checked ? "true" : "false";
+                              }}
+                            />
+                            Send the updated confirmation to the prospect&apos;s latest saved email
+                          </label>
                           <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
-                            Save
+                            {isPending ? "Saving…" : "Save"}
                           </button>
                         </form>
                       </td>
