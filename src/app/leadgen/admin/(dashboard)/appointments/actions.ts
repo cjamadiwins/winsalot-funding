@@ -12,6 +12,7 @@ import {
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_MEETING_TYPES,
   type LeadgenAppointmentIncentiveStatus,
+  type LeadgenAppointmentRow,
   type LeadgenAppointmentStatus,
   type LeadgenMeetingType,
 } from "@/lib/leadgen-types";
@@ -176,8 +177,70 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   return {};
 }
 
+// Fields "Edit Appointment" can change, each paired with a human label for
+// the before/after activity-log diff below. Deliberately excludes
+// lead_id/client_id/campaign_id (which lead or client an appointment
+// belongs to isn't something this form re-parents) and every
+// incentive_status* / booking_agent_id column (handled separately, same as
+// before - incentive_status_set_by/at must only stamp when the reviewed
+// value itself changes, never on every edit).
+const EDITABLE_APPOINTMENT_FIELDS: { key: keyof LeadgenAppointmentEditableFields; label: string }[] = [
+  { key: "business_name", label: "Business Name" },
+  { key: "contact_name", label: "Contact Name" },
+  { key: "phone", label: "Phone" },
+  { key: "email", label: "Email" },
+  { key: "appointment_date", label: "Appointment Date" },
+  { key: "appointment_time", label: "Appointment Time" },
+  { key: "timezone", label: "Time Zone" },
+  { key: "meeting_type", label: "Meeting Type" },
+  { key: "meeting_link", label: "Meeting Link" },
+  { key: "assigned_specialist_id", label: "Assigned Specialist" },
+  { key: "appointment_notes", label: "Appointment Notes" },
+  { key: "client_feedback", label: "Client Feedback" },
+  { key: "status", label: "Status" },
+];
+
+type LeadgenAppointmentEditableFields = Pick<
+  LeadgenAppointmentRow,
+  | "business_name"
+  | "contact_name"
+  | "phone"
+  | "email"
+  | "appointment_date"
+  | "appointment_time"
+  | "timezone"
+  | "meeting_type"
+  | "meeting_link"
+  | "assigned_specialist_id"
+  | "appointment_notes"
+  | "client_feedback"
+  | "status"
+>;
+
+// "Edit Appointment" (brief: administrator controls to edit an existing
+// booked appointment). Always an UPDATE against the same row by id - never
+// an insert - so the appointment count, its booking_agent_id attribution,
+// and any already-awarded incentive can never duplicate from an edit.
+// Every changed field is diffed against the row's prior values and logged
+// to the lead's activity timeline as one "old -> new" entry per brief
+// ("save the old and new details in the activity log"), and optionally
+// resends the confirmation - reusing sendLeadgenAppointmentEmail exactly
+// as the standalone "Resend Confirmation" button does, so it always
+// reflects the just-saved details and the prospect's latest saved email,
+// never a stale snapshot.
 export async function updateAppointmentAction(appointmentId: string, formData: FormData): Promise<ActionResult> {
   const adminUser = await requireLeadgenAdmin();
+
+  const businessName = String(formData.get("business_name") ?? "").trim();
+  if (!businessName) return { error: "Business name is required." };
+
+  const appointmentDate = String(formData.get("appointment_date") ?? "").trim();
+  const appointmentTime = String(formData.get("appointment_time") ?? "").trim();
+  if (!appointmentDate || !appointmentTime) return { error: "Appointment date and time are required." };
+
+  const meetingType = String(formData.get("meeting_type") ?? "").trim();
+  if (!LEADGEN_MEETING_TYPES.includes(meetingType as LeadgenMeetingType)) return { error: "Select a meeting type." };
+
   const status = String(formData.get("status") ?? "").trim();
   if (!LEADGEN_APPOINTMENT_STATUSES.includes(status as LeadgenAppointmentStatus)) return { error: "Invalid status." };
 
@@ -201,23 +264,39 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
 
   const supabase = await createSupabaseServerClient();
 
+  // Fetched in full (not just incentive_status) so every editable field
+  // can be diffed against its prior value below.
+  const { data: existing } = await supabase.from("leadgen_appointments").select("*").eq("id", appointmentId).maybeSingle();
+  if (!existing) return { error: "Appointment not found." };
+  const existingAppointment = existing as LeadgenAppointmentRow;
+
   // Only stamp incentive_status_set_by/at when the reviewed value is
   // actually changing - otherwise every unrelated "Save" on this form
   // (e.g. editing the meeting link) would keep resetting "when this was
-  // reviewed", which would misrepresent the incentive audit trail.
-  const { data: existing } = await supabase.from("leadgen_appointments").select("incentive_status").eq("id", appointmentId).maybeSingle();
-  const incentiveStatusChanged = (existing?.incentive_status ?? null) !== incentiveStatus;
+  // reviewed", which would misrepresent the incentive audit trail (and,
+  // per the brief, never award/re-stamp an incentive twice from an edit).
+  const incentiveStatusChanged = (existingAppointment.incentive_status ?? null) !== incentiveStatus;
+
+  const updatedFields: LeadgenAppointmentEditableFields = {
+    business_name: businessName,
+    contact_name: textOrNull(formData, "contact_name"),
+    phone: textOrNull(formData, "phone"),
+    email: textOrNull(formData, "email"),
+    appointment_date: appointmentDate,
+    appointment_time: appointmentTime,
+    timezone: String(formData.get("timezone") ?? "").trim() || existingAppointment.timezone,
+    meeting_type: meetingType as LeadgenMeetingType,
+    meeting_link: textOrNull(formData, "meeting_link"),
+    assigned_specialist_id: textOrNull(formData, "assigned_specialist_id"),
+    appointment_notes: textOrNull(formData, "appointment_notes"),
+    client_feedback: textOrNull(formData, "client_feedback"),
+    status: status as LeadgenAppointmentStatus,
+  };
 
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .update({
-      status,
-      appointment_date: String(formData.get("appointment_date") ?? "").trim() || undefined,
-      appointment_time: String(formData.get("appointment_time") ?? "").trim() || undefined,
-      meeting_link: textOrNull(formData, "meeting_link"),
-      assigned_specialist_id: textOrNull(formData, "assigned_specialist_id"),
-      appointment_notes: textOrNull(formData, "appointment_notes"),
-      client_feedback: textOrNull(formData, "client_feedback"),
+      ...updatedFields,
       confirmation_sent: formData.get("confirmation_sent") === "true",
       incentive_status: incentiveStatus,
       incentive_status_reason: incentiveStatusReason,
@@ -233,12 +312,17 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
   if (error) return { error: "Failed to update the appointment." };
 
   if (appointment?.lead_id) {
-    await supabase.from("leadgen_lead_activities").insert({
-      lead_id: appointment.lead_id,
-      agent_id: null,
-      activity_type: "appointment_updated",
-      notes: `Appointment status changed to "${status}".`,
-    });
+    const changedLines = EDITABLE_APPOINTMENT_FIELDS.filter(({ key }) => (existingAppointment[key] ?? null) !== (updatedFields[key] ?? null)).map(
+      ({ key, label }) => `${label}: "${existingAppointment[key] ?? "—"}" -> "${updatedFields[key] ?? "—"}"`
+    );
+    if (changedLines.length > 0) {
+      await supabase.from("leadgen_lead_activities").insert({
+        lead_id: appointment.lead_id,
+        agent_id: null,
+        activity_type: "appointment_updated",
+        notes: `Appointment edited by ${adminUser.full_name || adminUser.email}:\n${changedLines.join("\n")}`,
+      });
+    }
   }
 
   revalidatePath("/leadgen/admin/appointments");
@@ -247,6 +331,20 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
     revalidatePath("/leadgen/admin/incentives");
     revalidatePath("/leadgen/agent");
   }
+
+  // "Offer a checkbox to send the updated confirmation to the prospect's
+  // latest saved email" - reuses the exact same send/log path as the
+  // standalone "Resend Confirmation" button (never a bespoke email here),
+  // fetching the appointment fresh so it reflects what was just saved
+  // above, and resolving the recipient via the lead's current email
+  // first (resolveAppointmentEmailRecipient), never a stale snapshot.
+  // Never touches the appointment count, booking_agent_id, or incentive
+  // fields - sendLeadgenAppointmentEmail only sends and logs.
+  if (formData.get("send_updated_confirmation") === "true") {
+    const sendResult = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "resend_confirmation");
+    if (sendResult.error) return { error: `Appointment saved, but the confirmation email failed to send: ${sendResult.error}` };
+  }
+
   return {};
 }
 
