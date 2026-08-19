@@ -30,6 +30,7 @@ export default function LeadsListClient({
   campaigns,
   agents,
   appointmentStatusByLeadId,
+  appointmentIdByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
   initialAppointmentStatusFilter,
@@ -45,6 +46,11 @@ export default function LeadsListClient({
   // Most recent appointment status per lead_id, for the Appointment
   // Status column - a lead with no appointment simply has no entry here.
   appointmentStatusByLeadId?: Record<string, LeadgenAppointmentStatus>;
+  // That same most-recent appointment's id per lead_id - powers the
+  // "Manage" link beside "Delete" (only shown when a lead actually has
+  // an appointment to manage), which deep-links to that appointment's
+  // edit panel on /leadgen/admin/appointments.
+  appointmentIdByLeadId?: Record<string, string>;
   initialSuccessMessage?: string | null;
   // Pre-select a filter when landing here from the admin dashboard's
   // clickable stat cards or Results by Agent chart (see
@@ -490,14 +496,24 @@ export default function LeadsListClient({
                     {lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : "—"}
                   </td>
                   <td className="p-3">
-                    <button
-                      type="button"
-                      disabled={isPending || deletingLeadId === lead.id}
-                      onClick={() => handleDeleteLead(lead)}
-                      className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      {appointmentIdByLeadId?.[lead.id] && (
+                        <Link
+                          href={`/leadgen/admin/appointments?highlight=${appointmentIdByLeadId[lead.id]}`}
+                          className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-700 hover:bg-sky-100"
+                        >
+                          Manage
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        disabled={isPending || deletingLeadId === lead.id}
+                        onClick={() => handleDeleteLead(lead)}
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

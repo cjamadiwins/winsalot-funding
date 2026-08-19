@@ -43,14 +43,23 @@ export default async function LeadgenLeadsPage({
     admin.from("leadgen_campaigns").select("*").order("name"),
     admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
     // Most recent appointment per lead, for the Appointment Status
-    // column - ordered oldest-first so the reduce below keeps the last
-    // (most recent) one per lead_id.
-    admin.from("leadgen_appointments").select("lead_id, status, created_at").order("created_at", { ascending: true }),
+    // column and the "Manage" link beside Delete (below) - ordered
+    // oldest-first so the reduce below keeps the last (most recent) one
+    // per lead_id.
+    admin.from("leadgen_appointments").select("id, lead_id, status, created_at").order("created_at", { ascending: true }),
   ]);
 
   const appointmentStatusByLeadId: Record<string, LeadgenAppointmentStatus> = {};
+  // "Manage" (beside "Delete") deep-links into the same appointment
+  // edit panel already on /leadgen/admin/appointments (via ?highlight=)
+  // instead of a second copy of that form here - one editable appointment
+  // form, not two that could drift apart.
+  const appointmentIdByLeadId: Record<string, string> = {};
   for (const appt of appointments ?? []) {
-    if (appt.lead_id) appointmentStatusByLeadId[appt.lead_id] = appt.status;
+    if (appt.lead_id) {
+      appointmentStatusByLeadId[appt.lead_id] = appt.status;
+      appointmentIdByLeadId[appt.lead_id] = appt.id;
+    }
   }
 
   return (
@@ -74,6 +83,7 @@ export default async function LeadgenLeadsPage({
         campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         appointmentStatusByLeadId={appointmentStatusByLeadId}
+        appointmentIdByLeadId={appointmentIdByLeadId}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
         initialStatusFilter={status}
         initialAppointmentStatusFilter={appointment_status}
