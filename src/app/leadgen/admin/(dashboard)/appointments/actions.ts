@@ -17,7 +17,7 @@ import {
   type LeadgenMeetingType,
 } from "@/lib/leadgen-types";
 
-type ActionResult = { error?: string };
+type ActionResult = { error?: string; message?: string };
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -343,9 +343,10 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
   if (formData.get("send_updated_confirmation") === "true") {
     const sendResult = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "resend_confirmation");
     if (sendResult.error) return { error: `Appointment saved, but the confirmation email failed to send: ${sendResult.error}` };
+    return { message: "Appointment saved and the updated confirmation was resent." };
   }
 
-  return {};
+  return { message: "Appointment saved." };
 }
 
 // Dedicated "Cancel/Replace Appointment" admin action (distinct from the

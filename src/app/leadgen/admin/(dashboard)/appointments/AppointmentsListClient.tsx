@@ -18,6 +18,7 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
+import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailConfirmModal";
 import {
   bookAppointmentAction,
   cancelOrReplaceAppointmentAction,
@@ -66,6 +67,27 @@ export default function AppointmentsListClient({
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  // Result of the last "Save" on the Manage edit panel, shown inline in
+  // that appointment's panel (distinct from the page-level `error` above,
+  // which the resend/reminder confirm modals below already surface their
+  // own way) - so "was the resend I just asked for actually sent?" is
+  // answered right where the admin is looking.
+  const [manageResult, setManageResult] = useState<{ id: string; text: string } | null>(null);
+  // Pending "Save & Resend" submission on the Manage edit panel, waiting
+  // on the confirmation window below (brief: "Ask for confirmation before
+  // resending the email") - holds the already-built FormData so
+  // confirming sends exactly what the admin just filled in, with nothing
+  // re-read or re-typed.
+  const [pendingResend, setPendingResend] = useState<{
+    appointmentId: string;
+    formData: FormData;
+    businessName: string;
+    contactName: string | null;
+    email: string | null;
+    appointmentDate: string;
+    appointmentTime: string;
+    timezone: string;
+  } | null>(null);
   const highlightRef = useRef<HTMLTableRowElement>(null);
 
   // "A direct link to open the appointment in the CRM" (brief, admin
@@ -80,12 +102,46 @@ export default function AppointmentsListClient({
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const selectedLead = selectedLeadId ? leadById.get(selectedLeadId) : null;
 
-  function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
+  function runAction(fn: () => Promise<{ error?: string; message?: string } | void>, onSuccess?: (message?: string) => void) {
     setError(null);
     startTransition(async () => {
       const result = await fn();
       if (result && "error" in result && result.error) setError(result.error);
-      else onSuccess?.();
+      else onSuccess?.(result && "message" in result ? result.message : undefined);
+    });
+  }
+
+  function handleManageSubmit(appointment: LeadgenAppointmentRow, e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setManageResult(null);
+    const formData = new FormData(e.currentTarget);
+    if (formData.get("send_updated_confirmation") !== "true") {
+      runAction(
+        () => updateAppointmentAction(appointment.id, formData),
+        (message) => setManageResult({ id: appointment.id, text: message ?? "Appointment saved." })
+      );
+      return;
+    }
+    // Resend requested - hold off on saving/sending until the admin
+    // confirms in the window below, reusing the same confirmation
+    // component the standalone "Resend Appointment Notification" button
+    // uses so the experience (and success/failure messaging) matches.
+    const lead = leadById.get(appointment.lead_id ?? "");
+    setPendingResend({
+      appointmentId: appointment.id,
+      formData,
+      businessName: String(formData.get("business_name") ?? ""),
+      contactName: String(formData.get("contact_name") ?? "") || null,
+      // The email that will actually receive it: the lead's own saved
+      // email takes priority server-side (resolveAppointmentEmailRecipient)
+      // over whatever is typed into this appointment's Email field, so the
+      // preview must match that same resolution or it would promise a
+      // recipient the send won't actually use.
+      email: lead?.email ?? (String(formData.get("email") ?? "") || null),
+      appointmentDate: String(formData.get("appointment_date") ?? ""),
+      appointmentTime: String(formData.get("appointment_time") ?? ""),
+      timezone: String(formData.get("timezone") ?? ""),
     });
   }
 
@@ -288,7 +344,7 @@ export default function AppointmentsListClient({
                 <th className="p-3">Type</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Incentive</th>
-                <th className="p-3">Actions</th>
+                <th className="sticky right-0 z-10 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -322,11 +378,19 @@ export default function AppointmentsListClient({
                         {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                       </span>
                     </td>
-                    <td className="p-3">
+                    <td
+                      className={`sticky right-0 z-10 p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)] ${
+                        appt.id === highlightId ? "bg-amber-50" : "bg-[var(--crm-surface)]"
+                      }`}
+                    >
                       <div className="flex flex-wrap gap-3">
                         <button
                           type="button"
-                          onClick={() => setEditingId(editingId === appt.id ? null : appt.id)}
+                          onClick={() => {
+                            setManageResult(null);
+                            setPendingResend(null);
+                            setEditingId(editingId === appt.id ? null : appt.id);
+                          }}
                           className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
                         >
                           {editingId === appt.id ? "Close" : "Manage"}
@@ -406,7 +470,7 @@ export default function AppointmentsListClient({
                     <tr>
                       <td colSpan={7} className="bg-slate-50 p-4">
                         <form
-                          action={(formData) => runAction(() => updateAppointmentAction(appt.id, formData))}
+                          onSubmit={(e) => handleManageSubmit(appt, e)}
                           className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                         >
                           <p className="text-[12.5px] text-slate-600 sm:col-span-2">
@@ -528,12 +592,39 @@ export default function AppointmentsListClient({
                                 hidden.value = e.currentTarget.checked ? "true" : "false";
                               }}
                             />
-                            Send the updated confirmation to the prospect&apos;s latest saved email
+                            Send the updated confirmation to the prospect&apos;s latest saved email (you&apos;ll be asked to
+                            confirm before it sends)
                           </label>
+                          {manageResult?.id === appt.id && (
+                            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700 sm:col-span-2">
+                              {manageResult.text}
+                            </p>
+                          )}
                           <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
                             {isPending ? "Saving…" : "Save"}
                           </button>
                         </form>
+                        {pendingResend?.appointmentId === appt.id && (
+                          <AppointmentEmailConfirmModal
+                            mode="resend"
+                            businessName={pendingResend.businessName}
+                            contactName={pendingResend.contactName}
+                            email={pendingResend.email}
+                            appointmentDate={pendingResend.appointmentDate}
+                            appointmentTime={pendingResend.appointmentTime}
+                            timezone={pendingResend.timezone}
+                            note="Your other edits on this form will be saved at the same time."
+                            onClose={() => setPendingResend(null)}
+                            onConfirm={async () => {
+                              const result = await updateAppointmentAction(pendingResend.appointmentId, pendingResend.formData);
+                              if (!result?.error) {
+                                setManageResult({ id: pendingResend.appointmentId, text: result?.message ?? "Appointment saved and confirmation resent." });
+                              }
+                              return result;
+                            }}
+                            onSent={() => setPendingResend(null)}
+                          />
+                        )}
                       </td>
                     </tr>
                   )}
