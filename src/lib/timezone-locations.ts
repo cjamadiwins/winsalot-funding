@@ -35,9 +35,10 @@ export type CityOption = {
   timeZone: string;
   fact: string;
   // City-center coordinates, used only for the Client Local Time weather
-  // lookup (src/lib/weather.ts) - deliberately explicit per city rather
-  // than geocoded from the city name at request time, since several
-  // names in this table are ambiguous on their own (two Portlands, two
+  // lookup (ClientLocalTimePanel.tsx, via Open-Meteo) - deliberately
+  // explicit per city rather than geocoded from the city name at request
+  // time, since several names in this table are ambiguous on their own
+  // (two Portlands, two
   // Charlestons, London ON vs. London UK, etc.) and a name-based lookup
   // could silently resolve to the wrong place.
   lat: number;
