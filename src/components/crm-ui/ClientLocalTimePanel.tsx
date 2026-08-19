@@ -1,7 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock3, Pencil, RotateCcw, Globe2, Briefcase } from "lucide-react";
+import {
+  Clock3,
+  Pencil,
+  RotateCcw,
+  Globe2,
+  Briefcase,
+  Sun,
+  Moon,
+  CloudSun,
+  CloudMoon,
+  Cloud,
+  CloudDrizzle,
+  CloudRain,
+  CloudLightning,
+  Snowflake,
+  CloudFog,
+  Wind,
+  type LucideIcon,
+} from "lucide-react";
 import {
   resolveLocation,
   findCity,
@@ -12,9 +30,139 @@ import {
 } from "@/lib/timezone-locations";
 import { getNigeriaTimeDiffLabel, getCallingStatus, BUSINESS_HOURS_LABEL, type CallingStatusLevel } from "@/lib/market-snapshot";
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
+import type { WeatherData, WeatherIconKind, WeatherResult } from "@/lib/weather";
 import EditLocationsModal from "./EditLocationsModal";
 import CitySkyline, { isNightAt } from "./CitySkyline";
 import FlagIcon from "./FlagIcon";
+
+// Refresh interval for each card's live weather - "a sensible interval,
+// such as every 30 minutes," matched to the server's own 30-minute
+// OpenWeatherMap cache window (src/lib/weather.ts) so a refetch almost
+// always just picks up the same cached upstream reading rather than
+// forcing a new one.
+const WEATHER_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+const WEATHER_ICONS: Record<WeatherIconKind, LucideIcon> = {
+  sun: Sun,
+  moon: Moon,
+  "partly-cloudy-day": CloudSun,
+  "partly-cloudy-night": CloudMoon,
+  cloudy: Cloud,
+  drizzle: CloudDrizzle,
+  rain: CloudRain,
+  thunderstorm: CloudLightning,
+  snow: Snowflake,
+  fog: CloudFog,
+  wind: Wind,
+};
+
+function celsiusToFahrenheit(celsius: number): number {
+  return (celsius * 9) / 5 + 32;
+}
+
+function formatTemp(celsius: number, unit: "C" | "F"): string {
+  const value = unit === "C" ? celsius : celsiusToFahrenheit(celsius);
+  return `${Math.round(value)}°${unit}`;
+}
+
+// Fetches (and re-fetches every 30 minutes, or immediately when the
+// selected city itself changes) this location's weather from our own
+// /api/weather route - never OpenWeatherMap directly, so the API key
+// never has to exist in browser-side code. Keeps whatever data it last
+// had while a refresh is in flight (no flicker to a loading state every
+// 30 minutes), and only ever shows the graceful fallback when a fetch
+// actually fails, not while a good reading is just waiting to be
+// replaced by a newer one.
+function useCityWeather(country: LocationCountry, regionCode: string, city: string): { data: WeatherData | null; error: boolean } {
+  const [data, setData] = useState<WeatherData | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const params = new URLSearchParams({ country, regionCode, city });
+        const response = await fetch(`/api/weather?${params.toString()}`);
+        const result = (await response.json()) as WeatherResult;
+        if (cancelled) return;
+        if (!response.ok || "error" in result) {
+          setError(true);
+          return;
+        }
+        setError(false);
+        setData(result.data);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    }
+
+    load();
+    const id = setInterval(load, WEATHER_REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [country, regionCode, city]);
+
+  return { data, error };
+}
+
+// The weather block within each Client Local Time card - current
+// condition/icon/temp, "feels like," today's high/low, and a "Last
+// updated" time, with a small °C/°F toggle (defaulting to the unit the
+// selected city's own country uses). Given its own `key` by the caller
+// (city triple), so switching cities via Edit Locations remounts this
+// fresh - clearing stale data and re-defaulting the unit - rather than
+// needing separate reset logic.
+function WeatherBlock({ location }: { location: SavedLocation }) {
+  const [unit, setUnit] = useState<"C" | "F">(location.country === "US" ? "F" : "C");
+  const { data, error } = useCityWeather(location.country, location.regionCode, location.city);
+  const Icon = data ? WEATHER_ICONS[data.icon] : null;
+
+  return (
+    <div className="mt-3 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
+      {error ? (
+        <p className="text-[11px] font-medium text-[var(--crm-text-muted,#6b7c90)]">Weather temporarily unavailable</p>
+      ) : !data || !Icon ? (
+        <div className="h-11 animate-pulse rounded-lg bg-[var(--crm-bg-2,#eaf0f6)]" aria-hidden="true" />
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Icon className="h-7 w-7 shrink-0 text-[var(--crm-accent,#3e7ef7)]" strokeWidth={2} aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-extrabold leading-none text-[var(--crm-text,#17283b)] sm:text-lg">
+                    {formatTemp(data.tempC, unit)}
+                  </span>
+                  <span className="truncate text-[11px] font-bold text-[var(--crm-text-soft,#4b5c71)]">{data.condition}</span>
+                </div>
+                <div className="mt-0.5 text-[10.5px] text-[var(--crm-text-muted,#6b7c90)]">
+                  Feels like {formatTemp(data.feelsLikeC, unit)} · H:{formatTemp(data.highC, unit)} L:{formatTemp(data.lowC, unit)}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUnit((u) => (u === "C" ? "F" : "C"))}
+              className="shrink-0 rounded-full border border-[var(--crm-border,#dce4ec)] px-2 py-1 text-[10.5px] font-bold text-[var(--crm-text-soft,#4b5c71)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+              aria-label={`Switch to ${unit === "C" ? "Fahrenheit" : "Celsius"}`}
+            >
+              °{unit === "C" ? "F" : "C"}
+            </button>
+          </div>
+          <div className="mt-1 text-[10px] text-[var(--crm-text-muted,#6b7c90)]" suppressHydrationWarning>
+            Last updated{" "}
+            {new Intl.DateTimeFormat("en-US", { timeZone: location.timeZone, hour: "numeric", minute: "2-digit", hour12: true }).format(
+              new Date(data.observedAt)
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // Configurable "Client Local Time" panel shown at the top of every
 // logged-in CRM dashboard (Cleaning + Lead Gen, admin + agent). Each user
@@ -115,7 +263,9 @@ function LocationCard({ location, now }: { location: SavedLocation; now: Date | 
           {formatted ? `${formatted.dateLabel} · ${formatted.zoneAbbr}` : ""}
         </div>
 
-        {/* Market Snapshot - compact, no weather/population/long copy per spec */}
+        <WeatherBlock key={`${location.country}-${location.regionCode}-${location.city}`} location={location} />
+
+        {/* Market Snapshot */}
         <div className="mt-3 space-y-1.5 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
             <Globe2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
