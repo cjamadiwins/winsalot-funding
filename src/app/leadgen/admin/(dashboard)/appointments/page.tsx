@@ -2,6 +2,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderSettings, fetchLeadgenAppointmentReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
+import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
 import AppointmentsListClient from "./AppointmentsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -33,6 +34,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
   }
 
   const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
+  const businessReminderStatusByAppointmentId = await fetchLeadgenBusinessAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
 
   return (
     <div>
@@ -47,6 +49,7 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
         leads={(leads ?? []) as Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">[]}
         latestEmailByAppointmentId={latestEmailByAppointmentId}
         automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
+        businessReminderStatusByAppointmentId={businessReminderStatusByAppointmentId}
         reminderSettings={reminderSettings}
         highlightId={highlight}
       />

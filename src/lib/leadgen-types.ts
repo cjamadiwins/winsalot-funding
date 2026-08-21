@@ -625,6 +625,84 @@ export function leadgenAppointmentReminderDisplayStatus(
   return "Sending";
 }
 
+// Automatic BUSINESS-facing appointment reminders (supabase/migrations/
+// 0068_leadgen_business_appointment_reminders.sql) - reminds the CRM
+// client (e.g. Brent's Essentials, via leadgen_clients.contact_email)
+// that one of THEIR booked/confirmed appointments is coming up, 24 hours
+// and again 1 hour before it. Deliberately a separate table/type/job from
+// the prospect-facing reminder above - see the migration's header comment
+// for why. See lib/leadgen-business-appointment-reminders.ts for the
+// eligibility/claim/send logic.
+export const LEADGEN_BUSINESS_APPOINTMENT_REMINDER_TYPES = ["24_hour_reminder", "1_hour_reminder"] as const;
+export type LeadgenBusinessAppointmentReminderType = (typeof LEADGEN_BUSINESS_APPOINTMENT_REMINDER_TYPES)[number];
+
+export const LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUSES = ["sending", "sent", "failed"] as const;
+export type LeadgenBusinessAppointmentReminderStatus = (typeof LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUSES)[number];
+
+export type LeadgenBusinessAppointmentReminderRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  appointment_id: string;
+  lead_id: string | null;
+  reminder_type: LeadgenBusinessAppointmentReminderType;
+  occurrence_key: string;
+  scheduled_appointment_at: string;
+  status: LeadgenBusinessAppointmentReminderStatus;
+  recipient_email: string | null;
+  email_id: string | null;
+  resend_message_id: string | null;
+  error_detail: string | null;
+  attempt_count: number;
+  sent_at: string | null;
+};
+
+export type LeadgenBusinessAppointmentReminderSettingsRow = {
+  id: string;
+  automatic_reminders_enabled: boolean;
+  updated_at: string;
+  updated_by_name: string | null;
+};
+
+// The brief's requested four-value status shown "on the appointment
+// record": Scheduled / Sent / Failed / Cancelled. Unlike the richer
+// Sent/Delivered/Bounced/Failed badge above (which tracks a single
+// prospect-facing send through the Resend webhook pipeline), this
+// combines BOTH the 24-hour and 1-hour reminder slots for one appointment
+// into a single label:
+// - "Cancelled": the appointment itself is no longer Booked/Confirmed
+//   (cancelled, rescheduled-away, completed, no-show, replaced) - neither
+//   reminder will ever send for this occurrence.
+// - "Sent": the later (1-hour) reminder has already gone out, so nothing
+//   further is pending for this appointment.
+// - "Failed": either slot's claimed send failed and the other hasn't
+//   already succeeded to supersede it.
+// - "Scheduled": still eligible and waiting on one or both future sends
+//   (the common case for a newly booked appointment).
+export type LeadgenBusinessAppointmentReminderDisplayStatus = "Scheduled" | "Sent" | "Failed" | "Cancelled";
+
+export const LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES: Record<LeadgenBusinessAppointmentReminderDisplayStatus, string> = {
+  Scheduled: "bg-sky-100 text-sky-800",
+  Sent: "bg-emerald-100 text-emerald-800",
+  Failed: "bg-rose-100 text-rose-800",
+  Cancelled: "bg-slate-200 text-slate-500",
+};
+
+export function leadgenBusinessAppointmentReminderDisplayStatus(
+  isAppointmentCurrentlyBookedOrConfirmed: boolean,
+  reminder24h: LeadgenBusinessAppointmentReminderRow | null,
+  reminder1h: LeadgenBusinessAppointmentReminderRow | null
+): LeadgenBusinessAppointmentReminderDisplayStatus {
+  // A completed send is never retroactively relabeled "Cancelled" just
+  // because the appointment later moved to e.g. Completed/No-show - the
+  // reminder genuinely went out.
+  if (reminder1h?.status === "sent") return "Sent";
+  if (!isAppointmentCurrentlyBookedOrConfirmed) return "Cancelled";
+  if (reminder1h?.status === "failed") return "Failed";
+  if (reminder24h?.status === "failed") return "Failed";
+  return "Scheduled";
+}
+
 // Small, self-contained province list (deliberately not shared with the
 // cleaning CRM's lib/provider-types.ts - see file header).
 export const LEADGEN_PROVINCES = [

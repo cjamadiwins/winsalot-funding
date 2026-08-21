@@ -8,8 +8,10 @@ import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES,
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES,
   LEADGEN_MEETING_TYPES,
   type LeadgenAppointmentReminderSettingsRow,
+  type LeadgenBusinessAppointmentReminderDisplayStatus,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -40,6 +42,7 @@ export default function AppointmentsListClient({
   leads,
   latestEmailByAppointmentId,
   automaticReminderStatusByAppointmentId,
+  businessReminderStatusByAppointmentId,
   reminderSettings,
   highlightId,
 }: {
@@ -55,6 +58,10 @@ export default function AppointmentsListClient({
   // "Automatic reminder: Scheduled/Sent/Delivered/.../Not scheduled"
   // label per appointment id (brief EMAIL TRACKING).
   automaticReminderStatusByAppointmentId?: Record<string, string>;
+  // "Business Reminder: Scheduled/Sent/Failed/Cancelled" - the
+  // client-facing (e.g. Brent's Essentials) 24-hour + 1-hour reminder
+  // status, distinct from the prospect-facing one above.
+  businessReminderStatusByAppointmentId?: Record<string, LeadgenBusinessAppointmentReminderDisplayStatus>;
   // Current leadgen_appointment_reminder_settings row (brief "ADMIN
   // SETTINGS").
   reminderSettings: LeadgenAppointmentReminderSettingsRow;
@@ -344,6 +351,7 @@ export default function AppointmentsListClient({
                 <th className="p-3">Type</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Incentive</th>
+                <th className="p-3">Business Reminder</th>
                 <th className="sticky right-0 z-10 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)]">Actions</th>
               </tr>
             </thead>
@@ -377,6 +385,17 @@ export default function AppointmentsListClient({
                       >
                         {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                       </span>
+                    </td>
+                    <td className="p-3">
+                      {businessReminderStatusByAppointmentId?.[appt.id] && (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id]]
+                          }`}
+                        >
+                          {businessReminderStatusByAppointmentId[appt.id]}
+                        </span>
+                      )}
                     </td>
                     <td
                       className={`sticky right-0 z-10 p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)] ${
@@ -427,7 +446,7 @@ export default function AppointmentsListClient({
                   </tr>
                   {cancelingId === appt.id && (
                     <tr>
-                      <td colSpan={7} className="bg-rose-50 p-4">
+                      <td colSpan={8} className="bg-rose-50 p-4">
                         <form
                           action={(formData) =>
                             runAction(() => cancelOrReplaceAppointmentAction(appt.id, formData), () => setCancelingId(null))
@@ -468,7 +487,7 @@ export default function AppointmentsListClient({
                   )}
                   {editingId === appt.id && (
                     <tr>
-                      <td colSpan={7} className="bg-slate-50 p-4">
+                      <td colSpan={8} className="bg-slate-50 p-4">
                         <form
                           onSubmit={(e) => handleManageSubmit(appt, e)}
                           className="grid grid-cols-1 gap-3 sm:grid-cols-2"
