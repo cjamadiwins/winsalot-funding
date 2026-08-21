@@ -6,7 +6,9 @@ import {
   LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
   LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES,
   type LeadgenAppointmentRow,
+  type LeadgenBusinessAppointmentReminderDisplayStatus,
   type LeadgenEmailRow,
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
@@ -19,6 +21,7 @@ export default function AgentAppointmentsListClient({
   leadContactByLeadId,
   latestEmailByAppointmentId,
   automaticReminderStatusByAppointmentId,
+  businessReminderStatusByAppointmentId,
 }: {
   appointments: LeadgenAppointmentRow[];
   // The lead's currently saved email/contact name, keyed by lead_id - the
@@ -28,6 +31,7 @@ export default function AgentAppointmentsListClient({
   leadContactByLeadId: Record<string, LeadContact>;
   latestEmailByAppointmentId: Record<string, LeadgenEmailRow>;
   automaticReminderStatusByAppointmentId: Record<string, string>;
+  businessReminderStatusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderDisplayStatus>;
 }) {
   return (
     <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
@@ -42,6 +46,7 @@ export default function AgentAppointmentsListClient({
               <th className="p-3">Type</th>
               <th className="p-3">Status</th>
               <th className="p-3">Incentive</th>
+              <th className="p-3">Business Reminder</th>
               <th className="p-3">Lead</th>
               <th className="p-3">Actions</th>
             </tr>
@@ -68,6 +73,17 @@ export default function AgentAppointmentsListClient({
                     >
                       {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                     </span>
+                  </td>
+                  <td className="p-3">
+                    {businessReminderStatusByAppointmentId[appt.id] && (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id]]
+                        }`}
+                      >
+                        {businessReminderStatusByAppointmentId[appt.id]}
+                      </span>
+                    )}
                   </td>
                   <td className="p-3">
                     {appt.lead_id && (
