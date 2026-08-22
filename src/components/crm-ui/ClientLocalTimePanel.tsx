@@ -215,12 +215,6 @@ function LocationCard({
   photoHero?: boolean;
 }) {
   const formatted = now ? formatClock(now, location.timeZone) : null;
-  // Seconds-free "11:42 PM" for the photoHero variant's large overlay
-  // clock - formatClock's `time` includes seconds for the default
-  // card's live-ticking display, which would be too fussy at hero size.
-  const heroTime = now
-    ? new Intl.DateTimeFormat("en-US", { timeZone: location.timeZone, hour: "numeric", minute: "2-digit", hour12: true }).format(now)
-    : "--:--";
   const region = findRegion(location.country, location.regionCode);
   const city = findCity(location.country, location.regionCode, location.city);
   const callingStatus = now ? getCallingStatus(now, location.timeZone) : null;
@@ -254,10 +248,10 @@ function LocationCard({
           )}
           <div className="absolute inset-x-5 bottom-4">
             <div
-              className="font-mono text-[32px] font-extrabold leading-none tabular-nums text-white drop-shadow-lg sm:text-[38px]"
+              className="font-mono text-[28px] font-extrabold leading-none tabular-nums text-white drop-shadow-lg sm:text-[33px]"
               suppressHydrationWarning
             >
-              {heroTime}
+              {formatted ? formatted.time : "--:--:-- --"}
             </div>
             <div className="mt-1.5 flex items-baseline gap-2.5" suppressHydrationWarning>
               {weather.error ? (

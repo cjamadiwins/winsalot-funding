@@ -65,7 +65,7 @@ export default function ResultsByAgentConversion({
           type="button"
           onClick={() => setFilter(option)}
           className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
-            filter === option ? "bg-sky-600 text-white" : "text-slate-500 hover:text-slate-900"
+            filter === option ? "bg-[var(--crm-accent,#3e7ef7)] text-white" : "text-slate-500 hover:text-slate-900"
           }`}
         >
           {CRM_RESULTS_DATE_FILTER_LABEL[option]}

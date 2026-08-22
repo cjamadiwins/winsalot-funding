@@ -56,10 +56,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
-    <div className="crm-theme">
+    <div className="crm-theme crm-theme--cleaning">
       <CrmShell
-        brandTitle="Winsalot Corp. Cleaning CRM"
-        brandSubtitle="Empowering Businesses. One Solution at a Time."
+        brandTitle="Cleaning CRM"
+        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandLogoSrc="/winsalot-logo.png"
         homeHref="/admin"
         navItems={NAV_ITEMS}
         userLabel={user.email}
@@ -68,6 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           initialPreferences: timeZonePreferences,
           saveLocationsAction: saveUserTimeZonePreferences,
           resetLocationsAction: resetUserTimeZonePreferences,
+          cardVariant: "photoHero",
         }}
         rightSlot={
           <NotificationBell

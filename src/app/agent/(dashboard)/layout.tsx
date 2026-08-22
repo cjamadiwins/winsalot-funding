@@ -51,10 +51,11 @@ export default async function AgentLayout({ children }: { children: ReactNode })
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
-    <div className="crm-theme">
+    <div className="crm-theme crm-theme--cleaning">
       <CrmShell
-        brandTitle="Winsalot Corp. Cleaning CRM"
-        brandSubtitle="Empowering Businesses. One Solution at a Time."
+        brandTitle="Cleaning CRM"
+        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandLogoSrc="/winsalot-logo.png"
         homeHref="/agent/dashboard"
         navItems={NAV_ITEMS}
         userLabel={crmUser.full_name || crmUser.email}
@@ -63,6 +64,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
           initialPreferences: timeZonePreferences,
           saveLocationsAction: saveUserTimeZonePreferences,
           resetLocationsAction: resetUserTimeZonePreferences,
+          cardVariant: "photoHero",
         }}
         rightSlot={
           <NotificationBell
