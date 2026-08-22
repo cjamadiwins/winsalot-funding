@@ -233,7 +233,6 @@ function LocationCard({
           seed={`${location.country}-${location.regionCode}-${location.city}`}
           alt={`${location.city} skyline`}
           priority
-          className="block h-auto w-full"
         />
 
         <div className="px-5 py-4">
