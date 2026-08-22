@@ -104,6 +104,30 @@ export async function deleteLeadgenCompanyMessageAction(messageId: string): Prom
   return {};
 }
 
+export async function editLeadgenCompanyMessageAction(messageId: string, rawContent: string): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const identity = await resolveIdentity(supabase);
+  if (!identity) return { error: "Your account does not have chat access." };
+
+  const content = sanitizeChatContent(rawContent);
+  if (!content) return { error: "Enter a message (up to 2000 characters)." };
+
+  const { data: existing } = await supabase
+    .from("leadgen_company_messages")
+    .select("id, sender_id, deleted_at")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (!existing) return { error: "Message not found." };
+  if (existing.sender_id !== identity.id) return { error: "You can only edit your own messages." };
+  if (existing.deleted_at) return { error: "This message has been removed." };
+
+  const { error } = await supabase.from("leadgen_company_messages").update({ content }).eq("id", messageId);
+  if (error) return { error: "Failed to save your changes." };
+
+  revalidateChatRoutes();
+  return {};
+}
+
 export async function markLeadgenCompanyChatReadAction(): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const identity = await resolveIdentity(supabase);
@@ -247,6 +271,30 @@ export async function sendLeadgenDmMessageAction(conversationId: string, rawCont
       .update({ title: `${identity.fullName} sent you a message`, body: content.slice(0, 140), created_at: new Date().toISOString() })
       .eq("id", existingNotif.id);
   }
+
+  revalidateChatRoutes();
+  return {};
+}
+
+export async function editLeadgenDmMessageAction(messageId: string, rawContent: string): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const identity = await resolveIdentity(supabase);
+  if (!identity) return { error: "Your account does not have chat access." };
+
+  const content = sanitizeChatContent(rawContent);
+  if (!content) return { error: "Enter a message (up to 2000 characters)." };
+
+  const { data: existing } = await supabase
+    .from("leadgen_dm_messages")
+    .select("id, sender_id, deleted_at")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (!existing) return { error: "Message not found." };
+  if (existing.sender_id !== identity.id) return { error: "You can only edit your own messages." };
+  if (existing.deleted_at) return { error: "This message has been removed." };
+
+  const { error } = await supabase.from("leadgen_dm_messages").update({ content }).eq("id", messageId);
+  if (error) return { error: "Failed to save your changes." };
 
   revalidateChatRoutes();
   return {};
