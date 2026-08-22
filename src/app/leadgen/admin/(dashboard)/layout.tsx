@@ -12,6 +12,7 @@ import {
   BarChart3,
   Clock,
   CalendarOff,
+  MessageSquare,
   Mail,
   UserCog,
   Wallet,
@@ -31,6 +32,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Incentives", href: "/leadgen/admin/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/leadgen/admin/attendance", icon: <Clock /> },
   { label: "Leave Requests", href: "/leadgen/admin/leave-requests", icon: <CalendarOff /> },
+  { label: "Chat", href: "/leadgen/admin/chat", icon: <MessageSquare /> },
   { label: "Email Tracking", href: "/leadgen/admin/emails", icon: <Mail /> },
   { label: "Agents", href: "/leadgen/admin/agents", icon: <UserCog /> },
   { label: "Payroll", href: "/leadgen/admin/payroll", icon: <Wallet /> },
@@ -41,17 +43,24 @@ const NAV_ITEMS: CrmNavItem[] = [
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, { data: chatNotifications }] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("leadgen_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
   ]);
+  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
+  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   // Stays visible until every pending request has been approved or
   // declined - "Keep the Leave Requests navigation badge visible until
   // all pending requests have been reviewed."
-  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
-    item.href === "/leadgen/admin/leave-requests" ? { ...item, badgeCount: pendingLeaveCount ?? 0 } : item
-  );
+  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) => {
+    if (item.href === "/leadgen/admin/leave-requests") return { ...item, badgeCount: pendingLeaveCount ?? 0 };
+    if (item.href === "/leadgen/admin/chat") return { ...item, badgeCount: chatUnreadCount };
+    return item;
+  });
 
   const timeZonePreferences = await getUserTimeZonePreferences();
 
@@ -81,7 +90,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={(notifications ?? []) as LeadgenNotificationRow[]}
+              notifications={allNotifications as LeadgenNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />

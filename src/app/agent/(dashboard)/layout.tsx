@@ -15,6 +15,7 @@ import {
   Clock,
   CalendarDays,
   CalendarOff,
+  MessageSquare,
   BarChart3,
   TrendingUp,
   Wallet,
@@ -36,6 +37,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Attendance", href: "/agent/attendance", icon: <Clock /> },
   { label: "My Attendance", href: "/agent/my-attendance", icon: <CalendarDays /> },
   { label: "Leave Requests", href: "/agent/leave-requests", icon: <CalendarOff /> },
+  { label: "Chat", href: "/agent/chat", icon: <MessageSquare /> },
   { label: "Performance", href: "/agent/performance", icon: <BarChart3 /> },
   { label: "Monthly Performance", href: "/agent/performance/monthly", icon: <TrendingUp /> },
   { label: "My Pay", href: "/agent/pay", icon: <Wallet /> },
@@ -45,11 +47,22 @@ export default async function AgentLayout({ children }: { children: ReactNode })
   const crmUser = await requireCrmUser();
 
   const supabase = await createSupabaseServerClient();
-  const { data: notifications } = await supabase
-    .from("crm_notifications")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [{ data: notifications }, { data: chatNotifications }] = await Promise.all([
+    supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
+    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", crmUser.id).order("created_at", { ascending: false }).limit(20),
+  ]);
+  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
+
+  // The bell shows both this CRM's own notifications and the shared
+  // Employee Chat system's notifications together, newest first - a
+  // single unified list rather than two separate bells.
+  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
+    item.href === "/agent/chat" ? { ...item, badgeCount: chatUnreadCount } : item
+  );
 
   const timeZonePreferences = await getUserTimeZonePreferences();
 
@@ -66,7 +79,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
         }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/agent/dashboard"
-        navItems={NAV_ITEMS}
+        navItems={navItems}
         userLabel={crmUser.full_name || crmUser.email}
         signOutAction={agentSignOutAction}
         clientLocalTime={{
@@ -79,7 +92,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              notifications={allNotifications as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />

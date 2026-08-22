@@ -365,22 +365,22 @@ export async function signOutLeadgenAction() {
 export async function markNotificationReadAction(notificationId: string) {
   const leadgenUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  await supabase
-    .from("leadgen_notifications")
-    .update({ is_read: true, read_at: new Date().toISOString() })
-    .eq("id", notificationId)
-    .eq("user_id", leadgenUser.id);
+  const now = new Date().toISOString();
+  await Promise.all([
+    supabase.from("leadgen_notifications").update({ is_read: true, read_at: now }).eq("id", notificationId).eq("user_id", leadgenUser.id),
+    supabase.from("winsalot_chat_notifications").update({ is_read: true, read_at: now }).eq("id", notificationId).eq("user_id", leadgenUser.id),
+  ]);
   revalidatePath("/leadgen/admin", "layout");
 }
 
 export async function markAllNotificationsReadAction() {
   const leadgenUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  await supabase
-    .from("leadgen_notifications")
-    .update({ is_read: true, read_at: new Date().toISOString() })
-    .eq("user_id", leadgenUser.id)
-    .eq("is_read", false);
+  const now = new Date().toISOString();
+  await Promise.all([
+    supabase.from("leadgen_notifications").update({ is_read: true, read_at: now }).eq("user_id", leadgenUser.id).eq("is_read", false),
+    supabase.from("winsalot_chat_notifications").update({ is_read: true, read_at: now }).eq("user_id", leadgenUser.id).eq("is_read", false),
+  ]);
   revalidatePath("/leadgen/admin", "layout");
 }
 

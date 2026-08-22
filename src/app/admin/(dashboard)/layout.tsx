@@ -15,6 +15,7 @@ import {
   BarChart3,
   Clock,
   CalendarOff,
+  MessageSquare,
   Search,
   UserPlus,
   GraduationCap,
@@ -36,6 +37,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Incentives", href: "/admin/crm/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/admin/crm/attendance", icon: <Clock /> },
   { label: "Leave Requests", href: "/admin/crm/leave-requests", icon: <CalendarOff /> },
+  { label: "Chat", href: "/admin/crm/chat", icon: <MessageSquare /> },
   { label: "Cleaning Opportunities", href: "/admin/crm/opportunities", icon: <Search /> },
   { label: "Provider Acquisition", href: "/admin/crm/provider-acquisition", icon: <UserPlus /> },
   { label: "Training", href: "/admin/crm/training", icon: <GraduationCap /> },
@@ -50,17 +52,25 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, { data: chatNotifications }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
   ]);
+  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
+
+  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   // Stays visible until every pending request has been approved or
   // declined - "Keep the Leave Requests navigation badge visible until
   // all pending requests have been reviewed."
-  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
-    item.href === "/admin/crm/leave-requests" ? { ...item, badgeCount: pendingLeaveCount ?? 0 } : item
-  );
+  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) => {
+    if (item.href === "/admin/crm/leave-requests") return { ...item, badgeCount: pendingLeaveCount ?? 0 };
+    if (item.href === "/admin/crm/chat") return { ...item, badgeCount: chatUnreadCount };
+    return item;
+  });
 
   const timeZonePreferences = await getUserTimeZonePreferences();
 
@@ -90,7 +100,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              notifications={allNotifications as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />
