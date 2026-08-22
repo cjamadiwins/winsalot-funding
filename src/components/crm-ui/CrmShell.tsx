@@ -57,7 +57,7 @@ function BrandHeader({
           {brandSubtitle}
         </span>
       )}
-      <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandTitle}</span>
+      <span className="text-[16px] font-bold uppercase tracking-wider text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandTitle}</span>
     </div>
   );
 }
