@@ -146,6 +146,24 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
     }
   }, [countdown]);
 
+  // Same one-time-per-transition pattern as the overdue alert above, but
+  // for a stage's scheduled *start* time arriving - "It's time for
+  // Break 1." `isDue` flips false -> true exactly once per stage (its
+  // phase string doesn't change between "not due yet" and "due", so an
+  // edge on the boolean itself, not the phase, is what avoids repeating
+  // the chime every tick).
+  const wasDueRef = useRef(false);
+  useEffect(() => {
+    if (!countdown) {
+      wasDueRef.current = false;
+      return;
+    }
+    if (countdown.isDue && !wasDueRef.current) {
+      playGentleAlertSound();
+    }
+    wasDueRef.current = countdown.isDue;
+  }, [countdown]);
+
   const clockOutAllowed = openShift ? canClockOut(openShift) : false;
   const error = clockInState.error ?? clockOutState.error;
 
@@ -180,14 +198,17 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
           {countdown && (
             <div
               className={`rounded-xl border px-4 py-3 ${
-                countdown.isOverdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"
+                countdown.isOverdue || countdown.isDue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"
               }`}
             >
-              <p className={`text-sm font-semibold tabular-nums ${countdown.isOverdue ? "text-amber-800" : "text-slate-800"}`}>
+              <p className={`text-sm font-semibold tabular-nums ${countdown.isOverdue || countdown.isDue ? "text-amber-800" : "text-slate-800"}`}>
                 {countdown.label}
               </p>
               {countdown.overdueMessage && countdown.overdueMessage !== countdown.label && (
                 <p className="mt-1 text-sm text-amber-700">{countdown.overdueMessage}</p>
+              )}
+              {countdown.dueMessage && (
+                <p className="mt-1 text-sm text-amber-700">{countdown.dueMessage}</p>
               )}
             </div>
           )}
