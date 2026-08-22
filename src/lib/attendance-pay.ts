@@ -423,9 +423,11 @@ export type CountdownState = {
   // *end* of an active break, not the start of one. The UI plays its
   // own one-time alert sound for this transition too.
   isDue: boolean;
-  // "It's time for Break 1." / "It's time for Lunch." / "It's time for
-  // Break 2." - shown once the stage becomes due. Never set for the
-  // clock-out countdown - only breaks/lunch get a start-time alert.
+  // "It's time for your break." - shown once a break/lunch stage becomes
+  // due (same fixed wording for Break 1, Lunch, and Break 2 - "Show a
+  // prominent on-screen warning: 'It's time for your break.'"). Never
+  // set for the clock-out countdown - only breaks/lunch get a
+  // start-time alert.
   dueMessage: string | null;
 };
 
@@ -513,7 +515,7 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
       isOverdue: false,
       overdueMessage: null,
       isDue: true,
-      dueMessage: `It's time for ${stageLabel}.`,
+      dueMessage: "It's time for your break.",
     };
   }
 
