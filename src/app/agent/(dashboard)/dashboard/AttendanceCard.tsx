@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 import {
   activeBreakStage,
   attendanceRecordStatus,
   ATTENDANCE_RECORD_STATUS_LABELS,
   BREAK_STAGE_LABELS,
+  BREAK_STAGE_START_LABELS,
   BREAK_STAGES,
   canClockOut,
   canStartBreak,
+  computeCountdownState,
   computeShiftPayBreakdown,
+  stageCompleted,
   type BreakStage,
 } from "@/lib/attendance-pay";
+import { playGentleAlertSound } from "@/lib/attendance-sound";
 import {
   clockInAction,
   clockOutAction,
@@ -53,14 +57,14 @@ const BREAK_ACTIONS: Record<BreakStage, { start: typeof startBreak1Action; end: 
   break2: { start: startBreak2Action, end: endBreak2Action },
 };
 
-function BreakControl({ stage, openShift }: { stage: BreakStage; openShift: AgentAttendanceRow }) {
+function BreakControl({ stage, openShift, now }: { stage: BreakStage; openShift: AgentAttendanceRow; now: number }) {
   const initial: AttendanceActionState = { error: null };
   const [startState, startFormAction, startPending] = useActionState(BREAK_ACTIONS[stage].start, initial);
   const [endState, endFormAction, endPending] = useActionState(BREAK_ACTIONS[stage].end, initial);
 
   const active = activeBreakStage(openShift) === stage;
-  const canStart = canStartBreak(openShift, stage);
-  const used = !canStart && !active;
+  const completed = stageCompleted(openShift, stage);
+  const canStart = canStartBreak(openShift, stage, now);
   const error = startState.error ?? endState.error;
 
   return (
@@ -79,14 +83,14 @@ function BreakControl({ stage, openShift }: { stage: BreakStage; openShift: Agen
         <form action={startFormAction}>
           <button
             type="submit"
-            disabled={!canStart || startPending}
+            disabled={!canStart || startPending || completed}
             className="rounded-full border border-[var(--color-border)] px-3.5 py-1.5 text-xs font-semibold text-[var(--color-ink-strong)] transition hover:bg-[var(--crm-surface-2)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {startPending ? "Starting..." : `Start ${BREAK_STAGE_LABELS[stage]}`}
+            {startPending ? "Starting..." : BREAK_STAGE_START_LABELS[stage]}
           </button>
         </form>
       )}
-      {used && !active && <span className="text-xs text-[var(--color-text-muted)]">✓ used</span>}
+      {completed && !active && <span className="text-xs text-[var(--color-text-muted)]">✓ used</span>}
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );
@@ -125,6 +129,30 @@ export default function AttendanceCard({ openShift }: { openShift: AgentAttendan
     return attendanceRecordStatus(openShift, breakdown, true);
   }, [openShift, breakdown]);
 
+  const countdown = useMemo(() => {
+    if (!openShift) return null;
+    return computeCountdownState(openShift, now);
+  }, [openShift, now]);
+
+  // Plays the alert sound exactly once per overdue phase, the instant
+  // its countdown crosses zero - "When the countdown reaches zero, play
+  // a gentle alert sound." Re-arms as soon as the shift moves past that
+  // phase (e.g. the agent ends the break), so the *next* overdue phase
+  // (Lunch exceeded, Break 2 exceeded, clock-out due) still alerts.
+  const lastAlertedPhaseRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!countdown) {
+      lastAlertedPhaseRef.current = null;
+      return;
+    }
+    if (countdown.isOverdue && lastAlertedPhaseRef.current !== countdown.phase) {
+      lastAlertedPhaseRef.current = countdown.phase;
+      playGentleAlertSound();
+    } else if (!countdown.isOverdue) {
+      lastAlertedPhaseRef.current = null;
+    }
+  }, [countdown]);
+
   const clockOutAllowed = openShift ? canClockOut(openShift) : false;
   const error = clockInState.error ?? clockOutState.error;
 
@@ -162,9 +190,30 @@ export default function AttendanceCard({ openShift }: { openShift: AgentAttendan
             Paid working time so far: {formatMinutes(breakdown.paidWorkingMinutes)} of 7h 30m
           </p>
 
+          {countdown && (
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                countdown.isOverdue
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-[var(--color-border)] bg-[var(--crm-surface-2)]"
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold tabular-nums ${
+                  countdown.isOverdue ? "text-amber-800" : "text-[var(--color-ink-strong)]"
+                }`}
+              >
+                {countdown.label}
+              </p>
+              {countdown.overdueMessage && countdown.overdueMessage !== countdown.label && (
+                <p className="mt-1 text-sm text-amber-700">{countdown.overdueMessage}</p>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3 pt-2">
             {BREAK_STAGES.map((stage) => (
-              <BreakControl key={stage} stage={stage} openShift={openShift} />
+              <BreakControl key={stage} stage={stage} openShift={openShift} now={now} />
             ))}
           </div>
 

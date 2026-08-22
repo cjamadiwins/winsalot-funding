@@ -3,7 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { activeBreakStage, canClockOut, canEndBreak, canStartBreak, type BreakStage } from "@/lib/attendance-pay";
+import { canClockOut, canEndBreak, canStartBreak, describeCannotStartBreak, type BreakStage } from "@/lib/attendance-pay";
 
 export type AttendanceActionState = {
   error: string | null;
@@ -130,12 +130,7 @@ async function setBreakEdge(stage: BreakStage, edge: "start" | "end"): Promise<A
   }
 
   if (edge === "start" && !canStartBreak(openShift, stage)) {
-    return {
-      error:
-        activeBreakStage(openShift) !== null
-          ? "End your current break before starting another one."
-          : "This break has already been used for this shift.",
-    };
+    return { error: describeCannotStartBreak(openShift, stage) };
   }
   if (edge === "end" && !canEndBreak(openShift, stage)) {
     return { error: "This break is not currently active." };
