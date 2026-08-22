@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
 import {
   attendanceRecordStatus,
   ATTENDANCE_RECORD_STATUS_LABELS,
+  computeCountdownState,
   computeShiftPayBreakdown,
   type AttendanceRecordStatus,
 } from "@/lib/attendance-pay";
@@ -228,7 +229,19 @@ export default function AdminAttendanceClient({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [correctingId, setCorrectingId] = useState<string | null>(null);
 
+  // Ticks once a second so the Live Status panel and every open row's
+  // countdown stay current for the admin without a manual refresh -
+  // "Admin should be able to see each agent's current status and
+  // remaining break time."
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const agentById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+
+  const openRows = useMemo(() => attendance.filter((row) => !row.clock_out), [attendance]);
 
   const filtered = useMemo(() => {
     return attendance.filter((row) => {
@@ -307,6 +320,33 @@ export default function AdminAttendanceClient({
       </div>
 
       <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Live Status ({openRows.length} currently clocked in)
+      </h2>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {openRows.map((row) => {
+          const agent = agentById.get(row.agent_id);
+          const countdown = computeCountdownState(row, now);
+          return (
+            <div
+              key={row.id}
+              className={`rounded-xl border p-4 ${countdown?.isOverdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-[var(--crm-surface)]"}`}
+            >
+              <div className="font-medium text-slate-900">{agent?.full_name || agent?.email || "Unknown"}</div>
+              <div className="mt-1 text-xs text-slate-500">Clocked in {new Date(row.clock_in).toLocaleTimeString()}</div>
+              {countdown && (
+                <p className={`mt-2 text-sm font-semibold tabular-nums ${countdown.isOverdue ? "text-amber-800" : "text-slate-700"}`}>
+                  {countdown.label}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        {openRows.length === 0 && (
+          <p className="text-sm text-slate-500">No agents are currently clocked in.</p>
+        )}
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
         Scheduled Shift Start (for Late Arrival / Early Departure)
       </h2>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -357,6 +397,12 @@ export default function AdminAttendanceClient({
                 </div>
                 <RecordStatusBadge status={status} />
               </div>
+
+              {!row.clock_out && (
+                <p className="mt-2 text-sm font-semibold tabular-nums text-slate-700">
+                  {computeCountdownState(row, now)?.label}
+                </p>
+              )}
 
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-4">
                 <div>

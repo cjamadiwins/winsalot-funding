@@ -42,6 +42,53 @@ export const BREAK_STAGE_LABELS: Record<BreakStage, string> = {
   break2: "Break 2",
 };
 
+// "Start Break 1 — 15 min" / "Start Lunch — 30 min" / "Start Break 2 —
+// 15 min" - the exact button copy requested, since each stage's allowed
+// duration needs to be visible on the button itself, not just implied.
+export const BREAK_STAGE_START_LABELS: Record<BreakStage, string> = {
+  break1: "Start Break 1 — 15 min",
+  lunch: "Start Lunch — 30 min",
+  break2: "Start Break 2 — 15 min",
+};
+
+// Break scheduling: each stage's allowed start time is a fixed offset
+// from clock-in, not admin-configurable and not tied to the wall-clock
+// scheduled_start_time used for late/early-departure payroll (a
+// different, pre-existing feature - see computeShiftPayBreakdown below,
+// which this section never touches). A 9:00 AM clock-in schedules
+// Break 1 11:00-11:15, Lunch 1:00-1:30 PM, Break 2 3:00-3:15 PM, and
+// clock-out at 5:00 PM, exactly as specified.
+export const BREAK1_OFFSET_MINUTES = 120; // 2 hours after clock-in
+export const LUNCH_OFFSET_MINUTES = 240; // 4 hours after clock-in
+export const BREAK2_OFFSET_MINUTES = 360; // 6 hours after clock-in
+export const CLOCK_OUT_OFFSET_MINUTES = SCHEDULED_SHIFT_MINUTES; // 8 hours after clock-in
+
+function stageOffsetMinutes(stage: BreakStage): number {
+  if (stage === "break1") return BREAK1_OFFSET_MINUTES;
+  if (stage === "lunch") return LUNCH_OFFSET_MINUTES;
+  return BREAK2_OFFSET_MINUTES;
+}
+
+// The instant (ms since epoch) a stage's scheduled window opens, e.g.
+// clock-in + 2 hours for Break 1.
+export function scheduledStageStartMs(clockIn: string, stage: BreakStage): number {
+  return new Date(clockIn).getTime() + stageOffsetMinutes(stage) * 60000;
+}
+
+// The instant the shift's scheduled clock-out falls at - clock-in + 8
+// hours, "Apply the same countdown behaviour ... to clock-out."
+export function scheduledClockOutMs(clockIn: string): number {
+  return new Date(clockIn).getTime() + CLOCK_OUT_OFFSET_MINUTES * 60000;
+}
+
+// The stage immediately before `stage` in the required Break 1 -> Lunch
+// -> Break 2 order, or null for Break 1 (nothing comes before it).
+function priorStage(stage: BreakStage): BreakStage | null {
+  if (stage === "lunch") return "break1";
+  if (stage === "break2") return "lunch";
+  return null;
+}
+
 // The subset of an attendance row this module needs - matches the
 // column names added to both agent_attendance and
 // leadgen_agent_attendance by migration 0075 exactly, so either CRM's
@@ -87,17 +134,57 @@ export function activeBreakStage(row: AttendanceBreakFields): BreakStage | null 
 }
 
 // Whether "Start <Stage>" should be enabled: the shift is open, no other
-// break is currently active, and this stage hasn't already been used.
-export function canStartBreak(row: AttendanceBreakFields, stage: BreakStage): boolean {
+// break is currently active, this stage hasn't already been used, its
+// scheduled window (clock-in + offset) has arrived, and every earlier
+// stage has already been completed - "Breaks must be taken in order."
+// `nowMs` defaults to the caller's own clock; server actions always let
+// this default to the server's Date.now() rather than trusting a
+// client-supplied time, so an agent can never spoof an early start by
+// forging their local clock.
+export function canStartBreak(row: AttendanceBreakFields, stage: BreakStage, nowMs: number = Date.now()): boolean {
   if (row.clock_out) return false;
   if (stageStart(row, stage)) return false;
-  return activeBreakStage(row) === null;
+  if (activeBreakStage(row) !== null) return false;
+
+  const before = priorStage(stage);
+  if (before && !stageEnd(row, before)) return false;
+
+  return nowMs >= scheduledStageStartMs(row.clock_in, stage);
 }
 
 // Whether "End <Stage>" should be enabled: this exact stage is the one
 // currently active.
 export function canEndBreak(row: AttendanceBreakFields, stage: BreakStage): boolean {
   return activeBreakStage(row) === stage;
+}
+
+// Whether this stage has already been started and ended - "used up" for
+// this shift. Distinct from `!canStartBreak(...)`, which is also false
+// for a stage that's simply not due yet or blocked by ordering.
+export function stageCompleted(row: AttendanceBreakFields, stage: BreakStage): boolean {
+  return !!stageEnd(row, stage);
+}
+
+// A precise, user-facing reason `canStartBreak` returned false, for the
+// server actions' error messages (the button itself is already disabled
+// client-side for all of these; this only matters for a stale click or
+// a forged request). Callers should only call this when canStartBreak
+// already returned false.
+export function describeCannotStartBreak(row: AttendanceBreakFields, stage: BreakStage, nowMs: number = Date.now()): string {
+  if (row.clock_out) return "You are already clocked out.";
+  if (stageCompleted(row, stage)) return "This break has already been used for this shift.";
+  if (activeBreakStage(row) !== null) return "End your current break before starting another one.";
+
+  const before = priorStage(stage);
+  if (before && !stageEnd(row, before)) {
+    return `Complete ${BREAK_STAGE_LABELS[before]} before starting ${BREAK_STAGE_LABELS[stage]}.`;
+  }
+
+  if (nowMs < scheduledStageStartMs(row.clock_in, stage)) {
+    return `${BREAK_STAGE_LABELS[stage]} isn't scheduled to start yet.`;
+  }
+
+  return "This break isn't available right now.";
 }
 
 // Whether "Clock Out" should be enabled: the shift is open and no break
@@ -282,3 +369,155 @@ export function shiftDeductionAmount(shortfallMinutes: number, hourlyRate: numbe
 // and not covered by approved paid leave) - the full 450-minute
 // schedule is unpaid shortfall for that day.
 export const FULL_DAY_SHORTFALL_MINUTES = SCHEDULED_PAID_MINUTES_PER_SHIFT;
+
+// ---------------------------------------------------------------------
+// Live countdown display (agent attendance card + admin live status).
+// Purely presentational - none of this feeds computeShiftPayBreakdown
+// or any payroll figure; the unpaid-excess-break math above is
+// unchanged and already does the actual accounting.
+// ---------------------------------------------------------------------
+
+export type CountdownPhase =
+  | "before_break1"
+  | "break1_active"
+  | "break1_exceeded"
+  | "before_lunch"
+  | "lunch_active"
+  | "lunch_exceeded"
+  | "before_break2"
+  | "break2_active"
+  | "break2_exceeded"
+  | "before_clock_out"
+  | "clock_out_due";
+
+// One stage's "*_active"/"*_exceeded" phase pairing, keyed the same way
+// BreakStage is - used to recover which stage a countdown phase is
+// about, e.g. for picking the right audio-alert trigger in the UI.
+export const COUNTDOWN_PHASE_STAGE: Partial<Record<CountdownPhase, BreakStage>> = {
+  break1_active: "break1",
+  break1_exceeded: "break1",
+  lunch_active: "lunch",
+  lunch_exceeded: "lunch",
+  break2_active: "break2",
+  break2_exceeded: "break2",
+};
+
+export type CountdownState = {
+  phase: CountdownPhase;
+  label: string; // "Break 1 begins in 10:00" / "Lunch — 14:59 remaining" / "Break 2 exceeded — 00:42" / "Clock-out in 10:00"
+  // Seconds until the boundary for "before_*"/"*_active" phases;
+  // seconds *since* the boundary (a live count-up) for "*_exceeded" and
+  // "clock_out_due". Always >= 0.
+  seconds: number;
+  // True exactly for the phases where the allowed window has been
+  // exceeded / the shift is overdue - the UI plays its one-time alert
+  // sound the instant a countdown enters one of these.
+  isOverdue: boolean;
+  // The message shown alongside the count-up once overdue - "Your break
+  // has ended. Please resume calls." for a break/lunch, a clock-out
+  // specific message once the shift's 8 hours are up.
+  overdueMessage: string | null;
+};
+
+function formatMmSs(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+const BREAK_ENDED_MESSAGE = "Your break has ended. Please resume calls.";
+const CLOCK_OUT_DUE_MESSAGE = "Your shift has ended. Please clock out.";
+
+// The single live countdown to show on the attendance card / admin live
+// status for an open shift, reflecting whichever stage is currently
+// relevant: counting down to a not-yet-started stage's scheduled start,
+// counting down an active break/lunch's allowed duration, counting up
+// once that allowed duration is exceeded, or counting down to the
+// scheduled clock-out once every break has been completed. Returns null
+// once the shift is closed (clock_out is set) - there is nothing left
+// to count down to.
+export function computeCountdownState(row: AttendanceBreakFields, nowMs: number = Date.now()): CountdownState | null {
+  if (row.clock_out) return null;
+
+  const active = activeBreakStage(row);
+  if (active) {
+    const startMs = new Date(stageStart(row, active) as string).getTime();
+    const allowedMs = stageAllowedMinutes(active) * 60000;
+    const elapsedMs = nowMs - startMs;
+    const remainingMs = allowedMs - elapsedMs;
+    const stageLabel = BREAK_STAGE_LABELS[active];
+
+    if (remainingMs > 0) {
+      return {
+        phase: `${active}_active` as CountdownPhase,
+        label: `${stageLabel} — ${formatMmSs(remainingMs / 1000)} remaining`,
+        seconds: Math.ceil(remainingMs / 1000),
+        isOverdue: false,
+        overdueMessage: null,
+      };
+    }
+
+    const overSeconds = -remainingMs / 1000;
+    return {
+      phase: `${active}_exceeded` as CountdownPhase,
+      label: `${stageLabel} exceeded — ${formatMmSs(overSeconds)}`,
+      seconds: Math.ceil(overSeconds),
+      isOverdue: true,
+      overdueMessage: BREAK_ENDED_MESSAGE,
+    };
+  }
+
+  const pending: { stage: BreakStage; phase: CountdownPhase }[] = [
+    { stage: "break1", phase: "before_break1" },
+    { stage: "lunch", phase: "before_lunch" },
+    { stage: "break2", phase: "before_break2" },
+  ];
+  const next = pending.find((p) => !stageEnd(row, p.stage));
+
+  if (next) {
+    const dueMs = scheduledStageStartMs(row.clock_in, next.stage);
+    const remainingMs = dueMs - nowMs;
+    const stageLabel = BREAK_STAGE_LABELS[next.stage];
+
+    if (remainingMs > 0) {
+      return {
+        phase: next.phase,
+        label: `${stageLabel} begins in ${formatMmSs(remainingMs / 1000)}`,
+        seconds: Math.ceil(remainingMs / 1000),
+        isOverdue: false,
+        overdueMessage: null,
+      };
+    }
+
+    return {
+      phase: next.phase,
+      label: `${stageLabel} available now`,
+      seconds: 0,
+      isOverdue: false,
+      overdueMessage: null,
+    };
+  }
+
+  // Every break has been completed - the only thing left to count down
+  // to is the scheduled clock-out itself.
+  const clockOutDueMs = scheduledClockOutMs(row.clock_in);
+  const remainingMs = clockOutDueMs - nowMs;
+  if (remainingMs > 0) {
+    return {
+      phase: "before_clock_out",
+      label: `Clock-out in ${formatMmSs(remainingMs / 1000)}`,
+      seconds: Math.ceil(remainingMs / 1000),
+      isOverdue: false,
+      overdueMessage: null,
+    };
+  }
+
+  return {
+    phase: "clock_out_due",
+    label: CLOCK_OUT_DUE_MESSAGE,
+    seconds: Math.ceil(-remainingMs / 1000),
+    isOverdue: true,
+    overdueMessage: CLOCK_OUT_DUE_MESSAGE,
+  };
+}

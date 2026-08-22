@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import type { LeadgenAgentAttendanceRow, LeadgenUserRow } from "@/lib/leadgen-types";
 import { LEADGEN_BOOKING_TIMEZONE, LEADGEN_BOOKING_TIMEZONE_LABEL } from "@/lib/leadgen-booking";
 import {
   attendanceRecordStatus,
   ATTENDANCE_RECORD_STATUS_LABELS,
+  computeCountdownState,
   computeShiftPayBreakdown,
   type AttendanceRecordStatus,
 } from "@/lib/attendance-pay";
@@ -207,6 +208,16 @@ export default function LeadgenAdminAttendanceClient({
   const [dateFilter, setDateFilter] = useState("");
   const [correctingId, setCorrectingId] = useState<string | null>(null);
 
+  // Ticks once a second so the Live Status panel and every open row's
+  // countdown stay current for the admin without a manual refresh -
+  // "Admin should be able to see each agent's current status and
+  // remaining break time."
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const filtered = useMemo(() => {
     return attendance.filter((row) => {
       if (agentFilter !== "all" && row.agent_id !== agentFilter) return false;
@@ -218,6 +229,8 @@ export default function LeadgenAdminAttendanceClient({
   const agentById = useMemo(() => {
     return new Map(agents.map((agent) => [agent.id, agent]));
   }, [agents]);
+
+  const openRows = useMemo(() => attendance.filter((row) => !row.clock_out), [attendance]);
 
   const totalsByAgent = useMemo(() => {
     const now = new Date();
@@ -265,6 +278,33 @@ export default function LeadgenAdminAttendanceClient({
             className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm"
           />
         </div>
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Live Status ({openRows.length} currently clocked in)
+      </h2>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {openRows.map((row) => {
+          const agent = agentById.get(row.agent_id);
+          const countdown = computeCountdownState(row, now);
+          return (
+            <div
+              key={row.id}
+              className={`rounded-xl border p-4 ${countdown?.isOverdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-[var(--crm-surface)]"}`}
+            >
+              <div className="font-medium text-slate-900">{agent?.full_name || row.agent_name}</div>
+              <div className="mt-1 text-xs text-slate-500">Clocked in {formatEasternTimestamp(row.clock_in)}</div>
+              {countdown && (
+                <p className={`mt-2 text-sm font-semibold tabular-nums ${countdown.isOverdue ? "text-amber-800" : "text-slate-700"}`}>
+                  {countdown.label}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        {openRows.length === 0 && (
+          <p className="text-sm text-slate-500">No agents are currently clocked in.</p>
+        )}
       </div>
 
       <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -318,6 +358,12 @@ export default function LeadgenAdminAttendanceClient({
                 </div>
                 <RecordStatusBadge status={status} />
               </div>
+
+              {!row.clock_out && (
+                <p className="mt-2 text-sm font-semibold tabular-nums text-slate-700">
+                  {computeCountdownState(row, now)?.label}
+                </p>
+              )}
 
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-4">
                 <div>
