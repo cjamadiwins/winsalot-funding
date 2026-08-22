@@ -4,6 +4,7 @@ import NotificationBell from "@/components/NotificationBell";
 import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
+import { loadLeadgenChatUnreadCount } from "@/lib/leadgen-chat-data";
 import {
   LayoutDashboard,
   Building2,
@@ -43,15 +44,11 @@ const NAV_ITEMS: CrmNavItem[] = [
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, { data: chatNotifications }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("leadgen_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
+    loadLeadgenChatUnreadCount(supabase, user.id),
   ]);
-  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
-  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
 
   // Stays visible until every pending request has been approved or
   // declined - "Keep the Leave Requests navigation badge visible until
@@ -90,7 +87,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={allNotifications as LeadgenNotificationRow[]}
+              notifications={(notifications ?? []) as LeadgenNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />

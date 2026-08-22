@@ -5,6 +5,7 @@ import NotificationBell from "@/components/NotificationBell";
 import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
+import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import {
   LayoutDashboard,
   Search,
@@ -47,18 +48,10 @@ export default async function AgentLayout({ children }: { children: ReactNode })
   const crmUser = await requireCrmUser();
 
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { data: chatNotifications }] = await Promise.all([
+  const [{ data: notifications }, chatUnreadCount] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
-    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", crmUser.id).order("created_at", { ascending: false }).limit(20),
+    loadCrmChatUnreadCount(supabase, crmUser.id),
   ]);
-  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
-
-  // The bell shows both this CRM's own notifications and the shared
-  // Employee Chat system's notifications together, newest first - a
-  // single unified list rather than two separate bells.
-  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
 
   const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
     item.href === "/agent/chat" ? { ...item, badgeCount: chatUnreadCount } : item
@@ -92,7 +85,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={allNotifications as CrmNotificationRow[]}
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />

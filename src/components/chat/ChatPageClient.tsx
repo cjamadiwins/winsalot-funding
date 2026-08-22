@@ -2,12 +2,39 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AnnouncementRow, CompanyMessageRow, DmConversationSummary } from "@/lib/chat-types";
+import type { ActiveEmployeeOption, AnnouncementRow, CompanyMessageRow, DmConversationSummary } from "@/lib/chat-types";
 import CompanyChatPanel from "./CompanyChatPanel";
 import DirectMessagesPanel from "./DirectMessagesPanel";
 import AnnouncementsPanel from "./AnnouncementsPanel";
 
 type Tab = "company" | "dm" | "announcements";
+type ActionResult = { error?: string };
+
+// Every table name, Realtime/Presence channel name, and Server Action
+// this page needs, bound to exactly one CRM by whichever page.tsx passes
+// it in (src/app/agent/(dashboard)/chat/page.tsx and its three
+// counterparts) - this component itself has no notion of which CRM it's
+// rendering for, so it can't accidentally mix the two.
+export type ChatScopeConfig = {
+  companyMessagesTable: string;
+  companyRealtimeChannel: string;
+  dmMessagesTable: string;
+  presenceChannel: string;
+  announcementsTable: string;
+  announcementsRealtimeChannel: string;
+  sendCompanyMessage: (content: string) => Promise<ActionResult>;
+  deleteCompanyMessage: (id: string) => Promise<ActionResult>;
+  markCompanyChatRead: () => Promise<ActionResult>;
+  searchActiveEmployees: (query: string) => Promise<{ error?: string; results?: ActiveEmployeeOption[] }>;
+  getOrCreateDmConversation: (otherUserId: string) => Promise<{ error?: string; conversationId?: string }>;
+  sendDmMessage: (conversationId: string, content: string) => Promise<ActionResult>;
+  deleteDmMessage: (id: string) => Promise<ActionResult>;
+  markDmConversationRead: (conversationId: string) => Promise<ActionResult>;
+  sendAnnouncement: (content: string) => Promise<ActionResult>;
+  toggleAnnouncementPin: (id: string, pinned: boolean) => Promise<ActionResult>;
+  deleteAnnouncement: (id: string) => Promise<ActionResult>;
+  markAnnouncementRead: (id: string) => Promise<ActionResult>;
+};
 
 export default function ChatPageClient({
   identity,
@@ -17,6 +44,7 @@ export default function ChatPageClient({
   dmUnreadCount,
   announcements,
   announcementUnreadCount,
+  scope,
 }: {
   identity: { id: string; isAdmin: boolean };
   companyMessages: CompanyMessageRow[];
@@ -25,6 +53,7 @@ export default function ChatPageClient({
   dmUnreadCount: number;
   announcements: AnnouncementRow[];
   announcementUnreadCount: number;
+  scope: ChatScopeConfig;
 }) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) ?? "company";
@@ -62,13 +91,43 @@ export default function ChatPageClient({
 
       <div className="min-h-0 flex-1">
         {tab === "company" && (
-          <CompanyChatPanel identity={identity} initialMessages={companyMessages} highlightId={searchParams.get("highlight") ?? undefined} />
+          <CompanyChatPanel
+            identity={identity}
+            initialMessages={companyMessages}
+            highlightId={searchParams.get("highlight") ?? undefined}
+            tableName={scope.companyMessagesTable}
+            realtimeChannel={scope.companyRealtimeChannel}
+            sendMessage={scope.sendCompanyMessage}
+            deleteMessage={scope.deleteCompanyMessage}
+            markRead={scope.markCompanyChatRead}
+          />
         )}
         {tab === "dm" && (
-          <DirectMessagesPanel identity={identity} initialConversations={conversations} initialConversationId={searchParams.get("conversation") ?? undefined} />
+          <DirectMessagesPanel
+            identity={identity}
+            initialConversations={conversations}
+            initialConversationId={searchParams.get("conversation") ?? undefined}
+            messagesTable={scope.dmMessagesTable}
+            presenceChannel={scope.presenceChannel}
+            searchActiveEmployees={scope.searchActiveEmployees}
+            getOrCreateConversation={scope.getOrCreateDmConversation}
+            sendMessage={scope.sendDmMessage}
+            deleteMessage={scope.deleteDmMessage}
+            markConversationRead={scope.markDmConversationRead}
+          />
         )}
         {tab === "announcements" && (
-          <AnnouncementsPanel identity={identity} initialAnnouncements={announcements} highlightId={searchParams.get("highlight") ?? undefined} />
+          <AnnouncementsPanel
+            identity={identity}
+            initialAnnouncements={announcements}
+            highlightId={searchParams.get("highlight") ?? undefined}
+            tableName={scope.announcementsTable}
+            realtimeChannel={scope.announcementsRealtimeChannel}
+            sendAnnouncement={scope.sendAnnouncement}
+            togglePin={scope.toggleAnnouncementPin}
+            deleteAnnouncement={scope.deleteAnnouncement}
+            markRead={scope.markAnnouncementRead}
+          />
         )}
       </div>
     </div>

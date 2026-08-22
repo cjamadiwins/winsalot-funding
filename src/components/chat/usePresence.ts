@@ -9,11 +9,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // heuristics or "last seen N minutes ago" guessing, which is why this is
 // safe to build ("show a simple online indicator only if it can be
 // implemented accurately").
-export function usePresenceOnlineUsers(supabase: SupabaseClient, userId: string): Set<string> {
+export function usePresenceOnlineUsers(supabase: SupabaseClient, userId: string, channelName: string): Set<string> {
   const [online, setOnline] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const channel = supabase.channel("winsalot-chat-presence", {
+    const channel = supabase.channel(channelName, {
       config: { presence: { key: userId } },
     });
 
@@ -30,7 +30,7 @@ export function usePresenceOnlineUsers(supabase: SupabaseClient, userId: string)
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [supabase, userId, channelName]);
 
   return online;
 }

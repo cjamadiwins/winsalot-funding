@@ -1,11 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
-import type {
-  AnnouncementRow,
-  CompanyMessageRow,
-  DmConversationSummary,
-} from "./chat-types";
+import { countDmUnread, countAnnouncementUnread } from "./chat-shared";
+import type { AnnouncementRow, CompanyMessageRow, DmConversationSummary } from "./chat-types";
 
 export type ChatPageData = {
   companyMessages: CompanyMessageRow[];
@@ -16,15 +13,15 @@ export type ChatPageData = {
   announcementUnreadCount: number;
 };
 
-// Loads everything the shared chat UI needs for one page render, from the
-// caller's own session-scoped client - RLS already restricts every query
-// here to rows this specific employee may see (their own conversations,
-// messages in channels they belong to). The one exception is resolving
-// *other* DM participants' display names, which uses the service-role
-// client deliberately (an agent's own crm_users/leadgen_users RLS only
-// lets them see their own row) - narrowed to exactly the participant ids
-// this employee's own (already-authorized) conversations reference.
-export async function loadChatPageData(
+// Loads everything the Cleaning CRM's chat UI needs for one page render,
+// from the caller's own session-scoped client - RLS already restricts
+// every query here to rows this specific crm_users employee may see. The
+// one exception is resolving *other* DM participants' display names,
+// which uses the service-role client deliberately (an agent's own
+// crm_users RLS only lets them see their own row) - narrowed to exactly
+// the participant ids this employee's own (already-authorized)
+// conversations reference, and never queries leadgen_users.
+export async function loadCrmChatPageData(
   supabase: SupabaseClient,
   identity: { id: string; isAdmin: boolean }
 ): Promise<ChatPageData> {
@@ -35,24 +32,15 @@ export async function loadChatPageData(
     { data: announcementRows },
     { data: announcementReadRows },
   ] = await Promise.all([
+    supabase.from("crm_company_messages").select("*").order("created_at", { ascending: false }).limit(50),
+    supabase.from("crm_company_chat_read_state").select("last_read_at").eq("user_id", identity.id).maybeSingle(),
     supabase
-      .from("winsalot_company_messages")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase.from("winsalot_company_chat_read_state").select("last_read_at").eq("user_id", identity.id).maybeSingle(),
-    supabase
-      .from("winsalot_dm_conversations")
+      .from("crm_dm_conversations")
       .select("*")
       .or(`participant_one.eq.${identity.id},participant_two.eq.${identity.id}`)
       .order("last_message_at", { ascending: false }),
-    supabase
-      .from("winsalot_announcements")
-      .select("*")
-      .order("pinned", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase.from("winsalot_announcement_reads").select("announcement_id").eq("user_id", identity.id),
+    supabase.from("crm_announcements").select("*").order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(50),
+    supabase.from("crm_announcement_reads").select("announcement_id").eq("user_id", identity.id),
   ]);
 
   const companyMessages = [...(companyMessagesDesc ?? [])].reverse() as CompanyMessageRow[];
@@ -67,10 +55,10 @@ export async function loadChatPageData(
     supabase,
     conversations.map((c) => c.id)
   );
-  const unreadCountByConversation = await countUnreadDmMessages(supabase, conversations, identity.id, readByConversation);
+  const unreadCountByConversation = await countUnreadDmMessagesPerConversation(supabase, conversations, identity.id, readByConversation);
 
   const otherUserIds = conversations.map((c) => (c.participant_one === identity.id ? c.participant_two : c.participant_one));
-  const namesById = await resolveEmployeeNames(otherUserIds);
+  const namesById = await resolveCrmEmployeeNames(otherUserIds);
 
   const conversationSummaries: DmConversationSummary[] = conversations
     .map((c) => {
@@ -101,8 +89,19 @@ export async function loadChatPageData(
   };
 }
 
+// Lightweight version of the counts above, for the sidebar "Chat" nav
+// badge - company chat is deliberately excluded, same as the rest of the
+// app never badging a high-volume shared feed.
+export async function loadCrmChatUnreadCount(supabase: SupabaseClient, userId: string): Promise<number> {
+  const [dmUnread, announcementUnread] = await Promise.all([
+    countDmUnread(supabase, { conversations: "crm_dm_conversations", messages: "crm_dm_messages", readState: "crm_dm_read_state" }, userId),
+    countAnnouncementUnread(supabase, { announcements: "crm_announcements", reads: "crm_announcement_reads" }, userId),
+  ]);
+  return dmUnread + announcementUnread;
+}
+
 async function loadDmReadState(supabase: SupabaseClient, userId: string): Promise<Map<string, string>> {
-  const { data } = await supabase.from("winsalot_dm_read_state").select("conversation_id, last_read_at").eq("user_id", userId);
+  const { data } = await supabase.from("crm_dm_read_state").select("conversation_id, last_read_at").eq("user_id", userId);
   const map = new Map<string, string>();
   (data ?? []).forEach((r) => map.set(r.conversation_id as string, r.last_read_at as string));
   return map;
@@ -116,7 +115,7 @@ async function loadLastDmMessages(
   if (conversationIds.length === 0) return map;
 
   const { data } = await supabase
-    .from("winsalot_dm_messages")
+    .from("crm_dm_messages")
     .select("conversation_id, content, deleted_at, created_at")
     .in("conversation_id", conversationIds)
     .order("created_at", { ascending: false });
@@ -129,7 +128,7 @@ async function loadLastDmMessages(
   return map;
 }
 
-async function countUnreadDmMessages(
+async function countUnreadDmMessagesPerConversation(
   supabase: SupabaseClient,
   conversations: { id: string }[],
   userId: string,
@@ -139,7 +138,7 @@ async function countUnreadDmMessages(
   if (conversations.length === 0) return counts;
 
   const { data } = await supabase
-    .from("winsalot_dm_messages")
+    .from("crm_dm_messages")
     .select("conversation_id, sender_id, created_at")
     .in(
       "conversation_id",
@@ -155,30 +154,15 @@ async function countUnreadDmMessages(
   return counts;
 }
 
-async function resolveEmployeeNames(ids: string[]): Promise<Map<string, string>> {
+async function resolveCrmEmployeeNames(ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const uniqueIds = Array.from(new Set(ids));
   if (uniqueIds.length === 0) return map;
 
   const admin = getSupabaseAdmin();
-  const [{ data: crmRows }, { data: leadgenRows }] = await Promise.all([
-    admin.from("crm_users").select("id, full_name").in("id", uniqueIds),
-    admin.from("leadgen_users").select("id, full_name").in("id", uniqueIds),
-  ]);
-  for (const row of [...(crmRows ?? []), ...(leadgenRows ?? [])]) {
-    if (!map.has(row.id as string)) map.set(row.id as string, row.full_name as string);
+  const { data: rows } = await admin.from("crm_users").select("id, full_name").in("id", uniqueIds);
+  for (const row of rows ?? []) {
+    map.set(row.id as string, row.full_name as string);
   }
   return map;
-}
-
-// Total chat-related unread count for the sidebar "Chat" nav badge -
-// DMs + announcements only (company chat is deliberately excluded, same
-// as the rest of the app never badging a high-volume shared feed).
-export async function loadChatNavBadgeCount(supabase: SupabaseClient, userId: string): Promise<number> {
-  const { count } = await supabase
-    .from("winsalot_chat_notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("is_read", false);
-  return count ?? 0;
 }

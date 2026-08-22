@@ -1,7 +1,10 @@
-// Shared Employee Chat types, used identically by all four entry points
-// (Cleaning admin/agent, Lead Gen admin/agent) - chat is one system, not
-// duplicated per CRM, since identity (auth.users.id) and every RLS policy
-// are already CRM-agnostic (see supabase/migrations/0072_winsalot_chat.sql).
+// Employee Chat types - structurally identical shapes reused by two fully
+// independent chat implementations, one per CRM (src/lib/crm-chat-*.ts for
+// Cleaning, src/lib/leadgen-chat-*.ts for Lead Gen; see
+// supabase/migrations/0073_chat_crm_isolation.sql). Sharing these type
+// definitions is safe - they're just row shapes, not data or identity -
+// but no server action, query, or table name is ever shared between the
+// two CRMs.
 
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
 
