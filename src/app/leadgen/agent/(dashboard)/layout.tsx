@@ -38,7 +38,13 @@ export default async function LeadgenAgentLayout({ children }: { children: React
     <div className="crm-theme crm-theme--leadgen">
       <CrmShell
         brandTitle="Lead Generation CRM"
-        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandSubtitle={
+          <>
+            Empowering Businesses,
+            <br />
+            One Solution at a Time.
+          </>
+        }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/leadgen/agent"
         navItems={NAV_ITEMS}

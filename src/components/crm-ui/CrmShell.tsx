@@ -31,7 +31,7 @@ function BrandHeader({
   logoSrc,
 }: {
   brandTitle: string;
-  brandSubtitle?: string;
+  brandSubtitle?: ReactNode;
   logoSrc?: string;
 }) {
   if (!logoSrc) {
@@ -49,7 +49,7 @@ function BrandHeader({
         <img src={logoSrc} alt={brandTitle} className="block h-[76px] w-[76px] object-contain" />
       </span>
       {brandSubtitle && (
-        <span className="max-w-[190px] text-[10px] font-medium italic leading-snug text-[var(--crm-sidebar-text-soft,#c3d0e3)]">
+        <span className="max-w-[200px] text-[15px] font-bold leading-relaxed text-white">
           {brandSubtitle}
         </span>
       )}
@@ -136,7 +136,7 @@ export default function CrmShell({
   children,
 }: {
   brandTitle: string;
-  brandSubtitle?: string;
+  brandSubtitle?: ReactNode;
   // Path to a logo image (e.g. "/winsalot-logo.png") to show above
   // brandTitle/brandSubtitle on a white chip. Optional - omit to keep
   // the original text-only sidebar header every other portal already
