@@ -133,6 +133,28 @@
   --color-purple: #9333ea;
 }
 
+/* ---------------------------------------------------------------------
+ * Lead Generation CRM (admin) - navy / royal-blue / teal redesign.
+ *
+ * Scoped to `.crm-theme.crm-theme--leadgen-admin` (both classes applied
+ * together on the root of src/app/leadgen/admin/(dashboard)/layout.tsx
+ * only) so this repaints just that one portal. Combining both class
+ * names gives this block higher specificity than the plain `.crm-theme`
+ * rule above regardless of source order, and every other logged-in CRM
+ * screen - Cleaning admin/agent, Lead Gen agent/client - keeps applying
+ * only `.crm-theme` and is completely unaffected.
+ * ------------------------------------------------------------------- */
+.crm-theme.crm-theme--leadgen-admin {
+  --crm-sidebar: #132038;
+  --crm-sidebar-border: #24365a;
+  --crm-sidebar-text-soft: #cbd5e1;
+  --crm-sidebar-text-muted: #7e93b5;
+  --crm-accent: #2f6fed;
+  --crm-accent-hover: #1d4ed8;
+  --color-accent: var(--crm-accent);
+  --color-step-num: var(--crm-accent);
+}
+
 .crm-theme input:not([type="checkbox"]):not([type="radio"]),
 .crm-theme select,
 .crm-theme textarea {

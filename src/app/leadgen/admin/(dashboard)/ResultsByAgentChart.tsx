@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Trophy } from "lucide-react";
 import {
   LEADGEN_RESULTS_DATE_FILTERS,
   LEADGEN_RESULTS_DATE_FILTER_LABEL,
@@ -21,13 +21,19 @@ type LeadSummary = Pick<LeadgenLeadRow, "id" | "business_name">;
 
 type MetricKey = "assignedLeads" | "interestedLeads" | "appointmentsBooked" | "followUpsDue" | "overdueFollowUps";
 
-const METRICS: { key: MetricKey; label: string; barClass: string; dotClass: string }[] = [
-  { key: "assignedLeads", label: "Assigned Leads", barClass: "bg-blue-500", dotClass: "bg-blue-500" },
-  { key: "interestedLeads", label: "Interested Leads", barClass: "bg-yellow-400", dotClass: "bg-yellow-400" },
-  { key: "appointmentsBooked", label: "Appointments Booked", barClass: "bg-green-500", dotClass: "bg-green-500" },
-  { key: "followUpsDue", label: "Follow-ups Due", barClass: "bg-orange-500", dotClass: "bg-orange-500" },
-  { key: "overdueFollowUps", label: "Overdue Follow-ups", barClass: "bg-red-500", dotClass: "bg-red-500" },
+// Bar chart colors - deliberately its own palette from the KPI cards
+// above (which use blue/indigo/green/amber/red tones), matching what
+// this chart has always used for its legend/bars so a returning admin
+// sees the same colors they always have here.
+const METRICS: { key: MetricKey; label: string; barColor: string; dotClass: string }[] = [
+  { key: "assignedLeads", label: "Assigned Leads", barColor: "#2f6fed", dotClass: "bg-[#2f6fed]" },
+  { key: "interestedLeads", label: "Interested Leads", barColor: "#f5a623", dotClass: "bg-[#f5a623]" },
+  { key: "appointmentsBooked", label: "Appointments Booked", barColor: "#22c55e", dotClass: "bg-[#22c55e]" },
+  { key: "followUpsDue", label: "Follow-ups Due", barColor: "#f97316", dotClass: "bg-[#f97316]" },
+  { key: "overdueFollowUps", label: "Overdue Follow-ups", barColor: "#ef4444", dotClass: "bg-[#ef4444]" },
 ];
+
+const CHART_HEIGHT = 180;
 
 function buildLeadsHref(agentId: string, extra?: Record<string, string>): string {
   const params = new URLSearchParams({ agent: agentId, ...extra });
@@ -51,6 +57,15 @@ function hrefForMetric(agentId: string, metric: MetricKey, filter: LeadgenResult
   }
   // overdueFollowUps
   return buildLeadsHref(agentId, { followup: "overdue", ...(range ? { due_from: range.start, due_to: range.end } : {}) });
+}
+
+// Rounds a chart max up to a clean axis ceiling (next multiple of 5, or
+// 10 above 50) so the gridline labels read as round numbers instead of
+// something like "0 / 13 / 27 / 40".
+function niceAxisMax(value: number): number {
+  if (value <= 0) return 5;
+  const step = value <= 50 ? 5 : 10;
+  return Math.ceil(value / step) * step;
 }
 
 export default function ResultsByAgentChart({
@@ -95,6 +110,22 @@ export default function ResultsByAgentChart({
     }
     return max;
   }, [rows]);
+  const axisMax = niceAxisMax(maxValue);
+
+  // "Top Performer" = most appointments booked in the active period
+  // (ties broken by lead-to-appointment rate) - the same headline number
+  // the overall Lead-to-Appointment Rate card is built from. Omitted
+  // entirely when nobody has booked anything yet, rather than crowning
+  // an agent with 0 bookings.
+  const topPerformer = useMemo(() => {
+    return rows.reduce<LeadgenAgentResultsRow | null>((best, row) => {
+      if (row.appointmentsBooked <= 0) return best;
+      if (!best) return row;
+      if (row.appointmentsBooked > best.appointmentsBooked) return row;
+      if (row.appointmentsBooked === best.appointmentsBooked && row.leadToAppointmentRate > best.leadToAppointmentRate) return row;
+      return best;
+    }, null);
+  }, [rows]);
 
   if (agents.length === 0) {
     return <p className="mt-3 text-[13.5px] text-slate-500">No agents yet.</p>;
@@ -110,7 +141,7 @@ export default function ResultsByAgentChart({
               type="button"
               onClick={() => setFilter(option)}
               className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
-                filter === option ? "bg-sky-600 text-white" : "text-slate-500 hover:text-slate-900"
+                filter === option ? "bg-[var(--crm-accent,#3e7ef7)] text-white" : "text-slate-500 hover:text-slate-900"
               }`}
             >
               {LEADGEN_RESULTS_DATE_FILTER_LABEL[option]}
@@ -121,7 +152,7 @@ export default function ResultsByAgentChart({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {METRICS.map((metric) => (
             <span key={metric.key} className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-600">
-              <span className={`h-2.5 w-2.5 rounded-full ${metric.dotClass}`} aria-hidden="true" />
+              <span className={`h-2.5 w-2.5 rounded-sm ${metric.dotClass}`} aria-hidden="true" />
               {metric.label}
             </span>
           ))}
@@ -148,80 +179,101 @@ export default function ResultsByAgentChart({
         />
       )}
 
-      <div className="mt-5 space-y-4">
-        {rows.map((row) => {
-          const total =
-            row.assignedLeads + row.interestedLeads + row.appointmentsBooked + row.followUpsDue + row.overdueFollowUps;
-
-          return (
-            <div key={row.agentId} className="rounded-xl border border-slate-200 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Link
-                  href={buildLeadsHref(row.agentId)}
-                  className="cursor-pointer text-[14px] font-semibold text-slate-900 hover:text-sky-600"
-                  title={`${row.agentName} — ${row.assignedLeads} assigned, ${row.interestedLeads} interested, ${row.appointmentsBooked} booked, ${row.followUpsDue} due, ${row.overdueFollowUps} overdue`}
-                >
+      {/* Grouped bar chart - one cluster of 5 bars per agent, sharing a
+          single y-axis scale so relative performance is comparable at a
+          glance instead of each agent needing its own bar-length read. */}
+      <div className="mt-6 flex">
+        <div
+          className="flex shrink-0 flex-col justify-between pb-6 pr-2.5 text-right"
+          style={{ height: CHART_HEIGHT }}
+        >
+          {[4, 3, 2, 1, 0].map((step) => (
+            <span key={step} className="text-[10px] font-semibold text-slate-400">
+              {Math.round((axisMax * step) / 4)}
+            </span>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <div className="relative" style={{ height: CHART_HEIGHT, minWidth: rows.length * 96 }}>
+            <div className="absolute inset-x-0 top-0 flex flex-col justify-between" style={{ height: CHART_HEIGHT }} aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="border-t border-slate-100" />
+              ))}
+            </div>
+            <div className="relative flex h-full items-end justify-around gap-2 px-2">
+              {rows.map((row) => (
+                <div key={row.agentId} className="flex items-end gap-[3px]">
+                  {METRICS.map((metric) => {
+                    const value = row[metric.key];
+                    const heightPx = axisMax > 0 ? Math.max((value / axisMax) * CHART_HEIGHT, value > 0 ? 3 : 0) : 0;
+                    return (
+                      <Link
+                        key={metric.key}
+                        href={hrefForMetric(row.agentId, metric.key, filter)}
+                        title={`${row.agentName} — ${metric.label}: ${value}`}
+                        className="group flex w-2 min-h-1 items-end"
+                      >
+                        <span
+                          className="w-2 rounded-t-[3px] transition group-hover:brightness-110"
+                          style={{ height: heightPx, backgroundColor: metric.barColor }}
+                        />
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 flex items-start justify-around gap-2 px-2" style={{ minWidth: rows.length * 96 }}>
+            {rows.map((row) => (
+              <div key={row.agentId} className="flex w-24 flex-col items-center gap-1 text-center">
+                <Link href={buildLeadsHref(row.agentId)} className="truncate text-[12px] font-semibold text-slate-900 hover:text-sky-600">
                   {row.agentName}
                 </Link>
                 <button
                   type="button"
                   onClick={() => setExpanded((current) => (current === row.agentId ? null : row.agentId))}
                   title={`${row.agentName} — Lead-to-Appointment Rate: ${formatConversionRate(row.leadToAppointmentRate)}`}
-                  className={`cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition ${
-                    expanded === row.agentId
-                      ? "bg-cyan-600 text-white"
-                      : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                  className={`cursor-pointer rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition ${
+                    expanded === row.agentId ? "bg-cyan-600 text-white" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                   }`}
                 >
-                  {formatConversionRate(row.leadToAppointmentRate)} Lead-to-Appt
+                  {formatConversionRate(row.leadToAppointmentRate)}
                 </button>
               </div>
-
-              {expanded === row.agentId && (
-                <ConversionDrilldown
-                  title={`${row.agentName} — Appointments booked (${LEADGEN_RESULTS_DATE_FILTER_LABEL[filter]})`}
-                  count={row.appointmentsBooked}
-                  totalLeads={row.assignedLeads}
-                  leadHref={(id) => `/leadgen/admin/leads/${id}`}
-                  leads={bookedLeadsInRange(row.agentId)}
-                />
-              )}
-
-              {total === 0 ? (
-                <p className="mt-2 text-[12.5px] text-slate-400">No results for this period.</p>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {METRICS.map((metric) => {
-                    const value = row[metric.key];
-                    const widthPct = maxValue > 0 ? Math.max((value / maxValue) * 100, value > 0 ? 3 : 0) : 0;
-                    return (
-                      <Link
-                        key={metric.key}
-                        href={hrefForMetric(row.agentId, metric.key, filter)}
-                        title={`${row.agentName} — ${metric.label}: ${value}`}
-                        className="group flex cursor-pointer items-center gap-2"
-                      >
-                        <span className="w-24 shrink-0 truncate text-[11px] font-medium text-slate-500 sm:w-36 sm:text-[12px]">
-                          {metric.label}
-                        </span>
-                        <span className="h-5 flex-1 overflow-hidden rounded-md bg-slate-100 transition group-hover:bg-slate-200">
-                          <span
-                            className={`block h-full rounded-md transition-[width] ${metric.barClass} group-hover:brightness-110`}
-                            style={{ width: `${widthPct}%` }}
-                          />
-                        </span>
-                        <span className="w-6 shrink-0 text-right text-[12px] font-semibold tabular-nums text-slate-700">
-                          {value}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        </div>
       </div>
+
+      {rows.map(
+        (row) =>
+          expanded === row.agentId && (
+            <ConversionDrilldown
+              key={row.agentId}
+              title={`${row.agentName} — Appointments booked (${LEADGEN_RESULTS_DATE_FILTER_LABEL[filter]})`}
+              count={row.appointmentsBooked}
+              totalLeads={row.assignedLeads}
+              leadHref={(id) => `/leadgen/admin/leads/${id}`}
+              leads={bookedLeadsInRange(row.agentId)}
+            />
+          )
+      )}
+
+      {topPerformer && (
+        <div className="mt-5 flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5a623] shadow-sm">
+            <Trophy className="h-4 w-4 text-white" strokeWidth={2.2} />
+          </span>
+          <p className="text-[12.5px] text-blue-900">
+            <Link href={buildLeadsHref(topPerformer.agentId)} className="font-bold text-blue-900 hover:underline">
+              Top Performer: {topPerformer.agentName}
+            </Link>{" "}
+            · {topPerformer.assignedLeads} Assigned · {topPerformer.appointmentsBooked} Appointments Booked ·{" "}
+            {formatConversionRate(topPerformer.leadToAppointmentRate)} Lead-to-Appointment Rate
+          </p>
+        </div>
+      )}
     </div>
   );
 }
