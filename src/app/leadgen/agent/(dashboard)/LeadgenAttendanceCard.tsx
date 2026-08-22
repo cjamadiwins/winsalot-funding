@@ -17,7 +17,12 @@ import {
   stageCompleted,
   type BreakStage,
 } from "@/lib/attendance-pay";
-import { playGentleAlertSound } from "@/lib/attendance-sound";
+import {
+  ALARM_MAX_DURATION_MS,
+  ALARM_REPEAT_MS,
+  playAlarmSound,
+  playGentleAlertSound,
+} from "@/lib/attendance-sound";
 import {
   leadgenClockInAction,
   leadgenClockOutAction,
@@ -132,25 +137,72 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
     return computeCountdownState(openShift, now);
   }, [openShift, now]);
 
+  // The clock-out due alert is unchanged from before: a single gentle
+  // chime the instant the shift's 8 hours are up, one-time-per-phase.
+  // Break/lunch start- and end-of-break alerts are handled below by the
+  // repeating alarm instead, so this only ever fires for "clock_out_due".
   const lastAlertedPhaseRef = useRef<string | null>(null);
   useEffect(() => {
     if (!countdown) {
       lastAlertedPhaseRef.current = null;
       return;
     }
-    if (countdown.isOverdue && lastAlertedPhaseRef.current !== countdown.phase) {
+    if (countdown.phase === "clock_out_due" && lastAlertedPhaseRef.current !== countdown.phase) {
       lastAlertedPhaseRef.current = countdown.phase;
       playGentleAlertSound();
-    } else if (!countdown.isOverdue) {
+    } else if (countdown.phase !== "clock_out_due") {
       lastAlertedPhaseRef.current = null;
     }
   }, [countdown]);
+
+  // The start-of-break ("It's time for your break.") and end-of-break
+  // ("Your break has ended. Please resume calls.") warnings for Break 1,
+  // Lunch, and Break 2 - a repeating alarm the agent must actively
+  // acknowledge, capped at 30 seconds so it can never ring forever.
+  // Clock-out's own alert is intentionally excluded (handled above,
+  // unchanged) since the request named only the three break stages.
+  const alarmCondition =
+    !!countdown && (countdown.isDue || (countdown.isOverdue && countdown.phase !== "clock_out_due"));
+  const alarmMessage = countdown?.isDue ? countdown.dueMessage : countdown?.overdueMessage ?? null;
+  const [alarmAcknowledged, setAlarmAcknowledged] = useState(false);
+  const wasAlarmConditionRef = useRef(false);
+  useEffect(() => {
+    if (alarmCondition && !wasAlarmConditionRef.current) {
+      setAlarmAcknowledged(false);
+    }
+    wasAlarmConditionRef.current = alarmCondition;
+  }, [alarmCondition]);
+
+  const alarmActive = alarmCondition && !alarmAcknowledged;
+  useEffect(() => {
+    if (!alarmActive) return;
+    playAlarmSound();
+    const intervalId = window.setInterval(() => playAlarmSound(), ALARM_REPEAT_MS);
+    const timeoutId = window.setTimeout(() => window.clearInterval(intervalId), ALARM_MAX_DURATION_MS);
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [alarmActive]);
 
   const clockOutAllowed = openShift ? canClockOut(openShift) : false;
   const error = clockInState.error ?? clockOutState.error;
 
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+      {alarmActive && alarmMessage && (
+        <div className="fixed inset-x-0 top-0 z-50 flex flex-col items-center justify-center gap-2 bg-rose-600 px-4 py-3 text-center shadow-lg sm:flex-row sm:gap-4">
+          <p className="text-base font-bold text-white">{alarmMessage}</p>
+          <button
+            type="button"
+            onClick={() => setAlarmAcknowledged(true)}
+            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+          >
+            Acknowledge / Stop Alarm
+          </button>
+        </div>
+      )}
+
       <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Attendance</h2>
 
       {!openShift && (
@@ -180,14 +232,17 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
           {countdown && (
             <div
               className={`rounded-xl border px-4 py-3 ${
-                countdown.isOverdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"
+                countdown.isOverdue || countdown.isDue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"
               }`}
             >
-              <p className={`text-sm font-semibold tabular-nums ${countdown.isOverdue ? "text-amber-800" : "text-slate-800"}`}>
+              <p className={`text-sm font-semibold tabular-nums ${countdown.isOverdue || countdown.isDue ? "text-amber-800" : "text-slate-800"}`}>
                 {countdown.label}
               </p>
               {countdown.overdueMessage && countdown.overdueMessage !== countdown.label && (
                 <p className="mt-1 text-sm text-amber-700">{countdown.overdueMessage}</p>
+              )}
+              {countdown.dueMessage && (
+                <p className="mt-1 text-sm text-amber-700">{countdown.dueMessage}</p>
               )}
             </div>
           )}

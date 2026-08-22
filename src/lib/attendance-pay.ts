@@ -417,6 +417,18 @@ export type CountdownState = {
   // has ended. Please resume calls." for a break/lunch, a clock-out
   // specific message once the shift's 8 hours are up.
   overdueMessage: string | null;
+  // True exactly the instant a not-yet-started stage's scheduled start
+  // time arrives (the "before_break1"/"before_lunch"/"before_break2"
+  // phases only) - distinct from `isOverdue`, which is about the
+  // *end* of an active break, not the start of one. The UI plays its
+  // own one-time alert sound for this transition too.
+  isDue: boolean;
+  // "It's time for your break." - shown once a break/lunch stage becomes
+  // due (same fixed wording for Break 1, Lunch, and Break 2 - "Show a
+  // prominent on-screen warning: 'It's time for your break.'"). Never
+  // set for the clock-out countdown - only breaks/lunch get a
+  // start-time alert.
+  dueMessage: string | null;
 };
 
 function formatMmSs(totalSeconds: number): string {
@@ -455,6 +467,8 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
         seconds: Math.ceil(remainingMs / 1000),
         isOverdue: false,
         overdueMessage: null,
+        isDue: false,
+        dueMessage: null,
       };
     }
 
@@ -465,6 +479,8 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
       seconds: Math.ceil(overSeconds),
       isOverdue: true,
       overdueMessage: BREAK_ENDED_MESSAGE,
+      isDue: false,
+      dueMessage: null,
     };
   }
 
@@ -487,6 +503,8 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
         seconds: Math.ceil(remainingMs / 1000),
         isOverdue: false,
         overdueMessage: null,
+        isDue: false,
+        dueMessage: null,
       };
     }
 
@@ -496,11 +514,16 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
       seconds: 0,
       isOverdue: false,
       overdueMessage: null,
+      isDue: true,
+      dueMessage: "It's time for your break.",
     };
   }
 
   // Every break has been completed - the only thing left to count down
-  // to is the scheduled clock-out itself.
+  // to is the scheduled clock-out itself. No start-time alert here -
+  // "Apply the same start-time alert to Lunch and Break 2" names only
+  // the three break stages, and the existing clock-out countdown/alert
+  // is left exactly as it was.
   const clockOutDueMs = scheduledClockOutMs(row.clock_in);
   const remainingMs = clockOutDueMs - nowMs;
   if (remainingMs > 0) {
@@ -510,12 +533,16 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
       seconds: Math.ceil(remainingMs / 1000),
       isOverdue: false,
       overdueMessage: null,
+      isDue: false,
+      dueMessage: null,
     };
   }
 
   return {
     phase: "clock_out_due",
     label: CLOCK_OUT_DUE_MESSAGE,
+    isDue: false,
+    dueMessage: null,
     seconds: Math.ceil(-remainingMs / 1000),
     isOverdue: true,
     overdueMessage: CLOCK_OUT_DUE_MESSAGE,
