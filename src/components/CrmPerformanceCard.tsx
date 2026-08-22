@@ -25,7 +25,7 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
   const { current, history } = performance;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6 sm:p-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{agentName}</h2>
         <span className="text-[12px] text-slate-500">Period: {crmBiweeklyRangeLabel(current.periodStart, current.periodEnd)}</span>
@@ -82,9 +82,9 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
 
   return (
     <>
-      <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-        <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" />
-        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
+        <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" size={180} strokeWidth={14} />
+        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <Stat label="Quotes Sent" value={`${period.quotesSent}/${CRM_BIWEEKLY_QUOTES_SENT_TARGET}`} />
           <Stat label="Quotes Received" value={`${period.quotesReceived}/${CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET}`} />
           <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
