@@ -144,9 +144,31 @@
  * this block higher specificity than the plain `.crm-theme` rule above
  * regardless of source order, and every other logged-in CRM screen -
  * Cleaning admin/agent, Lead Gen client - keeps applying only
- * `.crm-theme` and is completely unaffected.
+ * `.crm-theme` (or its own `.crm-theme--cleaning` block below) and is
+ * completely unaffected.
  * ------------------------------------------------------------------- */
 .crm-theme.crm-theme--leadgen {
+  --crm-sidebar: #132038;
+  --crm-sidebar-border: #24365a;
+  --crm-sidebar-text-soft: #cbd5e1;
+  --crm-sidebar-text-muted: #7e93b5;
+  --crm-accent: #2f6fed;
+  --crm-accent-hover: #1d4ed8;
+  --color-accent: var(--crm-accent);
+  --color-step-num: var(--crm-accent);
+}
+
+/* ---------------------------------------------------------------------
+ * Cleaning CRM (admin + agent) - same navy / royal-blue / teal redesign
+ * as the Lead Gen CRM above, reusing the identical token values.
+ *
+ * Scoped to `.crm-theme.crm-theme--cleaning` (both classes applied
+ * together on the root of src/app/admin/(dashboard)/layout.tsx and
+ * src/app/agent/(dashboard)/layout.tsx only) so this repaints just
+ * those two portals; Lead Gen admin/agent (`.crm-theme--leadgen`) and
+ * the Lead Gen client portal (`.crm-theme` alone) are unaffected.
+ * ------------------------------------------------------------------- */
+.crm-theme.crm-theme--cleaning {
   --crm-sidebar: #132038;
   --crm-sidebar-border: #24365a;
   --crm-sidebar-text-soft: #cbd5e1;
