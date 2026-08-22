@@ -2,19 +2,30 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { sendCompanyMessageAction, deleteCompanyMessageAction, markCompanyChatReadAction } from "@/lib/chat-actions";
 import { formatChatDateSeparator, isSameChatDay, type CompanyMessageRow } from "@/lib/chat-types";
 import MessageBubble from "./MessageBubble";
 import ChatComposer from "./ChatComposer";
+
+type ActionResult = { error?: string };
 
 export default function CompanyChatPanel({
   identity,
   initialMessages,
   highlightId,
+  tableName,
+  realtimeChannel,
+  sendMessage,
+  deleteMessage,
+  markRead,
 }: {
   identity: { id: string; isAdmin: boolean };
   initialMessages: CompanyMessageRow[];
   highlightId?: string;
+  tableName: string;
+  realtimeChannel: string;
+  sendMessage: (content: string) => Promise<ActionResult>;
+  deleteMessage: (id: string) => Promise<ActionResult>;
+  markRead: () => Promise<ActionResult>;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [hasMoreOlder, setHasMoreOlder] = useState(initialMessages.length >= 50);
@@ -24,14 +35,14 @@ export default function CompanyChatPanel({
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
-    markCompanyChatReadAction();
+    markRead();
     const channel = supabase
-      .channel("winsalot-company-messages")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "winsalot_company_messages" }, (payload) => {
+      .channel(realtimeChannel)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: tableName }, (payload) => {
         setMessages((prev) => [...prev, payload.new as CompanyMessageRow]);
-        markCompanyChatReadAction();
+        markRead();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "winsalot_company_messages" }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: tableName }, (payload) => {
         setMessages((prev) => prev.map((m) => (m.id === (payload.new as CompanyMessageRow).id ? (payload.new as CompanyMessageRow) : m)));
       })
       .subscribe();
@@ -40,7 +51,7 @@ export default function CompanyChatPanel({
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tableName, realtimeChannel]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,7 +67,7 @@ export default function CompanyChatPanel({
     setLoadingOlder(true);
     const oldest = messages[0].created_at;
     const { data } = await supabase
-      .from("winsalot_company_messages")
+      .from(tableName)
       .select("*")
       .lt("created_at", oldest)
       .order("created_at", { ascending: false })
@@ -68,7 +79,7 @@ export default function CompanyChatPanel({
   }
 
   async function handleDelete(id: string) {
-    const result = await deleteCompanyMessageAction(id);
+    const result = await deleteMessage(id);
     if (result.error) setError(result.error);
   }
 
@@ -122,7 +133,7 @@ export default function CompanyChatPanel({
       <ChatComposer
         placeholder="Message everyone at Winsalot..."
         onSend={async (content) => {
-          const result = await sendCompanyMessageAction(content);
+          const result = await sendMessage(content);
           if (result.error) setError(result.error);
           return result;
         }}

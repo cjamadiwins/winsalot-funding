@@ -3,13 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import {
-  searchActiveEmployeesAction,
-  getOrCreateDmConversationAction,
-  sendDmMessageAction,
-  deleteDmMessageAction,
-  markDmConversationReadAction,
-} from "@/lib/chat-actions";
-import {
   formatChatDateSeparator,
   isSameChatDay,
   type ActiveEmployeeOption,
@@ -20,17 +13,33 @@ import MessageBubble from "./MessageBubble";
 import ChatComposer from "./ChatComposer";
 import { usePresenceOnlineUsers } from "./usePresence";
 
+type ActionResult = { error?: string };
+
 export default function DirectMessagesPanel({
   identity,
   initialConversations,
   initialConversationId,
+  messagesTable,
+  presenceChannel,
+  searchActiveEmployees,
+  getOrCreateConversation,
+  sendMessage,
+  deleteMessage,
+  markConversationRead,
 }: {
   identity: { id: string };
   initialConversations: DmConversationSummary[];
   initialConversationId?: string;
+  messagesTable: string;
+  presenceChannel: string;
+  searchActiveEmployees: (query: string) => Promise<{ error?: string; results?: ActiveEmployeeOption[] }>;
+  getOrCreateConversation: (otherUserId: string) => Promise<{ error?: string; conversationId?: string }>;
+  sendMessage: (conversationId: string, content: string) => Promise<ActionResult>;
+  deleteMessage: (id: string) => Promise<ActionResult>;
+  markConversationRead: (conversationId: string) => Promise<ActionResult>;
 }) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const onlineUsers = usePresenceOnlineUsers(supabase, identity.id);
+  const onlineUsers = usePresenceOnlineUsers(supabase, identity.id, presenceChannel);
 
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState<string | undefined>(initialConversationId);
@@ -50,7 +59,7 @@ export default function DirectMessagesPanel({
     let ignore = false;
     (async () => {
       const { data } = await supabase
-        .from("winsalot_dm_messages")
+        .from(messagesTable)
         .select("*")
         .eq("conversation_id", selectedId)
         .order("created_at", { ascending: false })
@@ -59,30 +68,30 @@ export default function DirectMessagesPanel({
       const asc = ((data ?? []) as DmMessageRow[]).reverse();
       setMessages(asc);
       setHasMoreOlder(asc.length >= 50);
-      await markDmConversationReadAction(selectedId);
+      await markConversationRead(selectedId);
       if (ignore) return;
       setConversations((prev) => prev.map((c) => (c.conversationId === selectedId ? { ...c, unreadCount: 0 } : c)));
     })();
     return () => {
       ignore = true;
     };
-  }, [selectedId, supabase]);
+  }, [selectedId, supabase, messagesTable, markConversationRead]);
 
   useEffect(() => {
     if (!selectedId) return;
     const channel = supabase
-      .channel(`winsalot-dm-${selectedId}`)
+      .channel(`${presenceChannel}-dm-${selectedId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "winsalot_dm_messages", filter: `conversation_id=eq.${selectedId}` },
+        { event: "INSERT", schema: "public", table: messagesTable, filter: `conversation_id=eq.${selectedId}` },
         (payload) => {
           setMessages((prev) => [...prev, payload.new as DmMessageRow]);
-          markDmConversationReadAction(selectedId);
+          markConversationRead(selectedId);
         }
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "winsalot_dm_messages", filter: `conversation_id=eq.${selectedId}` },
+        { event: "UPDATE", schema: "public", table: messagesTable, filter: `conversation_id=eq.${selectedId}` },
         (payload) => {
           setMessages((prev) => prev.map((m) => (m.id === (payload.new as DmMessageRow).id ? (payload.new as DmMessageRow) : m)));
         }
@@ -91,7 +100,7 @@ export default function DirectMessagesPanel({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, selectedId]);
+  }, [supabase, selectedId, messagesTable, presenceChannel, markConversationRead]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,15 +113,15 @@ export default function DirectMessagesPanel({
   useEffect(() => {
     if (trimmedSearchQuery.length < 1) return;
     const timeout = setTimeout(async () => {
-      const result = await searchActiveEmployeesAction(trimmedSearchQuery);
+      const result = await searchActiveEmployees(trimmedSearchQuery);
       setSearchResults(result.results ?? []);
       setLastSearchedQuery(trimmedSearchQuery);
     }, 250);
     return () => clearTimeout(timeout);
-  }, [trimmedSearchQuery]);
+  }, [trimmedSearchQuery, searchActiveEmployees]);
 
   async function handleStartConversation(employee: ActiveEmployeeOption) {
-    const result = await getOrCreateDmConversationAction(employee.id);
+    const result = await getOrCreateConversation(employee.id);
     if (result.error || !result.conversationId) {
       setError(result.error ?? "Failed to start the conversation.");
       return;
@@ -141,7 +150,7 @@ export default function DirectMessagesPanel({
     if (!selectedId || messages.length === 0) return;
     setLoadingOlder(true);
     const { data } = await supabase
-      .from("winsalot_dm_messages")
+      .from(messagesTable)
       .select("*")
       .eq("conversation_id", selectedId)
       .lt("created_at", messages[0].created_at)
@@ -154,7 +163,7 @@ export default function DirectMessagesPanel({
   }
 
   async function handleDelete(id: string) {
-    const result = await deleteDmMessageAction(id);
+    const result = await deleteMessage(id);
     if (result.error) setError(result.error);
   }
 
@@ -278,7 +287,7 @@ export default function DirectMessagesPanel({
             <ChatComposer
               placeholder={`Message ${selectedConversation.otherUserName}...`}
               onSend={async (content) => {
-                const result = await sendDmMessageAction(selectedConversation.conversationId, content);
+                const result = await sendMessage(selectedConversation.conversationId, content);
                 if (result.error) setError(result.error);
                 return result;
               }}

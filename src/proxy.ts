@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { LEAD_GEN_HOSTS, CLEANING_QUOTE_HOSTS } from "@/lib/hosts";
+import { LEAD_GEN_HOSTS, CLEANING_QUOTE_HOSTS, isLeadGenHost, isCleaningHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0];
@@ -14,9 +14,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.rewrite(new URL("/commercial-cleaning-quote", request.url));
   }
 
+  // Cross-CRM isolation: /admin and /agent belong exclusively to the
+  // Cleaning CRM, /leadgen/* exclusively to the Lead Gen CRM. Both Vercel
+  // projects deploy this exact same codebase, so without this check
+  // either CRM's routes render identically on the other's domain - this
+  // is exactly what produced leads.winsalotcorp.com/admin displaying the
+  // Cleaning CRM. Redirecting to "/" is safe on both hosts: the rewrite
+  // rules above already give each host its own correct landing page.
+  if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent"))) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+  if (isCleaningHost(host) && pathname.startsWith("/leadgen")) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (pathname.startsWith("/admin")) {
     return handleSessionGate(
       request,
+      host,
       "/admin/login",
       "/admin",
       ["/admin/forgot-password", "/admin/set-password"],
@@ -30,7 +45,7 @@ export async function proxy(request: NextRequest) {
     // bounce someone away just because they happen to already have an
     // unrelated session - unlike the login page itself, which does bounce
     // an already-authenticated visitor onward.
-    return handleSessionGate(request, "/agent/login", "/agent/dashboard", [
+    return handleSessionGate(request, host, "/agent/login", "/agent/dashboard", [
       "/agent/set-password",
       "/agent/forgot-password",
     ]);
@@ -45,7 +60,7 @@ export async function proxy(request: NextRequest) {
     // server-side in requireLeadgenAdmin()/requireLeadgenAgent()/
     // requireLeadgenClient(). postLoginPath is /leadgen itself, which
     // dispatches to the right role's home.
-    return handleSessionGate(request, "/leadgen/login", "/leadgen", [
+    return handleSessionGate(request, host, "/leadgen/login", "/leadgen", [
       "/leadgen/set-password",
       "/leadgen/forgot-password",
     ]);
@@ -78,6 +93,7 @@ export async function proxy(request: NextRequest) {
 // that path itself, so the reset flow doesn't redirect-loop.
 async function handleSessionGate(
   request: NextRequest,
+  host: string,
   loginPath: string,
   postLoginPath: string,
   publicPaths: string[] = [],
@@ -115,6 +131,7 @@ async function handleSessionGate(
   }
 
   const supabase = createServerClient(supabaseUrl, anonKey, {
+    cookieOptions: { name: authCookieName(host) },
     cookies: {
       getAll() {
         return request.cookies.getAll();

@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { authCookieName } from "./hosts";
 
 // Session-aware Supabase client for use in Server Components, Route
 // Handlers, and Server Actions under /admin. Uses the public anon key and
@@ -10,6 +11,7 @@ import { cookies } from "next/headers";
 // Create a fresh instance per request; never share across requests.
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
+  const host = (await headers()).get("host") ?? "";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -20,6 +22,11 @@ export async function createSupabaseServerClient() {
   }
 
   return createServerClient(supabaseUrl, anonKey, {
+    // A distinct cookie name per CRM (see src/lib/hosts.ts) so a session
+    // for one can never be read, overwritten, or invalidated by the
+    // other, even if something ever collapsed both apps onto what the
+    // browser sees as a single origin.
+    cookieOptions: { name: authCookieName(host.split(":")[0]) },
     cookies: {
       getAll() {
         return cookieStore.getAll();

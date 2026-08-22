@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { authCookieName } from "./hosts";
 
 // The only browser-side Supabase client in this codebase - every other
 // page uses the cookie-based server client (supabase-server.ts). Needed
@@ -18,5 +19,8 @@ export function createSupabaseBrowserClient() {
     );
   }
 
-  return createBrowserClient(supabaseUrl, anonKey);
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  return createBrowserClient(supabaseUrl, anonKey, {
+    cookieOptions: { name: authCookieName(host) },
+  });
 }

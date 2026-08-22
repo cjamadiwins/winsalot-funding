@@ -2,23 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import {
-  sendAnnouncementAction,
-  toggleAnnouncementPinAction,
-  deleteAnnouncementAction,
-  markAnnouncementReadAction,
-} from "@/lib/chat-actions";
 import { formatChatDate, formatChatTime, type AnnouncementRow } from "@/lib/chat-types";
 import ChatComposer from "./ChatComposer";
+
+type ActionResult = { error?: string };
 
 export default function AnnouncementsPanel({
   identity,
   initialAnnouncements,
   highlightId,
+  tableName,
+  realtimeChannel,
+  sendAnnouncement,
+  togglePin,
+  deleteAnnouncement,
+  markRead,
 }: {
   identity: { id: string; isAdmin: boolean };
   initialAnnouncements: AnnouncementRow[];
   highlightId?: string;
+  tableName: string;
+  realtimeChannel: string;
+  sendAnnouncement: (content: string) => Promise<ActionResult>;
+  togglePin: (id: string, pinned: boolean) => Promise<ActionResult>;
+  deleteAnnouncement: (id: string) => Promise<ActionResult>;
+  markRead: (id: string) => Promise<ActionResult>;
 }) {
   const [announcements, setAnnouncements] = useState(initialAnnouncements);
   const [error, setError] = useState<string | null>(null);
@@ -26,20 +34,20 @@ export default function AnnouncementsPanel({
 
   useEffect(() => {
     for (const a of initialAnnouncements) {
-      markAnnouncementReadAction(a.id);
+      markRead(a.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const channel = supabase
-      .channel("winsalot-announcements")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "winsalot_announcements" }, (payload) => {
+      .channel(realtimeChannel)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: tableName }, (payload) => {
         const row = payload.new as AnnouncementRow;
         setAnnouncements((prev) => [row, ...prev]);
-        markAnnouncementReadAction(row.id);
+        markRead(row.id);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "winsalot_announcements" }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: tableName }, (payload) => {
         setAnnouncements((prev) => prev.map((a) => (a.id === (payload.new as AnnouncementRow).id ? (payload.new as AnnouncementRow) : a)));
       })
       .subscribe();
@@ -47,7 +55,7 @@ export default function AnnouncementsPanel({
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tableName, realtimeChannel]);
 
   useEffect(() => {
     if (!highlightId) return;
@@ -60,12 +68,12 @@ export default function AnnouncementsPanel({
   });
 
   async function handlePin(id: string, pinned: boolean) {
-    const result = await toggleAnnouncementPinAction(id, pinned);
+    const result = await togglePin(id, pinned);
     if (result.error) setError(result.error);
   }
 
   async function handleDelete(id: string) {
-    const result = await deleteAnnouncementAction(id);
+    const result = await deleteAnnouncement(id);
     if (result.error) setError(result.error);
   }
 
@@ -126,7 +134,7 @@ export default function AnnouncementsPanel({
           placeholder="Post an announcement to all employees..."
           submitLabel="Post"
           onSend={async (content) => {
-            const result = await sendAnnouncementAction(content);
+            const result = await sendAnnouncement(content);
             if (result.error) setError(result.error);
             return result;
           }}

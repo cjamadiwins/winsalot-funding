@@ -4,6 +4,7 @@ import NotificationBell from "@/components/NotificationBell";
 import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
+import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import {
   ClipboardList,
   HardHat,
@@ -52,16 +53,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, { data: chatNotifications }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("winsalot_chat_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
+    loadCrmChatUnreadCount(supabase, user.id),
   ]);
-  const chatUnreadCount = (chatNotifications ?? []).filter((n) => !n.is_read).length;
-
-  const allNotifications = [...(notifications ?? []), ...(chatNotifications ?? [])].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
 
   // Stays visible until every pending request has been approved or
   // declined - "Keep the Leave Requests navigation badge visible until
@@ -100,7 +96,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <>
             <NotificationRefresher />
             <NotificationBell
-              notifications={allNotifications as CrmNotificationRow[]}
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
             />
