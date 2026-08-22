@@ -61,7 +61,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="crm-theme crm-theme--cleaning">
       <CrmShell
         brandTitle="Cleaning CRM"
-        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandSubtitle={
+          <>
+            Empowering Businesses,
+            <br />
+            One Solution at a Time.
+          </>
+        }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/admin"
         navItems={NAV_ITEMS}

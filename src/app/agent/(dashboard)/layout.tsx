@@ -56,7 +56,13 @@ export default async function AgentLayout({ children }: { children: ReactNode })
     <div className="crm-theme crm-theme--cleaning">
       <CrmShell
         brandTitle="Cleaning CRM"
-        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandSubtitle={
+          <>
+            Empowering Businesses,
+            <br />
+            One Solution at a Time.
+          </>
+        }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/agent/dashboard"
         navItems={NAV_ITEMS}
