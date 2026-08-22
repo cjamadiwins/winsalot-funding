@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  dailyRate,
   formatDateLong,
   formatDateShort,
   formatNgn,
   formatPayPeriodLabel,
+  hourlyRate,
   PAYROLL_STATUS_LABELS,
   type PayrollRecord,
   type PayrollStatus,
@@ -54,12 +54,14 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
       payPeriodStart: record.pay_period_start,
       payPeriodEnd: record.pay_period_end,
       payday: record.payday,
-      standardBiweeklyPay: record.standard_biweekly_pay,
       standardWorkingDays: record.standard_working_days,
+      standardBiweeklyWage: record.standard_biweekly_wage,
+      standardPaidHours: record.standard_paid_hours,
       daysPresent: record.days_present,
-      approvedPaidDays: record.approved_paid_days,
       unpaidAbsenceDays: record.unpaid_absence_days,
-      totalPayableDays: record.total_payable_days,
+      regularPaidHours: record.regular_paid_hours,
+      unpaidHours: record.unpaid_hours,
+      approvedPaidLeaveHours: record.approved_paid_leave_hours,
       basePayEarned: record.base_pay_earned,
       incentiveBonus: record.bonus_commission,
       otherAdditions: record.other_additions,
@@ -94,13 +96,9 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
 
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Standard Biweekly Pay</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.standard_biweekly_pay)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Daily Rate</dt>
+                <dt className="text-xs text-[var(--color-text-muted)]">Scheduled Days / Hours</dt>
                 <dd className="font-medium text-[var(--color-ink)]">
-                  {formatNgn(dailyRate(current.standard_biweekly_pay, current.standard_working_days))}
+                  {current.standard_working_days}d / {current.standard_paid_hours}h
                 </dd>
               </div>
               <div>
@@ -108,20 +106,38 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
                 <dd className="font-medium text-[var(--color-ink)]">{current.days_present}</dd>
               </div>
               <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Approved Paid Days</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{current.approved_paid_days}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Unpaid Absence Days</dt>
+                <dt className="text-xs text-[var(--color-text-muted)]">Missed Days</dt>
                 <dd className="font-medium text-[var(--color-ink)]">{current.unpaid_absence_days}</dd>
               </div>
               <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Total Payable Days</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{current.total_payable_days}</dd>
+                <dt className="text-xs text-[var(--color-text-muted)]">Approved Paid-Leave Hours</dt>
+                <dd className="font-medium text-[var(--color-ink)]">{current.approved_paid_leave_hours}</dd>
               </div>
               <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Base Pay Earned</dt>
+                <dt className="text-xs text-[var(--color-text-muted)]">Regular Paid Hours</dt>
+                <dd className="font-medium text-[var(--color-ink)]">{current.regular_paid_hours}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Unpaid Hours</dt>
+                <dd className="font-medium text-[var(--color-ink)]">{current.unpaid_hours}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Hourly Wage</dt>
+                <dd className="font-medium text-[var(--color-ink)]">
+                  {formatNgn(hourlyRate(current.standard_biweekly_wage, current.standard_paid_hours))}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Gross Wage Earnings</dt>
                 <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.base_pay_earned)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Attendance Deductions</dt>
+                <dd className="font-medium text-[var(--color-ink)]">-{formatNgn(current.deductions)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Internet Allowance</dt>
+                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.internet_allowance)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Incentive / Bonus</dt>
@@ -129,13 +145,7 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Other Additions</dt>
-                <dd className="font-medium text-[var(--color-ink)]">
-                  {formatNgn(current.other_additions + current.internet_allowance)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-[var(--color-text-muted)]">Deductions</dt>
-                <dd className="font-medium text-[var(--color-ink)]">-{formatNgn(current.deductions)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.other_additions)}</dd>
               </div>
             </dl>
 

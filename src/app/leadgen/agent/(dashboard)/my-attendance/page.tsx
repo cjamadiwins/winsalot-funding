@@ -38,6 +38,7 @@ export default async function LeadgenMyAttendancePage() {
           <LeadgenMyAttendanceClient
             rows={(records ?? []) as LeadgenAgentAttendanceRow[]}
             serverNowIso={new Date().toISOString()}
+            scheduledStartTime={agent.scheduled_start_time}
           />
         </div>
       )}

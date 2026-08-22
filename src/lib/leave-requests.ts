@@ -5,7 +5,8 @@
 // deduction calculation are identical, so they live here once instead of
 // being duplicated per CRM - same pattern as src/lib/payroll.ts.
 
-import { dailyRate, weekdaysInRange } from "./payroll";
+import { dailyRate, hourlyRate, weekdaysInRange } from "./payroll";
+import { SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
 
 export type LeaveType = "planned" | "emergency";
 export type LeaveStatus = "pending" | "approved" | "declined";
@@ -88,11 +89,46 @@ export function calculateLeaveDeductionAmount(
   return { amount: Math.round(scheduledDays * rate * 100) / 100, scheduledDays };
 }
 
+// The scheduled paid hours (Mon-Fri weekdays x 7.5 paid hours/day) an
+// unpaid absence or unapproved leave request covers - "Unapproved
+// absence and unpaid leave must reduce wages," at the same per-minute
+// hourly rate every other attendance shortfall is billed at (see
+// src/lib/attendance-pay.ts). Approved paid leave never calls this - it
+// "counts as paid time and must not reduce wages" instead (see
+// countScheduledLeaveDays below).
+export function calculateLeaveDeductionHours(startDate: string, endDate: string): number {
+  return weekdaysInRange(startDate, endDate).length * (SCHEDULED_PAID_MINUTES_PER_SHIFT / 60);
+}
+
+// Hourly-rate counterpart of calculateLeaveDeductionAmount above - the
+// payroll deduction for an unpaid absence, at the agent's own internal
+// hourly rate (standardBiweeklyWage ÷ standardPaidHours), rounded to the
+// nearest cent only at this final step, never per day.
+export function calculateLeaveDeductionAmountHourly(
+  startDate: string,
+  endDate: string,
+  standardBiweeklyWage: number,
+  standardPaidHours: number
+): { amount: number; hours: number; scheduledDays: number } {
+  const scheduledDays = weekdaysInRange(startDate, endDate).length;
+  const hours = calculateLeaveDeductionHours(startDate, endDate);
+  const rate = hourlyRate(standardBiweeklyWage, standardPaidHours);
+  return { amount: Math.round(hours * rate * 100) / 100, hours, scheduledDays };
+}
+
 // Scheduled (Mon-Fri) working days an approved leave request covers -
 // the count added to a payroll record's approved_paid_days when the
 // paid-leave attendance marking is applied to payroll.
 export function countScheduledLeaveDays(startDate: string, endDate: string): number {
   return weekdaysInRange(startDate, endDate).length;
+}
+
+// Hourly-rate counterpart of countScheduledLeaveDays above - the paid
+// hours (7.5/day) an approved leave request adds to a payroll record's
+// approved_paid_leave_hours when the paid-leave attendance marking is
+// applied to payroll.
+export function countScheduledLeaveHours(startDate: string, endDate: string): number {
+  return calculateLeaveDeductionHours(startDate, endDate);
 }
 
 const MONTH_NAMES = [

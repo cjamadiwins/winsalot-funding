@@ -4,12 +4,19 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
-import { attendanceDateKey, buildPayPeriodAttendanceSummary, type PayPeriodAttendanceSummary } from "@/lib/crm-attendance-report";
+import {
+  attendanceDateKey,
+  buildPayPeriodAttendanceSummary,
+  buildPayPeriodHourlySummary,
+  type PayPeriodAttendanceSummary,
+  type PayPeriodHourlySummary,
+} from "@/lib/crm-attendance-report";
 import {
   buildPayrollAdjustmentAuditRows,
-  calculateBasePayEarned,
   getPayPeriodForPayday,
   STANDARD_BIWEEKLY_PAY,
+  STANDARD_BIWEEKLY_WAGE,
+  STANDARD_PAID_HOURS,
   STANDARD_WORKING_DAYS,
   type PayrollAdjustableFields,
   type PayrollAuditAction,
@@ -69,7 +76,7 @@ function parseNonNegativeAmount(formData: FormData, key: string): number | null 
 export async function loadAttendanceSummaryAction(
   agentId: string,
   payday: string
-): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary }> {
+): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary; hourlySummary?: PayPeriodHourlySummary }> {
   await requireCrmAdmin();
 
   if (!agentId || !payday) return { error: "Agent and payday are required." };
@@ -86,19 +93,31 @@ export async function loadAttendanceSummaryAction(
   const paddedEnd = new Date(`${end}T23:59:59.999Z`);
   paddedEnd.setUTCDate(paddedEnd.getUTCDate() + 1);
 
-  const { data, error } = await supabase
-    .from("agent_attendance")
-    .select("*")
-    .eq("agent_id", agentId)
-    .gte("clock_in", paddedStart.toISOString())
-    .lte("clock_in", paddedEnd.toISOString())
-    .order("clock_in", { ascending: true });
+  const [{ data, error }, { data: agentRow, error: agentError }] = await Promise.all([
+    supabase
+      .from("agent_attendance")
+      .select("*")
+      .eq("agent_id", agentId)
+      .gte("clock_in", paddedStart.toISOString())
+      .lte("clock_in", paddedEnd.toISOString())
+      .order("clock_in", { ascending: true }),
+    supabase.from("crm_users").select("scheduled_start_time").eq("id", agentId).maybeSingle(),
+  ]);
 
   if (error) return { error: `Failed to load attendance: ${error.message}` };
+  if (agentError) return { error: `Failed to load agent: ${agentError.message}` };
 
   const todayKey = attendanceDateKey(new Date().toISOString());
-  const summary = buildPayPeriodAttendanceSummary((data ?? []) as AgentAttendanceRow[], start, end, todayKey);
-  return { summary };
+  const rows = (data ?? []) as AgentAttendanceRow[];
+  const summary = buildPayPeriodAttendanceSummary(rows, start, end, todayKey);
+  const hourlySummary = buildPayPeriodHourlySummary(
+    rows,
+    start,
+    end,
+    todayKey,
+    agentRow?.scheduled_start_time ?? null
+  );
+  return { summary, hourlySummary };
 }
 
 export async function createPayrollAction(formData: FormData): Promise<ActionResult> {
@@ -106,11 +125,16 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
 
   const agentId = String(formData.get("agent_id") ?? "").trim();
   const payday = String(formData.get("payday") ?? "").trim();
-  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") ?? STANDARD_BIWEEKLY_PAY;
+  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") || STANDARD_BIWEEKLY_PAY;
   const standardWorkingDays = parseNonNegativeInt(formData, "standard_working_days") || STANDARD_WORKING_DAYS;
+  const standardBiweeklyWage = parseNonNegativeAmount(formData, "standard_biweekly_wage") ?? STANDARD_BIWEEKLY_WAGE;
+  const standardPaidHours = parseNonNegativeAmount(formData, "standard_paid_hours") || STANDARD_PAID_HOURS;
   const daysPresent = parseNonNegativeInt(formData, "days_present");
   const approvedPaidDays = parseNonNegativeInt(formData, "approved_paid_days");
   const unpaidAbsenceDays = parseNonNegativeInt(formData, "unpaid_absence_days");
+  const regularPaidHours = parseNonNegativeAmount(formData, "regular_paid_hours");
+  const unpaidHours = parseNonNegativeAmount(formData, "unpaid_hours");
+  const approvedPaidLeaveHours = parseNonNegativeAmount(formData, "approved_paid_leave_hours");
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
@@ -125,19 +149,26 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
     daysPresent === null ||
     approvedPaidDays === null ||
     unpaidAbsenceDays === null ||
+    regularPaidHours === null ||
+    unpaidHours === null ||
+    approvedPaidLeaveHours === null ||
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
     deductions === null
   ) {
-    return { error: "Amounts and day counts must be zero or a positive number." };
+    return { error: "Amounts and day/hour counts must be zero or a positive number." };
   }
   if (!adjustmentReason) {
     return { error: "A reason is required for this payroll entry." };
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = calculateBasePayEarned(totalPayableDays, standardBiweeklyPay, standardWorkingDays);
+  // Gross wage earnings: the full standard biweekly wage - every
+  // shortfall (absence, late arrival, early departure, excess break
+  // time) is captured in `deductions` instead (see
+  // src/lib/attendance-pay.ts), never by shrinking this figure itself.
+  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const supabase = await createSupabaseServerClient();
@@ -151,10 +182,15 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
       status: "draft",
       standard_biweekly_pay: standardBiweeklyPay,
       standard_working_days: standardWorkingDays,
+      standard_biweekly_wage: standardBiweeklyWage,
+      standard_paid_hours: standardPaidHours,
       days_present: daysPresent,
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
@@ -183,6 +219,9 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
@@ -219,11 +258,16 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
   }
 
   const payday = String(formData.get("payday") ?? "").trim();
-  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") ?? STANDARD_BIWEEKLY_PAY;
+  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") || STANDARD_BIWEEKLY_PAY;
   const standardWorkingDays = parseNonNegativeInt(formData, "standard_working_days") || STANDARD_WORKING_DAYS;
+  const standardBiweeklyWage = parseNonNegativeAmount(formData, "standard_biweekly_wage") ?? STANDARD_BIWEEKLY_WAGE;
+  const standardPaidHours = parseNonNegativeAmount(formData, "standard_paid_hours") || STANDARD_PAID_HOURS;
   const daysPresent = parseNonNegativeInt(formData, "days_present");
   const approvedPaidDays = parseNonNegativeInt(formData, "approved_paid_days");
   const unpaidAbsenceDays = parseNonNegativeInt(formData, "unpaid_absence_days");
+  const regularPaidHours = parseNonNegativeAmount(formData, "regular_paid_hours");
+  const unpaidHours = parseNonNegativeAmount(formData, "unpaid_hours");
+  const approvedPaidLeaveHours = parseNonNegativeAmount(formData, "approved_paid_leave_hours");
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
@@ -238,19 +282,22 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     daysPresent === null ||
     approvedPaidDays === null ||
     unpaidAbsenceDays === null ||
+    regularPaidHours === null ||
+    unpaidHours === null ||
+    approvedPaidLeaveHours === null ||
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
     deductions === null
   ) {
-    return { error: "Amounts and day counts must be zero or a positive number." };
+    return { error: "Amounts and day/hour counts must be zero or a positive number." };
   }
   if (!adjustmentReason) {
     return { error: "A reason is required for this payroll adjustment." };
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = calculateBasePayEarned(totalPayableDays, standardBiweeklyPay, standardWorkingDays);
+  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const { error } = await supabase
@@ -261,10 +308,15 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
       payday,
       standard_biweekly_pay: standardBiweeklyPay,
       standard_working_days: standardWorkingDays,
+      standard_biweekly_wage: standardBiweeklyWage,
+      standard_paid_hours: standardPaidHours,
       days_present: daysPresent,
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
@@ -286,6 +338,9 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     approved_paid_days: existing.approved_paid_days,
     unpaid_absence_days: existing.unpaid_absence_days,
     total_payable_days: existing.total_payable_days,
+    regular_paid_hours: existing.regular_paid_hours,
+    unpaid_hours: existing.unpaid_hours,
+    approved_paid_leave_hours: existing.approved_paid_leave_hours,
     bonus_commission: existing.bonus_commission,
     other_additions: existing.other_additions,
     internet_allowance: existing.internet_allowance,
@@ -297,6 +352,9 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     approved_paid_days: approvedPaidDays,
     unpaid_absence_days: unpaidAbsenceDays,
     total_payable_days: totalPayableDays,
+    regular_paid_hours: regularPaidHours,
+    unpaid_hours: unpaidHours,
+    approved_paid_leave_hours: approvedPaidLeaveHours,
     bonus_commission: bonusCommission,
     other_additions: otherAdditions,
     internet_allowance: internetAllowance,

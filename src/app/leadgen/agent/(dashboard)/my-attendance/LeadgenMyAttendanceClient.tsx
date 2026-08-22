@@ -16,6 +16,12 @@ import {
 import { addDays } from "@/lib/leadgen-performance";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { CalendarDays, CalendarRange, Clock, ListChecks } from "lucide-react";
+import {
+  attendanceRecordStatus,
+  ATTENDANCE_RECORD_STATUS_LABELS,
+  computeShiftPayBreakdown,
+  type AttendanceRecordStatus,
+} from "@/lib/attendance-pay";
 
 type View = "daily" | "weekly" | "monthly";
 
@@ -65,12 +71,31 @@ function formatElapsedClock(ms: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+const RECORD_STATUS_STYLES: Record<AttendanceRecordStatus, string> = {
+  clocked_in: "bg-emerald-100 text-emerald-800",
+  on_break: "bg-sky-100 text-sky-800",
+  present: "bg-slate-100 text-slate-700",
+  late: "bg-amber-100 text-amber-800",
+  early_departure: "bg-amber-100 text-amber-800",
+  incomplete: "bg-rose-100 text-rose-700",
+};
+
+function RecordStatusBadge({ status }: { status: AttendanceRecordStatus }) {
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${RECORD_STATUS_STYLES[status]}`}>
+      {ATTENDANCE_RECORD_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
 export default function LeadgenMyAttendanceClient({
   rows,
   serverNowIso,
+  scheduledStartTime,
 }: {
   rows: LeadgenAgentAttendanceRow[];
   serverNowIso: string;
+  scheduledStartTime: string | null;
 }) {
   const todayKey = useMemo(() => attendanceDateKey(serverNowIso), [serverNowIso]);
 
@@ -180,41 +205,68 @@ export default function LeadgenMyAttendanceClient({
           )}
 
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Clock In</th>
                   <th className="px-4 py-3">Clock Out</th>
-                  <th className="px-4 py-3">Break</th>
-                  <th className="px-4 py-3">Total Hours</th>
+                  <th className="px-4 py-3">Lunch</th>
+                  <th className="px-4 py-3">Breaks</th>
+                  <th className="px-4 py-3">Paid Hours</th>
+                  <th className="px-4 py-3">Late / Early</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {dailyView.sessions.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                       No attendance records for this date.
                     </td>
                   </tr>
                 )}
-                {dailyView.sessions.map((session) => (
-                  <tr key={session.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 text-slate-600">{formatTime(session.clockIn)}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatTime(session.clockOut)}</td>
-                    <td className="px-4 py-3 text-slate-400">Not tracked</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {session.status === "Incomplete"
-                        ? "Incomplete"
-                        : session.totalMinutes != null && session.clockOut
-                          ? formatDurationMinutes(session.totalMinutes)
+                {dailyView.sessions.map((session) => {
+                  const rawRow = rows.find((r) => r.id === session.id);
+                  const breakdown = rawRow ? computeShiftPayBreakdown(rawRow, scheduledStartTime, serverNowIso) : null;
+                  const recordStatus = rawRow && breakdown
+                    ? attendanceRecordStatus(rawRow, breakdown, attendanceDateKey(rawRow.clock_in) === todayKey)
+                    : null;
+                  return (
+                    <tr key={session.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3 text-slate-600">{formatTime(session.clockIn)}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatTime(session.clockOut)}</td>
+                      <td className="px-4 py-3 text-slate-400">
+                        {breakdown ? formatDurationMinutes(breakdown.lunchMinutes) : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-400">
+                        {breakdown
+                          ? `${formatDurationMinutes(breakdown.break1Minutes)} + ${formatDurationMinutes(breakdown.break2Minutes)}`
                           : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={session.status} />
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {session.status === "Incomplete" || !breakdown || !session.clockOut
+                          ? "-"
+                          : formatDurationMinutes(breakdown.paidWorkingMinutes)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-400">
+                        {breakdown && (breakdown.lateMinutes > 0 || breakdown.earlyDepartureMinutes > 0)
+                          ? [
+                              breakdown.lateMinutes > 0 ? `${breakdown.lateMinutes}m late` : null,
+                              breakdown.earlyDepartureMinutes > 0 ? `${breakdown.earlyDepartureMinutes}m early` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {recordStatus ? <RecordStatusBadge status={recordStatus} /> : <StatusBadge status={session.status} />}
+                        {session.status === "Admin Clock-Out" && (
+                          <div className="mt-1 text-xs text-slate-400">Clocked out by admin</div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

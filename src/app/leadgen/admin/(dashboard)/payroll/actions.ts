@@ -7,13 +7,16 @@ import type { LeadgenAgentAttendanceRow, LeadgenUserRow } from "@/lib/leadgen-ty
 import {
   attendanceDateKey,
   buildPayPeriodAttendanceSummary,
+  buildPayPeriodHourlySummary,
   type PayPeriodAttendanceSummary,
+  type PayPeriodHourlySummary,
 } from "@/lib/leadgen-attendance-report";
 import {
   buildPayrollAdjustmentAuditRows,
-  calculateBasePayEarned,
   getPayPeriodForPayday,
   STANDARD_BIWEEKLY_PAY,
+  STANDARD_BIWEEKLY_WAGE,
+  STANDARD_PAID_HOURS,
   STANDARD_WORKING_DAYS,
   type PayrollAdjustableFields,
   type PayrollAuditAction,
@@ -70,7 +73,7 @@ function parseNonNegativeAmount(formData: FormData, key: string): number | null 
 export async function loadLeadgenAttendanceSummaryAction(
   agentId: string,
   payday: string
-): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary }> {
+): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary; hourlySummary?: PayPeriodHourlySummary }> {
   await requireLeadgenAdmin();
 
   if (!agentId || !payday) return { error: "Agent and payday are required." };
@@ -83,19 +86,25 @@ export async function loadLeadgenAttendanceSummaryAction(
   const paddedEnd = new Date(`${end}T23:59:59.999Z`);
   paddedEnd.setUTCDate(paddedEnd.getUTCDate() + 1);
 
-  const { data, error } = await supabase
-    .from("leadgen_agent_attendance")
-    .select("*")
-    .eq("agent_id", agentId)
-    .gte("clock_in", paddedStart.toISOString())
-    .lte("clock_in", paddedEnd.toISOString())
-    .order("clock_in", { ascending: true });
+  const [{ data, error }, { data: agentRow, error: agentError }] = await Promise.all([
+    supabase
+      .from("leadgen_agent_attendance")
+      .select("*")
+      .eq("agent_id", agentId)
+      .gte("clock_in", paddedStart.toISOString())
+      .lte("clock_in", paddedEnd.toISOString())
+      .order("clock_in", { ascending: true }),
+    supabase.from("leadgen_users").select("scheduled_start_time").eq("id", agentId).maybeSingle(),
+  ]);
 
   if (error) return { error: `Failed to load attendance: ${error.message}` };
+  if (agentError) return { error: `Failed to load agent: ${agentError.message}` };
 
   const todayKey = attendanceDateKey(new Date().toISOString());
-  const summary = buildPayPeriodAttendanceSummary((data ?? []) as LeadgenAgentAttendanceRow[], start, end, todayKey);
-  return { summary };
+  const rows = (data ?? []) as LeadgenAgentAttendanceRow[];
+  const summary = buildPayPeriodAttendanceSummary(rows, start, end, todayKey);
+  const hourlySummary = buildPayPeriodHourlySummary(rows, start, end, todayKey, agentRow?.scheduled_start_time ?? null);
+  return { summary, hourlySummary };
 }
 
 export async function createLeadgenPayrollAction(formData: FormData): Promise<ActionResult> {
@@ -103,11 +112,16 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
 
   const agentId = String(formData.get("agent_id") ?? "").trim();
   const payday = String(formData.get("payday") ?? "").trim();
-  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") ?? STANDARD_BIWEEKLY_PAY;
+  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") || STANDARD_BIWEEKLY_PAY;
   const standardWorkingDays = parseNonNegativeInt(formData, "standard_working_days") || STANDARD_WORKING_DAYS;
+  const standardBiweeklyWage = parseNonNegativeAmount(formData, "standard_biweekly_wage") ?? STANDARD_BIWEEKLY_WAGE;
+  const standardPaidHours = parseNonNegativeAmount(formData, "standard_paid_hours") || STANDARD_PAID_HOURS;
   const daysPresent = parseNonNegativeInt(formData, "days_present");
   const approvedPaidDays = parseNonNegativeInt(formData, "approved_paid_days");
   const unpaidAbsenceDays = parseNonNegativeInt(formData, "unpaid_absence_days");
+  const regularPaidHours = parseNonNegativeAmount(formData, "regular_paid_hours");
+  const unpaidHours = parseNonNegativeAmount(formData, "unpaid_hours");
+  const approvedPaidLeaveHours = parseNonNegativeAmount(formData, "approved_paid_leave_hours");
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
@@ -122,19 +136,22 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
     daysPresent === null ||
     approvedPaidDays === null ||
     unpaidAbsenceDays === null ||
+    regularPaidHours === null ||
+    unpaidHours === null ||
+    approvedPaidLeaveHours === null ||
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
     deductions === null
   ) {
-    return { error: "Amounts and day counts must be zero or a positive number." };
+    return { error: "Amounts and day/hour counts must be zero or a positive number." };
   }
   if (!adjustmentReason) {
     return { error: "A reason is required for this payroll entry." };
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = calculateBasePayEarned(totalPayableDays, standardBiweeklyPay, standardWorkingDays);
+  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const supabase = await createSupabaseServerClient();
@@ -148,10 +165,15 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
       status: "draft",
       standard_biweekly_pay: standardBiweeklyPay,
       standard_working_days: standardWorkingDays,
+      standard_biweekly_wage: standardBiweeklyWage,
+      standard_paid_hours: standardPaidHours,
       days_present: daysPresent,
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
@@ -180,6 +202,9 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
@@ -216,11 +241,16 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
   }
 
   const payday = String(formData.get("payday") ?? "").trim();
-  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") ?? STANDARD_BIWEEKLY_PAY;
+  const standardBiweeklyPay = parseNonNegativeAmount(formData, "standard_biweekly_pay") || STANDARD_BIWEEKLY_PAY;
   const standardWorkingDays = parseNonNegativeInt(formData, "standard_working_days") || STANDARD_WORKING_DAYS;
+  const standardBiweeklyWage = parseNonNegativeAmount(formData, "standard_biweekly_wage") ?? STANDARD_BIWEEKLY_WAGE;
+  const standardPaidHours = parseNonNegativeAmount(formData, "standard_paid_hours") || STANDARD_PAID_HOURS;
   const daysPresent = parseNonNegativeInt(formData, "days_present");
   const approvedPaidDays = parseNonNegativeInt(formData, "approved_paid_days");
   const unpaidAbsenceDays = parseNonNegativeInt(formData, "unpaid_absence_days");
+  const regularPaidHours = parseNonNegativeAmount(formData, "regular_paid_hours");
+  const unpaidHours = parseNonNegativeAmount(formData, "unpaid_hours");
+  const approvedPaidLeaveHours = parseNonNegativeAmount(formData, "approved_paid_leave_hours");
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
@@ -235,19 +265,22 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     daysPresent === null ||
     approvedPaidDays === null ||
     unpaidAbsenceDays === null ||
+    regularPaidHours === null ||
+    unpaidHours === null ||
+    approvedPaidLeaveHours === null ||
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
     deductions === null
   ) {
-    return { error: "Amounts and day counts must be zero or a positive number." };
+    return { error: "Amounts and day/hour counts must be zero or a positive number." };
   }
   if (!adjustmentReason) {
     return { error: "A reason is required for this payroll adjustment." };
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = calculateBasePayEarned(totalPayableDays, standardBiweeklyPay, standardWorkingDays);
+  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const { error } = await supabase
@@ -258,10 +291,15 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
       payday,
       standard_biweekly_pay: standardBiweeklyPay,
       standard_working_days: standardWorkingDays,
+      standard_biweekly_wage: standardBiweeklyWage,
+      standard_paid_hours: standardPaidHours,
       days_present: daysPresent,
       approved_paid_days: approvedPaidDays,
       unpaid_absence_days: unpaidAbsenceDays,
       total_payable_days: totalPayableDays,
+      regular_paid_hours: regularPaidHours,
+      unpaid_hours: unpaidHours,
+      approved_paid_leave_hours: approvedPaidLeaveHours,
       base_pay_earned: basePayEarned,
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
@@ -284,6 +322,9 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     approved_paid_days: existing.approved_paid_days,
     unpaid_absence_days: existing.unpaid_absence_days,
     total_payable_days: existing.total_payable_days,
+    regular_paid_hours: existing.regular_paid_hours,
+    unpaid_hours: existing.unpaid_hours,
+    approved_paid_leave_hours: existing.approved_paid_leave_hours,
     bonus_commission: existing.bonus_commission,
     other_additions: existing.other_additions,
     internet_allowance: existing.internet_allowance,
@@ -295,6 +336,9 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     approved_paid_days: approvedPaidDays,
     unpaid_absence_days: unpaidAbsenceDays,
     total_payable_days: totalPayableDays,
+    regular_paid_hours: regularPaidHours,
+    unpaid_hours: unpaidHours,
+    approved_paid_leave_hours: approvedPaidLeaveHours,
     bonus_commission: bonusCommission,
     other_additions: otherAdditions,
     internet_allowance: internetAllowance,
