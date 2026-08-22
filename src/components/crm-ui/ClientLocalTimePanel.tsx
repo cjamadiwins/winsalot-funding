@@ -31,6 +31,7 @@ import { getNigeriaTimeDiffLabel, getCallingStatus, BUSINESS_HOURS_LABEL, type C
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 import EditLocationsModal from "./EditLocationsModal";
 import CitySkyline, { isNightAt } from "./CitySkyline";
+import CityPhoto from "./CityPhoto";
 import FlagIcon from "./FlagIcon";
 
 // Refresh interval for each card's live weather - "a sensible interval,
@@ -228,52 +229,48 @@ function LocationCard({
     const WeatherIcon = weather.data ? WEATHER_ICONS[weather.data.icon] : null;
     return (
       <div className="overflow-hidden rounded-2xl border border-[var(--crm-border,#dce4ec)] bg-[var(--crm-surface,#ffffff)] shadow-lg">
-        <div className="relative h-[190px] overflow-hidden sm:h-[212px]">
-          <CitySkyline
-            seed={`${location.country}-${location.regionCode}-${location.city}`}
-            night={now ? isNightAt(now, location.timeZone) : false}
-            className="absolute inset-0 h-full w-full"
-          />
-          <div
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(180deg, rgba(5,9,18,0.12) 0%, rgba(5,9,18,0.05) 35%, rgba(5,9,18,0.72) 100%)" }}
-            aria-hidden="true"
-          />
-          <div className="absolute left-5 top-4 flex items-center gap-1.5 text-[13px] font-bold text-white drop-shadow">
-            <FlagIcon country={location.country} className="h-4 w-6" />
-            {location.city}
-          </div>
-          {WeatherIcon && (
-            <WeatherIcon className="absolute right-4 top-4 h-6 w-6 text-white/90 drop-shadow" strokeWidth={1.8} aria-hidden="true" />
-          )}
-          <div className="absolute inset-x-5 bottom-4">
-            <div
-              className="font-mono text-[28px] font-extrabold leading-none tabular-nums text-white drop-shadow-lg sm:text-[33px]"
-              suppressHydrationWarning
-            >
-              {formatted ? formatted.time : "--:--:-- --"}
-            </div>
-            <div className="mt-1.5 flex items-baseline gap-2.5" suppressHydrationWarning>
-              {weather.error ? (
-                <span className="text-[12px] font-semibold text-white/80">Weather unavailable</span>
-              ) : weather.data ? (
-                <>
-                  <span className="text-[14px] font-bold text-white/90 drop-shadow">{weather.data.condition}</span>
-                  <span className="text-[22px] font-extrabold text-white drop-shadow">{Math.round(weather.data.tempC)}°C</span>
-                </>
-              ) : (
-                <span className="text-[12px] font-semibold text-white/70">Loading…</span>
-              )}
-            </div>
-          </div>
-        </div>
+        <CityPhoto
+          seed={`${location.country}-${location.regionCode}-${location.city}`}
+          alt={`${location.city} skyline`}
+          priority
+          className="block h-auto w-full"
+        />
 
-        <div className="px-5 py-3.5">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]" suppressHydrationWarning>
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[13px] font-bold text-[var(--crm-text,#17283b)] sm:text-sm">
+              <FlagIcon country={location.country} className="h-4 w-6" />
+              {location.city}
+            </div>
+            {WeatherIcon && (
+              <WeatherIcon className="h-6 w-6 shrink-0 text-[var(--crm-accent,#3e7ef7)]" strokeWidth={1.8} aria-hidden="true" />
+            )}
+          </div>
+
+          <div
+            className="mt-2 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[var(--crm-accent,#3e7ef7)] sm:text-[33px]"
+            suppressHydrationWarning
+          >
+            {formatted ? formatted.time : "--:--:-- --"}
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-2.5" suppressHydrationWarning>
+            {weather.error ? (
+              <span className="text-[12px] font-semibold text-[var(--crm-text-muted,#6b7c90)]">Weather unavailable</span>
+            ) : weather.data ? (
+              <>
+                <span className="text-[14px] font-bold text-[var(--crm-text-soft,#4b5c71)]">{weather.data.condition}</span>
+                <span className="text-[18px] font-extrabold text-[var(--crm-text,#17283b)]">{Math.round(weather.data.tempC)}°C</span>
+              </>
+            ) : (
+              <span className="text-[12px] font-semibold text-[var(--crm-text-muted,#6b7c90)]">Loading…</span>
+            )}
+          </div>
+
+          <div className="mt-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--crm-text-muted,#6b7c90)]" suppressHydrationWarning>
             {region?.name ?? location.regionCode}, {countryName(location.country)}
             {formatted ? ` · ${formatted.dateLabel} · ${formatted.zoneAbbr}` : ""}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5" suppressHydrationWarning>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
             {nigeriaDiff && <span className="text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)]">{nigeriaDiff}</span>}
             <span className="text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)]">{BUSINESS_HOURS_LABEL}</span>
             {callingStatus && (
