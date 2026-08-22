@@ -37,7 +37,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
-    <div className="crm-theme crm-theme--leadgen-admin">
+    <div className="crm-theme crm-theme--leadgen">
       <CrmShell
         brandTitle="Lead Generation CRM"
         brandSubtitle="Empowering Businesses, One Solution at a Time."
