@@ -1,16 +1,29 @@
 import Link from "next/link";
-import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle } from "lucide-react";
+import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
+import { computeLeadgenDashboardTrends } from "@/lib/leadgen-dashboard-trends";
+import { LEADGEN_PERFORMANCE_TIMEZONE, leadgenDateKey } from "@/lib/leadgen-performance";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
+import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
-export default async function LeadgenAdminDashboardPage() {
-  const admin = getSupabaseAdmin();
+function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
-  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }] = await Promise.all([
+export default async function LeadgenAdminDashboardPage() {
+  const currentAdmin = await requireLeadgenAdmin();
+  const admin = getSupabaseAdmin();
+  const now = new Date();
+  const todayKey = leadgenDateKey(now);
+
+  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: todaysAppointments }] = await Promise.all([
     admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
     admin.from("leadgen_appointments").select("status, client_id"),
     admin.from("leadgen_clients").select("id, name"),
@@ -20,6 +33,13 @@ export default async function LeadgenAdminDashboardPage() {
       .eq("role", "agent")
       .eq("active", true)
       .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
+    // Today's Appointments dashboard widget - every non-cancelled/replaced
+    // appointment booked for today, earliest first.
+    admin
+      .from("leadgen_appointments")
+      .select("id, appointment_time, business_name, contact_name, status, assigned_specialist_id")
+      .eq("appointment_date", todayKey)
+      .order("appointment_time", { ascending: true }),
   ]);
 
   const allLeads = leads ?? [];
@@ -42,6 +62,8 @@ export default async function LeadgenAdminDashboardPage() {
   const followUpsDueToday = allLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)).length;
   const overdueFollowUps = allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length;
 
+  const trends = computeLeadgenDashboardTrends(allLeads, now);
+
   const byCampaignClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const client of allClients) byCampaignClient.set(client.id, { name: client.name, leads: 0, appointments: 0 });
   for (const lead of allLeads) {
@@ -53,19 +75,44 @@ export default async function LeadgenAdminDashboardPage() {
     if (entry) entry.appointments++;
   }
 
+  const agentNameById = new Map(agents.map((agent) => [agent.id, agent.full_name] as const));
+  const todaysAppointmentRows: TodaysAppointmentRow[] = (todaysAppointments ?? [])
+    .filter((appt) => isLeadgenAppointmentCountable(appt.status))
+    .map((appt) => ({
+      id: appt.id,
+      appointment_time: appt.appointment_time,
+      business_name: appt.business_name,
+      contact_name: appt.contact_name,
+      status: appt.status,
+      agentName: appt.assigned_specialist_id ? (agentNameById.get(appt.assigned_specialist_id) ?? null) : null,
+    }));
+
+  const currentHour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: LEADGEN_PERFORMANCE_TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(now)
+  );
+  const firstName = currentAdmin.full_name.trim().split(/\s+/)[0] || currentAdmin.full_name;
+
   // Each card links straight into the Leads page pre-filtered to that
   // exact slice (see LeadsListClient's initialStatusFilter/
   // initialFollowUpFilter props), so clicking a number is never a dead
   // end - every row on the landed page already links to that lead's own
   // profile, where the admin can act immediately.
   const stats = [
-    { label: "Total Leads", value: String(totalLeads), href: "/leadgen/admin/leads", tone: LEADGEN_STAT_CARD_STYLES.leads, icon: Users },
+    {
+      label: "Total Leads",
+      value: String(totalLeads),
+      href: "/leadgen/admin/leads",
+      tone: LEADGEN_STAT_CARD_STYLES.leads,
+      icon: Users,
+      trend: trends.totalLeads,
+    },
     {
       label: "Interested Leads",
       value: String(interestedLeads),
       href: "/leadgen/admin/leads?status=Interested",
       tone: LEADGEN_STAT_CARD_STYLES.interested,
       icon: UserCheck,
+      trend: trends.interestedLeads,
     },
     {
       label: "Appointments Booked",
@@ -78,6 +125,7 @@ export default async function LeadgenAdminDashboardPage() {
       href: `/leadgen/admin/leads?appointment_status=${encodeURIComponent("Booked")}`,
       tone: LEADGEN_STAT_CARD_STYLES.appointments,
       icon: CalendarCheck,
+      trend: trends.appointmentsBooked,
     },
     {
       label: "Follow-ups Due Today",
@@ -85,6 +133,7 @@ export default async function LeadgenAdminDashboardPage() {
       href: "/leadgen/admin/leads?followup=due_today",
       tone: LEADGEN_STAT_CARD_STYLES.dueToday,
       icon: Clock,
+      trend: trends.followUpsDue,
     },
     {
       label: "Overdue Follow-ups",
@@ -92,17 +141,57 @@ export default async function LeadgenAdminDashboardPage() {
       href: "/leadgen/admin/leads?followup=overdue",
       tone: LEADGEN_STAT_CARD_STYLES.overdue,
       icon: AlertTriangle,
+      // Rising overdue count is bad, not good - flip the arrow's color
+      // logic so an "up" trend reads red, not green.
+      trend: { ...trends.overdueFollowUps, goodDirection: "down" as const },
     },
   ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-500">Lead Generation CRM overview across every client and campaign.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {greetingForHour(currentHour)}, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">Here&apos;s what&apos;s happening across every client and campaign today.</p>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <Link
+            href="/leadgen/admin/leads"
+            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2.3} />
+            Add Lead
+          </Link>
+          <Link
+            href="/leadgen/admin/appointments"
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+          >
+            <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
+            Book Appointment
+          </Link>
+          <Link
+            href="/leadgen/admin/performance"
+            className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-teal-700"
+          >
+            <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
+            View Reports
+          </Link>
+        </div>
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map((stat) => (
-          <KpiCard key={stat.label} label={stat.label} value={stat.value} href={stat.href} tone={stat.tone} icon={<stat.icon />} />
+          <KpiCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            href={stat.href}
+            tone={stat.tone}
+            icon={<stat.icon />}
+            trend={stat.trend}
+          />
         ))}
       </div>
 
@@ -136,10 +225,16 @@ export default async function LeadgenAdminDashboardPage() {
         )}
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Results by Agent</h2>
-        <ResultsByAgentChart agents={agents} leads={allLeads} serverNowIso={new Date().toISOString()} />
-      </section>
+      <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start">
+        <section className="min-w-0 flex-[1.6] rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Agent Performance</h2>
+          <ResultsByAgentChart agents={agents} leads={allLeads} serverNowIso={now.toISOString()} />
+        </section>
+
+        <div className="flex-1">
+          <TodaysAppointmentsCard appointments={todaysAppointmentRows} />
+        </div>
+      </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>

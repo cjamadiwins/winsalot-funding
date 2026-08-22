@@ -34,6 +34,68 @@ const TONE_ICON_BG: Record<KpiTone, string> = {
   slate: "#64748B",
 };
 
+// Optional "vs last 7 days" trend row - a small arrow + percentage plus
+// an inline sparkline of the last 7 days' daily volume. Omit `trend`
+// entirely to keep the plain tile every existing call site already
+// renders; only the Lead Gen admin dashboard passes one today.
+export type KpiTrend = {
+  pct: number;
+  direction: "up" | "down" | "flat";
+  // Oldest -> newest daily values, e.g. 7 entries for the last 7 days.
+  series: number[];
+  // "up" usually means good (green) and "down" bad, but a rising count
+  // of something undesirable (e.g. Overdue Follow-ups) should read as
+  // bad even though it's an "up" arrow - callers flip this for those.
+  goodDirection?: "up" | "down";
+};
+
+function Sparkline({ series, color }: { series: number[]; color: string }) {
+  if (series.length < 2) return null;
+  const max = Math.max(...series, 1);
+  const min = Math.min(...series, 0);
+  const range = max - min || 1;
+  const stepX = 64 / (series.length - 1);
+  const points = series.map((v, i) => `${(i * stepX).toFixed(1)},${(18 - ((v - min) / range) * 16).toFixed(1)}`).join(" ");
+  return (
+    <svg width="64" height="20" viewBox="0 0 64 20" className="shrink-0" aria-hidden="true">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TrendRow({ trend, tone }: { trend: KpiTrend; tone: KpiTone }) {
+  const good = trend.goodDirection ?? "up";
+  const isGood = trend.direction === "flat" ? null : trend.direction === good;
+  const arrowColor = isGood === null ? "#94a3b8" : isGood ? "#16a34a" : "#dc2626";
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <span className="inline-flex items-center gap-1 text-[11px] font-bold" style={{ color: arrowColor }}>
+        {trend.direction === "flat" ? (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={arrowColor} strokeWidth="3" strokeLinecap="round">
+            <path d="M5 12h14" />
+          </svg>
+        ) : (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={arrowColor}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={trend.direction === "down" ? { transform: "rotate(180deg)" } : undefined}
+          >
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
+        )}
+        {trend.pct}%
+      </span>
+      <Sparkline series={trend.series} color={TONE_ICON_BG[tone]} />
+    </div>
+  );
+}
+
 export default function KpiCard({
   label,
   value,
@@ -42,6 +104,7 @@ export default function KpiCard({
   active,
   icon,
   tone = "blue",
+  trend,
 }: {
   label: string;
   value: string | number;
@@ -50,6 +113,7 @@ export default function KpiCard({
   active?: boolean;
   icon: ReactNode;
   tone?: KpiTone;
+  trend?: KpiTrend;
 }) {
   const router = useRouter();
   const iconColor = TONE_ICON_BG[tone];
@@ -72,6 +136,7 @@ export default function KpiCard({
       <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--crm-text-soft,#4b5c71)]">
         {label}
       </div>
+      {trend && <TrendRow trend={trend} tone={tone} />}
     </>
   );
 

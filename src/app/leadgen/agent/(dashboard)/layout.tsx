@@ -33,10 +33,11 @@ export default async function LeadgenAgentLayout({ children }: { children: React
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
-    <div className="crm-theme">
+    <div className="crm-theme crm-theme--leadgen">
       <CrmShell
-        brandTitle="Winsalot Corp. Lead Gen CRM"
-        brandSubtitle="Empowering Businesses. One Solution at a Time."
+        brandTitle="Lead Generation CRM"
+        brandSubtitle="Empowering Businesses, One Solution at a Time."
+        brandLogoSrc="/winsalot-logo.png"
         homeHref="/leadgen/agent"
         navItems={NAV_ITEMS}
         userLabel={user.full_name}
@@ -45,6 +46,7 @@ export default async function LeadgenAgentLayout({ children }: { children: React
           initialPreferences: timeZonePreferences,
           saveLocationsAction: saveUserTimeZonePreferences,
           resetLocationsAction: resetUserTimeZonePreferences,
+          cardVariant: "photoHero",
         }}
       >
         {children}

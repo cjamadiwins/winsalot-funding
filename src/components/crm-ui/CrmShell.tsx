@@ -19,6 +19,45 @@ function isNavItemActive(pathname: string, homeHref: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// Sidebar brand block, top-level for the same stable-identity reason as
+// SidebarNav below. `logoSrc` is optional - most CRM portals still get
+// the plain text brandTitle/brandSubtitle they always have; only a
+// portal that explicitly opts in (passing logoSrc) gets the logo-on-a-
+// white-chip treatment, so this is a strict visual addition for those
+// portals and a no-op for every other one.
+function BrandHeader({
+  brandTitle,
+  brandSubtitle,
+  logoSrc,
+}: {
+  brandTitle: string;
+  brandSubtitle?: string;
+  logoSrc?: string;
+}) {
+  if (!logoSrc) {
+    return (
+      <>
+        <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
+        {brandSubtitle && <span className="text-[10.5px] font-medium text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandSubtitle}</span>}
+      </>
+    );
+  }
+  return (
+    <div className="flex flex-1 flex-col items-center gap-2 text-center">
+      <span className="rounded-xl bg-white p-2 shadow-md">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoSrc} alt={brandTitle} className="block h-[76px] w-[76px] object-contain" />
+      </span>
+      {brandSubtitle && (
+        <span className="max-w-[190px] text-[10px] font-medium italic leading-snug text-[var(--crm-sidebar-text-soft,#c3d0e3)]">
+          {brandSubtitle}
+        </span>
+      )}
+      <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandTitle}</span>
+    </div>
+  );
+}
+
 // Top-level (not nested inside CrmShell's render) so its identity is
 // stable across re-renders instead of being recreated every time.
 function SidebarNav({
@@ -87,6 +126,7 @@ function SignOutButton({ signOutAction }: { signOutAction: () => void | Promise<
 export default function CrmShell({
   brandTitle,
   brandSubtitle,
+  brandLogoSrc,
   homeHref,
   navItems,
   userLabel,
@@ -97,6 +137,11 @@ export default function CrmShell({
 }: {
   brandTitle: string;
   brandSubtitle?: string;
+  // Path to a logo image (e.g. "/winsalot-logo.png") to show above
+  // brandTitle/brandSubtitle on a white chip. Optional - omit to keep
+  // the original text-only sidebar header every other portal already
+  // has.
+  brandLogoSrc?: string;
   homeHref: string;
   navItems: CrmNavItem[];
   userLabel?: string;
@@ -109,6 +154,10 @@ export default function CrmShell({
       location2: { country: LocationCountry; regionCode: string; city: string }
     ) => Promise<{ error?: string }>;
     resetLocationsAction: () => Promise<{ error?: string }>;
+    // "photoHero" = full-bleed skyline art with time/weather overlaid
+    // directly on it (Lead Gen admin's redesign); omit for the original
+    // small-strip-plus-white-body card every other portal keeps.
+    cardVariant?: "default" | "photoHero";
   };
   children: ReactNode;
 }) {
@@ -119,9 +168,15 @@ export default function CrmShell({
     <div className="flex min-h-screen bg-[var(--crm-bg,#f4f7fa)]">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] lg:flex">
-        <Link href={homeHref} className="flex flex-col gap-0.5 border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-5 leading-tight">
-          <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
-          {brandSubtitle && <span className="text-[10.5px] font-medium text-[var(--crm-sidebar-text-muted,#8ca1be)]">{brandSubtitle}</span>}
+        <Link
+          href={homeHref}
+          className={
+            brandLogoSrc
+              ? "flex flex-col items-center border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-6"
+              : "flex flex-col gap-0.5 border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-5 leading-tight"
+          }
+        >
+          <BrandHeader brandTitle={brandTitle} brandSubtitle={brandSubtitle} logoSrc={brandLogoSrc} />
         </Link>
         <SidebarNav navItems={navItems} pathname={pathname} homeHref={homeHref} />
         <div className="border-t border-[var(--crm-sidebar-border,#33496a)] px-3 py-3">
@@ -137,8 +192,12 @@ export default function CrmShell({
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} aria-hidden="true" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-[var(--crm-sidebar,#223a55)] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-4">
-              <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
+            <div className="flex items-start justify-between border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-4">
+              {brandLogoSrc ? (
+                <BrandHeader brandTitle={brandTitle} brandSubtitle={brandSubtitle} logoSrc={brandLogoSrc} />
+              ) : (
+                <span className="font-heading text-[15px] font-bold text-white">{brandTitle}</span>
+              )}
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
@@ -170,7 +229,15 @@ export default function CrmShell({
           >
             <Menu className="h-6 w-6" />
           </button>
-          <span className="font-heading text-[14.5px] font-bold text-white">{brandTitle}</span>
+          <div className="flex items-center gap-2">
+            {brandLogoSrc && (
+              <span className="flex items-center rounded-md bg-white p-0.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={brandLogoSrc} alt="" className="block h-[22px] w-[22px] object-contain" />
+              </span>
+            )}
+            <span className="font-heading text-[14.5px] font-bold text-white">{brandTitle}</span>
+          </div>
           <div className="flex h-6 w-6 items-center justify-center">{rightSlot}</div>
         </header>
 
@@ -185,6 +252,7 @@ export default function CrmShell({
           initialPreferences={clientLocalTime.initialPreferences}
           saveLocationsAction={clientLocalTime.saveLocationsAction}
           resetLocationsAction={clientLocalTime.resetLocationsAction}
+          cardVariant={clientLocalTime.cardVariant}
         />
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
