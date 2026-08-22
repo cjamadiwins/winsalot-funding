@@ -41,7 +41,10 @@ async function fetchLeaveRequestWithAgent(
 ): Promise<{ data: LeadgenLeaveRequestWithAgent | null; error: string | null }> {
   const { data, error } = await supabase
     .from("leadgen_leave_requests")
-    .select("*, leadgen_users(full_name, email)")
+    // `!agent_id` disambiguates which of leadgen_leave_requests' four FKs
+    // to leadgen_users PostgREST should embed through - see page.tsx's
+    // comment.
+    .select("*, leadgen_users!agent_id(full_name, email)")
     .eq("id", requestId)
     .single();
   if (error || !data) return { data: null, error: "Leave request not found." };
@@ -80,16 +83,21 @@ export async function approveLeadgenLeaveRequestAction(requestId: string, formDa
     note,
   });
 
-  if (existing.leadgen_users?.email) {
-    await notifyAgentOfLeadgenLeaveDecision({
-      agentEmail: existing.leadgen_users.email,
-      agentName: agentNameOf(existing),
-      status: "approved",
-    });
-  }
+  await notifyAgentOfLeadgenLeaveDecision({
+    leaveRequestId: requestId,
+    agentId: existing.agent_id,
+    agentEmail: existing.leadgen_users?.email ?? "",
+    agentName: agentNameOf(existing),
+    startDate: existing.start_date,
+    endDate: existing.end_date,
+    status: "approved",
+    decisionNote: note,
+  });
 
   revalidatePath("/leadgen/admin/leave-requests");
+  revalidatePath("/leadgen/admin", "layout");
   revalidatePath("/leadgen/agent/leave-requests");
+  revalidatePath("/leadgen/agent", "layout");
   return {};
 }
 
@@ -125,16 +133,21 @@ export async function declineLeadgenLeaveRequestAction(requestId: string, formDa
     note,
   });
 
-  if (existing.leadgen_users?.email) {
-    await notifyAgentOfLeadgenLeaveDecision({
-      agentEmail: existing.leadgen_users.email,
-      agentName: agentNameOf(existing),
-      status: "declined",
-    });
-  }
+  await notifyAgentOfLeadgenLeaveDecision({
+    leaveRequestId: requestId,
+    agentId: existing.agent_id,
+    agentEmail: existing.leadgen_users?.email ?? "",
+    agentName: agentNameOf(existing),
+    startDate: existing.start_date,
+    endDate: existing.end_date,
+    status: "declined",
+    decisionNote: note,
+  });
 
   revalidatePath("/leadgen/admin/leave-requests");
+  revalidatePath("/leadgen/admin", "layout");
   revalidatePath("/leadgen/agent/leave-requests");
+  revalidatePath("/leadgen/agent", "layout");
   return {};
 }
 

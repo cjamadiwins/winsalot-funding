@@ -41,7 +41,9 @@ async function fetchLeaveRequestWithAgent(
 ): Promise<{ data: LeaveRequestWithAgent | null; error: string | null }> {
   const { data, error } = await supabase
     .from("crm_leave_requests")
-    .select("*, crm_users(full_name, email)")
+    // `!agent_id` disambiguates which of crm_leave_requests' four FKs to
+    // crm_users PostgREST should embed through - see page.tsx's comment.
+    .select("*, crm_users!agent_id(full_name, email)")
     .eq("id", requestId)
     .single();
   if (error || !data) return { data: null, error: "Leave request not found." };
@@ -80,10 +82,19 @@ export async function approveLeaveRequestAction(requestId: string, formData: For
     note,
   });
 
-  await notifyAgentOfCrmLeaveDecision({ agentId: existing.agent_id, status: "approved" });
+  await notifyAgentOfCrmLeaveDecision({
+    leaveRequestId: requestId,
+    agentId: existing.agent_id,
+    startDate: existing.start_date,
+    endDate: existing.end_date,
+    status: "approved",
+    decisionNote: note,
+  });
 
   revalidatePath("/admin/crm/leave-requests");
+  revalidatePath("/admin", "layout");
   revalidatePath("/agent/leave-requests");
+  revalidatePath("/agent", "layout");
   return {};
 }
 
@@ -119,10 +130,19 @@ export async function declineLeaveRequestAction(requestId: string, formData: For
     note,
   });
 
-  await notifyAgentOfCrmLeaveDecision({ agentId: existing.agent_id, status: "declined" });
+  await notifyAgentOfCrmLeaveDecision({
+    leaveRequestId: requestId,
+    agentId: existing.agent_id,
+    startDate: existing.start_date,
+    endDate: existing.end_date,
+    status: "declined",
+    decisionNote: note,
+  });
 
   revalidatePath("/admin/crm/leave-requests");
+  revalidatePath("/admin", "layout");
   revalidatePath("/agent/leave-requests");
+  revalidatePath("/agent", "layout");
   return {};
 }
 

@@ -95,6 +95,33 @@ export function countScheduledLeaveDays(startDate: string, endDate: string): num
   return weekdaysInRange(startDate, endDate).length;
 }
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// "September 4–7, 2026" (same month/year, en dash - matches the spec's
+// own example verbatim) / "September 30 - October 2, 2026" (crosses
+// months) / "December 30, 2026 - January 2, 2027" (crosses years) /
+// "September 4, 2026" (single day) - used verbatim in every
+// notification message this feature sends ("submitted a leave request
+// for ...", "Your leave request for ... was approved").
+export function formatLeaveDateRangeLabel(startDate: string, endDate: string): string {
+  const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+
+  if (startDate === endDate) {
+    return `${MONTH_NAMES[startMonth - 1]} ${startDay}, ${startYear}`;
+  }
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${MONTH_NAMES[startMonth - 1]} ${startDay}–${endDay}, ${startYear}`;
+  }
+  if (startYear === endYear) {
+    return `${MONTH_NAMES[startMonth - 1]} ${startDay} - ${MONTH_NAMES[endMonth - 1]} ${endDay}, ${startYear}`;
+  }
+  return `${MONTH_NAMES[startMonth - 1]} ${startDay}, ${startYear} - ${MONTH_NAMES[endMonth - 1]} ${endDay}, ${endYear}`;
+}
+
 export type LeaveRequestAuditAction =
   | "submitted"
   | "approved"

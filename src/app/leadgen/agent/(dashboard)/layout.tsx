@@ -1,4 +1,8 @@
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import NotificationBell from "@/components/NotificationBell";
+import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
+import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import {
   LayoutDashboard,
@@ -13,7 +17,7 @@ import {
   GraduationCap,
   Wallet,
 } from "lucide-react";
-import { signOutLeadgenAgentAction } from "./actions";
+import { signOutLeadgenAgentAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
@@ -32,6 +36,12 @@ const NAV_ITEMS: CrmNavItem[] = [
 
 export default async function LeadgenAgentLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+  const { data: notifications } = await supabase
+    .from("leadgen_notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20);
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
@@ -56,6 +66,16 @@ export default async function LeadgenAgentLayout({ children }: { children: React
           resetLocationsAction: resetUserTimeZonePreferences,
           cardVariant: "photoHero",
         }}
+        rightSlot={
+          <>
+            <NotificationRefresher />
+            <NotificationBell
+              notifications={(notifications ?? []) as LeadgenNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
+          </>
+        }
       >
         {children}
       </CrmShell>

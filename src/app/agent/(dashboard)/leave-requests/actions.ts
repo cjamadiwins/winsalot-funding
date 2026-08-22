@@ -63,9 +63,16 @@ export async function submitLeaveRequestAction(formData: FormData): Promise<Acti
     details: { leave_type: leaveType, start_date: startDate, end_date: endDate, notice_days: noticeDays, is_short_notice: shortNotice },
   });
 
-  await notifyAdminsOfNewCrmLeaveRequest({ agentName, isShortNotice: shortNotice });
+  await notifyAdminsOfNewCrmLeaveRequest({
+    leaveRequestId: inserted.id,
+    agentName,
+    startDate,
+    endDate,
+    isShortNotice: shortNotice,
+  });
 
   revalidatePath("/agent/leave-requests");
   revalidatePath("/admin/crm/leave-requests");
+  revalidatePath("/admin", "layout");
   return {};
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NotificationBell from "@/components/NotificationBell";
+import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import {
@@ -75,11 +76,14 @@ export default async function AgentLayout({ children }: { children: ReactNode })
           cardVariant: "photoHero",
         }}
         rightSlot={
-          <NotificationBell
-            notifications={(notifications ?? []) as CrmNotificationRow[]}
-            markReadAction={markNotificationReadAction}
-            markAllReadAction={markAllNotificationsReadAction}
-          />
+          <>
+            <NotificationRefresher />
+            <NotificationBell
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
+          </>
         }
       >
         {children}

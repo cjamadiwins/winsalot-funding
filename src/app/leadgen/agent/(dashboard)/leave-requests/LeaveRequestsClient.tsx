@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { LeadgenLeaveRequestRow } from "@/lib/leadgen-types";
 import {
   LEAVE_POLICY_BODY,
@@ -18,7 +18,22 @@ import { submitLeadgenLeaveRequestAction } from "./actions";
 // exactly - see that file for design rationale.
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
-export default function LeadgenLeaveRequestsClient({ requests }: { requests: LeadgenLeaveRequestRow[] }) {
+export default function LeadgenLeaveRequestsClient({
+  requests,
+  highlightId,
+}: {
+  requests: LeadgenLeaveRequestRow[];
+  highlightId?: string;
+}) {
+  const [flashId, setFlashId] = useState(highlightId);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`leave-request-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(() => setFlashId(undefined), 4000);
+    return () => clearTimeout(timeout);
+  }, [highlightId]);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -144,7 +159,11 @@ export default function LeadgenLeaveRequestsClient({ requests }: { requests: Lea
                 </tr>
               )}
               {requests.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  id={`leave-request-${r.id}`}
+                  className={flashId === r.id ? "bg-amber-50 transition-colors" : "transition-colors"}
+                >
                   <td className="px-4 py-3">{new Date(r.submitted_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">{LEAVE_TYPE_LABELS[r.leave_type]}</td>
                   <td className="px-4 py-3">

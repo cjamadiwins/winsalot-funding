@@ -359,6 +359,31 @@ export async function signOutLeadgenAction() {
   redirect("/leadgen/login");
 }
 
+// Marks one of the signed-in admin's own leadgen_notifications rows
+// read. RLS (leadgen_notifications_update_own) already scopes this to
+// user_id = auth.uid() - mirrors src/app/admin/(dashboard)/actions.ts.
+export async function markNotificationReadAction(notificationId: string) {
+  const leadgenUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  await supabase
+    .from("leadgen_notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("user_id", leadgenUser.id);
+  revalidatePath("/leadgen/admin", "layout");
+}
+
+export async function markAllNotificationsReadAction() {
+  const leadgenUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  await supabase
+    .from("leadgen_notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("user_id", leadgenUser.id)
+    .eq("is_read", false);
+  revalidatePath("/leadgen/admin", "layout");
+}
+
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
   return value ? value : null;
