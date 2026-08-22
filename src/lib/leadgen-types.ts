@@ -874,3 +874,66 @@ export function leadgenServicesInviteSection(servicesLink: string | null, client
 export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
+
+// Leave Requests (leadgen_leave_requests, migration 0070) - identical
+// shape to the Cleaning CRM's crm_leave_requests (migration 0069). Pure
+// notice-period/deduction math lives in src/lib/leave-requests.ts, shared
+// with the Cleaning CRM since that logic has nothing CRM-specific about
+// it (same reasoning as src/lib/payroll.ts being shared); only the row
+// shape is duplicated here, matching this file's own stated convention.
+import type { LeaveAttendanceStatus, LeaveStatus, LeaveType } from "./leave-requests";
+
+export type LeadgenLeaveRequestRow = {
+  id: string;
+  agent_id: string;
+  leave_type: LeaveType;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: LeaveStatus;
+  notice_days: number;
+  is_short_notice: boolean;
+  submitted_at: string;
+  decision_note: string | null;
+  decided_by: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  attendance_status: LeaveAttendanceStatus;
+  attendance_marked_at: string | null;
+  attendance_marked_by: string | null;
+  attendance_marked_by_name: string | null;
+  deduction_amount: number | null;
+  deduction_reason: string | null;
+  deduction_confirmed: boolean;
+  deduction_confirmed_by: string | null;
+  deduction_confirmed_by_name: string | null;
+  deduction_confirmed_at: string | null;
+  payroll_applied_id: string | null;
+  payroll_applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadgenLeaveRequestWithAgent = LeadgenLeaveRequestRow & {
+  leadgen_users: Pick<LeadgenUserRow, "id" | "full_name" | "email"> | null;
+};
+
+export type LeadgenLeaveRequestAuditLogRow = {
+  id: string;
+  created_at: string;
+  leave_request_id: string;
+  agent_id: string | null;
+  agent_name: string;
+  action:
+    | "submitted"
+    | "approved"
+    | "declined"
+    | "attendance_marked_paid_leave"
+    | "attendance_marked_unpaid_absence"
+    | "deduction_confirmed"
+    | "payroll_applied";
+  performed_by: string | null;
+  performed_by_name: string;
+  note: string | null;
+  details: Record<string, unknown> | null;
+};

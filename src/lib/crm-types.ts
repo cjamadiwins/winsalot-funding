@@ -507,3 +507,68 @@ export function toDatetimeLocal(iso: string): string {
     date.getHours()
   )}:${pad(date.getMinutes())}`;
 }
+
+// Leave Requests (crm_leave_requests, migration 0069). Pure notice-period/
+// deduction math lives in src/lib/leave-requests.ts, shared with the Lead
+// Generation CRM's identically-shaped leadgen_leave_requests - this row
+// type is per-CRM only because the table (and its agent_id FK target,
+// crm_users) is.
+import type { LeaveAttendanceStatus, LeaveStatus, LeaveType } from "./leave-requests";
+
+export type CrmLeaveRequestRow = {
+  id: string;
+  agent_id: string;
+  leave_type: LeaveType;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: LeaveStatus;
+  notice_days: number;
+  is_short_notice: boolean;
+  submitted_at: string;
+  decision_note: string | null;
+  decided_by: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  attendance_status: LeaveAttendanceStatus;
+  attendance_marked_at: string | null;
+  attendance_marked_by: string | null;
+  attendance_marked_by_name: string | null;
+  deduction_amount: number | null;
+  deduction_reason: string | null;
+  deduction_confirmed: boolean;
+  deduction_confirmed_by: string | null;
+  deduction_confirmed_by_name: string | null;
+  deduction_confirmed_at: string | null;
+  payroll_applied_id: string | null;
+  payroll_applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// Joined shape for the admin Leave Requests page (one row per request,
+// with the agent's name/email attached so the table doesn't need a
+// second round trip per row).
+export type CrmLeaveRequestWithAgent = CrmLeaveRequestRow & {
+  crm_users: Pick<CrmUserRow, "id" | "full_name" | "email"> | null;
+};
+
+export type CrmLeaveRequestAuditLogRow = {
+  id: string;
+  created_at: string;
+  leave_request_id: string;
+  agent_id: string | null;
+  agent_name: string;
+  action:
+    | "submitted"
+    | "approved"
+    | "declined"
+    | "attendance_marked_paid_leave"
+    | "attendance_marked_unpaid_absence"
+    | "deduction_confirmed"
+    | "payroll_applied";
+  performed_by: string | null;
+  performed_by_name: string;
+  note: string | null;
+  details: Record<string, unknown> | null;
+};
