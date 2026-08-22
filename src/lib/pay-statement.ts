@@ -8,7 +8,7 @@
 // CRMs' payroll UIs; takes plain values rather than a PayrollRecord so it
 // never needs to import either CRM's types.
 
-import { formatNgn, formatPayPeriodLabel, formatDateLong, dailyRate, type PayrollStatus } from "./payroll";
+import { formatNgn, formatPayPeriodLabel, formatDateLong, hourlyRate, type PayrollStatus } from "./payroll";
 
 export type PayStatementInput = {
   companyName: string;
@@ -17,12 +17,14 @@ export type PayStatementInput = {
   payPeriodStart: string;
   payPeriodEnd: string;
   payday: string;
-  standardBiweeklyPay: number;
   standardWorkingDays: number;
+  standardBiweeklyWage: number;
+  standardPaidHours: number;
   daysPresent: number;
-  approvedPaidDays: number;
   unpaidAbsenceDays: number;
-  totalPayableDays: number;
+  regularPaidHours: number;
+  unpaidHours: number;
+  approvedPaidLeaveHours: number;
   basePayEarned: number;
   incentiveBonus: number;
   otherAdditions: number;
@@ -50,19 +52,21 @@ const STATUS_LABELS: Record<PayrollStatus, string> = {
 };
 
 export function buildPayStatementHtml(input: PayStatementInput): string {
-  const rate = dailyRate(input.standardBiweeklyPay, input.standardWorkingDays);
-  const additions = input.otherAdditions + input.internetAllowance;
+  const rate = hourlyRate(input.standardBiweeklyWage, input.standardPaidHours);
 
   const rows: [string, string][] = [
-    ["Daily Rate", formatNgn(rate)],
+    ["Scheduled Days / Hours", `${input.standardWorkingDays}d / ${input.standardPaidHours}h`],
     ["Days Present", String(input.daysPresent)],
-    ["Approved Paid Days", String(input.approvedPaidDays)],
-    ["Unpaid Absence Days", String(input.unpaidAbsenceDays)],
-    ["Total Payable Days", String(input.totalPayableDays)],
-    ["Base Pay Earned", formatNgn(input.basePayEarned)],
+    ["Missed Days", String(input.unpaidAbsenceDays)],
+    ["Approved Paid-Leave Hours", String(input.approvedPaidLeaveHours)],
+    ["Regular Paid Hours", String(input.regularPaidHours)],
+    ["Unpaid Hours", String(input.unpaidHours)],
+    ["Hourly Wage", formatNgn(rate)],
+    ["Gross Wage Earnings", formatNgn(input.basePayEarned)],
+    ["Attendance Deductions", `-${formatNgn(input.deductions)}`],
+    ["Internet Allowance", formatNgn(input.internetAllowance)],
     ["Incentives / Bonuses", formatNgn(input.incentiveBonus)],
-    ["Other Additions", formatNgn(additions)],
-    ["Deductions", `-${formatNgn(input.deductions)}`],
+    ["Other Additions", formatNgn(input.otherAdditions)],
   ];
 
   return `<!doctype html>

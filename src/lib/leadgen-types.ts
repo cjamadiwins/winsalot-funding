@@ -19,6 +19,11 @@ export type LeadgenUserRow = {
   role: LeadgenRole;
   client_id: string | null;
   active: boolean;
+  // "HH:MM:SS" or null - null means no schedule is configured yet for
+  // this agent, so late-arrival/early-departure is never flagged for
+  // them (see src/lib/attendance-pay.ts). Admin-set from the Attendance
+  // page, migration 0075.
+  scheduled_start_time: string | null;
 };
 
 export type LeadgenAgentAttendanceRow = {
@@ -35,6 +40,12 @@ export type LeadgenAgentAttendanceRow = {
   // Null means the agent clocked themselves out.
   clocked_out_by_admin_id: string | null;
   clocked_out_by_admin_name: string | null;
+  break1_start: string | null;
+  break1_end: string | null;
+  lunch_start: string | null;
+  lunch_end: string | null;
+  break2_start: string | null;
+  break2_end: string | null;
 };
 
 export type LeadgenClientRow = {

@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
-import { calculateLeaveDeductionAmount, countScheduledLeaveDays, type LeaveAttendanceStatus } from "@/lib/leave-requests";
-import { STANDARD_BIWEEKLY_PAY, STANDARD_WORKING_DAYS, calculateBasePayEarned } from "@/lib/payroll";
+import {
+  calculateLeaveDeductionAmountHourly,
+  countScheduledLeaveDays,
+  countScheduledLeaveHours,
+  type LeaveAttendanceStatus,
+} from "@/lib/leave-requests";
+import { STANDARD_BIWEEKLY_WAGE, STANDARD_PAID_HOURS, hourlyRate } from "@/lib/payroll";
 import { notifyAgentOfCrmLeaveDecision, recordCrmLeaveAudit } from "@/lib/crm-leave-notifications";
 
 // Returns { error } instead of throwing, matching crm/payroll/actions.ts -
@@ -189,24 +194,24 @@ export async function markLeaveAttendanceAction(requestId: string, formData: For
     // record yet fall back to the company-wide standard constants.
     const { data: latestPayroll } = await supabase
       .from("crm_payroll")
-      .select("standard_biweekly_pay, standard_working_days")
+      .select("standard_biweekly_wage, standard_paid_hours")
       .eq("agent_id", existing.agent_id)
       .order("payday", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const standardBiweeklyPay = latestPayroll?.standard_biweekly_pay ?? STANDARD_BIWEEKLY_PAY;
-    const standardWorkingDays = latestPayroll?.standard_working_days ?? STANDARD_WORKING_DAYS;
-    const { amount, scheduledDays } = calculateLeaveDeductionAmount(
+    const standardBiweeklyWage = latestPayroll?.standard_biweekly_wage ?? STANDARD_BIWEEKLY_WAGE;
+    const standardPaidHours = latestPayroll?.standard_paid_hours ?? STANDARD_PAID_HOURS;
+    const { amount, hours, scheduledDays } = calculateLeaveDeductionAmountHourly(
       existing.start_date,
       existing.end_date,
-      standardBiweeklyPay,
-      standardWorkingDays
+      standardBiweeklyWage,
+      standardPaidHours
     );
 
     updates.deduction_amount = amount;
-    updates.deduction_reason = `Unapproved absence: ${existing.start_date} to ${existing.end_date} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, leave request declined)`;
-    auditDetails = { deduction_amount: amount, scheduled_days: scheduledDays };
+    updates.deduction_reason = `Unapproved absence: ${existing.start_date} to ${existing.end_date} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, ${hours} unpaid hour${hours === 1 ? "" : "s"}, leave request declined)`;
+    auditDetails = { deduction_amount: amount, scheduled_days: scheduledDays, unpaid_hours: hours };
   }
 
   const { error } = await supabase.from("crm_leave_requests").update(updates).eq("id", requestId);
@@ -348,6 +353,7 @@ export async function applyPaidLeaveToPayrollAction(requestId: string): Promise<
 
   const agentName = agentNameOf(existing);
   const scheduledDays = countScheduledLeaveDays(existing.start_date, existing.end_date);
+  const scheduledHours = countScheduledLeaveHours(existing.start_date, existing.end_date);
   if (scheduledDays === 0) {
     return { error: "This leave range has no scheduled working days to apply." };
   }
@@ -370,20 +376,28 @@ export async function applyPaidLeaveToPayrollAction(requestId: string): Promise<
     };
   }
 
+  // "Approved paid leave counts as paid time and must not reduce
+  // wages" - base_pay_earned (the full standard biweekly wage) is never
+  // touched here. The leave's hours move from unpaid_hours into
+  // approved_paid_leave_hours, and the deduction already suggested for
+  // those hours (if any) is removed from `deductions` - the admin can
+  // still adjust either figure afterward, same as every other payroll
+  // field.
   const newApprovedPaidDays = matchingPayroll.approved_paid_days + scheduledDays;
   const newTotalPayableDays = matchingPayroll.days_present + newApprovedPaidDays;
-  const newBasePayEarned = calculateBasePayEarned(
-    newTotalPayableDays,
-    matchingPayroll.standard_biweekly_pay,
-    matchingPayroll.standard_working_days
-  );
+  const newApprovedPaidLeaveHours = Number(matchingPayroll.approved_paid_leave_hours) + scheduledHours;
+  const newUnpaidHours = Math.max(0, Number(matchingPayroll.unpaid_hours) - scheduledHours);
+  const rate = hourlyRate(matchingPayroll.standard_biweekly_wage, matchingPayroll.standard_paid_hours);
+  const newDeductions = Math.round(Math.max(0, Number(matchingPayroll.deductions) - scheduledHours * rate) * 100) / 100;
 
   const { error: payrollError } = await supabase
     .from("crm_payroll")
     .update({
       approved_paid_days: newApprovedPaidDays,
       total_payable_days: newTotalPayableDays,
-      base_pay_earned: newBasePayEarned,
+      approved_paid_leave_hours: newApprovedPaidLeaveHours,
+      unpaid_hours: newUnpaidHours,
+      deductions: newDeductions,
     })
     .eq("id", matchingPayroll.id);
   if (payrollError) return { error: `Failed to apply paid leave to payroll: ${payrollError.message}` };
@@ -391,14 +405,18 @@ export async function applyPaidLeaveToPayrollAction(requestId: string): Promise<
   await supabase.from("crm_payroll_audit_log").insert({
     payroll_id: matchingPayroll.id,
     agent_id: existing.agent_id,
-    action: "days_adjusted",
+    action: "hours_adjusted",
     performed_by: admin.id,
     performed_by_name: performedByName(admin),
     reason: `Approved leave applied: ${existing.start_date} to ${existing.end_date}`,
     details: {
       leave_request_id: requestId,
-      from: { approved_paid_days: matchingPayroll.approved_paid_days, total_payable_days: matchingPayroll.total_payable_days },
-      to: { approved_paid_days: newApprovedPaidDays, total_payable_days: newTotalPayableDays },
+      from: {
+        approved_paid_leave_hours: matchingPayroll.approved_paid_leave_hours,
+        unpaid_hours: matchingPayroll.unpaid_hours,
+        deductions: matchingPayroll.deductions,
+      },
+      to: { approved_paid_leave_hours: newApprovedPaidLeaveHours, unpaid_hours: newUnpaidHours, deductions: newDeductions },
     },
   });
 

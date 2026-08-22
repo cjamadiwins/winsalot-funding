@@ -38,6 +38,7 @@ export default async function MyAttendancePage() {
           <MyAttendanceClient
             rows={(records ?? []) as AgentAttendanceRow[]}
             serverNowIso={new Date().toISOString()}
+            scheduledStartTime={crmUser.scheduled_start_time}
           />
         </div>
       )}

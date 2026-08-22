@@ -17,6 +17,7 @@
 
 import type { AgentAttendanceRow } from "./crm-types";
 import { addDays, crmDateKey } from "./crm-performance";
+import { computeShiftPayBreakdown, FULL_DAY_SHORTFALL_MINUTES, SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
 
 export const CRM_ATTENDANCE_TIMEZONE = "America/Toronto";
 export const CRM_ATTENDANCE_TIMEZONE_LABEL = "ET";
@@ -231,6 +232,95 @@ export function buildPayPeriodAttendanceSummary(
     daysPresent: weekdays.filter((d) => d.status === "Clocked Out" || d.status === "Admin Clock-Out").length,
     flaggedDates: weekdays.filter((d) => d.status === "Incomplete").map((d) => d.dateKey),
     openTodayDate: weekdays.find((d) => d.status === "Clocked In")?.dateKey ?? null,
+  };
+}
+
+// Per-weekday hourly breakdown of an agent's attendance across a pay
+// period - the hourly counterpart of buildPayPeriodAttendanceSummary
+// above, used the same way: only ever a *suggested* starting point for
+// the admin's payroll form (src/app/admin/(dashboard)/crm/payroll/
+// actions.ts), never auto-applied. `regularPaidHours`/`unpaidHours` are
+// raw attendance-only figures - they don't yet know about approved
+// leave, which the payroll action layers on separately (exactly how the
+// existing day-count suggestion already defers to approved_paid_days).
+export type PayPeriodHourlySummary = {
+  periodStart: string;
+  periodEnd: string;
+  scheduledPaidHours: number; // weekday count x 7.5
+  regularPaidHours: number; // sum of each weekday's paid working minutes / 60
+  unpaidHours: number; // sum of shortfall minutes (late/early/excess-break/missed-day) / 60
+  daysPresent: number;
+  missedDays: number; // weekdays with no attendance session at all
+  flaggedDates: string[]; // weekdays with a clock-in but no clock-out
+  openTodayDate: string | null;
+};
+
+export function buildPayPeriodHourlySummary(
+  rows: AgentAttendanceRow[],
+  periodStart: string,
+  periodEnd: string,
+  todayKey: string,
+  scheduledStartTime: string | null
+): PayPeriodHourlySummary {
+  let regularPaidMinutes = 0;
+  let unpaidMinutes = 0;
+  let daysPresent = 0;
+  let missedDays = 0;
+  const flaggedDates: string[] = [];
+  let openTodayDate: string | null = null;
+  let weekdayCount = 0;
+
+  for (let dateKey = periodStart; dateKey <= periodEnd; dateKey = addDays(dateKey, 1)) {
+    const [y, m, d] = dateKey.split("-").map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    if (dow === 0 || dow === 6) continue;
+    weekdayCount++;
+
+    const daySessions = rows
+      .filter((r) => attendanceDateKey(r.clock_in) === dateKey)
+      .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
+
+    if (daySessions.length === 0) {
+      missedDays++;
+      unpaidMinutes += FULL_DAY_SHORTFALL_MINUTES;
+      continue;
+    }
+
+    const openSession = daySessions.find((r) => !r.clock_out);
+    if (openSession) {
+      if (attendanceDateKey(openSession.clock_in) === todayKey) {
+        openTodayDate = dateKey;
+      } else {
+        flaggedDates.push(dateKey);
+      }
+    }
+
+    const completedSessions = daySessions.filter((r) => r.clock_out);
+    if (completedSessions.length === 0) {
+      // Only an open/incomplete session today or a stale one - no
+      // completed paid minutes yet for this day, but not counted as a
+      // missed day either since the agent did show up.
+      continue;
+    }
+
+    daysPresent++;
+    for (const session of completedSessions) {
+      const breakdown = computeShiftPayBreakdown(session, scheduledStartTime);
+      regularPaidMinutes += breakdown.paidWorkingMinutes;
+      unpaidMinutes += breakdown.shortfallMinutes;
+    }
+  }
+
+  return {
+    periodStart,
+    periodEnd,
+    scheduledPaidHours: (weekdayCount * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60,
+    regularPaidHours: regularPaidMinutes / 60,
+    unpaidHours: unpaidMinutes / 60,
+    daysPresent,
+    missedDays,
+    flaggedDates,
+    openTodayDate,
   };
 }
 

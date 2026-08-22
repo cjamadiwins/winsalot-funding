@@ -2,17 +2,17 @@
 
 import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
 import {
-  calculateBasePayEarned,
   calculateFinalPay,
-  dailyRate,
+  FIXED_INTERNET_ALLOWANCE,
   formatDateShort,
   formatNgn,
   formatPayPeriodLabel,
   getPayPeriodForPayday,
+  hourlyRate,
   PAYROLL_AUDIT_ACTION_LABELS,
   PAYROLL_STATUS_LABELS,
-  STANDARD_BIWEEKLY_PAY,
-  STANDARD_WORKING_DAYS,
+  STANDARD_BIWEEKLY_WAGE,
+  STANDARD_PAID_HOURS,
   type PayrollAuditLogRow,
   type PayrollRecord,
   type PayrollStatus,
@@ -40,6 +40,17 @@ type AttendanceSummary = {
   flaggedDates: string[];
   openTodayDate: string | null;
 };
+type HourlySummary = {
+  periodStart: string;
+  periodEnd: string;
+  scheduledPaidHours: number;
+  regularPaidHours: number;
+  unpaidHours: number;
+  daysPresent: number;
+  missedDays: number;
+  flaggedDates: string[];
+  openTodayDate: string | null;
+};
 
 type Props = {
   companyName: string;
@@ -49,7 +60,10 @@ type Props = {
   auditLog: PayrollAuditLogRow[];
   nextPayday: string;
   upcomingPaydays: string[];
-  loadAttendanceAction: (agentId: string, payday: string) => Promise<{ error?: string; summary?: AttendanceSummary }>;
+  loadAttendanceAction: (
+    agentId: string,
+    payday: string
+  ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary }>;
   createAction: (formData: FormData) => Promise<ActionResult>;
   updateAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   approveAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
@@ -83,8 +97,11 @@ type FormValues = {
   daysPresent: string;
   approvedPaidDays: string;
   unpaidAbsenceDays: string;
-  standardBiweeklyPay: string;
-  standardWorkingDays: string;
+  standardBiweeklyWage: string;
+  standardPaidHours: string;
+  regularPaidHours: string;
+  unpaidHours: string;
+  approvedPaidLeaveHours: string;
   bonusCommission: string;
   otherAdditions: string;
   internetAllowance: string;
@@ -96,11 +113,14 @@ function defaultFormValues(record?: PayrollRecord): FormValues {
     daysPresent: String(record?.days_present ?? 0),
     approvedPaidDays: String(record?.approved_paid_days ?? 0),
     unpaidAbsenceDays: String(record?.unpaid_absence_days ?? 0),
-    standardBiweeklyPay: String(record?.standard_biweekly_pay ?? STANDARD_BIWEEKLY_PAY),
-    standardWorkingDays: String(record?.standard_working_days ?? STANDARD_WORKING_DAYS),
+    standardBiweeklyWage: String(record?.standard_biweekly_wage ?? STANDARD_BIWEEKLY_WAGE),
+    standardPaidHours: String(record?.standard_paid_hours ?? STANDARD_PAID_HOURS),
+    regularPaidHours: String(record?.regular_paid_hours ?? 0),
+    unpaidHours: String(record?.unpaid_hours ?? 0),
+    approvedPaidLeaveHours: String(record?.approved_paid_leave_hours ?? 0),
     bonusCommission: String(record?.bonus_commission ?? 0),
     otherAdditions: String(record?.other_additions ?? 0),
-    internetAllowance: String(record?.internet_allowance ?? 0),
+    internetAllowance: String(record?.internet_allowance ?? FIXED_INTERNET_ALLOWANCE),
     deductions: String(record?.deductions ?? 0),
   };
 }
@@ -126,6 +146,7 @@ function PayrollFormFields({
   const [payday, setPayday] = useState(defaultPayday);
   const [values, setValues] = useState<FormValues>(defaultFormValues(record));
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
+  const [hourlyAttendance, setHourlyAttendance] = useState<HourlySummary | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [confirmApprovedEdit, setConfirmApprovedEdit] = useState(false);
@@ -142,17 +163,24 @@ function PayrollFormFields({
     setAttendanceError(null);
     try {
       const result = await loadAttendanceAction(agentId, payday);
-      if (result.error || !result.summary) {
+      if (result.error || !result.summary || !result.hourlySummary) {
         setAttendanceError(result.error ?? "Failed to load attendance.");
         return;
       }
       setAttendance(result.summary);
+      setHourlyAttendance(result.hourlySummary);
       setField("daysPresent", String(result.summary.daysPresent));
-      setField("standardWorkingDays", String(result.summary.weekdayCount || STANDARD_WORKING_DAYS));
       setValues((v) => {
         const approved = Number(v.approvedPaidDays) || 0;
         const suggestedAbsence = Math.max(result.summary!.weekdayCount - result.summary!.daysPresent - approved, 0);
-        return { ...v, unpaidAbsenceDays: String(suggestedAbsence) };
+        const approvedLeaveHours = Number(v.approvedPaidLeaveHours) || 0;
+        const suggestedUnpaidHours = Math.max(0, result.hourlySummary!.unpaidHours - approvedLeaveHours);
+        return {
+          ...v,
+          unpaidAbsenceDays: String(suggestedAbsence),
+          regularPaidHours: result.hourlySummary!.regularPaidHours.toFixed(2),
+          unpaidHours: suggestedUnpaidHours.toFixed(2),
+        };
       });
     } finally {
       setLoadingAttendance(false);
@@ -175,11 +203,11 @@ function PayrollFormFields({
 
   const daysPresent = Number(values.daysPresent) || 0;
   const approvedPaidDays = Number(values.approvedPaidDays) || 0;
-  const standardBiweeklyPay = Number(values.standardBiweeklyPay) || 0;
-  const standardWorkingDays = Number(values.standardWorkingDays) || 0;
+  const standardBiweeklyWage = Number(values.standardBiweeklyWage) || 0;
+  const standardPaidHours = Number(values.standardPaidHours) || 0;
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const rate = dailyRate(standardBiweeklyPay, standardWorkingDays);
-  const basePayEarned = calculateBasePayEarned(totalPayableDays, standardBiweeklyPay, standardWorkingDays);
+  const rate = hourlyRate(standardBiweeklyWage, standardPaidHours);
+  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
   const finalPay = calculateFinalPay({
     basePayEarned,
     internetAllowance: Number(values.internetAllowance) || 0,
@@ -241,11 +269,15 @@ function PayrollFormFields({
           </button>
         </div>
         {attendanceError && <p className="mt-2 text-xs text-rose-600">{attendanceError}</p>}
-        {attendance && (
+        {attendance && hourlyAttendance && (
           <div className="mt-2 space-y-1 text-xs text-slate-600">
             <p>
-              {attendance.weekdayCount} standard working days in this period, {attendance.daysPresent} with a
-              completed clock-in/clock-out.
+              {attendance.weekdayCount} scheduled days ({(attendance.weekdayCount * 7.5).toFixed(1)} paid hours) in
+              this period · {attendance.daysPresent} days present · {hourlyAttendance.missedDays} missed days.
+            </p>
+            <p>
+              Regular paid hours: {hourlyAttendance.regularPaidHours.toFixed(2)} · Unpaid hours (before leave):{" "}
+              {hourlyAttendance.unpaidHours.toFixed(2)}.
             </p>
             {attendance.flaggedDates.length > 0 && (
               <p className="text-amber-700">
@@ -287,7 +319,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Unpaid Absence Days</label>
+          <label className={labelClasses}>Missed Days (Unpaid)</label>
           <input
             type="number"
             name="unpaid_absence_days"
@@ -301,10 +333,52 @@ function PayrollFormFields({
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className={labelClasses}>Regular Paid Hours</label>
+          <input
+            type="number"
+            name="regular_paid_hours"
+            min={0}
+            step="0.01"
+            required
+            value={values.regularPaidHours}
+            onChange={(e) => setField("regularPaidHours", e.target.value)}
+            className={`${inputClasses} mt-1`}
+          />
+        </div>
+        <div>
+          <label className={labelClasses}>Unpaid Hours</label>
+          <input
+            type="number"
+            name="unpaid_hours"
+            min={0}
+            step="0.01"
+            required
+            value={values.unpaidHours}
+            onChange={(e) => setField("unpaidHours", e.target.value)}
+            className={`${inputClasses} mt-1`}
+          />
+        </div>
+        <div>
+          <label className={labelClasses}>Approved Paid-Leave Hours</label>
+          <input
+            type="number"
+            name="approved_paid_leave_hours"
+            min={0}
+            step="0.01"
+            required
+            value={values.approvedPaidLeaveHours}
+            onChange={(e) => setField("approvedPaidLeaveHours", e.target.value)}
+            className={`${inputClasses} mt-1`}
+          />
+        </div>
+      </div>
+
       <p className="text-sm text-slate-600">
-        Total Payable Days: <span className="font-semibold text-slate-900">{totalPayableDays}</span> · Daily Rate:{" "}
-        <span className="font-semibold text-slate-900">{formatNgn(rate)}</span> · Base Pay Earned:{" "}
-        <span className="font-semibold text-slate-900">{formatNgn(basePayEarned)}</span>
+        Hourly Wage: <span className="font-semibold text-slate-900">{formatNgn(rate)}</span> · Gross Wage Earnings:{" "}
+        <span className="font-semibold text-slate-900">{formatNgn(basePayEarned)}</span> · Total Payable Days:{" "}
+        <span className="font-semibold text-slate-900">{totalPayableDays}</span>
       </p>
 
       <details className="rounded-lg border border-slate-200 p-3">
@@ -313,26 +387,26 @@ function PayrollFormFields({
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className={labelClasses}>Standard Biweekly Pay (₦)</label>
+            <label className={labelClasses}>Standard Biweekly Wage (₦)</label>
             <input
               type="number"
-              name="standard_biweekly_pay"
+              name="standard_biweekly_wage"
               min={0}
               step="0.01"
-              value={values.standardBiweeklyPay}
-              onChange={(e) => setField("standardBiweeklyPay", e.target.value)}
+              value={values.standardBiweeklyWage}
+              onChange={(e) => setField("standardBiweeklyWage", e.target.value)}
               className={`${inputClasses} mt-1`}
             />
           </div>
           <div>
-            <label className={labelClasses}>Standard Working Days</label>
+            <label className={labelClasses}>Standard Paid Hours</label>
             <input
               type="number"
-              name="standard_working_days"
+              name="standard_paid_hours"
               min={1}
-              step={1}
-              value={values.standardWorkingDays}
-              onChange={(e) => setField("standardWorkingDays", e.target.value)}
+              step="0.01"
+              value={values.standardPaidHours}
+              onChange={(e) => setField("standardPaidHours", e.target.value)}
               className={`${inputClasses} mt-1`}
             />
           </div>
@@ -365,7 +439,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Internet Allowance (₦, legacy)</label>
+          <label className={labelClasses}>Internet Allowance (₦, fixed)</label>
           <input
             type="number"
             name="internet_allowance"
@@ -377,7 +451,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Deductions (₦)</label>
+          <label className={labelClasses}>Attendance Deductions (₦)</label>
           <input
             type="number"
             name="deductions"
@@ -537,12 +611,14 @@ export default function AdminPayrollClient({
       payPeriodStart: record.pay_period_start,
       payPeriodEnd: record.pay_period_end,
       payday: record.payday,
-      standardBiweeklyPay: record.standard_biweekly_pay,
       standardWorkingDays: record.standard_working_days,
+      standardBiweeklyWage: record.standard_biweekly_wage,
+      standardPaidHours: record.standard_paid_hours,
       daysPresent: record.days_present,
-      approvedPaidDays: record.approved_paid_days,
       unpaidAbsenceDays: record.unpaid_absence_days,
-      totalPayableDays: record.total_payable_days,
+      regularPaidHours: record.regular_paid_hours,
+      unpaidHours: record.unpaid_hours,
+      approvedPaidLeaveHours: record.approved_paid_leave_hours,
       basePayEarned: record.base_pay_earned,
       incentiveBonus: record.bonus_commission,
       otherAdditions: record.other_additions,
@@ -691,13 +767,9 @@ export default function AdminPayrollClient({
 
                         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                           <div>
-                            <dt className="text-xs text-slate-500">Standard Biweekly Pay</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.standard_biweekly_pay)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Daily Rate</dt>
+                            <dt className="text-xs text-slate-500">Scheduled Days / Hours</dt>
                             <dd className="font-medium text-slate-800">
-                              {formatNgn(dailyRate(record.standard_biweekly_pay, record.standard_working_days))}
+                              {record.standard_working_days}d / {record.standard_paid_hours}h
                             </dd>
                           </div>
                           <div>
@@ -705,20 +777,38 @@ export default function AdminPayrollClient({
                             <dd className="font-medium text-slate-800">{record.days_present}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-slate-500">Approved Paid Days</dt>
-                            <dd className="font-medium text-slate-800">{record.approved_paid_days}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Unpaid Absence Days</dt>
+                            <dt className="text-xs text-slate-500">Missed Days</dt>
                             <dd className="font-medium text-slate-800">{record.unpaid_absence_days}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-slate-500">Total Payable Days</dt>
-                            <dd className="font-medium text-slate-800">{record.total_payable_days}</dd>
+                            <dt className="text-xs text-slate-500">Approved Paid-Leave Hours</dt>
+                            <dd className="font-medium text-slate-800">{record.approved_paid_leave_hours}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-slate-500">Base Pay Earned</dt>
+                            <dt className="text-xs text-slate-500">Regular Paid Hours</dt>
+                            <dd className="font-medium text-slate-800">{record.regular_paid_hours}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Unpaid Hours</dt>
+                            <dd className="font-medium text-slate-800">{record.unpaid_hours}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Hourly Wage</dt>
+                            <dd className="font-medium text-slate-800">
+                              {formatNgn(hourlyRate(record.standard_biweekly_wage, record.standard_paid_hours))}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Gross Wage Earnings</dt>
                             <dd className="font-medium text-slate-800">{formatNgn(record.base_pay_earned)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Attendance Deductions</dt>
+                            <dd className="font-medium text-slate-800">-{formatNgn(record.deductions)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Internet Allowance</dt>
+                            <dd className="font-medium text-slate-800">{formatNgn(record.internet_allowance)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Incentive / Bonus</dt>
@@ -726,13 +816,7 @@ export default function AdminPayrollClient({
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Other Additions</dt>
-                            <dd className="font-medium text-slate-800">
-                              {formatNgn(record.other_additions + record.internet_allowance)}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-500">Deductions</dt>
-                            <dd className="font-medium text-slate-800">-{formatNgn(record.deductions)}</dd>
+                            <dd className="font-medium text-slate-800">{formatNgn(record.other_additions)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Payment Method</dt>

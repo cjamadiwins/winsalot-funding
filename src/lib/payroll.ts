@@ -42,9 +42,49 @@ export const STANDARD_BIWEEKLY_PAY = 75_000;
 export const STANDARD_WORKING_DAYS = 10;
 export const STANDARD_DAILY_RATE = STANDARD_BIWEEKLY_PAY / STANDARD_WORKING_DAYS;
 
+// Hourly pay structure (see src/lib/attendance-pay.ts for the break/
+// shortfall math this feeds): a completed 10-working-day, 75-paid-hour
+// pay period earns exactly the ₦50,000 wage plus the fixed ₦25,000
+// internet allowance, for a ₦75,000 total - "An agent completing all 75
+// paid hours must receive exactly: Wages ₦50,000, Internet allowance
+// ₦25,000, Total pay ₦75,000." Stored per-record (crm_payroll.standard_
+// biweekly_wage / standard_paid_hours, migration 0075), not just read
+// from here, for the same "a future rate change never silently rewrites
+// an already-created record" reason as STANDARD_BIWEEKLY_PAY above.
+export const STANDARD_BIWEEKLY_WAGE = 50_000;
+export const STANDARD_PAID_HOURS = 75;
+export const FIXED_INTERNET_ALLOWANCE = 25_000;
+export const STANDARD_HOURLY_RATE = STANDARD_BIWEEKLY_WAGE / STANDARD_PAID_HOURS;
+
 export function dailyRate(standardBiweeklyPay: number, standardWorkingDays: number): number {
   if (standardWorkingDays <= 0) return 0;
   return standardBiweeklyPay / standardWorkingDays;
+}
+
+// The internal hourly rate for a payroll record: standard biweekly wage
+// ÷ standard paid hours (e.g. ₦50,000 ÷ 75 = ₦666.6667/hour). Deliberately
+// not rounded - "Round only the final payroll amount, not each daily
+// calculation" - only the final Naira totals this feeds into get rounded.
+export function hourlyRate(standardBiweeklyWage: number, standardPaidHours: number): number {
+  if (standardPaidHours <= 0) return 0;
+  return standardBiweeklyWage / standardPaidHours;
+}
+
+// Gross wages before attendance deductions for a pay period: the full
+// standard biweekly wage, prorated only if the agent's own schedule for
+// the period covers fewer than the standard paid hours (e.g. a new hire
+// starting mid-period). A full-schedule period simply earns the full
+// ₦50,000 - every shortfall (absence, late arrival, early departure,
+// excess break time) is captured by `deductions` instead, computed from
+// attendance by aggregatePayPeriodHours (src/lib/attendance-pay.ts).
+export function calculateGrossWageEarnings(
+  standardBiweeklyWage: number,
+  scheduledPaidHours: number,
+  standardPaidHours: number
+): number {
+  if (standardPaidHours <= 0) return 0;
+  const proration = Math.min(1, scheduledPaidHours / standardPaidHours);
+  return Math.round(standardBiweeklyWage * proration * 100) / 100;
 }
 
 // Base Pay Earned = Payable Working Days x Daily Rate. Rounded to the
@@ -86,6 +126,11 @@ export type PayrollRecord = {
   payday: string;
   standard_biweekly_pay: number;
   standard_working_days: number;
+  standard_biweekly_wage: number;
+  standard_paid_hours: number;
+  regular_paid_hours: number;
+  unpaid_hours: number;
+  approved_paid_leave_hours: number;
   days_present: number;
   approved_paid_days: number;
   unpaid_absence_days: number;
@@ -114,6 +159,7 @@ export type PayrollAuditAction =
   | "created"
   | "attendance_loaded"
   | "days_adjusted"
+  | "hours_adjusted"
   | "incentive_changed"
   | "deduction_changed"
   | "addition_changed"
@@ -127,6 +173,7 @@ export const PAYROLL_AUDIT_ACTION_LABELS: Record<PayrollAuditAction, string> = {
   created: "Payroll record created",
   attendance_loaded: "Attendance loaded",
   days_adjusted: "Payable days adjusted",
+  hours_adjusted: "Paid/unpaid hours adjusted",
   incentive_changed: "Incentive/bonus changed",
   deduction_changed: "Deduction changed",
   addition_changed: "Other addition changed",
@@ -159,6 +206,9 @@ export type PayrollAdjustableFields = Pick<
   | "approved_paid_days"
   | "unpaid_absence_days"
   | "total_payable_days"
+  | "regular_paid_hours"
+  | "unpaid_hours"
+  | "approved_paid_leave_hours"
   | "bonus_commission"
   | "other_additions"
   | "internet_allowance"
@@ -197,6 +247,28 @@ export function buildPayrollAdjustmentAuditRows(
           approved_paid_days: after.approved_paid_days,
           unpaid_absence_days: after.unpaid_absence_days,
           total_payable_days: after.total_payable_days,
+        },
+      },
+    });
+  }
+
+  if (
+    before.regular_paid_hours !== after.regular_paid_hours ||
+    before.unpaid_hours !== after.unpaid_hours ||
+    before.approved_paid_leave_hours !== after.approved_paid_leave_hours
+  ) {
+    rows.push({
+      action: "hours_adjusted",
+      details: {
+        from: {
+          regular_paid_hours: before.regular_paid_hours,
+          unpaid_hours: before.unpaid_hours,
+          approved_paid_leave_hours: before.approved_paid_leave_hours,
+        },
+        to: {
+          regular_paid_hours: after.regular_paid_hours,
+          unpaid_hours: after.unpaid_hours,
+          approved_paid_leave_hours: after.approved_paid_leave_hours,
         },
       },
     });
