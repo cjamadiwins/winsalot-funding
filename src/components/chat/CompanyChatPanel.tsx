@@ -15,6 +15,7 @@ export default function CompanyChatPanel({
   tableName,
   realtimeChannel,
   sendMessage,
+  editMessage,
   deleteMessage,
   markRead,
 }: {
@@ -24,6 +25,7 @@ export default function CompanyChatPanel({
   tableName: string;
   realtimeChannel: string;
   sendMessage: (content: string) => Promise<ActionResult>;
+  editMessage: (id: string, content: string) => Promise<ActionResult>;
   deleteMessage: (id: string) => Promise<ActionResult>;
   markRead: () => Promise<ActionResult>;
 }) {
@@ -117,10 +119,13 @@ export default function CompanyChatPanel({
                 isAdminSender={m.sender_is_admin}
                 content={m.content}
                 createdAt={m.created_at}
+                editedAt={m.edited_at}
                 isOwn={m.sender_id === identity.id}
                 isDeleted={!!m.deleted_at}
                 canDelete={!m.deleted_at && (m.sender_id === identity.id || identity.isAdmin)}
                 onDelete={() => handleDelete(m.id)}
+                canEdit={m.sender_id === identity.id}
+                onEdit={(content) => editMessage(m.id, content)}
               />
             </div>
           );

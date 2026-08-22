@@ -23,11 +23,13 @@ export type ChatScopeConfig = {
   announcementsTable: string;
   announcementsRealtimeChannel: string;
   sendCompanyMessage: (content: string) => Promise<ActionResult>;
+  editCompanyMessage: (id: string, content: string) => Promise<ActionResult>;
   deleteCompanyMessage: (id: string) => Promise<ActionResult>;
   markCompanyChatRead: () => Promise<ActionResult>;
   searchActiveEmployees: (query: string) => Promise<{ error?: string; results?: ActiveEmployeeOption[] }>;
   getOrCreateDmConversation: (otherUserId: string) => Promise<{ error?: string; conversationId?: string }>;
   sendDmMessage: (conversationId: string, content: string) => Promise<ActionResult>;
+  editDmMessage: (id: string, content: string) => Promise<ActionResult>;
   deleteDmMessage: (id: string) => Promise<ActionResult>;
   markDmConversationRead: (conversationId: string) => Promise<ActionResult>;
   sendAnnouncement: (content: string) => Promise<ActionResult>;
@@ -98,6 +100,7 @@ export default function ChatPageClient({
             tableName={scope.companyMessagesTable}
             realtimeChannel={scope.companyRealtimeChannel}
             sendMessage={scope.sendCompanyMessage}
+            editMessage={scope.editCompanyMessage}
             deleteMessage={scope.deleteCompanyMessage}
             markRead={scope.markCompanyChatRead}
           />
@@ -112,6 +115,7 @@ export default function ChatPageClient({
             searchActiveEmployees={scope.searchActiveEmployees}
             getOrCreateConversation={scope.getOrCreateDmConversation}
             sendMessage={scope.sendDmMessage}
+            editMessage={scope.editDmMessage}
             deleteMessage={scope.deleteDmMessage}
             markConversationRead={scope.markDmConversationRead}
           />

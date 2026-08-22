@@ -27,6 +27,7 @@ export type CompanyMessageRow = {
   sender_name: string;
   sender_is_admin: boolean;
   content: string;
+  edited_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
   deleted_by_name: string | null;
@@ -47,6 +48,7 @@ export type DmMessageRow = {
   sender_id: string;
   sender_name: string;
   content: string;
+  edited_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
   deleted_by_name: string | null;

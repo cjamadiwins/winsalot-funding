@@ -24,6 +24,7 @@ export default function DirectMessagesPanel({
   searchActiveEmployees,
   getOrCreateConversation,
   sendMessage,
+  editMessage,
   deleteMessage,
   markConversationRead,
 }: {
@@ -35,6 +36,7 @@ export default function DirectMessagesPanel({
   searchActiveEmployees: (query: string) => Promise<{ error?: string; results?: ActiveEmployeeOption[] }>;
   getOrCreateConversation: (otherUserId: string) => Promise<{ error?: string; conversationId?: string }>;
   sendMessage: (conversationId: string, content: string) => Promise<ActionResult>;
+  editMessage: (id: string, content: string) => Promise<ActionResult>;
   deleteMessage: (id: string) => Promise<ActionResult>;
   markConversationRead: (conversationId: string) => Promise<ActionResult>;
 }) {
@@ -271,10 +273,13 @@ export default function DirectMessagesPanel({
                       senderName={m.sender_name}
                       content={m.content}
                       createdAt={m.created_at}
+                      editedAt={m.edited_at}
                       isOwn={m.sender_id === identity.id}
                       isDeleted={!!m.deleted_at}
                       canDelete={!m.deleted_at && m.sender_id === identity.id}
                       onDelete={() => handleDelete(m.id)}
+                      canEdit={m.sender_id === identity.id}
+                      onEdit={(content) => editMessage(m.id, content)}
                     />
                   </div>
                 );
