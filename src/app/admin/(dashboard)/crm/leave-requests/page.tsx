@@ -10,15 +10,25 @@ import {
   markLeaveAttendanceAction,
 } from "./actions";
 
-export default async function AdminLeaveRequestsPage() {
+export default async function AdminLeaveRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ highlight?: string }>;
+}) {
   await requireCrmAdmin();
+  const { highlight } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   const [{ data: agents, error: agentsError }, { data: requests, error: requestsError }] = await Promise.all([
     supabase.from("crm_users").select("*").eq("role", "agent").order("full_name"),
     supabase
       .from("crm_leave_requests")
-      .select("*, crm_users(id, full_name, email)")
+      // crm_leave_requests has four FK columns to crm_users (agent_id,
+      // decided_by, attendance_marked_by, deduction_confirmed_by) - the
+      // `!agent_id` hint tells PostgREST which one to embed through,
+      // since an unqualified `crm_users(...)` is ambiguous with more
+      // than one relationship to the same table.
+      .select("*, crm_users!agent_id(id, full_name, email)")
       .order("submitted_at", { ascending: false }),
   ]);
 
@@ -42,6 +52,7 @@ export default async function AdminLeaveRequestsPage() {
           <AdminLeaveRequestsClient
             agents={((agents ?? []) as CrmUserRow[]).map((a) => ({ id: a.id, full_name: a.full_name, email: a.email }))}
             requests={(requests ?? []) as CrmLeaveRequestWithAgent[]}
+            highlightId={highlight}
             approveAction={approveLeaveRequestAction}
             declineAction={declineLeaveRequestAction}
             markAttendanceAction={markLeaveAttendanceAction}

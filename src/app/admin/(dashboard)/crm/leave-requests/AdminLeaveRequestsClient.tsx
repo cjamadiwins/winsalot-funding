@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import type { CrmLeaveRequestWithAgent } from "@/lib/crm-types";
 import {
   LEAVE_POLICY_BODY,
@@ -28,6 +28,7 @@ export default function AdminLeaveRequestsClient({
   markAttendanceAction,
   confirmDeductionAction,
   applyPaidLeaveAction,
+  highlightId,
 }: {
   agents: AgentOption[];
   requests: CrmLeaveRequestWithAgent[];
@@ -36,7 +37,21 @@ export default function AdminLeaveRequestsClient({
   markAttendanceAction: (id: string, formData: FormData) => Promise<ActionResult>;
   confirmDeductionAction: (id: string) => Promise<ActionResult>;
   applyPaidLeaveAction: (id: string) => Promise<ActionResult>;
+  highlightId?: string;
 }) {
+  const [flashId, setFlashId] = useState(highlightId);
+
+  // Opens the specific request a notification linked to (?highlight=<id>) -
+  // scrolls it into view and briefly highlights the row, regardless of
+  // any active filter (the row simply won't be there yet if a filter
+  // hides it, which is an acceptable edge case for a fresh page load).
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`leave-request-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(() => setFlashId(undefined), 4000);
+    return () => clearTimeout(timeout);
+  }, [highlightId]);
+
   const [agentFilter, setAgentFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<"all" | LeaveType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | LeaveStatus>("all");
@@ -150,7 +165,10 @@ export default function AdminLeaveRequestsClient({
               const isDeciding = decidingId === r.id;
               return (
                 <Fragment key={r.id}>
-                  <tr>
+                  <tr
+                    id={`leave-request-${r.id}`}
+                    className={flashId === r.id ? "bg-amber-50 transition-colors" : "transition-colors"}
+                  >
                     <td className="px-4 py-3 font-medium text-[var(--color-ink-strong)]">{agentName}</td>
                     <td className="px-4 py-3">{LEAVE_TYPE_LABELS[r.leave_type]}</td>
                     <td className="px-4 py-3 whitespace-nowrap">

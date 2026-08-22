@@ -12,7 +12,11 @@ import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 // component reference - every layout using CrmShell is a Server
 // Component, and a bare component reference (a function) can't cross
 // the server/client boundary as a prop, only a rendered element can.
-export type CrmNavItem = { label: string; href: string; icon: ReactNode };
+// `badgeCount` is optional and only meant for a count that should stay
+// visible until some backlog is cleared (e.g. pending leave requests
+// awaiting admin review) - omit it (or pass 0) for every nav item that
+// doesn't need one, which is every existing item today.
+export type CrmNavItem = { label: string; href: string; icon: ReactNode; badgeCount?: number };
 
 function isNavItemActive(pathname: string, homeHref: string, href: string) {
   if (href === homeHref) return pathname === homeHref;
@@ -94,7 +98,16 @@ function SidebarNav({
             }`}
           >
             {iconEl}
-            <span className="truncate">{item.label}</span>
+            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {!!item.badgeCount && item.badgeCount > 0 && (
+              <span
+                className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold ${
+                  active ? "bg-white/25 text-white" : "bg-rose-600 text-white"
+                }`}
+              >
+                {item.badgeCount > 9 ? "9+" : item.badgeCount}
+              </span>
+            )}
           </Link>
         );
       })}

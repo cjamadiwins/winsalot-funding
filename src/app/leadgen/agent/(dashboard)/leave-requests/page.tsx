@@ -3,8 +3,13 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { LeadgenLeaveRequestRow } from "@/lib/leadgen-types";
 import LeadgenLeaveRequestsClient from "./LeaveRequestsClient";
 
-export default async function LeadgenAgentLeaveRequestsPage() {
+export default async function LeadgenAgentLeaveRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ highlight?: string }>;
+}) {
   const leadgenUser = await requireLeadgenAgent();
+  const { highlight } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   // RLS (leadgen_leave_requests_agent_select_own, migration 0070)
@@ -30,7 +35,7 @@ export default async function LeadgenAgentLeaveRequestsPage() {
 
       {!error && (
         <div className="mt-6">
-          <LeadgenLeaveRequestsClient requests={(requests ?? []) as LeadgenLeaveRequestRow[]} />
+          <LeadgenLeaveRequestsClient requests={(requests ?? []) as LeadgenLeaveRequestRow[]} highlightId={highlight} />
         </div>
       )}
     </div>

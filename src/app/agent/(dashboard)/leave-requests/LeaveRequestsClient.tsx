@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { CrmLeaveRequestRow } from "@/lib/crm-types";
 import {
   LEAVE_POLICY_BODY,
@@ -16,7 +16,25 @@ import { submitLeaveRequestAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
-export default function LeaveRequestsClient({ requests }: { requests: CrmLeaveRequestRow[] }) {
+export default function LeaveRequestsClient({
+  requests,
+  highlightId,
+}: {
+  requests: CrmLeaveRequestRow[];
+  highlightId?: string;
+}) {
+  const [flashId, setFlashId] = useState(highlightId);
+
+  // Opens the specific request a notification linked to (?highlight=<id>) -
+  // scrolls it into view and briefly highlights the row, then clears so
+  // the highlight doesn't linger after the user has seen it.
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`leave-request-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(() => setFlashId(undefined), 4000);
+    return () => clearTimeout(timeout);
+  }, [highlightId]);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -142,7 +160,11 @@ export default function LeaveRequestsClient({ requests }: { requests: CrmLeaveRe
                 </tr>
               )}
               {requests.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  id={`leave-request-${r.id}`}
+                  className={flashId === r.id ? "bg-amber-50 transition-colors" : "transition-colors"}
+                >
                   <td className="px-4 py-3">{new Date(r.submitted_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">{LEAVE_TYPE_LABELS[r.leave_type]}</td>
                   <td className="px-4 py-3">

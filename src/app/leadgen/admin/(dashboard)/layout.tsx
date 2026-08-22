@@ -1,4 +1,8 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import NotificationBell from "@/components/NotificationBell";
+import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
+import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import {
   LayoutDashboard,
@@ -15,7 +19,7 @@ import {
   GraduationCap,
   Gift,
 } from "lucide-react";
-import { signOutLeadgenAction } from "./actions";
+import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
@@ -36,6 +40,19 @@ const NAV_ITEMS: CrmNavItem[] = [
 
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  const [{ data: notifications }, { count: pendingLeaveCount }] = await Promise.all([
+    supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
+    supabase.from("leadgen_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
+
+  // Stays visible until every pending request has been approved or
+  // declined - "Keep the Leave Requests navigation badge visible until
+  // all pending requests have been reviewed."
+  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
+    item.href === "/leadgen/admin/leave-requests" ? { ...item, badgeCount: pendingLeaveCount ?? 0 } : item
+  );
+
   const timeZonePreferences = await getUserTimeZonePreferences();
 
   return (
@@ -51,7 +68,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
         }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/leadgen/admin"
-        navItems={NAV_ITEMS}
+        navItems={navItems}
         userLabel={user.email}
         signOutAction={signOutLeadgenAction}
         clientLocalTime={{
@@ -60,6 +77,16 @@ export default async function LeadgenAdminLayout({ children }: { children: React
           resetLocationsAction: resetUserTimeZonePreferences,
           cardVariant: "photoHero",
         }}
+        rightSlot={
+          <>
+            <NotificationRefresher />
+            <NotificationBell
+              notifications={(notifications ?? []) as LeadgenNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
+          </>
+        }
       >
         {children}
       </CrmShell>

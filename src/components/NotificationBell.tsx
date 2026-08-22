@@ -2,22 +2,37 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import { notificationTimeAgoLabel } from "@/lib/crm-notifications";
 
-// Shared by both /admin and /agent layouts - the "notify the assigned
-// agent and administrator inside the CRM" requirement, showing the same
-// bell + dropdown in either dashboard's header. Each recipient only ever
-// sees their own crm_notifications rows (RLS: user_id = auth.uid()), so
-// this component doesn't need to know which role it's rendered for -
-// link_path is already correct per-row (set at insert time in
-// src/lib/provider-intake-submission.ts).
+// Shared by every CRM dashboard layout (Cleaning and Lead Generation,
+// admin and agent) - the "notify the assigned agent and administrator
+// inside the CRM" requirement, showing the same bell + dropdown in every
+// header. Each recipient only ever sees their own notification rows
+// (RLS: user_id = auth.uid()), so this component doesn't need to know
+// which CRM or role it's rendered for - link_path is already correct
+// per-row, set at insert time by whichever feature created it.
+//
+// Deliberately typed against only the fields this component actually
+// reads, not the full CrmNotificationRow/LeadgenNotificationRow shape -
+// those two tables' row types differ (e.g. crm_notifications has a
+// cleaning-CRM-only provider_lead_id column leadgen_notifications
+// doesn't), and this component has no reason to require either table's
+// full shape.
+type NotificationLike = {
+  id: string;
+  created_at: string;
+  title: string;
+  body: string | null;
+  link_path: string | null;
+  is_read: boolean;
+};
+
 export default function NotificationBell({
   notifications,
   markReadAction,
   markAllReadAction,
 }: {
-  notifications: CrmNotificationRow[];
+  notifications: NotificationLike[];
   markReadAction: (id: string) => Promise<void>;
   markAllReadAction: () => Promise<void>;
 }) {

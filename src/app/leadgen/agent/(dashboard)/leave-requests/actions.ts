@@ -63,9 +63,16 @@ export async function submitLeadgenLeaveRequestAction(formData: FormData): Promi
     details: { leave_type: leaveType, start_date: startDate, end_date: endDate, notice_days: noticeDays, is_short_notice: shortNotice },
   });
 
-  await notifyAdminsOfNewLeadgenLeaveRequest({ agentName, isShortNotice: shortNotice });
+  await notifyAdminsOfNewLeadgenLeaveRequest({
+    leaveRequestId: inserted.id,
+    agentName,
+    startDate,
+    endDate,
+    isShortNotice: shortNotice,
+  });
 
   revalidatePath("/leadgen/agent/leave-requests");
   revalidatePath("/leadgen/admin/leave-requests");
+  revalidatePath("/leadgen/admin", "layout");
   return {};
 }

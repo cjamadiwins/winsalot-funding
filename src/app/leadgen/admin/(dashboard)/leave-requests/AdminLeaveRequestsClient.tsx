@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import type { LeadgenLeaveRequestWithAgent } from "@/lib/leadgen-types";
 import {
   LEAVE_POLICY_BODY,
@@ -30,6 +30,7 @@ export default function AdminLeadgenLeaveRequestsClient({
   markAttendanceAction,
   confirmDeductionAction,
   applyPaidLeaveAction,
+  highlightId,
 }: {
   agents: AgentOption[];
   requests: LeadgenLeaveRequestWithAgent[];
@@ -38,7 +39,17 @@ export default function AdminLeadgenLeaveRequestsClient({
   markAttendanceAction: (id: string, formData: FormData) => Promise<ActionResult>;
   confirmDeductionAction: (id: string) => Promise<ActionResult>;
   applyPaidLeaveAction: (id: string) => Promise<ActionResult>;
+  highlightId?: string;
 }) {
+  const [flashId, setFlashId] = useState(highlightId);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`leave-request-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(() => setFlashId(undefined), 4000);
+    return () => clearTimeout(timeout);
+  }, [highlightId]);
+
   const [agentFilter, setAgentFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<"all" | LeaveType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | LeaveStatus>("all");
@@ -152,7 +163,10 @@ export default function AdminLeadgenLeaveRequestsClient({
               const isDeciding = decidingId === r.id;
               return (
                 <Fragment key={r.id}>
-                  <tr>
+                  <tr
+                    id={`leave-request-${r.id}`}
+                    className={flashId === r.id ? "bg-amber-50 transition-colors" : "transition-colors"}
+                  >
                     <td className="px-4 py-3 font-medium text-[var(--color-ink-strong)]">{agentName}</td>
                     <td className="px-4 py-3">{LEAVE_TYPE_LABELS[r.leave_type]}</td>
                     <td className="px-4 py-3 whitespace-nowrap">

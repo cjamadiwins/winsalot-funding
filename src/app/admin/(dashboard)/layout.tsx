@@ -1,6 +1,7 @@
 import { requireAdminUser } from "@/lib/admin-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NotificationBell from "@/components/NotificationBell";
+import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import {
@@ -49,11 +50,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const { data: notifications } = await supabase
-    .from("crm_notifications")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [{ data: notifications }, { count: pendingLeaveCount }] = await Promise.all([
+    supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
+    supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
+
+  // Stays visible until every pending request has been approved or
+  // declined - "Keep the Leave Requests navigation badge visible until
+  // all pending requests have been reviewed."
+  const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
+    item.href === "/admin/crm/leave-requests" ? { ...item, badgeCount: pendingLeaveCount ?? 0 } : item
+  );
 
   const timeZonePreferences = await getUserTimeZonePreferences();
 
@@ -70,7 +77,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         }
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/admin"
-        navItems={NAV_ITEMS}
+        navItems={navItems}
         userLabel={user.email}
         signOutAction={signOutAction}
         clientLocalTime={{
@@ -80,11 +87,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           cardVariant: "photoHero",
         }}
         rightSlot={
-          <NotificationBell
-            notifications={(notifications ?? []) as CrmNotificationRow[]}
-            markReadAction={markNotificationReadAction}
-            markAllReadAction={markAllNotificationsReadAction}
-          />
+          <>
+            <NotificationRefresher />
+            <NotificationBell
+              notifications={(notifications ?? []) as CrmNotificationRow[]}
+              markReadAction={markNotificationReadAction}
+              markAllReadAction={markAllNotificationsReadAction}
+            />
+          </>
         }
       >
         {children}

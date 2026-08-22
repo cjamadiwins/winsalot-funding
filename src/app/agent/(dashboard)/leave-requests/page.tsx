@@ -3,8 +3,13 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { CrmLeaveRequestRow } from "@/lib/crm-types";
 import LeaveRequestsClient from "./LeaveRequestsClient";
 
-export default async function AgentLeaveRequestsPage() {
+export default async function AgentLeaveRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ highlight?: string }>;
+}) {
   const crmUser = await requireCrmUser();
+  const { highlight } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   // RLS (crm_leave_requests_agent_select_own, migration 0069) already
@@ -29,7 +34,7 @@ export default async function AgentLeaveRequestsPage() {
 
       {!error && (
         <div className="mt-6">
-          <LeaveRequestsClient requests={(requests ?? []) as CrmLeaveRequestRow[]} />
+          <LeaveRequestsClient requests={(requests ?? []) as CrmLeaveRequestRow[]} highlightId={highlight} />
         </div>
       )}
     </div>
