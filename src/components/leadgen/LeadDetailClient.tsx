@@ -296,19 +296,21 @@ export default function LeadDetailClient({
 
       {!rawBookingUrl && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending the consultation email, the
-          15-minute consultation invitation, or a follow-up email.
+          No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending{" "}
+          {isMantra ? "the Mantra Collab email" : "the consultation email, the 15-minute consultation invitation, or a follow-up email"}.
         </p>
       )}
 
       <div className="mt-5 flex flex-wrap gap-2.5">
-        <button
-          type="button"
-          onClick={() => setShowConsultationModal(true)}
-          className="rounded-full bg-emerald-600 px-5 py-2.5 text-[13.5px] font-semibold text-white transition hover:bg-emerald-700"
-        >
-          Send Consultation Email
-        </button>
+        {!isMantra && (
+          <button
+            type="button"
+            onClick={() => setShowConsultationModal(true)}
+            className="rounded-full bg-emerald-600 px-5 py-2.5 text-[13.5px] font-semibold text-white transition hover:bg-emerald-700"
+          >
+            Send Consultation Email
+          </button>
+        )}
         <ActionButton onClick={() => setShowFollowUpForm((v) => !v)}>{showFollowUpForm ? "Cancel Follow-up" : "Schedule Follow-up"}</ActionButton>
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
@@ -324,7 +326,7 @@ export default function LeadDetailClient({
         )}
       </div>
 
-      {showConsultationModal && (
+      {showConsultationModal && !isMantra && (
         <ConsultationEmailModal
           lead={lead}
           agentName={currentUserName}
@@ -342,7 +344,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationModal && (
+      {showInvitationModal && !isMantra && (
         <ConsultationInvitationModal
           lead={lead}
           agentName={currentUserName}
@@ -360,7 +362,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationFollowUpModal && (
+      {showInvitationFollowUpModal && !isMantra && (
         <ConsultationEmailModal
           lead={lead}
           agentName={currentUserName}
@@ -637,20 +639,24 @@ export default function LeadDetailClient({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
             <div className="flex flex-wrap gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowInvitationModal(true)}
-                className="rounded-full bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
-              >
-                Send 15-Minute Consultation Invitation
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowInvitationFollowUpModal(true)}
-                className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-400"
-              >
-                Send Follow-Up Email
-              </button>
+              {!isMantra && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowInvitationModal(true)}
+                    className="rounded-full bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Send 15-Minute Consultation Invitation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowInvitationFollowUpModal(true)}
+                    className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-400"
+                  >
+                    Send Follow-Up Email
+                  </button>
+                </>
+              )}
               {isMantra && (
                 <button
                   type="button"

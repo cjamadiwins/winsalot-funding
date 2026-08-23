@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import {
   isLeadgenAppointmentCountable,
+  isMantraCollabClient,
   isValidEmail,
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_CONSULTATION_CTA_LABEL,
@@ -242,6 +243,15 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  // This template's body copy is not fully generic (see the templates
+  // admin screen) - it must never be sent to a Mantra Collab lead, which
+  // has its own dedicated "Send Mantra Collab Email" action/template
+  // instead. Enforced here (not just by hiding the button in
+  // LeadDetailClient.tsx), so a stale page or a crafted request can't
+  // send it either.
+  if (embeddedClient && isMantraCollabClient(embeddedClient)) {
+    return { emailId: "", error: "Use \"Send Mantra Collab Email\" for a Mantra Collab lead instead." };
+  }
   // The client's saved Consultation Booking Link (or its campaign-level
   // override, submitted from the client-side preview) - never the
   // Brent's Essentials website fallback. resolveLeadgenEmailBranding is
@@ -330,6 +340,13 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
   type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  // This template must never be sent to a Mantra Collab lead - it has
+  // its own dedicated "Send Mantra Collab Email" action/template.
+  // Enforced here (not just by hiding the button in LeadDetailClient.tsx)
+  // so a stale page or a crafted request can't send it either.
+  if (embeddedClient && isMantraCollabClient(embeddedClient)) {
+    return { emailId: "", error: "Use \"Send Mantra Collab Email\" for a Mantra Collab lead instead." };
+  }
   // Server-side safety net mirroring resolveLeadgenEmailBranding on the
   // client: re-validates against the DB row even if the submitted form
   // values were somehow blank, so a Brent's Essentials email can never go
@@ -403,6 +420,13 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
   type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  // This template must never be sent to a Mantra Collab lead - it has
+  // its own dedicated "Send Mantra Collab Email" action/template.
+  // Enforced here (not just by hiding the button in LeadDetailClient.tsx)
+  // so a stale page or a crafted request can't send it either.
+  if (embeddedClient && isMantraCollabClient(embeddedClient)) {
+    return { emailId: "", error: "Use \"Send Mantra Collab Email\" for a Mantra Collab lead instead." };
+  }
   // Server-side safety net mirroring resolveLeadgenEmailBranding on the
   // client: re-validates against the DB row even if the submitted form
   // values were somehow blank, so a Brent's Essentials email can never go
@@ -454,14 +478,17 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
 // "Send Mantra Collab Email" - agent version, identical shape to the
 // admin one in the admin leads/[id]/actions.ts. RLS
 // (leadgen_emails_agent_insert_own_lead) still independently enforces
-// that this can only ever be for a lead assigned to this agent.
+// that this can only ever be for a lead assigned to this agent. Also
+// re-checked here server-side - a crafted request for a non-Mantra lead
+// is rejected outright, so Mantra's fixed content/booking link can never
+// be sent under any other client (Brent's Essentials or otherwise).
 export async function sendMantraCollabIntroEmailAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
   const { data: lead } = await supabase
     .from("leadgen_leads")
-    .select("client_id, campaign_id, leadgen_clients(booking_link)")
+    .select("client_id, campaign_id, leadgen_clients(slug, booking_link)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
@@ -470,9 +497,12 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
-  type EmbeddedClient = { booking_link: string | null };
+  type EmbeddedClient = { slug: string; booking_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  if (!embeddedClient || !isMantraCollabClient(embeddedClient)) {
+    return { emailId: "", error: "This email can only be sent for a Mantra Collab lead." };
+  }
   const bookingUrl = submittedBookingUrl ?? embeddedClient?.booking_link?.trim() ?? null;
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
