@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import NextImage, { type StaticImageData } from "next/image";
 import vancouverPhoto from "./city-photos/vancouver.png";
-import northAmericaPhoto from "./city-photos/north-america.png";
 
 // Real skyline photographs for the Client Local Time cards, keyed by the
 // exact `${country}-${regionCode}-${city}` seed built in
 // ClientLocalTimePanel.tsx - Toronto and Vancouver (the two default
-// cities) each rotate through their own set of shots (TORONTO_PHOTOS /
-// VANCOUVER_PHOTOS below, via PhotoRotation), every other CA/US city a
-// user can pick via "Edit Locations" gets the generic North America
-// skyline fallback.
+// cities) each rotate through their own dedicated set of shots
+// (TORONTO_PHOTOS / VANCOUVER_PHOTOS below, via PhotoRotation). Every
+// other CA/US city a user can pick via "Edit Locations" has no dedicated
+// collection, so it instead rotates through the generic
+// NORTH_AMERICA_PHOTOS - the photo is purely decorative background and
+// never implies a specific city; the city name shown under it always
+// comes from the selected location itself, never from the photo.
 const TORONTO_SEED = "CA-ON-Toronto";
 const VANCOUVER_SEED = "CA-BC-Vancouver";
 
@@ -48,6 +50,19 @@ const VANCOUVER_PHOTOS: PhotoSource[] = [
   ].map((filename) => encodeURI(`/${filename}`)),
 ];
 
+// The 8 generic North America shots living in `public/`, shared by every
+// selected CA/US city that has no dedicated collection of its own.
+const NORTH_AMERICA_PHOTOS: PhotoSource[] = [
+  "Montreal skyline from the Saint Lawrence.png",
+  "North America 1.png",
+  "North America 2.png",
+  "North America 3.png",
+  "North America 4.png",
+  "North America 5.png",
+  "North America 6.png",
+  "North America 8.png",
+].map((filename) => encodeURI(`/${filename}`));
+
 // How long each photo stays on screen before the next one fades in.
 const PHOTO_ROTATION_INTERVAL_MS = 60 * 1000;
 
@@ -57,7 +72,7 @@ const PHOTO_ROTATION_INTERVAL_MS = 60 * 1000;
 // opacity transition below is what makes the change a fade instead of a
 // hard cut. A single setInterval (cleared on unmount) advances the index;
 // nothing here touches the clock/weather state one level up. Shared by
-// the Toronto and Vancouver rotations below.
+// the Toronto, Vancouver, and North America rotations below.
 function PhotoRotation({ photos, alt, priority }: { photos: PhotoSource[]; alt: string; priority?: boolean }) {
   const [index, setIndex] = useState(0);
 
@@ -89,11 +104,11 @@ function PhotoRotation({ photos, alt, priority }: { photos: PhotoSource[]; alt: 
 
 // Fixed aspect ratio for every card's photo, whatever the source photo's own
 // dimensions happen to be (the underlying shots are all different sizes) -
-// so every city card, Toronto/Vancouver's rotation or the North America
-// fallback, occupies exactly the same width/height/ratio and the two cards
-// in a row line up evenly. `fill` + `object-cover` (bound to this
-// fixed-ratio wrapper, not the image's intrinsic size) crops to fill that
-// box without stretching, centered on both axes.
+// so every city card, whichever rotation it's showing, occupies exactly the
+// same width/height/ratio and the two cards in a row line up evenly. `fill`
+// + `object-cover` (bound to this fixed-ratio wrapper, not the image's
+// intrinsic size) crops to fill that box without stretching, centered on
+// both axes.
 export default function CityPhoto({
   seed,
   alt,
@@ -112,14 +127,7 @@ export default function CityPhoto({
       ) : seed === VANCOUVER_SEED ? (
         <PhotoRotation photos={VANCOUVER_PHOTOS} alt={alt} priority={priority} />
       ) : (
-        <NextImage
-          src={northAmericaPhoto}
-          alt={alt}
-          fill
-          priority={priority}
-          className="object-cover object-center"
-          sizes="(min-width: 640px) 45vw, 90vw"
-        />
+        <PhotoRotation photos={NORTH_AMERICA_PHOTOS} alt={alt} priority={priority} />
       )}
     </div>
   );
