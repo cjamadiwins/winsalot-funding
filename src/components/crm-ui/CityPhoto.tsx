@@ -19,9 +19,10 @@ const VANCOUVER_SEED = "CA-BC-Vancouver";
 
 type PhotoSource = string | StaticImageData;
 
-// The 8 Toronto shots living in `public/`, referenced by their exact
+// The Toronto shots living in `public/`, referenced by their exact
 // on-disk filenames (encodeURI escapes the spaces for a valid <img> src).
-// Rotation order is arbitrary - any order satisfies "cycle through all 8".
+// Rotation order is arbitrary - any order satisfies "cycle through all of
+// them".
 const TORONTO_PHOTOS: PhotoSource[] = [
   "Toronto Harbourfront with CN Tower.png",
   "Toronto Islands Skyline with CN Tower.png",
@@ -31,6 +32,8 @@ const TORONTO_PHOTOS: PhotoSource[] = [
   "Market in Toronto.png",
   "Scarborough Bluffs by Lake Ontario in Toronto.png",
   "Scarborough Bluffs by Lake Ontario.png",
+  "Casa Loma Gardens and Toronto Skyline.png",
+  "Sunlit Toronto Distillery District.png",
 ].map((filename) => encodeURI(`/${filename}`));
 
 // The original Vancouver static import stays first in the rotation, followed
