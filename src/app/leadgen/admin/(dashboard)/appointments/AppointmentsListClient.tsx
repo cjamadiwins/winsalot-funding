@@ -10,6 +10,7 @@ import {
   LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES,
   LEADGEN_MEETING_TYPES,
+  isLeadgenAppointmentCountable,
   type LeadgenAppointmentReminderSettingsRow,
   type LeadgenBusinessAppointmentReminderDisplayStatus,
   type LeadgenAppointmentRow,
@@ -25,6 +26,7 @@ import {
   bookAppointmentAction,
   cancelOrReplaceAppointmentAction,
   resendAppointmentNotificationAction,
+  reviewLeadgenAppointmentIncentiveAction,
   sendAppointmentReminderAction,
   updateAppointmentAction,
   updateLeadgenAppointmentReminderSettingsAction,
@@ -96,6 +98,11 @@ export default function AppointmentsListClient({
     timezone: string;
   } | null>(null);
   const highlightRef = useRef<HTMLTableRowElement>(null);
+  // Which appointment's inline "Reject" reason box is open, in the
+  // Incentive column's quick-review controls below (distinct from
+  // `editingId`'s full "Manage" panel).
+  const [rejectingIncentiveId, setRejectingIncentiveId] = useState<string | null>(null);
+  const [rejectIncentiveReason, setRejectIncentiveReason] = useState("");
 
   // "A direct link to open the appointment in the CRM" (brief, admin
   // booking-notification email) - the admin notification links here with
@@ -149,6 +156,43 @@ export default function AppointmentsListClient({
       appointmentDate: String(formData.get("appointment_date") ?? ""),
       appointmentTime: String(formData.get("appointment_time") ?? ""),
       timezone: String(formData.get("timezone") ?? ""),
+    });
+  }
+
+  // "Verify as Qualified" - a no-op if it's already Qualified. Changing
+  // away from a different, already-reviewed decision asks for
+  // confirmation first ("Allow Admin to change a review decision later,
+  // with confirmation"); the very first review (from Not Reviewed) never
+  // needs one.
+  function handleVerifyQualified(appt: LeadgenAppointmentRow) {
+    if (appt.incentive_status === "Qualified") return;
+    if (
+      appt.incentive_status &&
+      !window.confirm(`This appointment is currently reviewed as "${appt.incentive_status}". Change the decision to Qualified?`)
+    ) {
+      return;
+    }
+    setError(null);
+    runAction(() => reviewLeadgenAppointmentIncentiveAction(appt.id, "Qualified", null));
+  }
+
+  function handleConfirmReject(appt: LeadgenAppointmentRow) {
+    const reason = rejectIncentiveReason.trim();
+    if (!reason) {
+      setError("A rejection reason is required.");
+      return;
+    }
+    if (
+      appt.incentive_status &&
+      appt.incentive_status !== "Unqualified" &&
+      !window.confirm(`This appointment is currently reviewed as "${appt.incentive_status}". Change the decision to Rejected?`)
+    ) {
+      return;
+    }
+    setError(null);
+    runAction(() => reviewLeadgenAppointmentIncentiveAction(appt.id, "Unqualified", reason), () => {
+      setRejectingIncentiveId(null);
+      setRejectIncentiveReason("");
     });
   }
 
@@ -377,14 +421,72 @@ export default function AppointmentsListClient({
                       </span>
                     </td>
                     <td className="p-3">
-                      <span
-                        title={appt.incentive_status_reason ?? undefined}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                          appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
-                        }`}
-                      >
-                        {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
-                      </span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span
+                          title={appt.incentive_status_reason ?? undefined}
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                          }`}
+                        >
+                          {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
+                        </span>
+                        {isLeadgenAppointmentCountable(appt.status) && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {appt.incentive_status !== "Qualified" && (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleVerifyQualified(appt)}
+                                className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Verify as Qualified
+                              </button>
+                            )}
+                            {appt.incentive_status !== "Unqualified" && (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => {
+                                  setError(null);
+                                  setRejectIncentiveReason("");
+                                  setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
+                                }}
+                                className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Reject
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {rejectingIncentiveId === appt.id && (
+                          <div className="flex w-56 flex-col gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2">
+                            <input
+                              type="text"
+                              value={rejectIncentiveReason}
+                              onChange={(e) => setRejectIncentiveReason(e.target.value)}
+                              placeholder="Rejection reason (required)"
+                              className="rounded border border-rose-300 px-2 py-1 text-[11.5px] text-slate-900"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleConfirmReject(appt)}
+                                className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isPending ? "Saving…" : "Confirm Reject"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRejectingIncentiveId(null)}
+                                className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
                       {businessReminderStatusByAppointmentId?.[appt.id] && (

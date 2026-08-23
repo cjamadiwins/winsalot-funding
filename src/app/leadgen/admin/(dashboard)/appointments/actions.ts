@@ -408,6 +408,73 @@ export async function cancelOrReplaceAppointmentAction(appointmentId: string, fo
   return {};
 }
 
+// Quick incentive review directly from the Admin Appointments table's
+// Incentive column ("Verify as Qualified" / "Reject" buttons) - a lean
+// alternative to picking a value in the "Manage" panel's full Incentive
+// Status dropdown (which stays available for the finer-grained Cancelled/
+// Invalid/Duplicate categories). Touches only the incentive_status* columns
+// and updated_at - never re-parents the appointment or changes any other
+// field, so it can never duplicate the appointment count or its
+// booking_agent_id credit. Crediting to the booking agent and bucketing
+// into their current Monday-Sunday week both fall out of existing,
+// unchanged logic (booking_agent_id set at insert time; leadgen-
+// incentives.ts buckets by created_at) - this action only ever writes the
+// review decision itself.
+export async function reviewLeadgenAppointmentIncentiveAction(
+  appointmentId: string,
+  decision: Extract<LeadgenAppointmentIncentiveStatus, "Qualified" | "Unqualified">,
+  reason: string | null
+): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+
+  if (decision !== "Qualified" && !reason?.trim()) {
+    return { error: "A reason is required to reject an appointment." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: existing } = await supabase
+    .from("leadgen_appointments")
+    .select("incentive_status, lead_id")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (!existing) return { error: "Appointment not found." };
+
+  const { error } = await supabase
+    .from("leadgen_appointments")
+    .update({
+      incentive_status: decision,
+      incentive_status_reason: decision === "Qualified" ? null : reason!.trim(),
+      incentive_status_set_by: adminUser.id,
+      incentive_status_set_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appointmentId);
+
+  if (error) return { error: "Failed to save the incentive review." };
+
+  if (existing.lead_id) {
+    await supabase.from("leadgen_lead_activities").insert({
+      lead_id: existing.lead_id,
+      agent_id: null,
+      activity_type: "appointment_updated",
+      notes:
+        decision === "Qualified"
+          ? `Appointment verified as Qualified for the Weekly Incentive by ${adminUser.full_name || adminUser.email}.`
+          : `Appointment rejected for the Weekly Incentive by ${adminUser.full_name || adminUser.email}. Reason: ${reason!.trim()}`,
+    });
+  }
+
+  // Refreshes the Admin Appointments table, the Agent Incentives
+  // dashboard, and the agent's own dashboard immediately - no redeploy or
+  // manual refresh needed for the new decision to be reflected everywhere
+  // it's counted.
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin/incentives");
+  revalidatePath("/leadgen/agent");
+  if (existing.lead_id) revalidatePath(`/leadgen/admin/leads/${existing.lead_id}`);
+  return {};
+}
+
 // "Resend Appointment Notification" / "Send Appointment Reminder" (brief
 // EMAIL FEATURES #4/#5) - admins may use both for every booked
 // appointment. Shared send/log logic lives in sendLeadgenAppointmentEmail
