@@ -20,6 +20,9 @@ export default async function LeadgenAgentLeaveRequestsPage({
     .from("leadgen_leave_requests")
     .select("*")
     .eq("agent_id", leadgenUser.id)
+    // Excludes soft-deleted requests (deleted_at, migration 0076) - a
+    // request an admin deleted disappears from the agent's own list too.
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: false });
 
   return (

@@ -921,6 +921,13 @@ export type LeadgenLeaveRequestRow = {
   deduction_confirmed_at: string | null;
   payroll_applied_id: string | null;
   payroll_applied_at: string | null;
+  // Soft-delete only (migration 0076) - a real DELETE would cascade-
+  // delete this row's own audit trail, including the very "deleted"
+  // entry recording who deleted it and when. The app filters every list
+  // query to exclude deleted_at is not null rows instead.
+  deleted_at: string | null;
+  deleted_by: string | null;
+  deleted_by_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -942,7 +949,9 @@ export type LeadgenLeaveRequestAuditLogRow = {
     | "attendance_marked_paid_leave"
     | "attendance_marked_unpaid_absence"
     | "deduction_confirmed"
-    | "payroll_applied";
+    | "payroll_applied"
+    | "edited"
+    | "deleted";
   performed_by: string | null;
   performed_by_name: string;
   note: string | null;

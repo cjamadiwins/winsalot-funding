@@ -165,7 +165,9 @@ export type LeaveRequestAuditAction =
   | "attendance_marked_paid_leave"
   | "attendance_marked_unpaid_absence"
   | "deduction_confirmed"
-  | "payroll_applied";
+  | "payroll_applied"
+  | "edited"
+  | "deleted";
 
 export const LEAVE_AUDIT_ACTION_LABELS: Record<LeaveRequestAuditAction, string> = {
   submitted: "Request submitted",
@@ -175,4 +177,23 @@ export const LEAVE_AUDIT_ACTION_LABELS: Record<LeaveRequestAuditAction, string> 
   attendance_marked_unpaid_absence: "Marked Unapproved Absence — Unpaid",
   deduction_confirmed: "Deduction confirmed",
   payroll_applied: "Applied to payroll",
+  edited: "Request edited",
+  deleted: "Request deleted",
 };
+
+// What attendance_status must become when an admin edits a request's
+// status (directly, or as a side effect of reversing/redeciding it) -
+// "Approved paid leave must remain recorded as paid leave" / "Declined or
+// unapproved leave must not count as paid leave." A request that was
+// never attendance-marked (`none`) stays `none` - editing never invents a
+// marking that was never made; it only ever keeps an *existing* marking
+// truthful to the current decision.
+export function reconcileAttendanceStatusForStatusChange(
+  oldAttendanceStatus: LeaveAttendanceStatus,
+  newStatus: LeaveStatus
+): LeaveAttendanceStatus {
+  if (oldAttendanceStatus === "none") return "none";
+  if (newStatus === "approved") return "paid_leave";
+  if (newStatus === "declined") return "unpaid_absence";
+  return "none"; // pending - nothing decided, nothing to record yet
+}
