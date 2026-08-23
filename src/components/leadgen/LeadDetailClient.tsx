@@ -19,6 +19,7 @@ import {
   leadgenBookingInviteSection,
   leadgenServicesInviteSection,
   resolveLeadgenEmailBranding,
+  isMantraCollabClient,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -47,6 +48,9 @@ export type LeadDetailActions = {
   sendConsultationEmail: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   sendConsultationInvitation: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   sendConsultationFollowUp: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  // Available to both admin and agent (Mantra agents need to send this
+  // themselves) - only rendered when isMantraCollabClient(client) is true.
+  sendMantraCollabIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
@@ -80,6 +84,7 @@ export default function LeadDetailClient({
   consultationTemplate,
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
+  mantraCollabTemplate,
   followUpTemplates,
   bookingLink,
   servicesInfoLink,
@@ -106,6 +111,10 @@ export default function LeadDetailClient({
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
   consultationFollowUpTemplate: LeadgenEmailTemplateRow | null;
+  // Only rendered/sendable when this lead's client is Mantra Collab
+  // (isMantraCollabClient below) - null for every other client, same as
+  // the seeded row simply not existing yet in an environment.
+  mantraCollabTemplate: LeadgenEmailTemplateRow | null;
   followUpTemplates: LeadgenEmailTemplateRow[];
   // The client's (or campaign's) configured booking link - shared by all
   // three consultation email types now (the original "Send Consultation
@@ -135,6 +144,7 @@ export default function LeadDetailClient({
   const [showConsultationModal, setShowConsultationModal] = useState(false);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [showInvitationFollowUpModal, setShowInvitationFollowUpModal] = useState(false);
+  const [showMantraModal, setShowMantraModal] = useState(false);
   const [postSendFollowUp, setPostSendFollowUp] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -228,6 +238,18 @@ export default function LeadDetailClient({
     });
   }
   const latestEmail = emails[0] ?? null;
+
+  // "Send Mantra Collab Email" - fixed subject/body/two buttons, only
+  // ever rendered/sendable for a Mantra Collab lead (see the button
+  // below). Same [LABEL]\n\nurl marker convention as booking_section/
+  // services_section above, so buildLeadgenBookingEmailHtml (server
+  // side, in the send action) swaps each for a real HTML button.
+  const isMantra = isMantraCollabClient(client);
+  const mantraBookingSection = `[Book a Free 15-Minute Consultation]\n\n${branding.bookingUrl ?? ""}`;
+  const mantraVisitSection = "[Visit Mantra Collab]\n\nhttps://mantracollab.com";
+  const mantraVars = { first_name: firstName, booking_section: mantraBookingSection, visit_section: mantraVisitSection };
+  const mantraSubject = mantraCollabTemplate?.subject ?? "Grow Your Business with Mantra Collab";
+  const mantraBody = mantraCollabTemplate ? renderLeadgenTemplate(mantraCollabTemplate.body, mantraVars) : "";
 
   return (
     <div>
@@ -355,6 +377,24 @@ export default function LeadDetailClient({
           onSent={() => {
             setShowInvitationFollowUpModal(false);
             setSuccessMessage("Follow-up email sent.");
+          }}
+        />
+      )}
+
+      {showMantraModal && (
+        <ConsultationInvitationModal
+          lead={lead}
+          agentName={currentUserName}
+          title="Send Mantra Collab Email"
+          subject={mantraSubject}
+          body={mantraBody}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={null}
+          onClose={() => setShowMantraModal(false)}
+          onSend={(formData) => actions.sendMantraCollabIntro(lead.id, formData)}
+          onSent={() => {
+            setShowMantraModal(false);
+            setSuccessMessage("Mantra Collab email sent.");
           }}
         />
       )}
@@ -611,6 +651,15 @@ export default function LeadDetailClient({
               >
                 Send Follow-Up Email
               </button>
+              {isMantra && (
+                <button
+                  type="button"
+                  onClick={() => setShowMantraModal(true)}
+                  className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-sky-700"
+                >
+                  Send Mantra Collab Email
+                </button>
+              )}
             </div>
           </div>
           {emails.length === 0 ? (

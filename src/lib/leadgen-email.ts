@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { escapeHtml } from "./html";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { LEADGEN_BRENTS_ESSENTIALS_FALLBACK } from "./leadgen-types";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -144,16 +143,26 @@ export function buildLeadgenBookingEmailHtml(
 // bookingUrl is required (never falls back to the Brent's Essentials
 // website) - the caller must block sending entirely when the client has
 // no Consultation Booking Link configured, rather than pass one in here.
-// The Brent's Essentials website only ever appears in the signature's
-// separate "Website:" line below, never as the booking button's target.
+//
+// clientName/websiteUrl are the lead's *own* client's resolved branding
+// (see resolveLeadgenEmailBranding in lib/leadgen-types.ts) - the caller
+// is responsible for resolving these per-client, exactly like the
+// sibling consultation-invitation/follow-up flows already do. Brent's
+// Essentials is never hardcoded here; it only ever appears because a
+// Brent's Essentials lead's own resolved clientName/websiteUrl happen to
+// be "Brent's Essentials"/its website, same as any other client's would.
 export function buildLeadgenConsultationCtaEmail(
   body: string,
   bookingUrl: string,
-  buttonLabel: string
+  buttonLabel: string,
+  clientName: string,
+  websiteUrl: string | null
 ): { text: string; html?: string } {
   const sanitizedBody = sanitizePlainEmailBody(body);
-  const websiteUrl = LEADGEN_BRENTS_ESSENTIALS_FALLBACK.servicesUrl;
-  const signatureText = `Best,\nBrent's Essentials Team\nBrent's Essentials\n${websiteUrl}`;
+  // No services/website link configured for this client - drop the
+  // "Website:" line entirely rather than show a broken/missing link
+  // (same never-show-a-broken-link rule as leadgenBookingParagraph).
+  const signatureText = websiteUrl ? `Best,\n${clientName} Team\n${clientName}\n${websiteUrl}` : `Best,\n${clientName} Team\n${clientName}`;
 
   const buildCtaHtml = () => {
     const safeUrl = escapeHtml(bookingUrl);
@@ -167,8 +176,10 @@ export function buildLeadgenConsultationCtaEmail(
   };
 
   const buildSignatureHtml = () => {
-    const safeUrl = escapeHtml(websiteUrl);
-    return `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;white-space:pre-wrap;">Best,<br>Brent's Essentials Team<br>Brent's Essentials<br>Website: <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${safeUrl}</a></div>`;
+    const websiteLine = websiteUrl
+      ? `<br>Website: <a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0284c7;">${escapeHtml(websiteUrl)}</a>`
+      : "";
+    return `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;margin-top:12px;white-space:pre-wrap;">Best,<br>${escapeHtml(clientName)} Team<br>${escapeHtml(clientName)}${websiteLine}</div>`;
   };
 
   const escapedBase = bookingUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -225,6 +236,12 @@ export type SendLeadgenEmailInput = {
   // exactly the env-configured sender/reply-to it always had.
   senderDisplayNameOverride?: string | null;
   replyToOverride?: string | null;
+  // The lead's resolved client name (see resolveLeadgenEmailBranding),
+  // used only to validate the "consultation_information" template's
+  // required signature below against the *right* client - never
+  // hardcoded to Brent's Essentials, so this validation (and therefore
+  // the send) works correctly for any client, not just that one.
+  expectedSignatureName?: string;
 };
 
 export type SendLeadgenEmailResult = { emailId: string; error?: string };
@@ -259,10 +276,14 @@ export async function sendLeadgenEmail(
   // their own link (see resolveLeadgenEmailBranding in lib/leadgen-types.ts) -
   // pinning this to the Brent's Essentials fallback URL would block
   // sending as soon as that admin-configured link differed from it.
+  // Likewise, the signature check is against this lead's own resolved
+  // client name (expectedSignatureName), never a hardcoded brand string
+  // - Brent's Essentials in name only when the lead's own client
+  // actually resolves to that.
   if (input.templateKey === "consultation_information") {
     const hasButtonLabel = finalHtml.includes("Book Your Free 15-Minute Consultation");
     const hasBookingLink = /href="https?:\/\/[^"]+"/.test(finalHtml);
-    const hasSignature = finalHtml.includes("Brent's Essentials Team") && finalHtml.includes("Best,");
+    const hasSignature = finalHtml.includes(`${input.expectedSignatureName ?? "Brent's Essentials"} Team`) && finalHtml.includes("Best,");
     if (!hasButtonLabel || !hasBookingLink || !hasSignature) {
       return { emailId: "", error: "Consultation email HTML is incomplete. Please regenerate and try again." };
     }
