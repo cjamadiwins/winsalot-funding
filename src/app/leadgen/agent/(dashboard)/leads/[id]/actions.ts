@@ -229,7 +229,7 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
 
   const { data: lead } = await supabase
     .from("leadgen_leads")
-    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link)")
+    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link, services_info_link)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
@@ -239,7 +239,7 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   const body = String(formData.get("body") ?? "").trim();
   const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
 
-  type EmbeddedClient = { name: string; slug: string; booking_link: string | null };
+  type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
   const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
   const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
   // The client's saved Consultation Booking Link (or its campaign-level
@@ -248,6 +248,13 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   // deliberately not used here, since it would substitute that fallback
   // URL for a blank link instead of blocking the send below.
   const bookingUrl = submittedBookingUrl ?? embeddedClient?.booking_link?.trim() ?? null;
+  // clientName/websiteUrl for the signature only - resolved the same way
+  // every other consultation email does (resolveLeadgenEmailBranding),
+  // so this lead's own client's name/website appear, never a hardcoded
+  // Brent's Essentials fallback for any other client.
+  const signatureBranding = embeddedClient
+    ? resolveLeadgenEmailBranding(embeddedClient, null, embeddedClient.services_info_link)
+    : { clientName: "us", servicesUrl: null };
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
@@ -255,7 +262,13 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
 
-  const rendered = buildLeadgenConsultationCtaEmail(body, bookingUrl, LEADGEN_CONSULTATION_CTA_LABEL);
+  const rendered = buildLeadgenConsultationCtaEmail(
+    body,
+    bookingUrl,
+    LEADGEN_CONSULTATION_CTA_LABEL,
+    signatureBranding.clientName,
+    signatureBranding.servicesUrl
+  );
 
   const result = await sendLeadgenEmail(supabase, {
     clientId: lead.client_id,
@@ -269,6 +282,7 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     html: rendered.html,
     sentBy: agent.id,
     clientVisible: false,
+    expectedSignatureName: signatureBranding.clientName,
   });
 
   if (result.error) return result;
@@ -427,6 +441,70 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     agent_id: agent.id,
     activity_type: "consultation_follow_up_sent",
     notes: `Consultation follow-up email sent to ${toEmail} by ${agent.full_name || agent.email} (Agent).`,
+    occurred_at: now,
+  });
+
+  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/agent/leads/${leadId}`);
+  revalidatePath("/leadgen/agent");
+  return result;
+}
+
+// "Send Mantra Collab Email" - agent version, identical shape to the
+// admin one in the admin leads/[id]/actions.ts. RLS
+// (leadgen_emails_agent_insert_own_lead) still independently enforces
+// that this can only ever be for a lead assigned to this agent.
+export async function sendMantraCollabIntroEmailAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  const agent = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase
+    .from("leadgen_leads")
+    .select("client_id, campaign_id, leadgen_clients(booking_link)")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found, or it isn't assigned to you." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  type EmbeddedClient = { booking_link: string | null };
+  const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
+  const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  const bookingUrl = submittedBookingUrl ?? embeddedClient?.booking_link?.trim() ?? null;
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+  if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: "mantra_collab_intro",
+    toEmail,
+    subject,
+    body,
+    html: buildLeadgenBookingEmailHtml(body, [
+      { url: bookingUrl, label: "Book a Free 15-Minute Consultation", style: "booking" },
+      { url: "https://mantracollab.com", label: "Visit Mantra Collab" },
+    ]),
+    sentBy: agent.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: agent.id,
+    activity_type: "mantra_collab_intro_sent",
+    notes: `Mantra Collab intro email sent to ${toEmail} by ${agent.full_name || agent.email} (Agent).`,
     occurred_at: now,
   });
 

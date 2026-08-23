@@ -468,10 +468,22 @@ export async function updateClientAction(clientId: string, formData: FormData): 
 // ---------------------------------------------------------------------
 // Campaigns
 // ---------------------------------------------------------------------
+// Empty/blank -> null (no goal set, same as every campaign today);
+// anything else must be a non-negative whole number.
+function intOrNull(formData: FormData, key: string): number | null | undefined {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return undefined; // signals "invalid" to the caller
+  return n;
+}
+
 export async function createCampaignAction(clientId: string, formData: FormData): Promise<ActionResult> {
   const admin = await requireLeadgenAdmin();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Campaign name is required." };
+  const appointmentGoal = intOrNull(formData, "appointment_goal");
+  if (appointmentGoal === undefined) return { error: "Appointment Goal must be a whole number." };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("leadgen_campaigns").insert({
@@ -481,6 +493,8 @@ export async function createCampaignAction(clientId: string, formData: FormData)
     booking_link: textOrNull(formData, "booking_link"),
     start_date: textOrNull(formData, "start_date"),
     end_date: textOrNull(formData, "end_date"),
+    pilot_label: textOrNull(formData, "pilot_label"),
+    appointment_goal: appointmentGoal,
     created_by: admin.id,
   });
 
@@ -496,6 +510,8 @@ export async function updateCampaignAction(campaignId: string, formData: FormDat
   if (!name) return { error: "Campaign name is required." };
   const status = String(formData.get("status") ?? "active");
   if (!["active", "paused", "completed"].includes(status)) return { error: "Invalid status." };
+  const appointmentGoal = intOrNull(formData, "appointment_goal");
+  if (appointmentGoal === undefined) return { error: "Appointment Goal must be a whole number." };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -506,12 +522,39 @@ export async function updateCampaignAction(campaignId: string, formData: FormDat
       booking_link: textOrNull(formData, "booking_link"),
       start_date: textOrNull(formData, "start_date"),
       end_date: textOrNull(formData, "end_date"),
+      pilot_label: textOrNull(formData, "pilot_label"),
+      appointment_goal: appointmentGoal,
       status,
       updated_at: new Date().toISOString(),
     })
     .eq("id", campaignId);
 
   if (error) return { error: "Failed to update the campaign." };
+
+  revalidatePath(`/leadgen/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+// Replace-set: an admin's "Save Assigned Agents" submits the full
+// intended set of agent ids for this campaign, so the simplest correct
+// implementation is delete-then-insert inside one transaction-like pair
+// of calls, rather than diffing. An agent with zero rows across every
+// campaign remains fully unrestricted (see leadgen_agent_campaign_allowed
+// in migration 0077) - this action is the only way that ever changes.
+export async function assignCampaignAgentsAction(campaignId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireLeadgenAdmin();
+  const agentIds = formData.getAll("agent_ids").map((v) => String(v));
+
+  const supabase = await createSupabaseServerClient();
+  const { error: deleteError } = await supabase.from("leadgen_campaign_agents").delete().eq("campaign_id", campaignId);
+  if (deleteError) return { error: "Failed to update assigned agents." };
+
+  if (agentIds.length > 0) {
+    const { error: insertError } = await supabase.from("leadgen_campaign_agents").insert(
+      agentIds.map((agentId) => ({ campaign_id: campaignId, agent_id: agentId, assigned_by: admin.id }))
+    );
+    if (insertError) return { error: "Failed to update assigned agents." };
+  }
 
   revalidatePath(`/leadgen/admin/campaigns/${campaignId}`);
   return {};

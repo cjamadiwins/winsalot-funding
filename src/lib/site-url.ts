@@ -35,3 +35,16 @@ export function getAuthRedirectBaseUrl(): string {
 
   return "http://localhost:3000";
 }
+
+// Expands a stored relative path (e.g. a leadgen client's booking_link
+// pointing at this CRM's own built-in "/book/<slug>" page - see Mantra
+// Collab's seeded client row) to a full absolute URL using this
+// deployment's own site URL, so it works correctly in an email opened
+// outside the app. Every other client's booking_link today is already
+// an absolute external URL (e.g. Calendly) and passes through completely
+// unchanged - this only ever matters for a link deliberately stored as
+// a same-app relative path.
+export function resolveSiteRelativeUrl(link: string | null): string | null {
+  if (!link) return null;
+  return link.startsWith("/") ? `${getSiteUrl()}${link}` : link;
+}

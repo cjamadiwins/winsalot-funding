@@ -80,6 +80,26 @@ export type LeadgenCampaignRow = {
   start_date: string | null;
   end_date: string | null;
   created_by: string | null;
+  // Optional free-text phase label (e.g. "3-Appointment Pilot") and
+  // target appointment count, shown as "X of Y qualified appointments
+  // booked" on the campaign detail page - both null for every campaign
+  // that hasn't set them, which is every campaign that existed before
+  // migration 0077.
+  pilot_label: string | null;
+  appointment_goal: number | null;
+};
+
+// A single agent-restricted-to-campaign assignment (leadgen_campaign_agents,
+// migration 0077). Presence of any row for an agent is what flips them
+// into "restricted" mode - see leadgen_agent_campaign_allowed in that
+// migration.
+export type LeadgenCampaignAgentRow = {
+  id: string;
+  created_at: string;
+  campaign_id: string;
+  agent_id: string;
+  assigned_by: string | null;
+  assigned_at: string;
 };
 
 // Call outcome options double as the lead's current status - a call
@@ -186,6 +206,7 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "appointment_confirmation_resent",
   "appointment_reminder_sent",
   "appointment_reminder_auto_sent",
+  "mantra_collab_intro_sent",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -207,6 +228,7 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   appointment_confirmation_resent: "Appointment confirmation resent",
   appointment_reminder_sent: "Appointment reminder sent",
   appointment_reminder_auto_sent: "Automatic 24-hour appointment reminder sent",
+  mantra_collab_intro_sent: "Mantra Collab intro email sent",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -414,6 +436,13 @@ export const LEADGEN_HIDDEN_CAMPAIGN_NAME = "Q3 Growth Campaign";
 
 export function isHiddenLeadgenCampaignName(name: string | null | undefined): boolean {
   return (name ?? "").trim().toLowerCase() === LEADGEN_HIDDEN_CAMPAIGN_NAME.toLowerCase();
+}
+
+// The "Send Mantra Collab Email" button/flow (fixed subject/body, own
+// booking link) should only ever appear for Mantra Collab's own leads -
+// matched by slug, same style as isLeadgenBrentsEssentials below.
+export function isMantraCollabClient(client: Pick<LeadgenClientRow, "slug">): boolean {
+  return client.slug.trim().toLowerCase() === "mantra-collab";
 }
 
 export function isLeadgenBrentsEssentials(client: Pick<LeadgenClientRow, "name" | "slug">): boolean {

@@ -17,6 +17,7 @@ export type SendConsultationInvitationResult = { error?: string; emailId?: strin
 export default function ConsultationInvitationModal({
   lead,
   agentName,
+  title = "Send 15-Minute Consultation Invitation",
   subject,
   body,
   bookingUrl,
@@ -27,6 +28,10 @@ export default function ConsultationInvitationModal({
 }: {
   lead: LeadgenLeadRow;
   agentName: string;
+  // Distinct flows sharing this same read-only preview design (e.g. the
+  // Mantra Collab intro email) can override the modal's heading; every
+  // existing caller keeps the original title unchanged.
+  title?: string;
   subject: string;
   body: string;
   // The exact booking/services URLs rendered into `body`'s
@@ -75,12 +80,12 @@ export default function ConsultationInvitationModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Send 15-Minute Consultation Invitation"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-bold text-slate-900">Send 15-Minute Consultation Invitation</h2>
+          <h2 className="text-[17px] font-bold text-slate-900">{title}</h2>
           <button
             type="button"
             onClick={onClose}

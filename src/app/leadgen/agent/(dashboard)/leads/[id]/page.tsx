@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { resolveSiteRelativeUrl } from "@/lib/site-url";
 import {
   getEffectiveBookingLink,
   isHiddenLeadgenCampaignName,
@@ -23,6 +24,7 @@ import {
   sendConsultationEmailAction,
   sendConsultationFollowUpAction,
   sendConsultationInvitationAction,
+  sendMantraCollabIntroEmailAction,
   updateLeadAction,
 } from "./actions";
 
@@ -35,6 +37,7 @@ const actions: LeadDetailActions = {
   sendConsultationEmail: sendConsultationEmailAction,
   sendConsultationInvitation: sendConsultationInvitationAction,
   sendConsultationFollowUp: sendConsultationFollowUpAction,
+  sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
   // email (admin-only per the brief) or reassign a lead.
   resendAppointmentNotification: resendAppointmentNotificationAction,
@@ -63,6 +66,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     { data: consultationTemplate },
     { data: consultationInvitationTemplate },
     { data: consultationFollowUpTemplate },
+    { data: mantraCollabTemplate },
     { data: followUpTemplates },
   ] = await Promise.all([
     supabase.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
@@ -74,6 +78,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_information").maybeSingle(),
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_invitation").maybeSingle(),
     supabase.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
+    supabase.from("leadgen_email_templates").select("*").eq("key", "mantra_collab_intro").maybeSingle(),
     supabase.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
   ]);
 
@@ -86,7 +91,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
   const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(supabase, (appointments ?? []) as LeadgenAppointmentRow[]);
 
   const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
-  const bookingLink = client ? getEffectiveBookingLink(client as LeadgenClientRow, visibleCampaign as LeadgenCampaignRow | null) : null;
+  const bookingLink = client ? resolveSiteRelativeUrl(getEffectiveBookingLink(client as LeadgenClientRow, visibleCampaign as LeadgenCampaignRow | null)) : null;
 
   return (
     <LeadDetailClient
@@ -105,6 +110,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       consultationTemplate={consultationTemplate as LeadgenEmailTemplateRow | null}
       consultationInvitationTemplate={consultationInvitationTemplate as LeadgenEmailTemplateRow | null}
       consultationFollowUpTemplate={consultationFollowUpTemplate as LeadgenEmailTemplateRow | null}
+      mantraCollabTemplate={mantraCollabTemplate as LeadgenEmailTemplateRow | null}
       followUpTemplates={(followUpTemplates ?? []) as LeadgenEmailTemplateRow[]}
       bookingLink={bookingLink}
       servicesInfoLink={(client as LeadgenClientRow)?.services_info_link ?? null}
