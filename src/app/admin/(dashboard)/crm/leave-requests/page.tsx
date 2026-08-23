@@ -7,7 +7,9 @@ import {
   approveLeaveRequestAction,
   confirmLeaveDeductionAction,
   declineLeaveRequestAction,
+  deleteLeaveRequestAction,
   markLeaveAttendanceAction,
+  updateLeaveRequestAction,
 } from "./actions";
 
 export default async function AdminLeaveRequestsPage({
@@ -28,7 +30,12 @@ export default async function AdminLeaveRequestsPage({
       // `!agent_id` hint tells PostgREST which one to embed through,
       // since an unqualified `crm_users(...)` is ambiguous with more
       // than one relationship to the same table.
+      // Excludes soft-deleted requests (deleted_at, migration 0076) - a
+      // deleted request disappears from this list entirely, exactly like
+      // a real delete, while remaining in the database for its audit
+      // trail and the payroll-reversal bookkeeping it already caused.
       .select("*, crm_users!agent_id(id, full_name, email)")
+      .is("deleted_at", null)
       .order("submitted_at", { ascending: false }),
   ]);
 
@@ -58,6 +65,8 @@ export default async function AdminLeaveRequestsPage({
             markAttendanceAction={markLeaveAttendanceAction}
             confirmDeductionAction={confirmLeaveDeductionAction}
             applyPaidLeaveAction={applyPaidLeaveToPayrollAction}
+            updateAction={updateLeaveRequestAction}
+            deleteAction={deleteLeaveRequestAction}
           />
         </div>
       )}

@@ -30,6 +30,8 @@ export default function AdminLeadgenLeaveRequestsClient({
   markAttendanceAction,
   confirmDeductionAction,
   applyPaidLeaveAction,
+  updateAction,
+  deleteAction,
   highlightId,
 }: {
   agents: AgentOption[];
@@ -39,6 +41,8 @@ export default function AdminLeadgenLeaveRequestsClient({
   markAttendanceAction: (id: string, formData: FormData) => Promise<ActionResult>;
   confirmDeductionAction: (id: string) => Promise<ActionResult>;
   applyPaidLeaveAction: (id: string) => Promise<ActionResult>;
+  updateAction: (id: string, formData: FormData) => Promise<ActionResult>;
+  deleteAction: (id: string) => Promise<ActionResult>;
   highlightId?: string;
 }) {
   const [flashId, setFlashId] = useState(highlightId);
@@ -58,6 +62,10 @@ export default function AdminLeadgenLeaveRequestsClient({
 
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionKind, setDecisionKind] = useState<"approve" | "decline" | null>(null);
+  // Which request's inline Edit form is open - separate from `decidingId`
+  // (Approve/Decline) so the two panels are never both open for the same
+  // row at once.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -82,6 +90,30 @@ export default function AdminLeadgenLeaveRequestsClient({
       }
       onSuccess?.();
     });
+  }
+
+  // "Before saving changes to an approved request, show a confirmation
+  // warning" - a plain confirm() naming exactly what's at risk, then a
+  // hidden field tells the server this was confirmed (it re-checks this
+  // itself too, in case of a stale form or forged request).
+  function handleEditSubmit(r: LeadgenLeaveRequestWithAgent, e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (r.status === "approved") {
+      const proceed = window.confirm(
+        "This leave request is currently Approved. Saving changes may automatically reverse or update its connected attendance and payroll records. Continue?"
+      );
+      if (!proceed) return;
+    }
+    const formData = new FormData(e.currentTarget);
+    formData.set("confirm_approved_edit", "true");
+    runAction(() => updateAction(r.id, formData), () => setEditingId(null));
+  }
+
+  // "Delete must always show: 'Are you sure you want to delete this leave
+  // request?'" - the exact wording, every time, regardless of status.
+  function handleDelete(r: LeadgenLeaveRequestWithAgent) {
+    if (!window.confirm("Are you sure you want to delete this leave request?")) return;
+    runAction(() => deleteAction(r.id));
   }
 
   return (
@@ -275,6 +307,27 @@ export default function AdminLeadgenLeaveRequestsClient({
                           {r.deduction_confirmed ? "Retry Apply" : "Confirm Deduction"}
                         </button>
                       )}
+                      <div className="mt-2 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDecidingId(null);
+                            setError(null);
+                            setEditingId(editingId === r.id ? null : r.id);
+                          }}
+                          className="text-[12px] font-semibold text-slate-600 hover:text-slate-800"
+                        >
+                          {editingId === r.id ? "Close" : "Edit"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleDelete(r)}
+                          className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {isDeciding && (
@@ -309,6 +362,63 @@ export default function AdminLeadgenLeaveRequestsClient({
                           >
                             Cancel
                           </button>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                  {editingId === r.id && (
+                    <tr>
+                      <td colSpan={8} className="bg-slate-50 px-4 py-4">
+                        {r.status === "approved" && (
+                          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
+                            This request is currently Approved. Saving changes here may automatically reverse or update
+                            its connected attendance and payroll records - you&apos;ll be asked to confirm.
+                          </p>
+                        )}
+                        <form onSubmit={(e) => handleEditSubmit(r, e)} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-slate-600">Leave Type</span>
+                            <select name="leave_type" defaultValue={r.leave_type} className={inputClass}>
+                              <option value="planned">Planned Leave</option>
+                              <option value="emergency">Emergency Leave</option>
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-slate-600">Status</span>
+                            <select name="status" defaultValue={r.status} className={inputClass}>
+                              <option value="pending">Pending</option>
+                              <option value="approved">Approved</option>
+                              <option value="declined">Declined</option>
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-slate-600">Start Date</span>
+                            <input type="date" name="start_date" required defaultValue={r.start_date} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-slate-600">End Date</span>
+                            <input type="date" name="end_date" required defaultValue={r.end_date} className={inputClass} />
+                          </label>
+                          <label className="flex flex-col gap-1 sm:col-span-2">
+                            <span className="text-[12px] font-medium text-slate-600">Reason</span>
+                            <textarea name="reason" required rows={2} defaultValue={r.reason} className={inputClass} />
+                          </label>
+                          <div className="flex gap-3 sm:col-span-2">
+                            <button
+                              type="submit"
+                              disabled={isPending}
+                              className="rounded-full bg-slate-700 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isPending ? "Saving…" : "Save Changes"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="text-[12px] font-semibold text-slate-500 hover:text-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </form>
                       </td>
                     </tr>
