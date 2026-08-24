@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   LEADGEN_LEAD_STATUS_STYLES,
   LEADGEN_STAT_CARD_STYLES,
+  isLeadgenAppointmentCountable,
   isLeadgenFollowUpDueToday,
   isLeadgenFollowUpOverdue,
   type LeadgenAgentAttendanceRow,
@@ -36,6 +37,7 @@ export default async function LeadgenAgentDashboardPage() {
     { data: followUps },
     { data: attendanceData, error: attendanceError },
     { data: appointments },
+    { data: clients },
     settings,
     ledgerRow,
     monthToDateApproved,
@@ -60,8 +62,12 @@ export default async function LeadgenAgentDashboardPage() {
     // selected for the Weekly Incentive card below.
     supabase
       .from("leadgen_appointments")
-      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, incentive_status")
+      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, incentive_status, client_id")
       .order("appointment_date", { ascending: false }),
+    // Names for the "My Results by Client" breakdown below - agents can
+    // already read every client's name (see leads/new/page.tsx), only
+    // their own leads/appointments are actually RLS-scoped.
+    supabase.from("leadgen_clients").select("id, name"),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
     // Service-role, narrowly filtered to this signed-in agent's own
@@ -102,6 +108,30 @@ export default async function LeadgenAgentDashboardPage() {
   const statusCounts = new Map<string, number>();
   for (const lead of myLeads) statusCounts.set(lead.status, (statusCounts.get(lead.status) ?? 0) + 1);
 
+  // "My Results by Client" - same shape as the admin dashboard's Results
+  // by Client table, but scoped to only this agent's own leads/
+  // appointments (already RLS-limited above), and only clients that are
+  // actually relevant to them - never the full client roster, so a
+  // Mantra-restricted agent's dashboard never surfaces Brent's Essentials
+  // (or vice versa) just because leadgen_clients itself is readable.
+  const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
+  const myByClient = new Map<string, { name: string; leads: number; appointments: number }>();
+  for (const lead of myLeads) {
+    const name = clientNameById.get(lead.client_id);
+    if (!name) continue;
+    const entry = myByClient.get(lead.client_id) ?? { name, leads: 0, appointments: 0 };
+    entry.leads++;
+    myByClient.set(lead.client_id, entry);
+  }
+  for (const appt of appointments ?? []) {
+    if (!isLeadgenAppointmentCountable(appt.status) || !appt.client_id) continue;
+    const name = clientNameById.get(appt.client_id);
+    if (!name) continue;
+    const entry = myByClient.get(appt.client_id) ?? { name, leads: 0, appointments: 0 };
+    entry.appointments++;
+    myByClient.set(appt.client_id, entry);
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {agent.full_name}</h1>
@@ -137,6 +167,42 @@ export default async function LeadgenAgentDashboardPage() {
           icon={<UserCheck />}
         />
       </div>
+
+      {myByClient.size > 1 && (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">My Results by Client</h2>
+          <table className="mt-3 w-full text-left text-[13px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                <th className="py-2">Client</th>
+                <th className="py-2 text-right">Leads</th>
+                <th className="py-2 text-right">Appointments</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(myByClient.entries()).map(([id, row]) => (
+                <tr key={id} className="border-b border-slate-100">
+                  <td className="py-2">
+                    <Link href={`/leadgen/agent/leads?client=${id}`} className="font-medium text-sky-600 hover:text-sky-700">
+                      {row.name}
+                    </Link>
+                  </td>
+                  <td className="py-2 text-right">
+                    <Link href={`/leadgen/agent/leads?client=${id}`} className="text-slate-700 hover:text-sky-600 hover:underline">
+                      {row.leads}
+                    </Link>
+                  </td>
+                  <td className="py-2 text-right">
+                    <Link href={`/leadgen/agent/appointments?client=${id}`} className="text-slate-700 hover:text-sky-600 hover:underline">
+                      {row.appointments}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col items-center gap-5 sm:flex-row">

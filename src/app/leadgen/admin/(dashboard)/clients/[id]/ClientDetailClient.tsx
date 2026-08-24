@@ -2,11 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus } from "lucide-react";
 import {
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_EMAIL_STATUS_LABELS,
   LEADGEN_EMAIL_STATUS_STYLES,
   LEADGEN_LEAD_ONLY_TEMPLATE_KEYS,
+  LEADGEN_STAT_CARD_STYLES,
   leadgenBookingInviteSection,
   leadgenEmailStatusAt,
   leadgenServicesInviteSection,
@@ -20,6 +22,7 @@ import {
 import { clearBouncedEmailAction, updateClientAction, createCampaignAction, resendLeadgenEmailAction } from "../../actions";
 import { sendClientCommunicationAction } from "./actions";
 import RefreshOnFocus from "@/components/leadgen/RefreshOnFocus";
+import KpiCard from "@/components/crm-ui/KpiCard";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -29,7 +32,12 @@ export default function ClientDetailClient({
   emails,
   templates,
   leadCountByCampaign,
+  appointmentCountByCampaign,
   totalLeads,
+  interestedLeads,
+  appointmentsBooked,
+  followUpsDueToday,
+  overdueFollowUps,
   bouncedEmails,
 }: {
   client: LeadgenClientRow;
@@ -37,7 +45,12 @@ export default function ClientDetailClient({
   emails: LeadgenEmailRow[];
   templates: LeadgenEmailTemplateRow[];
   leadCountByCampaign: Record<string, number>;
+  appointmentCountByCampaign: Record<string, number>;
   totalLeads: number;
+  interestedLeads: number;
+  appointmentsBooked: number;
+  followUpsDueToday: number;
+  overdueFollowUps: number;
   bouncedEmails: string[];
 }) {
   const bouncedSet = new Set(bouncedEmails);
@@ -60,7 +73,15 @@ export default function ClientDetailClient({
   return (
     <div>
       <RefreshOnFocus />
-      <div className="flex flex-wrap items-center justify-between gap-3">
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+        <p className="text-[13.5px] font-semibold text-sky-800">Viewing {client.name}</p>
+        <Link href="/leadgen/admin/clients" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+          ← Back to All Clients
+        </Link>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -68,12 +89,63 @@ export default function ClientDetailClient({
             {campaigns.length === 1 ? "" : "s"}
           </p>
         </div>
-        <Link href="/leadgen/admin/clients" className="text-[13px] font-semibold text-sky-600 hover:text-sky-700">
-          ← All Clients
-        </Link>
+        <div className="flex flex-wrap gap-2.5">
+          <Link
+            href={`/leadgen/admin/leads?client=${client.id}&openAdd=1`}
+            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2.3} />
+            Add Lead
+          </Link>
+          <Link
+            href={`/leadgen/admin/appointments?client=${client.id}&openAdd=1`}
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+          >
+            <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
+            Book Appointment
+          </Link>
+        </div>
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard
+          label="Total Leads"
+          value={String(totalLeads)}
+          href={`/leadgen/admin/leads?client=${client.id}`}
+          tone={LEADGEN_STAT_CARD_STYLES.leads}
+          icon={<Users />}
+        />
+        <KpiCard
+          label="Interested Leads"
+          value={String(interestedLeads)}
+          href={`/leadgen/admin/leads?client=${client.id}&status=${encodeURIComponent("Interested")}`}
+          tone={LEADGEN_STAT_CARD_STYLES.interested}
+          icon={<UserCheck />}
+        />
+        <KpiCard
+          label="Appointments Booked"
+          value={String(appointmentsBooked)}
+          href={`/leadgen/admin/appointments?client=${client.id}`}
+          tone={LEADGEN_STAT_CARD_STYLES.appointments}
+          icon={<CalendarCheck />}
+        />
+        <KpiCard
+          label="Follow-ups Due Today"
+          value={String(followUpsDueToday)}
+          href={`/leadgen/admin/leads?client=${client.id}&followup=due_today`}
+          tone={LEADGEN_STAT_CARD_STYLES.dueToday}
+          icon={<Clock />}
+        />
+        <KpiCard
+          label="Overdue Follow-ups"
+          value={String(overdueFollowUps)}
+          href={`/leadgen/admin/leads?client=${client.id}&followup=overdue`}
+          tone={LEADGEN_STAT_CARD_STYLES.overdue}
+          icon={<AlertTriangle />}
+        />
+      </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
@@ -237,7 +309,9 @@ export default function ClientDetailClient({
                       {campaign.status}
                     </span>
                   </div>
-                  <p className="mt-1 text-[12.5px] text-slate-500">{leadCountByCampaign[campaign.id] ?? 0} leads</p>
+                  <p className="mt-1 text-[12.5px] text-slate-500">
+                    {leadCountByCampaign[campaign.id] ?? 0} leads · {appointmentCountByCampaign[campaign.id] ?? 0} appointments
+                  </p>
                 </li>
               ))}
             </ul>

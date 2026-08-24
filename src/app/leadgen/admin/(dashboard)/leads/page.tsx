@@ -31,11 +31,19 @@ export default async function LeadgenLeadsPage({
     agent?: string;
     due_from?: string;
     due_to?: string;
+    // Set by the admin dashboard's "Results by Client" table and the
+    // client campaign dashboard (leadgen/admin/clients/[id]) to land
+    // here pre-filtered to one client - see initialClientFilter below.
+    client?: string;
+    // Paired with `client` from the campaign dashboard's "Add Lead"
+    // quick action - auto-expands the Add Lead form with that client
+    // pre-selected instead of requiring an extra click.
+    openAdd?: string;
   }>;
 }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
-  const { deleted, status, appointment_status, followup, agent, due_from, due_to } = await searchParams;
+  const { deleted, status, appointment_status, followup, agent, due_from, due_to, client, openAdd } = await searchParams;
 
   const [{ data: leads }, { data: clients }, { data: campaigns }, { data: agents }, { data: appointments }] = await Promise.all([
     admin.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
@@ -48,6 +56,8 @@ export default async function LeadgenLeadsPage({
     // per lead_id.
     admin.from("leadgen_appointments").select("id, lead_id, status, created_at").order("created_at", { ascending: true }),
   ]);
+
+  const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
   const appointmentStatusByLeadId: Record<string, LeadgenAppointmentStatus> = {};
   // "Manage" (beside "Delete") deep-links into the same appointment
@@ -91,6 +101,9 @@ export default async function LeadgenLeadsPage({
         initialAgentFilter={agent}
         initialDueFrom={due_from}
         initialDueTo={due_to}
+        initialClientFilter={client}
+        initialOpenAdd={openAdd === "1"}
+        viewingClientName={viewingClient?.name ?? null}
       />
     </div>
   );

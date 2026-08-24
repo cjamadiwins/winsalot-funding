@@ -212,12 +212,24 @@ export default async function LeadgenAdminDashboardPage() {
               {Array.from(byCampaignClient.entries()).map(([id, row]) => (
                 <tr key={id} className="border-b border-slate-100">
                   <td className="py-2">
-                    <Link href={`/leadgen/admin/clients/${id}`} className="font-medium text-sky-600 hover:text-sky-700">
+                    <Link
+                      href={`/leadgen/admin/clients/${id}`}
+                      className="font-medium text-sky-600 hover:text-sky-700"
+                      title={`Open the ${row.name} campaign dashboard`}
+                    >
                       {row.name}
                     </Link>
                   </td>
-                  <td className="py-2 text-right">{row.leads}</td>
-                  <td className="py-2 text-right">{row.appointments}</td>
+                  <td className="py-2 text-right">
+                    <Link href={`/leadgen/admin/leads?client=${id}`} className="text-slate-700 hover:text-sky-600 hover:underline">
+                      {row.leads}
+                    </Link>
+                  </td>
+                  <td className="py-2 text-right">
+                    <Link href={`/leadgen/admin/appointments?client=${id}`} className="text-slate-700 hover:text-sky-600 hover:underline">
+                      {row.appointments}
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -9,7 +9,10 @@ const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text
 export default async function LeadgenAgentNewLeadPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  // `client` is set by the agent leads page's "+ Add Lead" link when
+  // scoped to one client (via ?client=<id>) - just pre-selects the
+  // Client field below, the agent can still change it.
+  searchParams: Promise<{ error?: string; client?: string }>;
 }) {
   await requireLeadgenAgent();
   const params = await searchParams;
@@ -19,6 +22,7 @@ export default async function LeadgenAgentNewLeadPage({
     supabase.from("leadgen_clients").select("*").eq("active", true).order("name"),
     supabase.from("leadgen_campaigns").select("*").eq("status", "active").order("name"),
   ]);
+  const preselectedClientId = params.client && (clients ?? []).some((c) => c.id === params.client) ? params.client : "";
 
   return (
     <div>
@@ -35,7 +39,7 @@ export default async function LeadgenAgentNewLeadPage({
             <input name="business_name" required className={inputClass} />
           </Field>
           <Field label="Client" required>
-            <select name="client_id" required className={inputClass} defaultValue="">
+            <select name="client_id" required className={inputClass} defaultValue={preselectedClientId}>
               <option value="" disabled>
                 Select a client…
               </option>
