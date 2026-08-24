@@ -3,6 +3,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isHiddenLeadgenCampaignName } from "@/lib/leadgen-types";
 import { createAgentLeadAction } from "./actions";
+import ClientCampaignFields from "./ClientCampaignFields";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -38,28 +39,11 @@ export default async function LeadgenAgentNewLeadPage({
           <Field label="Business Name" required>
             <input name="business_name" required className={inputClass} />
           </Field>
-          <Field label="Client" required>
-            <select name="client_id" required className={inputClass} defaultValue={preselectedClientId}>
-              <option value="" disabled>
-                Select a client…
-              </option>
-              {(clients ?? []).map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Campaign">
-            <select name="campaign_id" className={inputClass} defaultValue="">
-              <option value="">No campaign</option>
-              {(campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name)).map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <ClientCampaignFields
+            clients={clients ?? []}
+            campaigns={(campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))}
+            preselectedClientId={preselectedClientId}
+          />
           <Field label="Industry">
             <input name="industry" className={inputClass} />
           </Field>

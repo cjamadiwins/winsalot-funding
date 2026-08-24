@@ -94,6 +94,13 @@ export default function AppointmentsListClient({
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
   const [clientFilter, setClientFilter] = useState(validInitialClient);
+  // Client currently selected in the Book Appointment form below - drives
+  // which campaigns that form's Campaign field offers (see
+  // campaignsForAddForm), so a campaign from a different client can never
+  // be attached to this appointment. Kept in sync with the "From an
+  // existing lead" picker's onChange below, and otherwise driven directly
+  // by the Client select.
+  const [formClientId, setFormClientId] = useState(validInitialClient !== "all" ? validInitialClient : "");
   // Result of the last "Save" on the Manage edit panel, shown inline in
   // that appointment's panel (distinct from the page-level `error` above,
   // which the resend/reminder confirm modals below already surface their
@@ -133,6 +140,7 @@ export default function AppointmentsListClient({
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const selectedLead = selectedLeadId ? leadById.get(selectedLeadId) : null;
+  const campaignsForAddForm = campaigns.filter((c) => c.client_id === formClientId);
 
   const visibleAppointments = useMemo(
     () => (clientFilter === "all" ? appointments : appointments.filter((a) => a.client_id === clientFilter)),
@@ -317,7 +325,13 @@ export default function AppointmentsListClient({
 
       {showForm && (
         <form
-          action={(formData) => runAction(() => bookAppointmentAction(formData), () => { setShowForm(false); setSelectedLeadId(""); })}
+          action={(formData) =>
+            runAction(() => bookAppointmentAction(formData), () => {
+              setShowForm(false);
+              setSelectedLeadId("");
+              setFormClientId(validInitialClient !== "all" ? validInitialClient : "");
+            })
+          }
           className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5 sm:col-span-2">
@@ -325,7 +339,12 @@ export default function AppointmentsListClient({
             <select
               name="lead_id"
               value={selectedLeadId}
-              onChange={(e) => setSelectedLeadId(e.target.value)}
+              onChange={(e) => {
+                const leadId = e.target.value;
+                setSelectedLeadId(leadId);
+                const lead = leadId ? leadById.get(leadId) : null;
+                setFormClientId(lead?.client_id ?? (validInitialClient !== "all" ? validInitialClient : ""));
+              }}
               className={inputClass}
             >
               <option value="">Not tied to a lead</option>
@@ -342,9 +361,9 @@ export default function AppointmentsListClient({
             <select
               name="client_id"
               required
-              defaultValue={selectedLead?.client_id ?? (validInitialClient !== "all" ? validInitialClient : "")}
+              value={formClientId}
+              onChange={(e) => setFormClientId(e.target.value)}
               className={inputClass}
-              key={selectedLeadId}
             >
               <option value="" disabled>
                 Select a client…
@@ -358,9 +377,9 @@ export default function AppointmentsListClient({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
-            <select name="campaign_id" defaultValue={selectedLead?.campaign_id ?? ""} className={inputClass} key={`camp-${selectedLeadId}`}>
+            <select name="campaign_id" defaultValue={selectedLead?.campaign_id ?? ""} className={inputClass} key={`camp-${selectedLeadId}-${formClientId}`}>
               <option value="">No campaign</option>
-              {campaigns.map((c) => (
+              {campaignsForAddForm.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
