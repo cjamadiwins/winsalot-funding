@@ -251,6 +251,17 @@ export default function LeadDetailClient({
   const mantraSubject = mantraCollabTemplate?.subject ?? "Grow Your Business with Mantra Collab";
   const mantraBody = mantraCollabTemplate ? renderLeadgenTemplate(mantraCollabTemplate.body, mantraVars) : "";
 
+  // The one primary "campaign email" button, now shown at the top beside
+  // Schedule Follow-up/Book Appointment/Edit Lead instead of buried at
+  // the bottom - same template/action for a given lead every time
+  // (consultation_information for every non-Mantra client,
+  // mantra_collab_intro for Mantra), so its label naturally reads "Send
+  // Brent's Essentials Email" / "Send Mantra Collab Email" for today's
+  // two clients and generalizes correctly for any future one too.
+  const primaryEmailTemplateKey = isMantra ? "mantra_collab_intro" : "consultation_information";
+  const hasSentPrimaryEmail = emails.some((email) => email.template_key === primaryEmailTemplateKey);
+  const primaryEmailButtonLabel = hasSentPrimaryEmail ? `Resend ${branding.clientName} Email` : `Send ${branding.clientName} Email`;
+
   return (
     <div>
       <RefreshOnFocus />
@@ -302,15 +313,15 @@ export default function LeadDetailClient({
       )}
 
       <div className="mt-5 flex flex-wrap gap-2.5">
-        {!isMantra && (
-          <button
-            type="button"
-            onClick={() => setShowConsultationModal(true)}
-            className="rounded-full bg-emerald-600 px-5 py-2.5 text-[13.5px] font-semibold text-white transition hover:bg-emerald-700"
-          >
-            Send Consultation Email
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => (isMantra ? setShowMantraModal(true) : setShowConsultationModal(true))}
+          className={`rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white transition ${
+            isMantra ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
+        >
+          {primaryEmailButtonLabel}
+        </button>
         <ActionButton onClick={() => setShowFollowUpForm((v) => !v)}>{showFollowUpForm ? "Cancel Follow-up" : "Schedule Follow-up"}</ActionButton>
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
@@ -331,6 +342,7 @@ export default function LeadDetailClient({
           lead={lead}
           agentName={currentUserName}
           campaignName={campaign?.name ?? null}
+          title={primaryEmailButtonLabel}
           defaultSubject={defaultSubject}
           defaultBody={defaultBody}
           bookingUrl={rawBookingUrl}
@@ -387,7 +399,7 @@ export default function LeadDetailClient({
         <ConsultationInvitationModal
           lead={lead}
           agentName={currentUserName}
-          title="Send Mantra Collab Email"
+          title={primaryEmailButtonLabel}
           subject={mantraSubject}
           body={mantraBody}
           bookingUrl={branding.bookingUrl}
@@ -656,15 +668,6 @@ export default function LeadDetailClient({
                     Send Follow-Up Email
                   </button>
                 </>
-              )}
-              {isMantra && (
-                <button
-                  type="button"
-                  onClick={() => setShowMantraModal(true)}
-                  className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-sky-700"
-                >
-                  Send Mantra Collab Email
-                </button>
               )}
             </div>
           </div>
