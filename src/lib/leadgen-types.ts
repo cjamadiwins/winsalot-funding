@@ -63,6 +63,13 @@ export type LeadgenClientRow = {
   notes: string | null;
   active: boolean;
   created_by: string | null;
+  // Who gets the immediate on-booking notification and the 24-hour/1-hour
+  // business reminders for this client's appointments (see
+  // resolveAppointmentNotificationRecipients below) - supports more than
+  // one recipient (e.g. Mantra Collab's Vikas + Praveen). Null/empty
+  // falls back to contact_email/contact_name, so a client without this
+  // set keeps its prior single-recipient behavior unchanged.
+  appointment_notification_emails: string[] | null;
 };
 
 export const LEADGEN_CAMPAIGN_STATUSES = ["active", "paused", "completed"] as const;
@@ -443,6 +450,34 @@ export function isHiddenLeadgenCampaignName(name: string | null | undefined): bo
 // matched by slug, same style as isLeadgenBrentsEssentials below.
 export function isMantraCollabClient(client: Pick<LeadgenClientRow, "slug">): boolean {
   return client.slug.trim().toLowerCase() === "mantra-collab";
+}
+
+export type LeadgenAppointmentNotificationRecipient = { email: string; name: string | null };
+
+// Single source of truth for "who gets told about this client's
+// appointments" - shared by the immediate on-booking notification
+// (lib/leadgen-appointment-notifications.ts) and the 24-hour/1-hour
+// business reminders (lib/leadgen-business-appointment-reminders.ts), so
+// both notification types can never disagree about a client's recipient
+// list. Prefers the explicit appointment_notification_emails list
+// (supports more than one person); falls back to the single
+// contact_email/contact_name pair when that list is empty or unset, so a
+// client that hasn't been given the new list yet behaves exactly as
+// before. Invalid/blank addresses are silently dropped rather than ever
+// blocking every other valid recipient's send.
+export function resolveAppointmentNotificationRecipients(
+  client: Pick<LeadgenClientRow, "appointment_notification_emails" | "contact_email" | "contact_name">
+): LeadgenAppointmentNotificationRecipient[] {
+  const configured = (client.appointment_notification_emails ?? [])
+    .map((email) => email.trim())
+    .filter((email) => email && isValidEmail(email));
+  if (configured.length > 0) {
+    return configured.map((email) => ({ email, name: client.contact_name }));
+  }
+  if (client.contact_email && isValidEmail(client.contact_email)) {
+    return [{ email: client.contact_email, name: client.contact_name }];
+  }
+  return [];
 }
 
 export function isLeadgenBrentsEssentials(client: Pick<LeadgenClientRow, "name" | "slug">): boolean {

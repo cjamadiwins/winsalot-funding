@@ -261,7 +261,6 @@ export async function POST(request: NextRequest) {
   }
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
-  await admin.from("leadgen_appointments").update({ admin_notified_at: new Date().toISOString() }).eq("id", appointment.id);
 
   return NextResponse.json({ received: true, appointmentId: appointment.id });
 }

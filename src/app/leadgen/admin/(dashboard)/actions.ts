@@ -389,6 +389,21 @@ function textOrNull(formData: FormData, key: string): string | null {
   return value ? value : null;
 }
 
+// Comma or newline-separated list of appointment notification recipient
+// emails (brief: "send notifications according to the client connected
+// to the appointment") - blank entries are dropped, blank input as a
+// whole is stored as null so the client falls back to its single
+// contact_email (see resolveAppointmentNotificationRecipients in
+// lib/leadgen-types.ts).
+function emailListOrNull(formData: FormData, key: string): string[] | null {
+  const raw = String(formData.get(key) ?? "");
+  const emails = raw
+    .split(/[,\n]/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return emails.length > 0 ? emails : null;
+}
+
 // ---------------------------------------------------------------------
 // Clients
 // ---------------------------------------------------------------------
@@ -414,6 +429,7 @@ export async function createClientAction(formData: FormData): Promise<ActionResu
       services_info_link: textOrNull(formData, "services_info_link"),
       calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
+      appointment_notification_emails: emailListOrNull(formData, "appointment_notification_emails"),
       created_by: admin.id,
     })
     .select("id")
@@ -450,6 +466,7 @@ export async function updateClientAction(clientId: string, formData: FormData): 
       services_info_link: textOrNull(formData, "services_info_link"),
       calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
+      appointment_notification_emails: emailListOrNull(formData, "appointment_notification_emails"),
       active: formData.get("active") !== "false",
       updated_at: new Date().toISOString(),
     })

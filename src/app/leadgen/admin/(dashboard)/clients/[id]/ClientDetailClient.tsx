@@ -220,6 +220,20 @@ export default function ClientDetailClient({
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Appointment Notification Emails</span>
+                <textarea
+                  name="appointment_notification_emails"
+                  placeholder={"e.g. vikas@mantracollab.com, praveen@mantracollab.com"}
+                  defaultValue={(client.appointment_notification_emails ?? []).join(", ")}
+                  className={`${inputClass} min-h-[50px] resize-y`}
+                />
+                <span className="text-[12px] text-slate-500">
+                  Who gets the immediate email when one of this client&apos;s appointments is booked, plus the 24-hour and 1-hour reminders
+                  before it. Comma or newline-separated - supports more than one person. Leave blank to fall back to the single Contact Email
+                  above.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Internal Notes</span>
                 <textarea name="notes" defaultValue={client.notes ?? ""} className={`${inputClass} min-h-[60px] resize-y`} />
               </label>
@@ -259,6 +273,7 @@ export default function ClientDetailClient({
               <Row label="Consultation Booking Link" value={client.booking_link} />
               <Row label="Services Information Link" value={client.services_info_link} />
               <Row label="Calendly Event Type URI" value={client.calendly_event_type_uri} />
+              <Row label="Appointment Notification Emails" value={(client.appointment_notification_emails ?? []).join(", ") || null} />
               {client.notes && (
                 <div className="border-t border-slate-100 pt-2">
                   <dt className="text-slate-500">Notes</dt>

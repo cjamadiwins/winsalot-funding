@@ -151,7 +151,11 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     }
   }
 
-  const { data: clientForNotify } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  const { data: clientForNotify } = await supabase
+    .from("leadgen_clients")
+    .select("id, name, contact_name, contact_email, appointment_notification_emails")
+    .eq("id", clientId)
+    .maybeSingle();
   if (clientForNotify) {
     await notifyOfNewLeadgenAppointment(
       {
@@ -166,6 +170,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
         timezone,
         meeting_type: meetingType as LeadgenMeetingType,
         meeting_link: meetingLink,
+        appointment_notes: agentNotes,
       },
       clientForNotify,
       adminUser.full_name || adminUser.email

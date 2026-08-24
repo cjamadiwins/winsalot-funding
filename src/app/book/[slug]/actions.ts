@@ -14,9 +14,14 @@ import { isLeadgenBrentsEssentials, isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, 
 
 export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: string };
 
-async function findActiveClientBySlug(slug: string): Promise<Pick<LeadgenClientRow, "id" | "name" | "slug"> | null> {
+async function findActiveClientBySlug(
+  slug: string
+): Promise<Pick<LeadgenClientRow, "id" | "name" | "slug" | "contact_name" | "contact_email" | "appointment_notification_emails"> | null> {
   const admin = getSupabaseAdmin();
-  const { data: clients } = await admin.from("leadgen_clients").select("id, name, slug").eq("active", true);
+  const { data: clients } = await admin
+    .from("leadgen_clients")
+    .select("id, name, slug, contact_name, contact_email, appointment_notification_emails")
+    .eq("active", true);
   return (clients ?? []).find((c) => slugifyForLeadgenBookingPath(c.name) === slug || c.slug.toLowerCase() === slug.toLowerCase()) ?? null;
 }
 
@@ -128,7 +133,6 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
   }
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
-  await admin.from("leadgen_appointments").update({ admin_notified_at: new Date().toISOString() }).eq("id", appointment.id);
 
   revalidatePath("/leadgen/admin/appointments");
   if (matchedLeadId) revalidatePath(`/leadgen/admin/leads/${matchedLeadId}`);

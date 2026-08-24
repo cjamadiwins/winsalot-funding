@@ -4,9 +4,10 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { sendLeadgenEmail } from "./leadgen-email";
 import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
 import {
-  isValidEmail,
   leadgenAppointmentOccurrenceKey,
   leadgenBusinessAppointmentReminderDisplayStatus,
+  resolveAppointmentNotificationRecipients,
+  type LeadgenAppointmentNotificationRecipient,
   type LeadgenAppointmentRow,
   type LeadgenBusinessAppointmentReminderDisplayStatus,
   type LeadgenBusinessAppointmentReminderRow,
@@ -87,26 +88,26 @@ export async function updateLeadgenBusinessAppointmentReminderSettings(
 }
 
 // ---------------------------------------------------------------------
-// Recipient resolution: always the CRM CLIENT's own contact_email (e.g.
-// Brent's Essentials -> kelechiamadi@hotmail.com), never the prospect's.
+// Recipient resolution: always the CRM CLIENT's own recipients (e.g.
+// Brent's Essentials -> Kelechi Amadi, Mantra Collab -> Vikas + Praveen -
+// see resolveAppointmentNotificationRecipients in lib/leadgen-types.ts),
+// never the prospect's. Supports more than one recipient per client.
 // ---------------------------------------------------------------------
 
-type BusinessReminderRecipient = {
-  recipientEmail: string | null;
-  recipientName: string | null;
+type BusinessReminderRecipients = {
+  recipients: LeadgenAppointmentNotificationRecipient[];
   clientName: string;
 };
 
-async function resolveBusinessReminderRecipient(supabase: SupabaseClient, appointment: LeadgenAppointmentRow): Promise<BusinessReminderRecipient> {
+async function resolveBusinessReminderRecipients(supabase: SupabaseClient, appointment: LeadgenAppointmentRow): Promise<BusinessReminderRecipients> {
   const { data: client } = await supabase
     .from("leadgen_clients")
-    .select("name, contact_name, contact_email")
+    .select("name, contact_name, contact_email, appointment_notification_emails")
     .eq("id", appointment.client_id)
     .maybeSingle();
 
   return {
-    recipientEmail: client?.contact_email ?? null,
-    recipientName: client?.contact_name ?? null,
+    recipients: client ? resolveAppointmentNotificationRecipients(client) : [],
     clientName: client?.name ?? appointment.business_name,
   };
 }
@@ -221,7 +222,7 @@ async function markReminderSent(admin: SupabaseClient, reminderId: string, recip
 // Job entry point
 // ---------------------------------------------------------------------
 
-export type BusinessReminderJobResultOutcome = "sent" | "failed" | "skipped_claimed_elsewhere" | "skipped_no_email" | "skipped_invalid_email" | "would_send";
+export type BusinessReminderJobResultOutcome = "sent" | "failed" | "skipped_claimed_elsewhere" | "skipped_no_email" | "would_send";
 
 export type BusinessReminderJobResult = {
   appointmentId: string;
@@ -305,14 +306,14 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
       const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
 
       if (dryRun) {
-        const recipient = await resolveBusinessReminderRecipient(admin, appt);
+        const { recipients } = await resolveBusinessReminderRecipients(admin, appt);
         summary.results.push({
           appointmentId: appt.id,
           leadId: appt.lead_id,
           reminderType,
           businessName: appt.business_name,
           scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
-          recipientEmail: recipient.recipientEmail,
+          recipientEmail: recipients.length > 0 ? recipients.map((r) => r.email).join(", ") : null,
           outcome: "would_send",
         });
         continue;
@@ -333,7 +334,7 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
         continue;
       }
 
-      const recipient = await resolveBusinessReminderRecipient(admin, appt);
+      const { recipients, clientName } = await resolveBusinessReminderRecipients(admin, appt);
       const resultBase = {
         appointmentId: appt.id,
         leadId: appt.lead_id,
@@ -342,45 +343,56 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
         scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
       };
 
-      if (!recipient.recipientEmail) {
+      if (recipients.length === 0) {
         await markReminderFailed(admin, reminderId, "No contact email on file for this client.");
         summary.failed++;
         summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_no_email", error: "No contact email on file for this client." });
         continue;
       }
-      if (!isValidEmail(recipient.recipientEmail)) {
-        await markReminderFailed(admin, reminderId, "Saved client contact email is invalid.");
-        summary.failed++;
-        summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "skipped_invalid_email", error: "Saved client contact email is invalid." });
-        continue;
-      }
 
       const subject = buildBusinessReminderSubject(reminderType, appt.business_name);
-      const body = buildBusinessReminderBody(appt, scheduledMs, reminderType, recipient.recipientName);
 
-      const sendResult = await sendLeadgenEmail(admin, {
-        clientId: appt.client_id,
-        campaignId: appt.campaign_id,
-        leadId: appt.lead_id,
-        appointmentId: appt.id,
-        templateKey: null,
-        toEmail: recipient.recipientEmail,
-        toName: recipient.recipientName,
-        subject,
-        body,
-        // System-generated send - no signed-in human triggered this.
-        sentBy: null,
-        clientVisible: false,
-      });
+      // One send per recipient (e.g. both Vikas and Praveen for Mantra
+      // Collab) - a failure for one recipient never blocks another's, and
+      // the reminder slot itself (claimed above, once per appointment/
+      // type/occurrence) still only ever "sends" once per recipient no
+      // matter how many times this job runs.
+      const sendOutcomes: { recipient: LeadgenAppointmentNotificationRecipient; emailId?: string; error?: string }[] = [];
+      for (const recipient of recipients) {
+        const body = buildBusinessReminderBody(appt, scheduledMs, reminderType, recipient.name);
+        const sendResult = await sendLeadgenEmail(admin, {
+          clientId: appt.client_id,
+          campaignId: appt.campaign_id,
+          leadId: appt.lead_id,
+          appointmentId: appt.id,
+          templateKey: null,
+          toEmail: recipient.email,
+          toName: recipient.name,
+          subject,
+          body,
+          // System-generated send - no signed-in human triggered this.
+          sentBy: null,
+          clientVisible: false,
+        });
+        if (sendResult.error) {
+          console.error(`[leadgen-business-appointment-reminders] failed to send to ${recipient.email}:`, sendResult.error);
+        }
+        sendOutcomes.push({ recipient, emailId: sendResult.error ? undefined : sendResult.emailId, error: sendResult.error });
+      }
 
-      if (sendResult.error) {
-        await markReminderFailed(admin, reminderId, sendResult.error);
+      const successes = sendOutcomes.filter((o) => !o.error);
+      const attemptedEmails = recipients.map((r) => r.email).join(", ");
+
+      if (successes.length === 0) {
+        const errorDetail = sendOutcomes.map((o) => `${o.recipient.email}: ${o.error}`).join("; ");
+        await markReminderFailed(admin, reminderId, errorDetail);
         summary.failed++;
-        summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "failed", error: sendResult.error });
+        summary.results.push({ ...resultBase, recipientEmail: attemptedEmails, outcome: "failed", error: errorDetail });
         continue;
       }
 
-      await markReminderSent(admin, reminderId, recipient.recipientEmail, sendResult.emailId);
+      const sentEmails = successes.map((o) => o.recipient.email).join(", ");
+      await markReminderSent(admin, reminderId, sentEmails, successes[0].emailId!);
 
       if (appt.lead_id) {
         const label = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
@@ -388,12 +400,12 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
           lead_id: appt.lead_id,
           agent_id: null,
           activity_type: "appointment_business_reminder_auto_sent",
-          notes: `Automatic ${label} appointment reminder sent to ${recipient.recipientEmail} (${recipient.clientName}). Appointment: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone}).`,
+          notes: `Automatic ${label} appointment reminder sent to ${sentEmails} (${clientName}). Appointment: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone}).`,
         });
       }
 
       summary.sent++;
-      summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "sent" });
+      summary.results.push({ ...resultBase, recipientEmail: sentEmails, outcome: "sent" });
     }
   }
 

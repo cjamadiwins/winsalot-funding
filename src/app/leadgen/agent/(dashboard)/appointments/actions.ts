@@ -40,6 +40,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const email = textOrNull(formData, "email");
   const timezone = String(formData.get("timezone") ?? "America/Toronto").trim();
   const meetingLink = textOrNull(formData, "meeting_link");
+  const appointmentNotes = textOrNull(formData, "appointment_notes");
 
   const supabase = await createSupabaseServerClient();
   const { data: appointment, error } = await supabase
@@ -58,7 +59,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       meeting_type: meetingType,
       meeting_link: meetingLink,
       assigned_specialist_id: textOrNull(formData, "assigned_specialist_id") ?? agent.id,
-      appointment_notes: textOrNull(formData, "appointment_notes"),
+      appointment_notes: appointmentNotes,
       created_by: agent.id,
     })
     .select("id")
@@ -80,7 +81,11 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     });
   }
 
-  const { data: clientForNotify } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  const { data: clientForNotify } = await supabase
+    .from("leadgen_clients")
+    .select("id, name, contact_name, contact_email, appointment_notification_emails")
+    .eq("id", clientId)
+    .maybeSingle();
   if (clientForNotify) {
     await notifyOfNewLeadgenAppointment(
       {
@@ -95,6 +100,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
         timezone,
         meeting_type: meetingType as LeadgenMeetingType,
         meeting_link: meetingLink,
+        appointment_notes: appointmentNotes,
       },
       clientForNotify,
       agent.full_name || agent.email
