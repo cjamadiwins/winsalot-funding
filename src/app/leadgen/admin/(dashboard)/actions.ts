@@ -484,6 +484,42 @@ export async function updateClientAction(clientId: string, formData: FormData): 
   return {};
 }
 
+// Dedicated Activate/Deactivate control (Clients list) - distinct from the
+// "Active client" checkbox buried in the full Edit Client form
+// (updateClientAction above), which this shares the same active/updated_at
+// columns with. Deactivating never touches any other column: every
+// existing lead, appointment, campaign, email, reminder, and client-portal
+// row for this client is left exactly as-is. Its only real-world effects
+// are (a) the client drops out of the active-only client pickers used for
+// agent lead-entry and appointment-booking (see leadgen/agent/(dashboard)/
+// leads/new/page.tsx), and (b) the two automated reminder cron jobs skip
+// claiming any *new* reminder slot for its appointments (see the
+// activeClientIds filtering in lib/leadgen-appointment-reminders.ts and
+// lib/leadgen-business-appointment-reminders.ts) - existing reminder rows
+// and appointments are untouched either way. Admin-side lists/pickers
+// intentionally keep showing every client regardless of active status, so
+// deactivating never hides anything from Admin.
+export async function setLeadgenClientActiveAction(clientId: string, active: boolean): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: client, error: clientError } = await supabase.from("leadgen_clients").select("id, name, active").eq("id", clientId).maybeSingle();
+  if (clientError) return { error: "Failed to load the client." };
+  if (!client) return { error: "Client not found." };
+  if (client.active === active) return {};
+
+  const { error } = await supabase
+    .from("leadgen_clients")
+    .update({ active, updated_at: new Date().toISOString() })
+    .eq("id", clientId);
+  if (error) return { error: `Failed to ${active ? "activate" : "deactivate"} the client.` };
+
+  revalidatePath("/leadgen/admin/clients");
+  revalidatePath(`/leadgen/admin/clients/${clientId}`);
+  revalidatePath("/leadgen/admin");
+  return {};
+}
+
 // ---------------------------------------------------------------------
 // Campaigns
 // ---------------------------------------------------------------------
