@@ -106,6 +106,11 @@ export default function LeadsListClient({
   const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
   const [clientFilter, setClientFilter] = useState(validInitialClient);
   const [campaignFilter, setCampaignFilter] = useState("all");
+  // Client selected in the "Add Lead" form below - drives which campaigns
+  // that form's Campaign field offers, so a campaign from a different
+  // client can never be picked for this lead (see campaignsForAddForm).
+  const [addFormClientId, setAddFormClientId] = useState(validInitialClient !== "all" ? validInitialClient : "");
+  const campaignsForAddForm = campaigns.filter((c) => c.client_id === addFormClientId);
   const [agentFilter, setAgentFilter] = useState(
     initialAgentFilter && (initialAgentFilter === "unassigned" || agents.some((a) => a.id === initialAgentFilter))
       ? initialAgentFilter
@@ -257,7 +262,13 @@ export default function LeadsListClient({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Client</span>
-            <select name="client_id" required className={inputClass} defaultValue={validInitialClient !== "all" ? validInitialClient : ""}>
+            <select
+              name="client_id"
+              required
+              className={inputClass}
+              value={addFormClientId}
+              onChange={(e) => setAddFormClientId(e.target.value)}
+            >
               <option value="" disabled>
                 Select a client…
               </option>
@@ -270,9 +281,9 @@ export default function LeadsListClient({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
-            <select name="campaign_id" className={inputClass} defaultValue="">
+            <select name="campaign_id" className={inputClass} defaultValue="" key={addFormClientId}>
               <option value="">No campaign</option>
-              {campaigns.map((c) => (
+              {campaignsForAddForm.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
