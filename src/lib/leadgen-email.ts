@@ -283,7 +283,14 @@ export async function sendLeadgenEmail(
   if (input.templateKey === "consultation_information") {
     const hasButtonLabel = finalHtml.includes("Book Your Free 15-Minute Consultation");
     const hasBookingLink = /href="https?:\/\/[^"]+"/.test(finalHtml);
-    const hasSignature = finalHtml.includes(`${input.expectedSignatureName ?? "Brent's Essentials"} Team`) && finalHtml.includes("Best,");
+    // finalHtml is HTML - the signature-building code (buildLeadgenConsultationCtaEmail)
+    // runs the client name through escapeHtml before writing it in, so an
+    // apostrophe in e.g. "Brent's Essentials" becomes "&#39;" there. The
+    // expected name must be escaped the same way before comparing, or this
+    // check fails on every client name containing an HTML-special
+    // character even though the actual rendered email is correct.
+    const expectedSignatureName = escapeHtml(input.expectedSignatureName ?? "Brent's Essentials");
+    const hasSignature = finalHtml.includes(`${expectedSignatureName} Team`) && finalHtml.includes("Best,");
     if (!hasButtonLabel || !hasBookingLink || !hasSignature) {
       return { emailId: "", error: "Consultation email HTML is incomplete. Please regenerate and try again." };
     }
