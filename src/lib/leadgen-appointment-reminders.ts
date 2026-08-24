@@ -311,7 +311,19 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
   const rows = (candidates ?? []) as LeadgenAppointmentRow[];
   summary.candidatesScanned = rows.length;
 
+  // A deactivated client (leadgen_clients.active = false - see the Clients
+  // page's Activate/Deactivate control) must stop receiving new automated
+  // reminders even for its existing, still-booked appointments. Existing
+  // appointment/reminder rows are never touched - this only skips claiming
+  // a *new* reminder slot for them.
+  const clientIds = Array.from(new Set(rows.map((appt) => appt.client_id)));
+  const { data: activeClientRows } = clientIds.length
+    ? await admin.from("leadgen_clients").select("id").in("id", clientIds).eq("active", true)
+    : { data: [] as { id: string }[] };
+  const activeClientIds = new Set((activeClientRows ?? []).map((c) => c.id));
+
   for (const appt of rows) {
+    if (!activeClientIds.has(appt.client_id)) continue;
     const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
     if (scheduledMs < windowStartMs || scheduledMs > windowEndMs) continue;
     if (scheduledMs <= nowMs) continue; // must still be in the future

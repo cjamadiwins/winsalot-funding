@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import { isLeadgenBrentsEssentials, isMantraCollabClient, slugifyClientName } from "@/lib/leadgen-types";
-import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClientAction } from "../actions";
+import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClientAction, setLeadgenClientActiveAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -58,6 +58,31 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
         .join(" | ");
 
       setInfo(details || "Cleanup completed.");
+      router.refresh();
+    });
+  }
+
+  function handleToggleActive(client: LeadgenClientRow) {
+    const nextActive = !client.active;
+    if (
+      !nextActive &&
+      !confirm(
+        `Deactivate ${client.name}? All existing leads, appointments, campaigns, emails, reminders, and reports will be kept exactly as they are. ${client.name} will just stop appearing in agents' lead-entry and appointment-booking selections, and automated campaign emails/reminders for it will stop going out. You (Admin) can reactivate it at any time.`
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const result = await setLeadgenClientActiveAction(client.id, nextActive);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setInfo(`${client.name} ${nextActive ? "activated" : "deactivated"}.`);
       router.refresh();
     });
   }
@@ -208,7 +233,21 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                   </td>
                   <td className="p-3">
                     {isLeadgenBrentsEssentials(client) || isMantraCollabClient(client) ? (
-                      <span className="text-[12px] font-medium text-slate-400">Locked</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-medium text-slate-400">Locked</span>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleToggleActive(client)}
+                          className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                            client.active
+                              ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                              : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {client.active ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
