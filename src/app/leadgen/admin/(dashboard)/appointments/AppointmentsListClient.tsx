@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL,
   LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
@@ -26,6 +27,7 @@ import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailC
 import {
   bookAppointmentAction,
   cancelOrReplaceAppointmentAction,
+  deleteLeadgenAppointmentAction,
   resendAppointmentNotificationAction,
   reviewLeadgenAppointmentIncentiveAction,
   sendAppointmentReminderAction,
@@ -81,12 +83,14 @@ export default function AppointmentsListClient({
   // Display name for the "Viewing X" banner when scoped to one client.
   viewingClientName?: string | null;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(!!initialOpenAdd);
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
   const [clientFilter, setClientFilter] = useState(validInitialClient);
@@ -142,6 +146,24 @@ export default function AppointmentsListClient({
       if (result && "error" in result && result.error) setError(result.error);
       else onSuccess?.(result && "message" in result ? result.message : undefined);
     });
+  }
+
+  async function handleDeleteAppointment(appt: LeadgenAppointmentRow) {
+    if (isPending || deletingId) return;
+    if (!confirm("Are you sure you want to permanently delete this appointment?")) return;
+
+    setError(null);
+    setDeletingId(appt.id);
+
+    const result = await deleteLeadgenAppointmentAction(appt.id);
+    if (result.error) {
+      setError(result.error);
+      setDeletingId(null);
+      return;
+    }
+
+    setDeletingId(null);
+    router.refresh();
   }
 
   function handleManageSubmit(appointment: LeadgenAppointmentRow, e: React.FormEvent<HTMLFormElement>) {
@@ -569,6 +591,14 @@ export default function AppointmentsListClient({
                             {cancelingId === appt.id ? "Close" : "Cancel/Replace"}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          disabled={isPending || deletingId === appt.id}
+                          onClick={() => handleDeleteAppointment(appt)}
+                          className="text-[12.5px] font-semibold text-rose-700 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingId === appt.id ? "Deleting…" : "Delete"}
+                        </button>
                       </div>
                       {(appt.status === "Booked" || appt.status === "Confirmed") && (
                         <div className="mt-2.5">

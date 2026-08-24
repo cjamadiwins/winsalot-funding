@@ -480,6 +480,63 @@ export async function reviewLeadgenAppointmentIncentiveAction(
   return {};
 }
 
+// Admin-only "Delete" - permanently removes the appointment row itself,
+// distinct from "Cancel/Replace" (which keeps the record for auditing
+// but excludes it from every total). Available for every status
+// (Booked, Confirmed, Cancelled, Replaced, or any test/unqualified
+// record) since there's no status this shouldn't work for.
+//
+// Only ever touches this one appointment row:
+// - leadgen_appointment_reminders and
+//   leadgen_appointment_business_reminders both declare
+//   `appointment_id ... on delete cascade`, so Postgres removes this
+//   appointment's reminder rows automatically - nothing to delete here
+//   by hand, and no other appointment's reminders are affected.
+// - leadgen_emails.appointment_id is `on delete set null` - the lead's
+//   email/communication history is preserved (just unlinked from the
+//   now-gone appointment), not deleted, since that's history, not a
+//   "reminder record".
+// - No FK from leadgen_appointments to leadgen_leads/leadgen_clients/
+//   leadgen_campaigns in the other direction, so the lead, its other
+//   appointments, and the client/campaign are completely untouched.
+// Because every dashboard total, Results by Client/Agent, and incentive
+// calculation (isLeadgenAppointmentCountable, lib/leadgen-types.ts)
+// simply queries leadgen_appointments live, deleting the row removes it
+// from all of them immediately - nothing else to update.
+export async function deleteLeadgenAppointmentAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: appointment, error: readError } = await supabase
+    .from("leadgen_appointments")
+    .select("id, lead_id, business_name")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (readError) return { error: "Failed to load the appointment." };
+  if (!appointment) return { error: "Appointment not found." };
+
+  const { error } = await supabase.from("leadgen_appointments").delete().eq("id", appointmentId);
+  if (error) return { error: "Failed to delete the appointment." };
+
+  if (appointment.lead_id) {
+    await supabase.from("leadgen_lead_activities").insert({
+      lead_id: appointment.lead_id,
+      agent_id: null,
+      activity_type: "appointment_updated",
+      notes: `Appointment for ${appointment.business_name} permanently deleted by ${adminUser.full_name || adminUser.email}.`,
+    });
+  }
+
+  revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin");
+  revalidatePath("/leadgen/admin/performance");
+  revalidatePath("/leadgen/admin/incentives");
+  revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/performance");
+  if (appointment.lead_id) revalidatePath(`/leadgen/admin/leads/${appointment.lead_id}`);
+  return {};
+}
+
 // "Resend Appointment Notification" / "Send Appointment Reminder" (brief
 // EMAIL FEATURES #4/#5) - admins may use both for every booked
 // appointment. Shared send/log logic lives in sendLeadgenAppointmentEmail
