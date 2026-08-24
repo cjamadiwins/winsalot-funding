@@ -20,11 +20,19 @@ type FollowUpFilter = "all" | "due_today" | "overdue";
 
 export default function AgentLeadsListClient({
   leads,
+  clients,
   initialStatusFilter,
   initialFollowUpFilter,
+  initialClientFilter,
+  viewingClientName,
   emailStatusByLeadId,
 }: {
   leads: LeadgenLeadRow[];
+  // Every client's id/name (agents can already read the full roster - see
+  // leads/new/page.tsx) - only used here to label leads and populate the
+  // client filter; the leads themselves are already RLS-scoped to this
+  // agent.
+  clients?: { id: string; name: string }[];
   // Pre-select a filter when landing here from the agent dashboard's
   // clickable stat cards (see /leadgen/agent/(dashboard)/page.tsx) -
   // ignored (falls back to "all") if not a recognized value, so a
@@ -32,6 +40,11 @@ export default function AgentLeadsListClient({
   // admin leads page's LeadsListClient.
   initialStatusFilter?: string;
   initialFollowUpFilter?: "due_today" | "overdue";
+  // Set by the agent dashboard's "My Results by Client" section via
+  // ?client=<id> - pre-selects the Client filter below.
+  initialClientFilter?: string;
+  // Display name for the "Viewing X" banner when scoped to one client.
+  viewingClientName?: string | null;
   // Latest tracked-email status per lead id, for the quick-glance badge
   // below - optional so any other caller of this component keeps working
   // unchanged if it doesn't pass one.
@@ -42,10 +55,16 @@ export default function AgentLeadsListClient({
   );
   const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
   const [search, setSearch] = useState("");
+  const clientList = clients ?? [];
+  const validInitialClient = initialClientFilter && clientList.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
+  const [clientFilter, setClientFilter] = useState(validInitialClient);
+  const clientNameById = new Map(clientList.map((c) => [c.id, c.name] as const));
+  const showClientFilter = clientList.length > 0 && new Set(leads.map((l) => l.client_id)).size > 1;
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
+      if (clientFilter !== "all" && lead.client_id !== clientFilter) return false;
       if (statusFilter !== "all" && lead.status !== statusFilter) return false;
       if (followUpFilter === "due_today" && !isLeadgenNextFollowUpDueToday(lead.next_follow_up_at)) return false;
       if (followUpFilter === "overdue" && !isLeadgenNextFollowUpOverdue(lead.next_follow_up_at)) return false;
@@ -56,11 +75,30 @@ export default function AgentLeadsListClient({
         (lead.phone ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, statusFilter, followUpFilter, search]);
+  }, [leads, clientFilter, statusFilter, followUpFilter, search]);
 
   return (
     <div>
+      {viewingClientName && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/agent" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+            ← Back to All Clients
+          </Link>
+        </div>
+      )}
+
       <div className="mt-6 flex flex-wrap gap-3">
+        {showClientFilter && (
+          <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={`${inputClass} w-auto`}>
+            <option value="all">All clients</option>
+            {clientList.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           type="search"
           value={search}
@@ -110,6 +148,9 @@ export default function AgentLeadsListClient({
               <div className="mt-1 text-[13px] text-slate-500">
                 {[lead.contact_name, lead.phone, lead.email].filter(Boolean).join(" · ")}
               </div>
+              {showClientFilter && clientNameById.get(lead.client_id) && (
+                <div className="mt-1.5 text-[12px] font-medium text-slate-400">{clientNameById.get(lead.client_id)}</div>
+              )}
               {lead.next_follow_up_at && (
                 <div className="mt-1.5 text-[12.5px] font-medium text-slate-600">
                   Next follow-up: {new Date(lead.next_follow_up_at).toLocaleString()}

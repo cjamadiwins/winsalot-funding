@@ -9,17 +9,22 @@ export default async function LeadgenAgentLeadsPage({
 }: {
   // status/followup are set by the agent dashboard's clickable stat
   // cards (see /leadgen/agent/(dashboard)/page.tsx) to land here
-  // pre-filtered - same convention as the admin leads page.
-  searchParams: Promise<{ status?: string; followup?: string }>;
+  // pre-filtered - same convention as the admin leads page. `client` is
+  // set by the dashboard's "My Results by Client" section.
+  searchParams: Promise<{ status?: string; followup?: string; client?: string }>;
 }) {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
-  const { status, followup } = await searchParams;
-  const { data: leads } = await supabase
-    .from("leadgen_leads")
-    .select("*")
-    .eq("assigned_agent_id", agent.id)
-    .order("next_follow_up_at", { ascending: true, nullsFirst: false });
+  const { status, followup, client } = await searchParams;
+  const [{ data: leads }, { data: clients }] = await Promise.all([
+    supabase
+      .from("leadgen_leads")
+      .select("*")
+      .eq("assigned_agent_id", agent.id)
+      .order("next_follow_up_at", { ascending: true, nullsFirst: false }),
+    supabase.from("leadgen_clients").select("id, name"),
+  ]);
+  const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
   // Quick-glance email delivery status per lead for this list view - each
   // lead's own page already shows the full Sent/Delivered/Bounced/Failed
@@ -52,7 +57,7 @@ export default async function LeadgenAgentLeadsPage({
           <p className="mt-1 text-sm text-slate-500">Prospects assigned to you.</p>
         </div>
         <Link
-          href="/leadgen/agent/leads/new"
+          href={client ? `/leadgen/agent/leads/new?client=${client}` : "/leadgen/agent/leads/new"}
           className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
         >
           + Add Lead
@@ -60,8 +65,11 @@ export default async function LeadgenAgentLeadsPage({
       </div>
       <AgentLeadsListClient
         leads={(leads ?? []) as LeadgenLeadRow[]}
+        clients={(clients ?? []) as { id: string; name: string }[]}
         initialStatusFilter={status}
         initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
+        initialClientFilter={client}
+        viewingClientName={viewingClient?.name ?? null}
         emailStatusByLeadId={emailStatusByLeadId}
       />
     </div>

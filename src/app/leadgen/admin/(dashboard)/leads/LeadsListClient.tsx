@@ -38,6 +38,9 @@ export default function LeadsListClient({
   initialAgentFilter,
   initialDueFrom,
   initialDueTo,
+  initialClientFilter,
+  initialOpenAdd,
+  viewingClientName,
 }: {
   leads: LeadgenLeadRow[];
   clients: LeadgenClientRow[];
@@ -74,19 +77,34 @@ export default function LeadsListClient({
   // that same week's due leads here, not every upcoming one.
   initialDueFrom?: string;
   initialDueTo?: string;
+  // Set by the admin dashboard's "Results by Client" table or a client
+  // campaign dashboard (leadgen/admin/clients/[id]) via ?client=<id> -
+  // pre-selects the Client filter below and, paired with
+  // initialOpenAdd, the Add Lead form's own Client field. Ignored (falls
+  // back to "all clients") if it doesn't match a real client id.
+  initialClientFilter?: string;
+  // Auto-expands the Add Lead form on load - only meaningful alongside
+  // initialClientFilter (the campaign dashboard's "Add Lead" quick
+  // action).
+  initialOpenAdd?: boolean;
+  // Display name for the banner ("Viewing X") when landing here scoped
+  // to one client - null/undefined renders no banner (the normal,
+  // unscoped "every client" view).
+  viewingClientName?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(!!initialOpenAdd);
   const [uploadResult, setUploadResult] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(initialSuccessMessage ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAgent, setBulkAgent] = useState("");
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
 
-  const [clientFilter, setClientFilter] = useState("all");
+  const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
+  const [clientFilter, setClientFilter] = useState(validInitialClient);
   const [campaignFilter, setCampaignFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState(
     initialAgentFilter && (initialAgentFilter === "unassigned" || agents.some((a) => a.id === initialAgentFilter))
@@ -200,6 +218,15 @@ export default function LeadsListClient({
 
   return (
     <div>
+      {viewingClientName && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/admin" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+            ← Back to All Clients
+          </Link>
+        </div>
+      )}
+
       <div className="mt-6 flex flex-wrap gap-3">
         <button type="button" onClick={() => setShowAddForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
           {showAddForm ? "Cancel" : "+ Add Lead"}
@@ -230,7 +257,7 @@ export default function LeadsListClient({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Client</span>
-            <select name="client_id" required className={inputClass} defaultValue="">
+            <select name="client_id" required className={inputClass} defaultValue={validInitialClient !== "all" ? validInitialClient : ""}>
               <option value="" disabled>
                 Select a client…
               </option>

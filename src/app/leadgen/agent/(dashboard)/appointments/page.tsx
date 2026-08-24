@@ -5,9 +5,15 @@ import { fetchLeadgenAppointmentReminderStatusMap } from "@/lib/leadgen-appointm
 import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
 import AgentAppointmentsListClient from "./AgentAppointmentsListClient";
 
-export default async function LeadgenAgentAppointmentsPage() {
+export default async function LeadgenAgentAppointmentsPage({
+  searchParams,
+}: {
+  // Set by the agent dashboard's "My Results by Client" section.
+  searchParams: Promise<{ client?: string }>;
+}) {
   await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
+  const { client } = await searchParams;
   const { data: appointments } = await supabase
     .from("leadgen_appointments")
     .select("*")
@@ -16,7 +22,7 @@ export default async function LeadgenAgentAppointmentsPage() {
   const rows = (appointments ?? []) as LeadgenAppointmentRow[];
   const leadIds = Array.from(new Set(rows.map((appt) => appt.lead_id).filter((id): id is string => !!id)));
 
-  const [{ data: leads }, { data: appointmentEmails }] = await Promise.all([
+  const [{ data: leads }, { data: appointmentEmails }, { data: clients }] = await Promise.all([
     leadIds.length
       ? supabase.from("leadgen_leads").select("id, email, contact_name").in("id", leadIds)
       : Promise.resolve({ data: [] as { id: string; email: string | null; contact_name: string | null }[] }),
@@ -26,7 +32,9 @@ export default async function LeadgenAgentAppointmentsPage() {
     // the most recent appointment-email status to both administrators
     // and the assigned agent").
     supabase.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
+    supabase.from("leadgen_clients").select("id, name"),
   ]);
+  const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
   const leadContactByLeadId: Record<string, { email: string | null; contact_name: string | null }> = {};
   for (const lead of leads ?? []) {
@@ -53,10 +61,13 @@ export default async function LeadgenAgentAppointmentsPage() {
 
       <AgentAppointmentsListClient
         appointments={rows}
+        clients={(clients ?? []) as { id: string; name: string }[]}
         leadContactByLeadId={leadContactByLeadId}
         latestEmailByAppointmentId={latestEmailByAppointmentId}
         automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
         businessReminderStatusByAppointmentId={businessReminderStatusByAppointmentId}
+        initialClientFilter={client}
+        viewingClientName={viewingClient?.name ?? null}
       />
     </div>
   );

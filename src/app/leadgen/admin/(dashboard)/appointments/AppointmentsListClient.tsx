@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL,
   LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE,
@@ -47,6 +48,9 @@ export default function AppointmentsListClient({
   businessReminderStatusByAppointmentId,
   reminderSettings,
   highlightId,
+  initialClientFilter,
+  initialOpenAdd,
+  viewingClientName,
 }: {
   appointments: LeadgenAppointmentRow[];
   clients: LeadgenClientRow[];
@@ -68,14 +72,24 @@ export default function AppointmentsListClient({
   // SETTINGS").
   reminderSettings: LeadgenAppointmentReminderSettingsRow;
   highlightId?: string;
+  // Set by the admin dashboard's "Results by Client" table or a client
+  // campaign dashboard (leadgen/admin/clients/[id]) via ?client=<id> -
+  // pre-selects the Client filter below and, paired with
+  // initialOpenAdd, the Book Appointment form's own Client field.
+  initialClientFilter?: string;
+  initialOpenAdd?: boolean;
+  // Display name for the "Viewing X" banner when scoped to one client.
+  viewingClientName?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!initialOpenAdd);
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
+  const [clientFilter, setClientFilter] = useState(validInitialClient);
   // Result of the last "Save" on the Manage edit panel, shown inline in
   // that appointment's panel (distinct from the page-level `error` above,
   // which the resend/reminder confirm modals below already surface their
@@ -115,6 +129,11 @@ export default function AppointmentsListClient({
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const selectedLead = selectedLeadId ? leadById.get(selectedLeadId) : null;
+
+  const visibleAppointments = useMemo(
+    () => (clientFilter === "all" ? appointments : appointments.filter((a) => a.client_id === clientFilter)),
+    [appointments, clientFilter]
+  );
 
   function runAction(fn: () => Promise<{ error?: string; message?: string } | void>, onSuccess?: (message?: string) => void) {
     setError(null);
@@ -198,7 +217,16 @@ export default function AppointmentsListClient({
 
   return (
     <div>
-      <div className="mt-6 flex flex-wrap gap-3">
+      {viewingClientName && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/admin" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+            ← Back to All Clients
+          </Link>
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => setShowForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
           {showForm ? "Cancel" : "+ Book Appointment"}
         </button>
@@ -209,6 +237,14 @@ export default function AppointmentsListClient({
         >
           {showReminderSettings ? "Close" : "Appointment Reminder Settings"}
         </button>
+        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={`${inputClass} w-auto`}>
+          <option value="all">All clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
@@ -281,7 +317,13 @@ export default function AppointmentsListClient({
 
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Client</span>
-            <select name="client_id" required defaultValue={selectedLead?.client_id ?? ""} className={inputClass} key={selectedLeadId}>
+            <select
+              name="client_id"
+              required
+              defaultValue={selectedLead?.client_id ?? (validInitialClient !== "all" ? validInitialClient : "")}
+              className={inputClass}
+              key={selectedLeadId}
+            >
               <option value="" disabled>
                 Select a client…
               </option>
@@ -383,8 +425,10 @@ export default function AppointmentsListClient({
       )}
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        {appointments.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">No appointments booked yet.</p>
+        {visibleAppointments.length === 0 ? (
+          <p className="p-6 text-center text-[13.5px] text-slate-500">
+            {appointments.length === 0 ? "No appointments booked yet." : "No appointments match this client."}
+          </p>
         ) : (
           <table className="w-full min-w-[860px] text-left text-[13px]">
             <thead>
@@ -400,7 +444,7 @@ export default function AppointmentsListClient({
               </tr>
             </thead>
             <tbody>
-              {appointments.map((appt) => (
+              {visibleAppointments.map((appt) => (
                 <Fragment key={appt.id}>
                   <tr
                     ref={appt.id === highlightId ? highlightRef : undefined}

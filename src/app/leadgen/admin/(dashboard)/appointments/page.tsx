@@ -7,10 +7,22 @@ import AppointmentsListClient from "./AppointmentsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
-export default async function LeadgenAppointmentsPage({ searchParams }: { searchParams: Promise<{ highlight?: string }> }) {
+export default async function LeadgenAppointmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    highlight?: string;
+    // Set by the admin dashboard's "Results by Client" table or a client
+    // campaign dashboard (leadgen/admin/clients/[id]) via ?client=<id> -
+    // pre-selects the Client filter and, paired with openAdd, the Book
+    // Appointment form's own Client field.
+    client?: string;
+    openAdd?: string;
+  }>;
+}) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
-  const { highlight } = await searchParams;
+  const { highlight, client, openAdd } = await searchParams;
 
   const [{ data: appointments }, { data: clients }, { data: campaigns }, { data: agents }, { data: leads }, { data: appointmentEmails }, reminderSettings] = await Promise.all([
     admin.from("leadgen_appointments").select("*").order("appointment_date", { ascending: false }),
@@ -25,6 +37,8 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
     admin.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
     fetchLeadgenAppointmentReminderSettings(admin),
   ]);
+
+  const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
   const latestEmailByAppointmentId: Record<string, LeadgenEmailRow> = {};
   for (const email of appointmentEmails ?? []) {
@@ -52,6 +66,9 @@ export default async function LeadgenAppointmentsPage({ searchParams }: { search
         businessReminderStatusByAppointmentId={businessReminderStatusByAppointmentId}
         reminderSettings={reminderSettings}
         highlightId={highlight}
+        initialClientFilter={client}
+        initialOpenAdd={openAdd === "1"}
+        viewingClientName={viewingClient?.name ?? null}
       />
     </div>
   );
