@@ -10,6 +10,8 @@ import { buildLeadgenBookingEmailHtml, sendLeadgenEmail } from "@/lib/leadgen-em
 import {
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_ROLES,
+  isLeadgenBrentsEssentials,
+  isMantraCollabClient,
   leadgenServicesButtonLabel,
   resolveLeadgenEmailBranding,
   slugifyClientName,
@@ -873,14 +875,18 @@ export async function cleanupLeadgenTestClientsAction(): Promise<ActionResult & 
 
   const { data: targetClients, error: clientLookupError } = await supabase
     .from("leadgen_clients")
-    .select("id, name")
+    .select("id, name, slug")
     .in("name", targetNames);
 
   if (clientLookupError) return { error: "Failed to load target clients." };
   if (!targetClients || targetClients.length === 0) return { error: "No matching test clients found." };
 
-  const brentsClient = targetClients.find((c) => c.name === "Brent's Essentials");
-  if (brentsClient) return { error: "Safety stop: refusing to delete Brent's Essentials." };
+  // Belt-and-suspenders: even though targetNames above can never legitimately
+  // match either protected client, refuse outright if a lookup somehow
+  // returns one (e.g. a test client renamed to collide) - this cleanup must
+  // never be able to touch either of the two protected, active clients.
+  const protectedClient = targetClients.find((c) => isLeadgenBrentsEssentials(c) || isMantraCollabClient(c));
+  if (protectedClient) return { error: `Safety stop: refusing to delete ${protectedClient.name}.` };
 
   const summaries: CleanupSummary[] = [];
 
@@ -914,10 +920,11 @@ export async function deleteLeadgenClientAction(clientId: string): Promise<Actio
   await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { data: client, error: clientError } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  const { data: client, error: clientError } = await supabase.from("leadgen_clients").select("id, name, slug").eq("id", clientId).maybeSingle();
   if (clientError) return { error: "Failed to load the client." };
   if (!client) return { error: "Client not found." };
-  if (client.name.trim() === "Brent's Essentials") return { error: "Brent's Essentials cannot be deleted." };
+  if (isLeadgenBrentsEssentials(client)) return { error: "Brent's Essentials cannot be deleted." };
+  if (isMantraCollabClient(client)) return { error: "Mantra Collab cannot be deleted." };
 
   const result = await deleteLeadgenClientData(client.id, client.name, supabase);
   if ("error" in result) return { error: result.error };

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
-import { slugifyClientName } from "@/lib/leadgen-types";
+import { isLeadgenBrentsEssentials, isMantraCollabClient, slugifyClientName } from "@/lib/leadgen-types";
 import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClientAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -37,7 +37,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
   }
 
   function handleCleanup() {
-    if (!confirm("Delete test clients Chijioke Amadi and Winsalot Corp. plus linked test records? Brent's Essentials will not be touched.")) {
+    if (!confirm("Delete test clients Chijioke Amadi and Winsalot Corp. plus linked test records? Brent's Essentials and Mantra Collab will not be touched.")) {
       return;
     }
 
@@ -207,7 +207,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                     </span>
                   </td>
                   <td className="p-3">
-                    {client.name.trim() === "Brent's Essentials" ? (
+                    {isLeadgenBrentsEssentials(client) || isMantraCollabClient(client) ? (
                       <span className="text-[12px] font-medium text-slate-400">Locked</span>
                     ) : (
                       <button
