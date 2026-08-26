@@ -2,109 +2,148 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, UserPlus, Clock, AlertTriangle, ClipboardList } from "lucide-react";
+import { Users, UserPlus, Sparkles, CalendarCheck2, Landmark, Megaphone, Clock, Trophy } from "lucide-react";
 import {
-  CRM_LEAD_DASHBOARD_CARD_STYLES,
-  EMAIL_STATUS_LABELS,
-  EMAIL_STATUS_STYLES,
-  LEAD_STAGES,
-  LEAD_STAGE_STYLES,
+  CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES,
+  OPPORTUNITY_STAGES,
+  OPPORTUNITY_STAGE_STYLES,
+  OPPORTUNITY_TYPE_LABELS,
   isOverdue,
   isDueToday,
-  overdueDurationLabel,
-  type CrmLeadRow,
-  type LeadStage,
+  type CrmOpportunityRow,
+  type OpportunityStage,
+  type OpportunityType,
 } from "@/lib/crm-types";
 import KpiCard from "@/components/crm-ui/KpiCard";
 
+type StageFilter = OpportunityStage | "all";
+type TypeFilter = OpportunityType | "all";
 type FollowUpFilter = "all" | "due_today" | "overdue";
 
-export default function AgentDashboardClient({
-  leads,
-  initialStageFilter,
-  initialFollowUpFilter,
-}: {
-  leads: CrmLeadRow[];
-  // Pre-select a filter when landing here from the stat cards below -
-  // ignored (falls back to "all") if not a recognized value, so a
-  // stale/tampered URL never crashes this page.
-  initialStageFilter?: string;
-  initialFollowUpFilter?: "due_today" | "overdue";
-}) {
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<LeadStage | "all">(
-    initialStageFilter && (LEAD_STAGES as readonly string[]).includes(initialStageFilter)
-      ? (initialStageFilter as LeadStage)
-      : "all"
-  );
-  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>(initialFollowUpFilter ?? "all");
+// Matches a row against the type dropdown/KPI-card grouping: "lead_generation"
+// and "business_financing" each include "both_services" (an opportunity
+// selling both services is, by definition, also a Lead Generation
+// opportunity and also a Business Financing opportunity), while
+// "both_services" itself is a strict, both-only filter.
+function matchesTypeFilter(opportunity: CrmOpportunityRow, filter: TypeFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "both_services") return opportunity.opportunity_type === "both_services";
+  return opportunity.opportunity_type === filter || opportunity.opportunity_type === "both_services";
+}
 
-  const overdueLeads = useMemo(
-    () =>
-      leads
-        .filter(isOverdue)
-        .sort((a, b) => new Date(a.next_follow_up_at!).getTime() - new Date(b.next_follow_up_at!).getTime()),
-    [leads]
-  );
-  const dueToday = leads.filter(isDueToday).length;
-  const overdue = overdueLeads.length;
-  const newLeads = leads.filter((l) => l.stage === "New interested lead").length;
-  const followUpRequired = leads.filter((l) => l.stage === "Follow-up required").length;
+export default function AgentDashboardClient({ opportunities }: { opportunities: CrmOpportunityRow[] }) {
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState<StageFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("all");
+
+  const newProspects = opportunities.filter((o) => o.stage === "New Prospect").length;
+  const interested = opportunities.filter((o) => o.stage === "Interested").length;
+  const consultationsBooked = opportunities.filter((o) => o.stage === "Consultation Booked").length;
+  const financing = opportunities.filter((o) => matchesTypeFilter(o, "business_financing")).length;
+  const leadGen = opportunities.filter((o) => matchesTypeFilter(o, "lead_generation")).length;
+  const followUpsDue = opportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
+  const clientsWon = opportunities.filter((o) => o.stage === "Client Won").length;
+
+  // Every card both scrolls to the table below AND seeds the same
+  // client-side filter state the manual dropdowns use, so "8 clickable KPI
+  // cards" and "filters over a table" are the same single mechanism rather
+  // than two competing ones.
+  function applyAndScroll(next: Partial<{ stage: StageFilter; type: TypeFilter; followUp: FollowUpFilter }>) {
+    setStageFilter(next.stage ?? "all");
+    setTypeFilter(next.type ?? "all");
+    setFollowUpFilter(next.followUp ?? "all");
+    document.getElementById("my-opportunities")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const stats = [
-    { label: "Total Leads", value: leads.length, href: "/agent/dashboard#my-leads", tone: CRM_LEAD_DASHBOARD_CARD_STYLES.total, icon: Users },
     {
-      label: "New Leads",
-      value: newLeads,
-      href: `/agent/dashboard?stage=${encodeURIComponent("New interested lead")}#my-leads`,
-      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.newLead,
+      label: "Total Prospects",
+      value: opportunities.length,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.total,
+      icon: Users,
+      onClick: () => applyAndScroll({}),
+    },
+    {
+      label: "New Prospects",
+      value: newProspects,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.newProspect,
       icon: UserPlus,
+      onClick: () => applyAndScroll({ stage: "New Prospect" }),
     },
     {
-      label: "Due Today",
-      value: dueToday,
-      href: "/agent/dashboard?followup=due_today#my-leads",
-      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.dueToday,
+      label: "Interested Prospects",
+      value: interested,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.interested,
+      icon: Sparkles,
+      onClick: () => applyAndScroll({ stage: "Interested" }),
+    },
+    {
+      label: "Consultations Booked",
+      value: consultationsBooked,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.consultations,
+      icon: CalendarCheck2,
+      onClick: () => applyAndScroll({ stage: "Consultation Booked" }),
+    },
+    {
+      label: "Financing Opportunities",
+      value: financing,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.financing,
+      icon: Landmark,
+      onClick: () => applyAndScroll({ type: "business_financing" }),
+    },
+    {
+      label: "Lead Generation Opportunities",
+      value: leadGen,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.leadGen,
+      icon: Megaphone,
+      onClick: () => applyAndScroll({ type: "lead_generation" }),
+    },
+    {
+      label: "Follow-Ups Due",
+      value: followUpsDue,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.followUp,
       icon: Clock,
+      onClick: () => applyAndScroll({ followUp: "due_today" }),
     },
     {
-      label: "Overdue",
-      value: overdue,
-      href: "/agent/dashboard?followup=overdue#my-leads",
-      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.overdue,
-      icon: AlertTriangle,
-    },
-    {
-      label: "Follow-up Required",
-      value: followUpRequired,
-      href: `/agent/dashboard?stage=${encodeURIComponent("Follow-up required")}#my-leads`,
-      tone: CRM_LEAD_DASHBOARD_CARD_STYLES.followUp,
-      icon: ClipboardList,
+      label: "Clients Won",
+      value: clientsWon,
+      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.won,
+      icon: Trophy,
+      onClick: () => applyAndScroll({ stage: "Client Won" }),
     },
   ];
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    return leads.filter((lead) => {
-      if (stageFilter !== "all" && lead.stage !== stageFilter) return false;
-      if (followUpFilter === "due_today" && !isDueToday(lead)) return false;
-      if (followUpFilter === "overdue" && !isOverdue(lead)) return false;
+    return opportunities.filter((opportunity) => {
+      if (stageFilter !== "all" && opportunity.stage !== stageFilter) return false;
+      if (!matchesTypeFilter(opportunity, typeFilter)) return false;
+      if (followUpFilter === "due_today" && !(isDueToday(opportunity) || isOverdue(opportunity))) return false;
+      if (followUpFilter === "overdue" && !isOverdue(opportunity)) return false;
       if (!query) return true;
       return (
-        lead.business_name.toLowerCase().includes(query) ||
-        (lead.contact_name ?? "").toLowerCase().includes(query) ||
-        lead.phone.toLowerCase().includes(query) ||
-        (lead.email ?? "").toLowerCase().includes(query) ||
-        lead.city.toLowerCase().includes(query)
+        opportunity.business_name.toLowerCase().includes(query) ||
+        (opportunity.contact_name ?? "").toLowerCase().includes(query) ||
+        opportunity.phone.toLowerCase().includes(query) ||
+        (opportunity.email ?? "").toLowerCase().includes(query)
       );
     });
-  }, [leads, query, stageFilter, followUpFilter]);
+  }, [opportunities, query, stageFilter, typeFilter, followUpFilter]);
 
   return (
     <div>
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map((stat) => (
-          <KpiCard key={stat.label} href={stat.href} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
+          <KpiCard
+            key={stat.label}
+            onClick={stat.onClick}
+            label={stat.label}
+            value={stat.value}
+            tone={stat.tone}
+            icon={<stat.icon />}
+          />
         ))}
       </div>
 
@@ -113,16 +152,26 @@ export default function AgentDashboardClient({
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, phone, email, city..."
+          placeholder="Search by business, contact, phone, email..."
           className="w-full max-w-sm rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
         />
         <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+          className="rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
+        >
+          <option value="all">All types</option>
+          <option value="lead_generation">Lead Generation (incl. Both Services)</option>
+          <option value="business_financing">Business Financing (incl. Both Services)</option>
+          <option value="both_services">Both Services only</option>
+        </select>
+        <select
           value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value as LeadStage | "all")}
+          onChange={(e) => setStageFilter(e.target.value as StageFilter)}
           className="rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]"
         >
           <option value="all">All stages</option>
-          {LEAD_STAGES.map((stage) => (
+          {OPPORTUNITY_STAGES.map((stage) => (
             <option key={stage} value={stage}>
               {stage}
             </option>
@@ -139,72 +188,74 @@ export default function AgentDashboardClient({
         </select>
       </div>
 
-      {leads.length === 0 ? (
+      {opportunities.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-[14px] text-[var(--color-text-muted)]">
-          No leads yet.{" "}
-          <Link href="/agent/leads/new" className="font-semibold text-[var(--color-accent)]">
-            Add your first lead
+          No opportunities yet.{" "}
+          <Link href="/agent/opportunities/new" className="font-semibold text-[var(--color-accent)]">
+            Add your first opportunity
           </Link>{" "}
           to get started.
         </div>
       ) : filtered.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-[14px] text-[var(--color-text-muted)]">
-          No leads match your search.
+          No opportunities match your filters.
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
-          {filtered.map((lead) => {
-            const bounced = lead.last_email_status === "bounced" || lead.last_email_status === "complained";
-            return (
-            <Link
-              key={lead.id}
-              href={`/agent/leads/${lead.id}`}
-              className={`block rounded-xl border p-4 transition hover:border-[var(--color-accent)] ${
-                bounced
-                  ? "border-red-200 bg-red-50"
-                  : isOverdue(lead)
-                    ? "border-red-200 bg-red-50"
-                    : isDueToday(lead)
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-[var(--color-border)] bg-[var(--color-input-bg)]"
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="font-semibold text-[var(--color-ink-strong)]">
-                  {lead.business_name}
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {lead.last_email_status && (
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${EMAIL_STATUS_STYLES[lead.last_email_status]}`}
-                    >
-                      {EMAIL_STATUS_LABELS[lead.last_email_status]}
-                    </span>
-                  )}
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEAD_STAGE_STYLES[lead.stage]}`}
-                  >
-                    {lead.stage}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-1 text-sm text-[var(--color-text-muted)]">
-                {lead.contact_name ? `${lead.contact_name} · ` : ""}
-                {lead.phone} · {lead.city}
-              </div>
-              {lead.next_follow_up_at && (
-                <div
-                  className={`mt-2 text-[12.5px] font-medium ${
-                    isOverdue(lead) ? "text-red-700" : "text-[var(--color-text-muted)]"
+        <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--color-border)]">
+          <table className="w-full min-w-[720px] text-left text-[13.5px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--crm-surface-2)] text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">
+              <tr>
+                <th className="px-4 py-3">Business</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Stage</th>
+                <th className="px-4 py-3">City</th>
+                <th className="px-4 py-3">Next Follow-Up</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((opportunity) => (
+                <tr
+                  key={opportunity.id}
+                  className={`border-b border-[var(--color-border-soft)] last:border-0 hover:bg-[var(--crm-surface-2)] ${
+                    isOverdue(opportunity) ? "bg-red-50" : isDueToday(opportunity) ? "bg-amber-50" : ""
                   }`}
                 >
-                  Next follow-up: {new Date(lead.next_follow_up_at).toLocaleString()}
-                  {isOverdue(lead) && ` — ${overdueDurationLabel(lead.next_follow_up_at)}`}
-                </div>
-              )}
-            </Link>
-            );
-          })}
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/agent/opportunities/${opportunity.id}`}
+                      className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
+                    >
+                      {opportunity.business_name}
+                    </Link>
+                    <div className="text-[12px] text-[var(--color-text-muted)]">
+                      {opportunity.contact_name ? `${opportunity.contact_name} · ` : ""}
+                      {opportunity.phone}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-text-body)]">
+                    {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${OPPORTUNITY_STAGE_STYLES[opportunity.stage]}`}
+                    >
+                      {opportunity.stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-text-body)]">{opportunity.city || "—"}</td>
+                  <td className="px-4 py-3">
+                    {opportunity.next_follow_up_at ? (
+                      <span className={isOverdue(opportunity) ? "font-medium text-red-700" : "text-[var(--color-text-body)]"}>
+                        {new Date(opportunity.next_follow_up_at).toLocaleString()}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

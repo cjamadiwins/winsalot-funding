@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CHAT_MESSAGE_MAX_LENGTH } from "./chat-types";
 
-// Generic, identity-agnostic chat helpers shared by the Cleaning CRM
+// Generic, identity-agnostic chat helpers shared by the Winsalot Growth CRM
 // (crm-chat-actions.ts/crm-chat-data.ts) and Lead Gen CRM
 // (leadgen-chat-actions.ts/leadgen-chat-data.ts) chat implementations.
 // Every function here takes its table name(s) as an explicit parameter

@@ -6,19 +6,13 @@ import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import {
-  ClipboardList,
-  HardHat,
-  Receipt,
   LayoutDashboard,
-  ClipboardCheck,
   UserCog,
   Wallet,
   BarChart3,
   Clock,
   CalendarOff,
   MessageSquare,
-  Search,
-  UserPlus,
   GraduationCap,
   Mail,
   Gift,
@@ -27,11 +21,7 @@ import { signOutAction, markNotificationReadAction, markAllNotificationsReadActi
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
-  { label: "Requests", href: "/admin", icon: <ClipboardList /> },
-  { label: "Providers", href: "/admin/providers", icon: <HardHat /> },
-  { label: "Invoices", href: "/admin/invoices", icon: <Receipt /> },
   { label: "CRM", href: "/admin/crm", icon: <LayoutDashboard /> },
-  { label: "Quote Fulfillment", href: "/admin/crm/leads", icon: <ClipboardCheck /> },
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
   { label: "Payroll", href: "/admin/crm/payroll", icon: <Wallet /> },
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },
@@ -39,8 +29,6 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Attendance", href: "/admin/crm/attendance", icon: <Clock /> },
   { label: "Leave Requests", href: "/admin/crm/leave-requests", icon: <CalendarOff /> },
   { label: "Chat", href: "/admin/crm/chat", icon: <MessageSquare /> },
-  { label: "Cleaning Opportunities", href: "/admin/crm/opportunities", icon: <Search /> },
-  { label: "Provider Acquisition", href: "/admin/crm/provider-acquisition", icon: <UserPlus /> },
   { label: "Training", href: "/admin/crm/training", icon: <GraduationCap /> },
   { label: "Email Tracking", href: "/admin/crm/emails", icon: <Mail /> },
 ];
@@ -73,7 +61,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="crm-theme crm-theme--cleaning">
       <CrmShell
-        brandTitle="Cleaning CRM"
+        brandTitle="Winsalot Growth CRM"
         brandSubtitle={
           <>
             Empowering Businesses,
@@ -82,7 +70,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </>
         }
         brandLogoSrc="/winsalot-logo.png"
-        homeHref="/admin"
+        homeHref="/admin/crm"
         navItems={navItems}
         userLabel={user.email}
         signOutAction={signOutAction}

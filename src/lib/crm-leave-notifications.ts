@@ -2,7 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { formatLeaveDateRangeLabel, type LeaveRequestAuditAction } from "./leave-requests";
 
-// Audit trail + in-app notifications for the Cleaning CRM's Leave
+// Audit trail + in-app notifications for the Winsalot Growth CRM's Leave
 // Requests feature (crm_leave_requests / crm_leave_request_audit_log,
 // migration 0069). Always uses the service-role admin client, same
 // rationale as notifyCrmUsers in provider-intake-submission.ts: the

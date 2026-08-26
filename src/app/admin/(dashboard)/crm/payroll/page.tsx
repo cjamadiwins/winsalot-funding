@@ -47,7 +47,7 @@ export default async function AdminCrmPayrollPage() {
         <div className="mt-6">
           <AdminPayrollClient
             companyName="Winsalot Corp"
-            crmLabel="Cleaning CRM"
+            crmLabel="Winsalot Growth CRM"
             agents={((agents ?? []) as CrmUserRow[]).map((a) => ({
               id: a.id,
               full_name: a.full_name,

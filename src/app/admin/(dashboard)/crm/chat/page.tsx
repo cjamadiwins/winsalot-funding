@@ -20,7 +20,7 @@ import {
 } from "@/lib/crm-chat-actions";
 import ChatPageClient, { type ChatScopeConfig } from "@/components/chat/ChatPageClient";
 
-// Cleaning CRM only - never reads/writes leadgen_users or any leadgen_*
+// Winsalot Growth CRM only - never reads/writes leadgen_users or any leadgen_*
 // table. See src/app/leadgen/admin/(dashboard)/chat/page.tsx for the
 // Lead Gen CRM's own, fully separate copy of this page.
 const scope: ChatScopeConfig = {
@@ -56,7 +56,7 @@ export default async function AdminChatPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Chat</h1>
-      <p className="mt-1 text-sm text-slate-500">Company Chat, Direct Messages, and Admin Announcements for the Cleaning CRM.</p>
+      <p className="mt-1 text-sm text-slate-500">Company Chat, Direct Messages, and Admin Announcements for the Winsalot Growth CRM.</p>
       <div className="mt-6">
         <Suspense>
           <ChatPageClient

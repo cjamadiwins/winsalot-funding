@@ -11,37 +11,38 @@ import {
 
 // Email Tracking - an agent's own view of the same crm_lead_emails data
 // the admin Email Tracking page (/admin/crm/emails) shows, scoped to only
-// the leads currently assigned to this agent. Read-only: this page never
-// writes to crm_lead_emails, it's kept current entirely by the existing
-// Resend webhook handler (src/app/api/webhooks/resend/route.ts), which is
-// unchanged.
+// the opportunities currently assigned to this agent. Read-only: this
+// page never writes to crm_lead_emails, it's kept current entirely by
+// the existing Resend webhook handler
+// (src/app/api/webhooks/resend/route.ts), which is unchanged.
 //
-// Same two-step access pattern already used by this agent's own lead page
-// (src/app/agent/(dashboard)/leads/[id]/page.tsx) for the exact same
-// table: first read crm_leads through the session-scoped client, so RLS
-// (crm_leads_agent_select_own) proves every id that comes back is really
-// assigned to this agent - only then read crm_lead_emails, filtered to
-// exactly those ids, with the service-role client (crm_lead_emails has no
-// RLS policies of its own - see migration 0022 - the same reason the
-// per-lead EmailStatusPanel already needs the service-role client).
+// Same two-step access pattern already used by this agent's own
+// opportunity page (src/app/agent/(dashboard)/opportunities/[id]/page.tsx)
+// for the exact same table: first read crm_opportunities through the
+// session-scoped client, so RLS (crm_opportunities_agent_select_own)
+// proves every id that comes back is really assigned to this agent - only
+// then read crm_lead_emails, filtered to exactly those ids, with the
+// service-role client (crm_lead_emails has no RLS policies of its own -
+// see migration 0022 - the same reason the per-opportunity
+// EmailStatusPanel already needs the service-role client).
 export default async function AgentEmailsPage() {
   const agent = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
 
-  const { data: leads, error: leadsError } = await supabase
-    .from("crm_leads")
+  const { data: opportunities, error: opportunitiesError } = await supabase
+    .from("crm_opportunities")
     .select("id, business_name, contact_name")
     .eq("assigned_agent_id", agent.id);
 
-  const leadById = new Map((leads ?? []).map((l) => [l.id, l] as const));
-  const leadIds = (leads ?? []).map((l) => l.id);
+  const opportunityById = new Map((opportunities ?? []).map((o) => [o.id, o] as const));
+  const opportunityIds = (opportunities ?? []).map((o) => o.id);
 
   const admin = getSupabaseAdmin();
-  const { data: emails, error: emailsError } = leadIds.length
+  const { data: emails, error: emailsError } = opportunityIds.length
     ? await admin
         .from("crm_lead_emails")
         .select("*")
-        .in("lead_id", leadIds)
+        .in("opportunity_id", opportunityIds)
         .order("sent_at", { ascending: false, nullsFirst: false })
         .limit(200)
     : { data: [] as CrmLeadEmailRow[], error: null };
@@ -50,17 +51,16 @@ export default async function AgentEmailsPage() {
     <div>
       <h1 className="font-heading text-[22px] font-bold text-[var(--color-ink-strong)]">Email Tracking</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-        Every quote-request and follow-up email sent to your assigned customers, with its live
-        Sent / Delivered / Bounced / Failed status from Resend.
+        Every follow-up email sent to your assigned opportunities, with its live Sent / Delivered / Bounced / Failed status from Resend.
       </p>
 
-      {(leadsError || emailsError) && (
+      {(opportunitiesError || emailsError) && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Failed to load email tracking data: {(leadsError ?? emailsError)?.message}
+          Failed to load email tracking data: {(opportunitiesError ?? emailsError)?.message}
         </p>
       )}
 
-      {!leadsError && !emailsError && (
+      {!opportunitiesError && !emailsError && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           {!emails || emails.length === 0 ? (
             <p className="text-[13.5px] text-slate-500">No tracked emails yet.</p>
@@ -78,7 +78,7 @@ export default async function AgentEmailsPage() {
                 </thead>
                 <tbody>
                   {(emails as CrmLeadEmailRow[]).map((email) => {
-                    const lead = email.lead_id ? leadById.get(email.lead_id) : undefined;
+                    const opportunity = email.opportunity_id ? opportunityById.get(email.opportunity_id) : undefined;
 
                     return (
                       <tr key={email.id} className="border-b border-slate-100 align-top">
@@ -86,12 +86,12 @@ export default async function AgentEmailsPage() {
                           {new Date(email.sent_at ?? email.created_at).toLocaleString()}
                         </td>
                         <td className="py-2 pr-3">
-                          {lead ? (
-                            <Link href={`/agent/leads/${lead.id}`} className="font-medium text-sky-600 hover:text-sky-700">
-                              {lead.contact_name || lead.business_name}
+                          {opportunity ? (
+                            <Link href={`/agent/opportunities/${opportunity.id}`} className="font-medium text-sky-600 hover:text-sky-700">
+                              {opportunity.contact_name || opportunity.business_name}
                             </Link>
                           ) : (
-                            <span className="text-slate-500">Unknown lead</span>
+                            <span className="text-slate-500">Unknown opportunity</span>
                           )}
                         </td>
                         <td className="py-2 pr-3 text-slate-700">{email.to_email}</td>

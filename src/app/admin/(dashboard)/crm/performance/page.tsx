@@ -8,8 +8,8 @@ import type { CrmUserRow } from "@/lib/crm-types";
 import CrmPerformanceCard from "@/components/CrmPerformanceCard";
 import CrmMonthlyPerformanceSection from "@/components/CrmMonthlyPerformanceSection";
 
-// Admin view of the Cleaning CRM's Agent Performance Report - every active
-// agent, each with their own biweekly-target card (see
+// Admin view of the Winsalot Growth CRM's Agent Performance Report -
+// every active agent, each with their own biweekly-target card (see
 // CrmPerformanceCard). Agents only ever see their own card -
 // /agent/performance. Below the unchanged biweekly cards,
 // CrmMonthlyPerformanceSection adds the Monthly Performance history
@@ -32,7 +32,7 @@ export default async function AdminCrmPerformancePage() {
   const { data: historyRows } = await admin
     .from("crm_agent_biweekly_performance")
     .select(
-      "agent_id, agent_name, period_start, period_end, quotes_sent, quotes_sent_target, quotes_sent_percentage, quotes_received, quotes_received_target, quotes_received_percentage, overall_percentage, status"
+      "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, qualified_opportunities, qualified_opportunities_target, qualified_opportunities_percentage, applications_submitted, applications_submitted_target, applications_submitted_percentage, proposals_sent, proposals_sent_target, proposals_sent_percentage, clients_won, clients_won_target, clients_won_percentage, overall_percentage, status"
     )
     .in("agent_id", allAgents.map((agent) => agent.id));
 
@@ -44,9 +44,8 @@ export default async function AdminCrmPerformancePage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Biweekly performance against a target of 4 quotes sent and 1 quote received per agent, reset every two weeks. A quote counts as
-        sent only once it&apos;s sent to the customer, and received only once a provider submits a completed price - credited to whichever
-        agent is handling that customer, not whoever submitted it.
+        Biweekly performance against five targets per agent, reset every two weeks: consultations booked, qualified opportunities,
+        applications submitted, proposals sent, and clients won.
       </p>
 
       <div className="mt-6 space-y-6">

@@ -16,23 +16,20 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 // Default/fallback metadata for any route that doesn't declare its own
-// (e.g. the funding homepage at "/", which has no page-level metadata of
-// its own). The funding pitch previously lived here; per project decision
-// it's parked — not deleted — until a dedicated financing landing page is
-// requested again. Routes with their own metadata (commercial-cleaning-quote,
-// lead-generation) fully override this and are unaffected.
+// (e.g. the root "/" landing page). Routes with their own metadata
+// (lead-generation, funding) fully override this and are unaffected.
 export const metadata: Metadata = {
-  title: "Winsalot Corp",
-  description: "Professional business solutions from Winsalot Corp.",
+  title: "Winsalot Growth CRM",
+  description: "Empowering Businesses, One Solution at a Time. — Winsalot Corp.",
   openGraph: {
-    title: "Winsalot Corp",
-    description: "Professional business solutions from Winsalot Corp.",
+    title: "Winsalot Growth CRM",
+    description: "Empowering Businesses, One Solution at a Time. — Winsalot Corp.",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Winsalot Corp",
-    description: "Professional business solutions from Winsalot Corp.",
+    title: "Winsalot Growth CRM",
+    description: "Empowering Businesses, One Solution at a Time. — Winsalot Corp.",
   },
 };
 

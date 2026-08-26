@@ -28,7 +28,7 @@ import {
 // dashboard page reading its own cross-CRM month-to-date total passes
 // the service-role client narrowly filtered to that one agent's own
 // email (see fetchAgentMonthToDateApproved below) - RLS alone cannot do
-// that read because the same real person's Cleaning CRM and Lead Gen CRM
+// that read because the same real person's Winsalot Growth CRM and Lead Gen CRM
 // logins are different auth.uid()s with no shared identity to match a
 // single agent_select_own policy against.
 

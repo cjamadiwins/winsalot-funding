@@ -1,4 +1,4 @@
-// Shared, pure Leave Requests logic used by both the Cleaning CRM
+// Shared, pure Leave Requests logic used by both the Winsalot Growth CRM
 // (crm_leave_requests) and the Lead Generation CRM (leadgen_leave_requests,
 // migrations 0069/0070). The two tables are entirely separate (separate
 // agent pools, separate RLS), but the policy text, notice-period math, and

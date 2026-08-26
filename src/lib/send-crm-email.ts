@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import type { CrmUserRow, EmailType } from "./crm-types";
 
 type SendTrackedCrmEmailInput = {
-  leadId: string;
+  opportunityId: string;
   crmUser: CrmUserRow;
   emailType: EmailType;
   fromEmail: string;
@@ -17,36 +17,36 @@ type SendTrackedCrmEmailInput = {
   noEmailMessage: string;
 };
 
-// Shared by every CRM-side email an agent/admin can send to a lead (the
-// quote request email and the follow-up email, both from
-// /admin/crm/leads/[id] and /agent/leads/[id]) so sending, activity
-// logging, and Resend delivery tracking stay identical no matter which
-// one it is or who sends it. Callers must already have run
+// Shared by every CRM-side email an agent/admin can send from an
+// opportunity's page (currently just the follow-up email, from
+// /admin/crm/opportunities/[id] and /agent/opportunities/[id]) so
+// sending, activity logging, and Resend delivery tracking stay identical
+// no matter who sends it. Callers must already have run
 // requireCrmAdmin()/requireCrmUser() themselves - this relies on the
 // session-scoped Supabase client (RLS) to keep an agent scoped to their
-// own leads, same as sendQuoteRequestEmailForLead always has.
+// own opportunities.
 export async function sendTrackedCrmEmail(
   supabase: SupabaseClient,
   input: SendTrackedCrmEmailInput
 ): Promise<{ email: string }> {
-  const { data: lead, error: fetchError } = await supabase
-    .from("crm_leads")
+  const { data: opportunity, error: fetchError } = await supabase
+    .from("crm_opportunities")
     .select("email, contact_name, business_name")
-    .eq("id", input.leadId)
+    .eq("id", input.opportunityId)
     .maybeSingle();
 
-  if (fetchError || !lead) {
-    throw new Error("Lead not found.");
+  if (fetchError || !opportunity) {
+    throw new Error("Opportunity not found.");
   }
-  if (!lead.email) {
+  if (!opportunity.email) {
     throw new Error(input.noEmailMessage);
   }
 
-  const name = lead.contact_name || lead.business_name;
+  const name = opportunity.contact_name || opportunity.business_name;
   const resend = getResendClient();
   const { data: sendResult, error: emailError } = await resend.emails.send({
     from: input.fromEmail,
-    to: lead.email,
+    to: opportunity.email,
     replyTo: input.replyToEmail,
     subject: input.subject,
     text: input.buildText(name),
@@ -63,10 +63,10 @@ export async function sendTrackedCrmEmail(
   const { data: activity, error: activityError } = await supabase
     .from("crm_activities")
     .insert({
-      lead_id: input.leadId,
+      opportunity_id: input.opportunityId,
       agent_id: input.crmUser.id,
       activity_type: "email",
-      notes: `${input.activityNotePrefix} sent to ${lead.email} by ${senderName}.`,
+      notes: `${input.activityNotePrefix} sent to ${opportunity.email} by ${senderName}.`,
     })
     .select("id")
     .single();
@@ -78,17 +78,17 @@ export async function sendTrackedCrmEmail(
   // crm_lead_emails has no RLS policies of its own (service-role only -
   // see migration 0022) since it's internal Resend delivery-tracking
   // bookkeeping, not something agents query directly; what an agent
-  // actually sees (the activity entry above, and the lead's last_email_*
-  // columns below) both go through the normal session-scoped client and
-  // its existing RLS.
+  // actually sees (the activity entry above, and the opportunity's
+  // last_email_* columns below) both go through the normal session-scoped
+  // client and its existing RLS.
   const admin = getSupabaseAdmin();
   const { error: trackingError } = await admin.from("crm_lead_emails").insert({
-    lead_id: input.leadId,
+    opportunity_id: input.opportunityId,
     agent_id: input.crmUser.id,
     activity_id: activity?.id ?? null,
     resend_email_id: sendResult.id,
     email_type: input.emailType,
-    to_email: lead.email,
+    to_email: opportunity.email,
     subject: input.subject,
     status: "sent",
     status_at: sentAt,
@@ -99,19 +99,19 @@ export async function sendTrackedCrmEmail(
     throw new Error("The email was sent, but delivery tracking could not be recorded.");
   }
 
-  const { error: leadUpdateError } = await supabase
-    .from("crm_leads")
+  const { error: opportunityUpdateError } = await supabase
+    .from("crm_opportunities")
     .update({
       last_email_status: "sent",
       last_email_status_at: sentAt,
       last_email_type: input.emailType,
-      last_email_to: lead.email,
+      last_email_to: opportunity.email,
     })
-    .eq("id", input.leadId);
+    .eq("id", input.opportunityId);
 
-  if (leadUpdateError) {
-    throw new Error("The email was sent, but updating the lead's email status failed.");
+  if (opportunityUpdateError) {
+    throw new Error("The email was sent, but updating the opportunity's email status failed.");
   }
 
-  return { email: lead.email };
+  return { email: opportunity.email };
 }

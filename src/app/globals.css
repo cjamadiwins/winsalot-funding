@@ -53,7 +53,7 @@
  * CRM light workspace / dark navy sidebar theme
  *
  * Scoped to `.crm-theme` (applied to the root of every logged-in CRM
- * screen - Cleaning CRM admin/agent, Lead Gen CRM admin/agent, and their
+ * screen - Winsalot Growth CRM admin/agent, Lead Gen CRM admin/agent, and their
  * login/forgot-password/set-password pages) so the public marketing and
  * quote-request pages, which share some of the same token names and the
  * same default Tailwind palette, are completely unaffected.
@@ -159,7 +159,7 @@
 }
 
 /* ---------------------------------------------------------------------
- * Cleaning CRM (admin + agent) - same navy / royal-blue / teal redesign
+ * Winsalot Growth CRM (admin + agent) - same navy / royal-blue / teal redesign
  * as the Lead Gen CRM above, reusing the identical token values.
  *
  * Scoped to `.crm-theme.crm-theme--cleaning` (both classes applied

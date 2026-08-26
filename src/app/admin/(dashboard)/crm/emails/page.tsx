@@ -6,45 +6,45 @@ import {
   EMAIL_STATUS_STYLES,
   EMAIL_TYPE_LABELS,
   type CrmLeadEmailRow,
-  type CrmLeadRow,
+  type CrmOpportunityRow,
   type CrmUserRow,
 } from "@/lib/crm-types";
 
-// Email Tracking - every quote-request/follow-up email sent to a customer
-// lead from the CRM (sendTrackedCrmEmail, src/lib/send-crm-email.ts),
-// with its live Resend delivery status. Read-only: this page only
-// displays crm_lead_emails (migration 0022), it never writes to it -
-// status is kept current entirely by the existing Resend webhook handler
+// Email Tracking - every follow-up email sent to an opportunity's contact
+// from the CRM (sendTrackedCrmEmail, src/lib/send-crm-email.ts), with its
+// live Resend delivery status. Read-only: this page only displays
+// crm_lead_emails (migration 0022), it never writes to it - status is
+// kept current entirely by the existing Resend webhook handler
 // (src/app/api/webhooks/resend/route.ts), which is unchanged. Scoped to
-// lead_id rows only (customer emails), not the provider-targeted rows the
-// same table also holds (migrations 0026/0028) - those aren't part of
-// this request. Same admin-only, service-role-read pattern already used
-// by the Lead Generation CRM's own Email Tracking page
-// (/leadgen/admin/emails).
+// opportunity_id rows only, not the historical lead_id rows or the
+// provider-targeted rows the same table also holds (migrations 0026/0028)
+// - those aren't part of this view. Same admin-only, service-role-read
+// pattern already used by the Lead Generation CRM's own Email Tracking
+// page (/leadgen/admin/emails).
 export default async function AdminCrmEmailsPage() {
   await requireCrmAdmin();
   const admin = getSupabaseAdmin();
 
-  const [{ data: emails, error }, { data: leads }, { data: agents }] = await Promise.all([
+  const [{ data: emails, error }, { data: opportunities }, { data: agents }] = await Promise.all([
     admin
       .from("crm_lead_emails")
       .select("*")
-      .not("lead_id", "is", null)
+      .not("opportunity_id", "is", null)
       .order("sent_at", { ascending: false, nullsFirst: false })
       .limit(500),
-    admin.from("crm_leads").select("id, business_name, contact_name"),
+    admin.from("crm_opportunities").select("id, business_name, contact_name"),
     admin.from("crm_users").select("id, full_name, email"),
   ]);
 
-  const leadById = new Map((leads ?? []).map((l) => [l.id, l] as const));
+  const opportunityById = new Map((opportunities ?? []).map((o) => [o.id, o] as const));
   const agentById = new Map((agents ?? []).map((a) => [a.id, a] as const));
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Every quote-request and follow-up email sent to a customer from the CRM, with its live
-        Sent / Delivered / Bounced / Failed status from Resend.
+        Every follow-up email sent to an opportunity&apos;s contact from the CRM, with its live Sent / Delivered / Bounced / Failed status
+        from Resend.
       </p>
 
       {error && (
@@ -73,8 +73,10 @@ export default async function AdminCrmEmailsPage() {
                 </thead>
                 <tbody>
                   {(emails as CrmLeadEmailRow[]).map((email) => {
-                    const lead = email.lead_id
-                      ? (leadById.get(email.lead_id) as Pick<CrmLeadRow, "id" | "business_name" | "contact_name"> | undefined)
+                    const opportunity = email.opportunity_id
+                      ? (opportunityById.get(email.opportunity_id) as
+                          | Pick<CrmOpportunityRow, "id" | "business_name" | "contact_name">
+                          | undefined)
                       : undefined;
                     const agent = email.agent_id
                       ? (agentById.get(email.agent_id) as Pick<CrmUserRow, "id" | "full_name" | "email"> | undefined)
@@ -86,15 +88,15 @@ export default async function AdminCrmEmailsPage() {
                           {new Date(email.sent_at ?? email.created_at).toLocaleString()}
                         </td>
                         <td className="py-2 pr-3">
-                          {lead ? (
+                          {opportunity ? (
                             <Link
-                              href={`/admin/crm/leads/${lead.id}`}
+                              href={`/admin/crm/opportunities/${opportunity.id}`}
                               className="font-medium text-sky-600 hover:text-sky-700"
                             >
-                              {lead.contact_name || lead.business_name}
+                              {opportunity.contact_name || opportunity.business_name}
                             </Link>
                           ) : (
-                            <span className="text-slate-500">No lead</span>
+                            <span className="text-slate-500">No opportunity</span>
                           )}
                         </td>
                         <td className="py-2 pr-3 text-slate-700">{email.to_email}</td>

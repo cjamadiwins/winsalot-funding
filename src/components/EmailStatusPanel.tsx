@@ -5,10 +5,11 @@ import {
   type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
 
-// Shown prominently on both the admin (/admin/crm/leads/[id]) and agent
-// (/agent/leads/[id]) lead detail pages, right under the page header so
-// it's impossible to miss — deliberately its own visually distinct card
-// rather than tucked into either page's two-column layout. Shows the
+// Shown prominently on both the admin (/admin/crm/opportunities/[id]) and
+// agent (/agent/opportunities/[id]) opportunity detail pages, right under
+// the page header so it's impossible to miss — deliberately its own
+// visually distinct card rather than tucked into either page's
+// two-column layout. Shows the
 // four milestones an agent most needs at a glance (Sent/Delivered/
 // Bounced/Failed, each with its own timestamp if it happened) plus the
 // single most recent event of any kind (which can also be Delayed/
@@ -21,7 +22,7 @@ export default function EmailStatusPanel({ latestEmail }: { latestEmail: LatestC
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Email Status
         </h2>
-        <p className="mt-2 text-sm text-slate-500">No email sent to this lead yet.</p>
+        <p className="mt-2 text-sm text-slate-500">No email sent to this opportunity yet.</p>
       </section>
     );
   }
@@ -77,7 +78,7 @@ export default function EmailStatusPanel({ latestEmail }: { latestEmail: LatestC
 
       {latestEmail.bounced_at && (
         <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
-          This email bounced — verify or correct this lead&apos;s email address before sending
+          This email bounced — verify or correct this opportunity&apos;s contact email address before sending
           again.
         </p>
       )}
@@ -89,7 +90,7 @@ export default function EmailStatusPanel({ latestEmail }: { latestEmail: LatestC
       )}
       {latestEmail.status === "complained" && (
         <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
-          This recipient marked an email as spam — consider not emailing this lead again.
+          This recipient marked an email as spam — consider not emailing this opportunity again.
         </p>
       )}
     </section>

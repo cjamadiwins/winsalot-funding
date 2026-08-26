@@ -12,7 +12,7 @@ import { formatNgn, formatPayPeriodLabel, formatDateLong, hourlyRate, type Payro
 
 export type PayStatementInput = {
   companyName: string;
-  crmLabel: string; // "Cleaning CRM" or "Lead Generation CRM"
+  crmLabel: string; // "Winsalot Growth CRM" or "Lead Generation CRM"
   agentName: string;
   payPeriodStart: string;
   payPeriodEnd: string;

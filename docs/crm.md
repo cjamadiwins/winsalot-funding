@@ -1,5 +1,14 @@
 # Calling Agent CRM
 
+> **Superseded.** This CRM has been converted to **Winsalot Growth CRM**, tracking Lead
+> Generation and Business Financing opportunities instead of commercial-cleaning quotes — see
+> `supabase/migrations/0080`-`0086` and `src/lib/crm-types.ts` for the current data model. Most
+> of the architecture below (auth, RLS, attendance, payroll, chat, training, email delivery
+> tracking, agent invite flow) is unchanged and still accurate; the "lead"/"quote" pipeline
+> sections describe the retired system and are kept here only as historical background pending
+> a full rewrite of this document. The domain references below have been updated to the current
+> production domain.
+
 A CRM for calling agents to enter interested commercial-cleaning leads, follow up after a
 quote has been sent, and track the pipeline through to a closed opportunity. It's layered on
 top of the existing quote system (`/commercial-cleaning-quote`, `/admin`) — it links to quote
@@ -302,7 +311,7 @@ just fire-and-forget:
 
 1. In the [Resend dashboard](https://resend.com/webhooks), click **Add Webhook**.
 2. **Endpoint URL**: `https://<your-deployment-domain>/api/webhooks/resend` — for production,
-   `https://cleaning.winsalotcorp.com/api/webhooks/resend`; for a Preview deployment, use that
+   `https://growth.winsalotcorp.com/api/webhooks/resend`; for a Preview deployment, use that
    branch's stable Vercel alias (e.g. `https://<project>-git-<branch>-<team>.vercel.app/api/webhooks/resend`,
    shown on the PR's Vercel comment/preview URL) rather than a one-off deployment URL, since the
    alias keeps pointing at the latest deployment on that branch as you push more commits.
@@ -525,7 +534,7 @@ redirect has to land back on the *same* deployment that sent the email:
 
 - If `NEXT_PUBLIC_SITE_URL` is set, it's used as-is. This should only ever be set on Vercel's
   **Production** environment (scoped to Production only in Project Settings → Environment
-  Variables) — e.g. `https://cleaning.winsalotcorp.com`.
+  Variables) — e.g. `https://growth.winsalotcorp.com`.
 - Otherwise it falls back to `VERCEL_URL`, which Vercel sets automatically to the current
   deployment's own hostname — this is what makes a Preview invite redirect back to that same
   preview, with zero configuration needed per-deployment.
@@ -557,12 +566,12 @@ below, since a *server-side* Redirect URL mismatch (the `?token_hash=...` flow v
 
 In the Supabase dashboard, **Authentication → URL Configuration**:
 
-- **Site URL**: set to your production domain, `https://cleaning.winsalotcorp.com` (currently
+- **Site URL**: set to your production domain, `https://growth.winsalotcorp.com` (currently
   likely still the default `http://localhost:3000` placeholder, or a domain that doesn't
   exactly match what's configured for this project).
 - **Redirect URLs** (add, don't remove anything already relied on elsewhere):
-  - `https://cleaning.winsalotcorp.com/agent/set-password`
-  - `https://cleaning.winsalotcorp.com/auth/confirm`
+  - `https://growth.winsalotcorp.com/agent/set-password`
+  - `https://growth.winsalotcorp.com/auth/confirm`
   - A wildcard covering every Preview deployment of this Vercel project, e.g.
     `https://winsalot-funding-*-<your-vercel-team-slug>.vercel.app/**` — scoped to this
     project's own deployment URL pattern rather than a bare `https://*.vercel.app/**`, since

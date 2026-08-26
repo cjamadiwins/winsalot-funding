@@ -2,7 +2,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDays, crmDateKey } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, computeCrmWeeklyRecordCounts, crmMondayOf } from "@/lib/crm-incentives";
-import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
+import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
 import {
   monthStartOfWeek,
   normalizeIncentiveEmail,
@@ -22,7 +22,7 @@ function formatDateRangeLabel(startKey: string, endKey: string): string {
   return `${start} – ${end}`;
 }
 
-// Admin's "Agent Incentives" section for the Cleaning CRM half of the
+// Admin's "Agent Incentives" section for the Winsalot Growth CRM half of the
 // Weekly Agent Incentive feature - see src/app/leadgen/admin/(dashboard)/
 // incentives/page.tsx for the Lead Gen CRM half; both share
 // AdminWeeklyIncentivesClient and the central winsalot_agent_incentive_*
@@ -40,7 +40,7 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
 
   const [{ data: agents }, quotes, { data: settingsRow }, { data: weekLedgerRows }, { data: monthLedgerRows }, { data: auditRows }] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true).order("full_name"),
-    getCrmIncentiveQuotes(),
+    getCrmIncentiveOpportunities(),
     admin.from("winsalot_incentive_settings").select("*").maybeSingle(),
     admin.from("winsalot_agent_incentive_ledger").select("*").eq("crm", "cleaning").eq("week_start", weekStart),
     admin.from("winsalot_agent_incentive_ledger").select("agent_email, crm, week_start, approved_total, status").eq("month_start", monthStart),
@@ -85,14 +85,14 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Agent Incentives</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Weekly Incentive: a flat bonus for meeting the weekly qualified-quote quota. No partial bonus for missing it.
-        Only quotes actually sent to the customer and reviewed as Qualified count.
+        Weekly Incentive: a flat bonus for meeting the weekly clients-won quota. No partial bonus for missing it.
+        Only opportunities closed as Client Won count.
       </p>
 
       <AdminWeeklyIncentivesClient
         crm="cleaning"
-        recordLabel="Qualified Quotes"
-        recordsHref="/admin"
+        recordLabel="Clients Won"
+        recordsHref="/admin/crm"
         weekLabel={weekLabel}
         prevWeekHref={`?week=${addDays(weekStart, -7)}`}
         nextWeekHref={`?week=${addDays(weekStart, 7)}`}

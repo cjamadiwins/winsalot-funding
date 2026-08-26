@@ -1,4 +1,4 @@
-// Cleaning CRM: pure "My Attendance" report calculations built on
+// Winsalot Growth CRM: pure "My Attendance" report calculations built on
 // agent_attendance rows (see crm-types.ts's AgentAttendanceRow and
 // migration 0043_crm_agent_attendance.sql) - the same live clock-in/out
 // table this CRM's dashboard Attendance card and Admin Attendance page

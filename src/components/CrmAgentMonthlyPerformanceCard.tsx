@@ -7,8 +7,9 @@ import {
   crmMonthsInRange,
   crmPeriodStartsInMonth,
   type CrmBiweeklyHistoryRow,
+  type CrmMonthlyMetricTotal,
 } from "@/lib/crm-performance-history";
-import { crmPerformanceTier, type CrmPerformanceQuoteRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
+import { crmPerformanceTier, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
 
 // Same color system as the existing biweekly Agent Performance Report
 // (CrmPerformanceCard.tsx) - green/yellow/red on every percentage badge
@@ -45,13 +46,14 @@ function monthLabelShort(year: number, month: number): string {
 }
 
 // This agent's own Monthly Performance - never given another agent's
-// quote records or history rows (the caller, /agent/performance/monthly,
-// scopes both to this agent alone via getCrmPerformanceRecords(agentId)
-// and an explicit agent_id filter), so there is nothing here another
-// agent's data could leak through even in the rendered page's source.
-// Mirrors CrmMonthlyPerformanceSection.tsx (the admin's every-agent
-// view) but deliberately has no agent selector - the whole point of
-// this component is that it is always exactly one agent's own view.
+// opportunity records or history rows (the caller,
+// /agent/performance/monthly, scopes both to this agent alone via
+// getCrmPerformanceRecords(agentId) and an explicit agent_id filter), so
+// there is nothing here another agent's data could leak through even in
+// the rendered page's source. Mirrors CrmMonthlyPerformanceSection.tsx
+// (the admin's every-agent view) but deliberately has no agent selector -
+// the whole point of this component is that it is always exactly one
+// agent's own view.
 export default function CrmAgentMonthlyPerformanceCard({
   agentId,
   agentName,
@@ -63,7 +65,7 @@ export default function CrmAgentMonthlyPerformanceCard({
 }: {
   agentId: string;
   agentName: string;
-  records: CrmPerformanceQuoteRecord[];
+  records: CrmPerformanceOpportunityRecord[];
   historyRows: CrmBiweeklyHistoryRow[];
   currentPeriodStart: string;
   currentYear: number;
@@ -78,7 +80,7 @@ export default function CrmAgentMonthlyPerformanceCard({
       if (key < earliest) earliest = key;
     }
     for (const record of records) {
-      for (const timestamp of [record.quoteSentAt, record.quoteReceivedAt]) {
+      for (const timestamp of [record.consultationDate, record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -113,8 +115,6 @@ export default function CrmAgentMonthlyPerformanceCard({
     [monthOptions, historyRows, records, agentId, currentPeriodStart]
   );
 
-  const sentTier = crmPerformanceTier(monthly.sentPercentage);
-  const receivedTier = crmPerformanceTier(monthly.receivedPercentage);
   const overallTierStyle = TIER_STYLES[monthly.monthlyTier];
 
   return (
@@ -130,22 +130,11 @@ export default function CrmAgentMonthlyPerformanceCard({
         </select>
       </div>
 
-      <GoalSection
-        title="Quotes Sent"
-        total={monthly.totalSent}
-        goal={monthly.sentGoal}
-        remaining={monthly.remainingSent}
-        percentage={monthly.sentPercentage}
-        tier={sentTier}
-      />
-      <GoalSection
-        title="Completed Quote Requests Submitted"
-        total={monthly.totalReceived}
-        goal={monthly.receivedGoal}
-        remaining={monthly.remainingReceived}
-        percentage={monthly.receivedPercentage}
-        tier={receivedTier}
-      />
+      <GoalSection title="Consultations Booked" metric={monthly.consultationsBooked} />
+      <GoalSection title="Qualified Opportunities" metric={monthly.qualifiedOpportunities} />
+      <GoalSection title="Applications Submitted" metric={monthly.applicationsSubmitted} />
+      <GoalSection title="Proposals Sent" metric={monthly.proposalsSent} />
+      <GoalSection title="Clients Won" metric={monthly.clientsWon} />
 
       <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overall Monthly Performance</span>
@@ -161,8 +150,8 @@ export default function CrmAgentMonthlyPerformanceCard({
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Month</th>
-                <th className="p-2.5">Quotes Sent</th>
-                <th className="p-2.5">Completed Submitted</th>
+                <th className="p-2.5">Clients Won</th>
+                <th className="p-2.5">Consultations</th>
                 <th className="p-2.5">Overall</th>
               </tr>
             </thead>
@@ -178,10 +167,10 @@ export default function CrmAgentMonthlyPerformanceCard({
                   >
                     <td className="p-2.5 font-medium text-slate-900">{row.monthLabel}</td>
                     <td className="p-2.5 text-slate-600">
-                      {row.totalSent}/{row.sentGoal}
+                      {row.clientsWon.total}/{row.clientsWon.goal}
                     </td>
                     <td className="p-2.5 text-slate-600">
-                      {row.totalReceived}/{row.receivedGoal}
+                      {row.consultationsBooked.total}/{row.consultationsBooked.goal}
                     </td>
                     <td className="p-2.5">
                       <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TIER_STYLES[row.monthlyTier].badge}`}>
@@ -199,40 +188,26 @@ export default function CrmAgentMonthlyPerformanceCard({
   );
 }
 
-function GoalSection({
-  title,
-  total,
-  goal,
-  remaining,
-  percentage,
-  tier,
-}: {
-  title: string;
-  total: number;
-  goal: number;
-  remaining: number;
-  percentage: number;
-  tier: CrmPerformanceTier;
-}) {
+function GoalSection({ title, metric }: { title: string; metric: CrmMonthlyMetricTotal }) {
+  const tier = crmPerformanceTier(metric.percentage);
   const style = TIER_STYLES[tier];
   // The number itself is never capped (a percentage over 100% is valid
-  // and must display correctly, brief: "Performance above 100%... should
-  // not cause an error") - only the bar's rendered width is capped so it
-  // never visually overflows its track.
-  const barWidth = Math.min(100, Math.max(0, percentage));
+  // and must display correctly) - only the bar's rendered width is
+  // capped so it never visually overflows its track.
+  const barWidth = Math.min(100, Math.max(0, metric.percentage));
 
   return (
     <div className="mt-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
       <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Total" value={String(total)} />
-        <Stat label="Monthly Target" value={String(goal)} />
-        <Stat label="Remaining to Target" value={String(remaining)} />
+        <Stat label="Total" value={String(metric.total)} />
+        <Stat label="Monthly Target" value={String(metric.goal)} />
+        <Stat label="Remaining to Target" value={String(metric.remaining)} />
       </div>
       <div className="mt-3">
         <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           <span>Performance</span>
-          <span className={style.text}>{percentage}%</span>
+          <span className={style.text}>{metric.percentage}%</span>
         </div>
         <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
           <div className={`h-full rounded-full ${style.bar} transition-all`} style={{ width: `${barWidth}%` }} />

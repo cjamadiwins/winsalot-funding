@@ -6,29 +6,29 @@ import {
   isFollowUpDueToday,
   isFollowUpUpcoming,
   toDatetimeLocal,
-  type CrmFollowUpWithLead,
-  type CrmLeadRow,
+  type CrmFollowUpWithOpportunity,
+  type CrmOpportunityRow,
 } from "@/lib/crm-types";
 import {
-  addFollowUpNoteAction,
-  completeFollowUpAction,
-  rescheduleFollowUpAction,
-  scheduleFollowUpAction,
-} from "../followup-actions";
+  addOpportunityFollowUpNoteAction,
+  completeOpportunityFollowUpAction,
+  rescheduleOpportunityFollowUpAction,
+  scheduleOpportunityFollowUpAction,
+} from "../opportunities/[id]/actions";
 
 const inputClass =
   "w-full rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-2.5 text-[14px]";
 
 // Today/Upcoming callbacks only - overdue ones have their own dedicated,
-// action-oriented surface (OverdueLeadsPanel, at the very top of
+// action-oriented surface (OverdueOpportunitiesPanel, at the very top of
 // /agent/dashboard) so an overdue callback isn't shown in two different
 // places with two different sets of controls.
 export default function FollowUpCalendar({
   followUps,
-  leads,
+  opportunities,
 }: {
-  followUps: CrmFollowUpWithLead[];
-  leads: CrmLeadRow[];
+  followUps: CrmFollowUpWithOpportunity[];
+  opportunities: CrmOpportunityRow[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -52,10 +52,10 @@ export default function FollowUpCalendar({
     });
   }
 
-  if (leads.length === 0 && followUps.length === 0) {
+  if (opportunities.length === 0 && followUps.length === 0) {
     return (
       <p className="text-[13.5px] text-[var(--color-text-muted)]">
-        Add a lead first to start scheduling callbacks.
+        Add an opportunity first to start scheduling callbacks.
       </p>
     );
   }
@@ -79,25 +79,25 @@ export default function FollowUpCalendar({
       {showSchedule && (
         <form
           action={(formData) => {
-            const leadId = String(formData.get("lead_id") ?? "");
-            if (!leadId) {
-              setError("Choose a lead.");
+            const opportunityId = String(formData.get("opportunity_id") ?? "");
+            if (!opportunityId) {
+              setError("Choose an opportunity.");
               return;
             }
             runAction(
-              () => scheduleFollowUpAction(leadId, formData),
+              () => scheduleOpportunityFollowUpAction(opportunityId, formData),
               () => setShowSchedule(false)
             );
           }}
           className="mt-3 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-4"
         >
-          <select name="lead_id" required className={inputClass} defaultValue="">
+          <select name="opportunity_id" required className={inputClass} defaultValue="">
             <option value="" disabled>
-              Select a lead…
+              Select an opportunity…
             </option>
-            {leads.map((lead) => (
-              <option key={lead.id} value={lead.id}>
-                {lead.business_name}
+            {opportunities.map((opportunity) => (
+              <option key={opportunity.id} value={opportunity.id}>
+                {opportunity.business_name}
               </option>
             ))}
           </select>
@@ -165,7 +165,7 @@ function CalendarGroup({
   runAction,
 }: {
   title: string;
-  items: CrmFollowUpWithLead[];
+  items: CrmFollowUpWithOpportunity[];
   emphasis: Emphasis;
   isPending: boolean;
   reschedulingId: string | null;
@@ -199,19 +199,19 @@ function CalendarGroup({
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Link
-                href={`/agent/leads/${followUp.lead_id}`}
+                href={`/agent/opportunities/${followUp.opportunity_id}`}
                 className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
               >
-                {followUp.crm_leads?.business_name ?? "Lead"}
+                {followUp.crm_opportunities?.business_name ?? "Opportunity"}
               </Link>
               <span className="text-[12.5px] font-medium text-[var(--color-text-muted)]">
                 {new Date(followUp.scheduled_at).toLocaleString()}
               </span>
             </div>
-            {followUp.crm_leads?.phone && (
+            {followUp.crm_opportunities?.phone && (
               <div className="mt-0.5 text-[12.5px] text-[var(--color-text-muted)]">
-                {followUp.crm_leads.phone}
-                {followUp.crm_leads.city ? ` · ${followUp.crm_leads.city}` : ""}
+                {followUp.crm_opportunities.phone}
+                {followUp.crm_opportunities.city ? ` · ${followUp.crm_opportunities.city}` : ""}
               </div>
             )}
             {followUp.note && (
@@ -222,7 +222,9 @@ function CalendarGroup({
               <button
                 type="button"
                 disabled={isPending}
-                onClick={() => runAction(() => completeFollowUpAction(followUp.id, followUp.lead_id))}
+                onClick={() =>
+                  runAction(() => completeOpportunityFollowUpAction(followUp.id, followUp.opportunity_id!))
+                }
                 className="text-[12.5px] font-semibold text-emerald-700 hover:text-emerald-800"
               >
                 Mark Completed
@@ -254,7 +256,7 @@ function CalendarGroup({
               <form
                 action={(formData) =>
                   runAction(
-                    () => rescheduleFollowUpAction(followUp.id, followUp.lead_id, formData),
+                    () => rescheduleOpportunityFollowUpAction(followUp.id, followUp.opportunity_id!, formData),
                     () => setReschedulingId(null)
                   )
                 }
@@ -287,7 +289,7 @@ function CalendarGroup({
               <form
                 action={() =>
                   runAction(
-                    () => addFollowUpNoteAction(followUp.lead_id, noteDraft),
+                    () => addOpportunityFollowUpNoteAction(followUp.opportunity_id!, noteDraft),
                     () => setNotingId(null)
                   )
                 }

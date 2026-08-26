@@ -1,5 +1,5 @@
 // Shared, pure break-tracking + hourly-pay math used by both the
-// Cleaning CRM (agent_attendance) and the Lead Generation CRM
+// Winsalot Growth CRM (agent_attendance) and the Lead Generation CRM
 // (leadgen_agent_attendance, migrations 0043/0044, extended by 0075).
 // The two tables are entirely separate (separate agent pools, separate
 // RLS), but the work-schedule and hourly-rate rules are identical, so

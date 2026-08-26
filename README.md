@@ -1,34 +1,20 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Commercial & home cleaning quote landing page
+## Winsalot Growth CRM
 
-This repo also includes a standalone, brand-neutral quote-request landing page at
-`/commercial-cleaning-quote`. See
-[`docs/commercial-cleaning-quote.md`](docs/commercial-cleaning-quote.md) for setup,
-environment variables, deployment and testing instructions specific to that page.
+An internal CRM for Winsalot Corp agents to find and manage prospective clients interested in
+Lead Generation Services, Business Financing Support, or both. Admins sign in at `/admin/login`
+and agents at `/agent/login`; both dashboards share the same opportunity pipeline (New Prospect
+→ Contacted → Interested → Consultation Booked → Proposal or Application Sent → Client Won /
+Not Interested / Follow-Up Required), attendance/payroll, employee chat, sales training, and
+performance tracking. See [`docs/crm.md`](docs/crm.md) for the full workflow, schema, and
+roles (currently mid-rewrite to reflect this conversion — see the notice at the top of that
+file).
 
-A private admin dashboard at `/admin` lets you assign incoming requests to a cleaning
-provider via a secure link and approve the final quote before it's sent to the customer.
-See [`docs/provider-quote-system.md`](docs/provider-quote-system.md) for setup and how it
-works.
-
-## Calling agent CRM
-
-A CRM for calling agents at `/agent/login` to enter interested leads, follow up after a quote
-is sent, and track the pipeline through to a closed opportunity — connected to, not
-duplicating, the quote system above. See [`docs/crm.md`](docs/crm.md) for the full workflow,
-schema, and roles.
-
-## Cleaning Opportunities (CRM)
-
-A "Cleaning Opportunities" section of the CRM above (`/admin/crm/opportunities` for admins,
-`/agent/opportunities` for agents — same logins, roles, activity timeline, and follow-up
-system as the rest of the CRM) that scans public, no-login sources (tenders, RFPs, and
-similar signals) for organizations in Metro Vancouver/the Lower Mainland and the Greater
-Toronto Area showing recent intent to buy commercial cleaning or janitorial services, scores
-each one's intent, and alerts `info@winsalotcorp.com` when a Hot opportunity is found. See
-[`docs/active-cleaning-opportunities.md`](docs/active-cleaning-opportunities.md) for the
-architecture, roles, sources, and how to enable the daily collection job.
+This repo also deploys, as a separate Vercel project against the same codebase, the
+independent Lead Generation CRM at `leads.winsalotcorp.com` (`src/app/leadgen/*`) — a
+lead-generation-as-a-service tool for Winsalot's own external clients. It is unrelated to the
+Growth CRM above and maintained separately.
 
 ## Getting Started
 

@@ -5,22 +5,23 @@ import Link from "next/link";
 import {
   isFollowUpDueToday,
   isFollowUpUpcoming,
-  type CrmFollowUpWithLead,
+  type CrmFollowUpWithOpportunity,
   type CrmUserRow,
 } from "@/lib/crm-types";
 
 // Read-only by design: admins can view every agent's scheduled callbacks
 // here, but managing an individual callback (complete/reschedule) happens
-// from that agent's own workflow, the lead's own page, or - for an
-// overdue one - AdminOverdueLeadsPanel above (Called — Reschedule /
-// Completed / Close Lead). Overdue callbacks aren't repeated here, same
-// reasoning as the agent dashboard's Follow-Up Calendar: one overdue
-// surface instead of two showing the same items with different controls.
+// from that agent's own workflow, the opportunity's own page, or - for an
+// overdue one - AdminOverdueOpportunitiesPanel above (Called — Reschedule
+// / Completed / Close Opportunity). Overdue callbacks aren't repeated
+// here, same reasoning as the agent dashboard's Follow-Up Calendar: one
+// overdue surface instead of two showing the same items with different
+// controls.
 export default function AdminFollowUps({
   followUps,
   agents,
 }: {
-  followUps: CrmFollowUpWithLead[];
+  followUps: CrmFollowUpWithOpportunity[];
   agents: CrmUserRow[];
 }) {
   const [agentFilter, setAgentFilter] = useState<string>("all");
@@ -29,7 +30,7 @@ export default function AdminFollowUps({
 
   const filtered = useMemo(() => {
     if (agentFilter === "all") return followUps;
-    return followUps.filter((f) => f.crm_leads?.assigned_agent_id === agentFilter);
+    return followUps.filter((f) => f.crm_opportunities?.assigned_agent_id === agentFilter);
   }, [followUps, agentFilter]);
 
   const today = filtered.filter(isFollowUpDueToday);
@@ -67,7 +68,7 @@ function Group({
   agentById,
 }: {
   title: string;
-  items: CrmFollowUpWithLead[];
+  items: CrmFollowUpWithOpportunity[];
   emphasis: "warn" | "none";
   agentById: Map<string, CrmUserRow>;
 }) {
@@ -87,15 +88,15 @@ function Group({
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Scheduled</th>
-              <th className="px-4 py-3">Lead</th>
+              <th className="px-4 py-3">Opportunity</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Note</th>
             </tr>
           </thead>
           <tbody>
             {items.map((followUp) => {
-              const agent = followUp.crm_leads?.assigned_agent_id
-                ? agentById.get(followUp.crm_leads.assigned_agent_id)
+              const agent = followUp.crm_opportunities?.assigned_agent_id
+                ? agentById.get(followUp.crm_opportunities.assigned_agent_id)
                 : null;
               return (
                 <tr key={followUp.id} className="border-b border-slate-100 last:border-0">
@@ -103,12 +104,12 @@ function Group({
                     {new Date(followUp.scheduled_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    {followUp.crm_leads ? (
+                    {followUp.crm_opportunities ? (
                       <Link
-                        href={`/admin/crm/leads/${followUp.crm_leads.id}`}
+                        href={`/admin/crm/opportunities/${followUp.crm_opportunities.id}`}
                         className="hover:text-sky-600"
                       >
-                        {followUp.crm_leads.business_name}
+                        {followUp.crm_opportunities.business_name}
                       </Link>
                     ) : (
                       "—"

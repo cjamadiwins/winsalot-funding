@@ -1,4 +1,4 @@
-// Shared, pure payroll math + formatting used by both the Cleaning CRM
+// Shared, pure payroll math + formatting used by both the Winsalot Growth CRM
 // (crm_payroll) and the Lead Generation CRM (leadgen_payroll). The two
 // tables are entirely separate (separate agent pools, separate RLS - see
 // the payroll migrations), but the payday schedule and NGN formatting are
