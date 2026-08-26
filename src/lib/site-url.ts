@@ -24,8 +24,13 @@ export function getSiteUrl(): string {
 //
 // NEXT_PUBLIC_SITE_URL should only be set on the Production environment in
 // Vercel (Project Settings -> Environment Variables, scoped to
-// Production only) - e.g. https://clean.winsalotcorp.com. Left unset on
-// Preview, so this falls through to VERCEL_URL, which Vercel sets
+// Production only) - exactly https://growth.winsalotcorp.com, never the
+// retired https://cleaning.winsalotcorp.com (see src/lib/hosts.ts). A stale
+// value here is the single root cause behind every consultation-booking
+// email link - the CRM "Open in CRM" link and the prospect-facing
+// reschedule/cancel links alike - pointing at the wrong domain, since both
+// getSiteUrl() below and this function read this same env var. Left unset
+// on Preview, so this falls through to VERCEL_URL, which Vercel sets
 // automatically to the current preview deployment's own hostname.
 export function getAuthRedirectBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL;
