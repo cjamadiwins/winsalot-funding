@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ClientListRow } from "@/lib/crm-clients-data";
-import { CLIENT_STATUSES, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES, formatCurrency } from "@/lib/crm-clients-types";
+import {
+  CLIENT_CURRENCIES,
+  CLIENT_CURRENCY_LABELS,
+  CLIENT_STATUSES,
+  CLIENT_STATUS_LABELS,
+  CLIENT_STATUS_STYLES,
+  DEFAULT_CLIENT_CURRENCY,
+  formatCurrency,
+} from "@/lib/crm-clients-types";
 
 type ActionResult = { error?: string; clientId?: string };
 type AgentOption = { id: string; full_name: string; email: string };
@@ -144,7 +152,13 @@ export default function AdminClientsClient({
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium text-slate-600">Currency</span>
-            <input type="text" name="currency" defaultValue="USD" className={inputClass} />
+            <select name="currency" defaultValue={DEFAULT_CLIENT_CURRENCY} className={inputClass}>
+              {CLIENT_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {CLIENT_CURRENCY_LABELS[c]}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium text-slate-600">Status</span>

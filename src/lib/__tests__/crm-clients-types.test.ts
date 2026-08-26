@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clientHasRelatedRecords, describeClientRelatedRecords, formatCurrency, type ClientRelatedCounts } from "../crm-clients-types";
+import {
+  CLIENT_CURRENCIES,
+  clientHasRelatedRecords,
+  DEFAULT_CLIENT_CURRENCY,
+  describeClientRelatedRecords,
+  formatCurrency,
+  isClientCurrency,
+  type ClientRelatedCounts,
+} from "../crm-clients-types";
 
 const emptyCounts: ClientRelatedCounts = { appointments: 0, invoices: 0, payments: 0, assignedAgents: 0, activities: 0 };
 
@@ -40,5 +48,26 @@ describe("formatCurrency", () => {
 
   it("falls back to USD when currency is missing", () => {
     expect(formatCurrency(10, null)).toBe("$10.00");
+  });
+
+  it("formats CAD correctly", () => {
+    expect(formatCurrency(10, "CAD")).toContain("10.00");
+  });
+});
+
+describe("client currency options", () => {
+  it("lists CAD first, then USD - never removing USD", () => {
+    expect(CLIENT_CURRENCIES).toEqual(["CAD", "USD"]);
+  });
+
+  it("defaults every new client to CAD", () => {
+    expect(DEFAULT_CLIENT_CURRENCY).toBe("CAD");
+  });
+
+  it("only accepts CAD or USD as a valid client currency", () => {
+    expect(isClientCurrency("CAD")).toBe(true);
+    expect(isClientCurrency("USD")).toBe(true);
+    expect(isClientCurrency("EUR")).toBe(false);
+    expect(isClientCurrency("")).toBe(false);
   });
 });

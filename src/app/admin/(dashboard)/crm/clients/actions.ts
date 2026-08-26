@@ -8,6 +8,8 @@ import {
   CLIENT_STATUSES,
   clientHasRelatedRecords,
   describeClientRelatedRecords,
+  DEFAULT_CLIENT_CURRENCY,
+  isClientCurrency,
   type ClientStatus,
   type PreArchiveStatus,
 } from "@/lib/crm-clients-types";
@@ -60,6 +62,9 @@ export async function createClientAction(formData: FormData): Promise<ActionResu
   const statusRaw = String(formData.get("status") ?? "Prospect").trim();
   if (!CLIENT_STATUSES.includes(statusRaw as ClientStatus)) return { error: "Invalid status." };
 
+  const currencyRaw = String(formData.get("currency") ?? DEFAULT_CLIENT_CURRENCY).trim() || DEFAULT_CLIENT_CURRENCY;
+  if (!isClientCurrency(currencyRaw)) return { error: "Select a valid currency (CAD or USD)." };
+
   const { data, error } = await supabase
     .from("crm_clients")
     .insert({
@@ -72,7 +77,7 @@ export async function createClientAction(formData: FormData): Promise<ActionResu
       billing_address: parseOptionalText(formData.get("billing_address")),
       service: parseOptionalText(formData.get("service")),
       monthly_price: parseOptionalNumber(formData.get("monthly_price")),
-      currency: String(formData.get("currency") ?? "USD").trim() || "USD",
+      currency: currencyRaw,
       start_date: parseOptionalText(formData.get("start_date")),
       renewal_date: parseOptionalText(formData.get("renewal_date")),
       status: statusRaw as ClientStatus,
@@ -108,6 +113,9 @@ export async function updateClientAction(clientId: string, formData: FormData): 
     return { error: "Use the Archive action to archive a client, so the prior status is preserved for reactivation." };
   }
 
+  const currencyRaw = String(formData.get("currency") ?? existing.currency).trim() || existing.currency;
+  if (!isClientCurrency(currencyRaw)) return { error: "Select a valid currency (CAD or USD)." };
+
   const updates = {
     company_name: companyName,
     primary_contact_name: parseOptionalText(formData.get("primary_contact_name")),
@@ -117,7 +125,7 @@ export async function updateClientAction(clientId: string, formData: FormData): 
     billing_address: parseOptionalText(formData.get("billing_address")),
     service: parseOptionalText(formData.get("service")),
     monthly_price: parseOptionalNumber(formData.get("monthly_price")),
-    currency: String(formData.get("currency") ?? "USD").trim() || "USD",
+    currency: currencyRaw,
     start_date: parseOptionalText(formData.get("start_date")),
     renewal_date: parseOptionalText(formData.get("renewal_date")),
     status: statusRaw as ClientStatus,
@@ -315,10 +323,18 @@ export async function recordStandaloneClientPaymentAction(clientId: string, form
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
+  // Always the client's own saved currency - there is no per-payment
+  // currency override in the UI, and a standalone payment recorded in a
+  // different currency than its client would make the client's
+  // outstanding-balance/total-paid figures (which sum payments alongside
+  // invoices, all formatted with the client's own currency) meaningless.
+  const { data: client } = await supabase.from("crm_clients").select("currency").eq("id", clientId).maybeSingle();
+  if (!client) return { error: "Client not found." };
+  const currency = client.currency;
+
   const amount = Number(formData.get("amount"));
   if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a valid payment amount greater than zero." };
   const paymentDate = String(formData.get("payment_date") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  const currency = String(formData.get("currency") ?? "USD").trim() || "USD";
   const paymentMethod = parseOptionalText(formData.get("payment_method"));
   const referenceNumber = parseOptionalText(formData.get("reference_number"));
   const notes = parseOptionalText(formData.get("notes"));

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { ClientDetail } from "@/lib/crm-clients-data";
 import {
+  CLIENT_CURRENCIES,
+  CLIENT_CURRENCY_LABELS,
   CLIENT_STATUSES,
   CLIENT_STATUS_LABELS,
   CLIENT_STATUS_STYLES,
@@ -163,7 +165,13 @@ export default function ClientProfileClient({
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium text-slate-600">Currency</span>
-            <input type="text" name="currency" defaultValue={client.currency} className={inputClass} />
+            <select name="currency" defaultValue={client.currency} className={inputClass}>
+              {CLIENT_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {CLIENT_CURRENCY_LABELS[c]}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium text-slate-600">Status</span>

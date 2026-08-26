@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import type { CrmInvoiceWithClient, InvoiceStatus } from "@/lib/crm-invoices-types";
 import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus } from "@/lib/crm-invoices-types";
 import type { InvoiceDashboardSummary } from "@/lib/crm-invoices-data";
-import { formatCurrency } from "@/lib/crm-clients-types";
+import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 
 type ActionResult = { error?: string; invoiceId?: string };
@@ -172,7 +172,14 @@ export default function AdminInvoicesClient({
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Currency</span>
-              <input type="text" name="currency" defaultValue={selectedClient?.currency ?? "USD"} className={inputClass} />
+              {/* key forces this to remount (and re-default) whenever the selected client changes, so switching clients always follows that client's own saved currency. */}
+              <select key={selectedClientId} name="currency" defaultValue={selectedClient?.currency ?? DEFAULT_CLIENT_CURRENCY} className={inputClass}>
+                {CLIENT_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CLIENT_CURRENCY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Service Period Start</span>
