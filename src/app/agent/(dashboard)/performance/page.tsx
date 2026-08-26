@@ -17,8 +17,8 @@ export default async function AgentPerformancePage() {
     <div>
       <h1 className="font-heading text-2xl font-bold text-[var(--color-ink-strong)]">My Performance</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-        Your biweekly performance against a target of 4 quotes sent and 1 quote received, reset every two weeks. A quote counts as sent
-        only once it&apos;s sent to the customer, and received only once a provider submits a completed price for one of your leads.
+        Your biweekly performance against five targets, reset every two weeks: consultations booked, qualified opportunities,
+        applications submitted, proposals sent, and clients won.
       </p>
 
       <div className="mt-6">

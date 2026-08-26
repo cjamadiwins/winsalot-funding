@@ -28,7 +28,7 @@ export default async function CrmAgentIncentiveHistoryPage() {
         Every week your Weekly Incentive has been reviewed by an admin, most recent first.
       </p>
 
-      <AgentIncentiveHistoryTable rows={(data ?? []) as WinsalotAgentIncentiveLedgerRow[]} recordLabel="Qualified Quotes" />
+      <AgentIncentiveHistoryTable rows={(data ?? []) as WinsalotAgentIncentiveLedgerRow[]} recordLabel="Qualified Consultations" />
     </div>
   );
 }

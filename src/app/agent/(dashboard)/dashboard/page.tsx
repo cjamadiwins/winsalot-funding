@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
 import type { AgentAttendanceRow, CrmFollowUpWithOpportunity, CrmOpportunityRow } from "@/lib/crm-types";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
+import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
@@ -71,22 +71,22 @@ export default async function AgentDashboardPage() {
   // only ever sees their own rate here.
   const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
 
-  // Weekly Agent Incentive - scoped to just this agent's own opportunities
-  // (getCrmIncentiveOpportunities(crmUser.id) never even receives another
+  // Weekly Agent Incentive - scoped to just this agent's own appointments
+  // (getCrmIncentiveAppointments(crmUser.id) never even receives another
   // agent's rows over the wire, same pattern as getCrmPerformanceRecords
   // above). Settings/ledger reads go through the session client (RLS:
   // winsalot_incentive_settings_agent_select /
   // winsalot_agent_incentive_ledger_agent_select_own); the cross-CRM
   // month-to-date total is the one deliberate service-role exception -
   // see fetchAgentMonthToDateApproved's header comment.
-  const [incentiveOpportunities, incentiveSettings, incentiveLedgerRow, incentiveMonthToDateApproved] = await Promise.all([
-    getCrmIncentiveOpportunities(crmUser.id),
+  const [incentiveAppointments, incentiveSettings, incentiveLedgerRow, incentiveMonthToDateApproved] = await Promise.all([
+    getCrmIncentiveAppointments(crmUser.id),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "cleaning", crmUser.email, weekStart),
     fetchAgentMonthToDateApproved(admin, crmUser.email, incentiveMonthStart),
   ]);
   const weeklyIncentive = computeCrmWeeklyIncentive(
-    incentiveOpportunities,
+    incentiveAppointments,
     crmUser.id,
     weekStart,
     weekEnd,
@@ -163,7 +163,7 @@ export default async function AgentDashboardPage() {
       <AgentWeeklyIncentiveCard
         crm="cleaning"
         weekLabel={formatIncentiveWeekLabel(weekStart, weekEnd)}
-        recordLabel="won opportunities"
+        recordLabel="qualified consultations"
         qualifiedCount={weeklyIncentive.qualifiedCount}
         quota={weeklyIncentive.quota}
         percentage={weeklyIncentive.percentage}

@@ -44,28 +44,29 @@ const LEADGEN_DOES_NOT_COUNT = [
 ];
 
 const CRM_COUNTS_WHEN = [
-  "It belongs to a genuine customer quote request.",
-  "The customer and cleaning-service information are complete and valid.",
-  "The quote has an actual price and service details.",
-  "The quote completed the existing approval workflow.",
-  "The approved quote was successfully sent to the customer during the displayed incentive week.",
-  "The email or sending record confirms that it was sent.",
-  "Admin verifies it as Qualified.",
+  "It was booked during the displayed incentive week.",
+  "The prospect clearly agreed to a specific consultation date and time.",
+  "The appointment is recorded on the correct CRM opportunity and appointment record.",
+  "The prospect is a genuine, contactable business - not a test or placeholder entry.",
+  "The person attending is the owner, decision-maker or an appropriate authorized contact.",
+  "The business name, contact name, phone number and email address are valid.",
+  "The consultation is genuine and can be verified.",
+  "Admin reviews and marks it as Qualified.",
 ];
 
 const CRM_DOES_NOT_COUNT = [
-  "It remains a draft.",
-  "It was prepared but never sent to the customer.",
-  "The request is duplicated, false or a test.",
-  "Required customer information is missing or invalid.",
-  "It was rejected or cancelled before being sent.",
-  "It is marked Draft, Test, Invalid, Duplicate, Cancelled or Deleted.",
-  "The same quote is resent multiple times; resending counts as only one quote.",
-  "Multiple versions of a quote for the same customer request are submitted; only the final qualifying quote counts.",
+  "The prospect did not clearly agree to the consultation.",
+  "There is no confirmed date or time.",
+  "It is only a callback or follow-up reminder, not a booked consultation.",
+  "It is duplicated from an existing appointment.",
+  "It involves incorrect or false contact information.",
+  "It is a test or fabricated appointment.",
+  "It is cancelled before admin approval.",
+  "It is marked Invalid, Duplicate, Unqualified or Cancelled.",
 ];
 
 const ADMIN_RESPONSIBILITIES = [
-  "Review every qualifying appointment or quote before approving the weekly incentive.",
+  "Review every qualifying appointment before approving the weekly incentive.",
   "Confirm that all four records satisfy the applicable qualification rules.",
   "Approve only one ₦5,000 incentive per agent per week.",
   "Confirm that approval will not exceed the agent's ₦25,000 monthly cap.",
@@ -100,7 +101,7 @@ export default function IncentiveRulesPanel({ crm, audience }: { crm: WinsalotIn
   const explanation =
     crm === "leadgen"
       ? "Book at least 4 qualified appointments between Monday and Sunday to earn a ₦5,000 weekly incentive."
-      : "Send at least 4 qualified cleaning quotes to genuine prospective customers between Monday and Sunday to earn a ₦5,000 weekly incentive.";
+      : "Book at least 4 qualified consultation appointments with genuine prospective customers between Monday and Sunday to earn a ₦5,000 weekly incentive.";
 
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
@@ -130,39 +131,32 @@ export default function IncentiveRulesPanel({ crm, audience }: { crm: WinsalotIn
             <>
               <div>
                 <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                  {crm === "leadgen" ? "An appointment counts only when" : "A cleaning quote counts only when"}
+                  {crm === "leadgen" ? "An appointment counts only when" : "A consultation appointment counts only when"}
                 </h3>
                 <RuleList items={crm === "leadgen" ? LEADGEN_COUNTS_WHEN : CRM_COUNTS_WHEN} ordered />
               </div>
               <div>
                 <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                  {crm === "leadgen" ? "An appointment does not count when" : "A cleaning quote does not count when"}
+                  {crm === "leadgen" ? "An appointment does not count when" : "A consultation appointment does not count when"}
                 </h3>
                 <RuleList items={crm === "leadgen" ? LEADGEN_DOES_NOT_COUNT : CRM_DOES_NOT_COUNT} />
               </div>
-              {crm === "leadgen" ? (
-                <p className="rounded-lg border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
-                  An appointment that is cancelled after the weekly bonus has been approved is flagged for admin review. Money already paid is
-                  never automatically deducted - admin documents any adjustment.
-                </p>
-              ) : (
-                <p className="rounded-lg border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
-                  Customer acceptance is not required to earn the incentive - you&apos;re rewarded for sending a complete, approved and qualified
-                  quote, not for whether the customer ultimately accepts it.
-                </p>
-              )}
+              <p className="rounded-lg border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
+                {crm === "leadgen" ? "An appointment" : "A consultation appointment"} that is cancelled after the weekly bonus has been approved is
+                flagged for admin review. Money already paid is never automatically deducted - admin documents any adjustment.
+              </p>
             </>
           ) : (
             <>
               <div>
                 <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                  {crm === "leadgen" ? "An appointment counts only when" : "A cleaning quote counts only when"}
+                  {crm === "leadgen" ? "An appointment counts only when" : "A consultation appointment counts only when"}
                 </h3>
                 <RuleList items={crm === "leadgen" ? LEADGEN_COUNTS_WHEN : CRM_COUNTS_WHEN} ordered />
               </div>
               <div>
                 <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                  {crm === "leadgen" ? "An appointment does not count when" : "A cleaning quote does not count when"}
+                  {crm === "leadgen" ? "An appointment does not count when" : "A consultation appointment does not count when"}
                 </h3>
                 <RuleList items={crm === "leadgen" ? LEADGEN_DOES_NOT_COUNT : CRM_DOES_NOT_COUNT} />
               </div>

@@ -1,38 +1,42 @@
 // Weekly Agent Incentive (Winsalot Growth CRM half): pure, client-safe
-// bonus math over a batch of opportunity records, mirroring
-// lib/leadgen-incentives.ts for the Lead Gen CRM. Deliberately its own
-// file for the same reason crm-performance.ts is its own file, separate
-// from crm-types.ts.
+// bonus math over a batch of winsalot_appointments records, mirroring
+// lib/leadgen-incentives.ts for the Lead Gen CRM exactly. Deliberately
+// its own file for the same reason crm-performance.ts is its own file,
+// separate from crm-types.ts.
 //
-// A qualifying event is an opportunity actually won - stage = 'Client Won'
-// with closed_at set (the same "Clients Won" event crm-performance.ts's
-// clientsWon metric already keys off). This replaces the old "quote sent
-// + admin-reviewed as Qualified" gate from the retired quote workflow -
-// there's no separate admin quality-review step in the new pipeline, so a
-// closed-won opportunity (which already requires a closing reason, see
-// crm_opportunities_closed_reason_required in migration 0081) is itself
-// the qualifying signal.
+// A qualifying event is a consultation appointment an admin has
+// reviewed as Qualified (winsalot_appointments.incentive_status,
+// migration 0090) - this replaces the incentive's previous qualifying
+// event for this CRM, an opportunity closed as Client Won. The CRM's
+// product moved from selling cleaning services to booking growth
+// consultations, so the incentive now rewards the same behavior the CRM
+// is built around: booking qualified appointments, not closing deals.
+// A null incentive_status (never reviewed) or any of
+// Cancelled/Invalid/Duplicate/Unqualified never counts toward the
+// weekly quota - only 'Qualified' does, exactly matching
+// isLeadgenIncentiveQualifying.
 //
-// Week bucketing uses closed_at (when it was won, not when the
-// opportunity was originally created) in America/Toronto, Monday-Sunday -
-// matching CRM_PERFORMANCE_TIMEZONE (crm-performance.ts).
+// Week bucketing uses created_at (when the appointment was booked, not
+// the appointment's scheduled date) in America/Toronto, Monday-Sunday -
+// matching CRM_PERFORMANCE_TIMEZONE (crm-performance.ts) and the same
+// "booked this week" bucketing leadgen-incentives.ts uses.
 
 import { addDays, crmDateKey, CRM_PERFORMANCE_TIMEZONE } from "./crm-performance";
 import { computeWeeklyIncentiveBonus } from "./agent-incentive-shared";
+import { isWinsalotAppointmentCountable, type WinsalotAppointmentIncentiveStatus, type WinsalotAppointmentStatus } from "./winsalot-consultation-types";
 
 export { CRM_PERFORMANCE_TIMEZONE as CRM_INCENTIVE_TIMEZONE };
 
-export type CrmIncentiveOpportunity = {
+export type CrmIncentiveAppointment = {
   id: string;
-  assignedAgentId: string | null; // crm_opportunities.assigned_agent_id
-  stage: string;
-  closedAt: string | null;
+  assignedAgentId: string | null; // winsalot_appointments.assigned_agent_id
+  createdAt: string;
+  status: WinsalotAppointmentStatus;
+  incentiveStatus: WinsalotAppointmentIncentiveStatus | null;
 };
 
-export function isCrmOpportunityIncentiveQualifying(
-  opportunity: Pick<CrmIncentiveOpportunity, "stage" | "closedAt">
-): boolean {
-  return opportunity.stage === "Client Won" && opportunity.closedAt !== null;
+export function isCrmAppointmentIncentiveQualifying(status: WinsalotAppointmentIncentiveStatus | null): boolean {
+  return status === "Qualified";
 }
 
 export type CrmWeeklyIncentive = {
@@ -61,22 +65,27 @@ export function crmMondayOf(dateKey: string): string {
   return addDays(dateKey, diffToMonday);
 }
 
-function creditedTo(opportunities: CrmIncentiveOpportunity[], agentId: string): CrmIncentiveOpportunity[] {
-  return opportunities.filter((opportunity) => opportunity.assignedAgentId === agentId);
+// "Do not count the same appointment twice" (brief) - filters to
+// exactly what the given agent was credited with booking (the same
+// assigned_agent_id rule the appointment list views use), and excludes
+// cancelled appointments (isWinsalotAppointmentCountable) - a cancelled
+// appointment can never qualify for an incentive bonus, even if it was
+// reviewed as Qualified before it was cancelled.
+function creditedTo(appointments: CrmIncentiveAppointment[], agentId: string): CrmIncentiveAppointment[] {
+  return appointments.filter((appointment) => appointment.assignedAgentId === agentId && isWinsalotAppointmentCountable(appointment.status));
 }
 
 export function computeCrmWeeklyIncentive(
-  opportunities: CrmIncentiveOpportunity[],
+  appointments: CrmIncentiveAppointment[],
   agentId: string,
   weekStart: string,
   weekEnd: string,
   weeklyQuota: number,
   weeklyBonusAmount: number
 ): CrmWeeklyIncentive {
-  const qualifiedCount = creditedTo(opportunities, agentId).filter((opportunity) => {
-    if (!isCrmOpportunityIncentiveQualifying(opportunity)) return false;
-    const key = crmDateKey(opportunity.closedAt as string);
-    return key >= weekStart && key <= weekEnd;
+  const qualifiedCount = creditedTo(appointments, agentId).filter((appointment) => {
+    const key = crmDateKey(appointment.createdAt);
+    return key >= weekStart && key <= weekEnd && isCrmAppointmentIncentiveQualifying(appointment.incentiveStatus);
   }).length;
 
   const { quotaMet, calculatedBonus } = computeWeeklyIncentiveBonus(qualifiedCount, weeklyQuota, weeklyBonusAmount);
@@ -100,30 +109,27 @@ export function crmCurrentIncentiveWeek(now: Date = new Date()): { weekStart: st
 }
 
 export type CrmWeeklyRecordCounts = {
-  rawCount: number; // every opportunity credited to this agent and closed during the week, won or lost
-  rejectedCount: number; // closed during the week as Not Interested (lost), not Client Won
+  rawCount: number; // every appointment credited to this agent and booked during the week, any review status
+  rejectedCount: number; // explicitly reviewed and marked as a non-Qualified value
 };
 
 // Admin table's "Raw Total"/"Rejected" columns - purely descriptive
 // counts alongside computeCrmWeeklyIncentive's qualifiedCount (the
 // "Verified" column); never feeds into the bonus calculation. Bucketed
-// the same way as computeCrmWeeklyIncentive (closedAt within the week) -
-// an opportunity that was never closed has no closed date and so cannot
-// belong to any week here.
+// the same way as computeCrmWeeklyIncentive (createdAt within the week).
 export function computeCrmWeeklyRecordCounts(
-  opportunities: CrmIncentiveOpportunity[],
+  appointments: CrmIncentiveAppointment[],
   agentId: string,
   weekStart: string,
   weekEnd: string
 ): CrmWeeklyRecordCounts {
-  const inWeek = creditedTo(opportunities, agentId).filter((opportunity) => {
-    if (!opportunity.closedAt) return false;
-    const key = crmDateKey(opportunity.closedAt);
+  const inWeek = creditedTo(appointments, agentId).filter((appointment) => {
+    const key = crmDateKey(appointment.createdAt);
     return key >= weekStart && key <= weekEnd;
   });
   let rejectedCount = 0;
-  for (const opportunity of inWeek) {
-    if (opportunity.stage === "Not Interested") rejectedCount++;
+  for (const appointment of inWeek) {
+    if (appointment.incentiveStatus !== null && appointment.incentiveStatus !== "Qualified") rejectedCount++;
   }
   return { rawCount: inWeek.length, rejectedCount };
 }

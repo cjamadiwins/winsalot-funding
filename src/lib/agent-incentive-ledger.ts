@@ -93,7 +93,7 @@ export async function approveWeeklyIncentiveBonus(
 
   // Brief: "Approve the weekly ₦5,000 incentive only after at least 4
   // results are verified." qualifiedCount is already the *verified*
-  // total (only appointments/quotes an admin marked Qualified count at
+  // total (only appointments an admin marked Qualified count at
   // all - see computeLeadgenWeeklyIncentive/computeCrmWeeklyIncentive),
   // so this is a pure workflow gate on top of unchanged math: a below-
   // quota week already calculates to a ₦0 bonus, this just also refuses

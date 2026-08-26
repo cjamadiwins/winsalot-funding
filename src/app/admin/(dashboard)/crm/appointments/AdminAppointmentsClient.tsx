@@ -1,7 +1,14 @@
 "use client";
 
 import WinsalotAppointmentsListClient, { type WinsalotAppointmentListRow } from "@/components/WinsalotAppointmentsListClient";
-import { cancelAppointmentAction, deleteAppointmentAction, editAppointmentAction, getOfferedSlotsAction, rescheduleAppointmentAction } from "./actions";
+import {
+  cancelAppointmentAction,
+  deleteAppointmentAction,
+  editAppointmentAction,
+  getOfferedSlotsAction,
+  rescheduleAppointmentAction,
+  reviewCrmAppointmentIncentiveAction,
+} from "./actions";
 
 export default function AdminAppointmentsClient({ appointments }: { appointments: WinsalotAppointmentListRow[] }) {
   return (
@@ -14,6 +21,7 @@ export default function AdminAppointmentsClient({ appointments }: { appointments
         cancel: cancelAppointmentAction,
         edit: editAppointmentAction,
         remove: deleteAppointmentAction,
+        reviewIncentive: reviewCrmAppointmentIncentiveAction,
         opportunityHref: (opportunityId) => `/admin/crm/opportunities/${opportunityId}`,
       }}
     />

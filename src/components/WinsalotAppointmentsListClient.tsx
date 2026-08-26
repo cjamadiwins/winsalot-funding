@@ -3,7 +3,14 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
-import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+import {
+  WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL,
+  WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE,
+  WINSALOT_APPOINTMENT_INCENTIVE_STATUS_STYLES,
+  isWinsalotAppointmentCountable,
+  type WinsalotAppointmentIncentiveStatus,
+  type WinsalotAppointmentRow,
+} from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
 
 const inputClass =
@@ -23,6 +30,10 @@ export type WinsalotAppointmentActions = {
   cancel: (id: string, reason: string | null) => Promise<{ error?: string }>;
   edit: (id: string, input: { businessName: string; contactName: string; email: string; phone: string; serviceType: OpportunityType; notes: string }) => Promise<{ error?: string }>;
   remove?: (id: string) => Promise<{ error?: string }>;
+  // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
+  // quick actions) - undefined for the agent view, where the incentive
+  // badge is still shown read-only but no review controls render.
+  reviewIncentive?: (id: string, decision: Extract<WinsalotAppointmentIncentiveStatus, "Qualified" | "Unqualified">, reason: string | null) => Promise<{ error?: string }>;
   opportunityHref: (opportunityId: string) => string;
 };
 
@@ -49,6 +60,8 @@ export default function WinsalotAppointmentsListClient({
   const [offeredSlots, setOfferedSlots] = useState<{ slotIsos: string[]; businessTimezone: string } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [rejectingIncentiveId, setRejectingIncentiveId] = useState<string | null>(null);
+  const [rejectIncentiveReason, setRejectIncentiveReason] = useState("");
 
   function openRow(appt: WinsalotAppointmentListRow, nextMode: "view" | "edit" | "reschedule" | "cancel") {
     setError(null);
@@ -105,6 +118,49 @@ export default function WinsalotAppointmentsListClient({
     });
   }
 
+  // "Verify as Qualified" - a no-op if it's already Qualified. Changing
+  // away from a different, already-reviewed decision asks for
+  // confirmation first; the very first review (from Not Reviewed) never
+  // needs one. Mirrors the Lead Gen CRM's admin appointments table
+  // exactly (leadgen/admin/appointments/AppointmentsListClient.tsx).
+  function handleVerifyQualified(appt: WinsalotAppointmentListRow) {
+    if (!actions.reviewIncentive) return;
+    if (appt.incentive_status === "Qualified") return;
+    if (appt.incentive_status && !confirm(`This appointment is currently reviewed as "${appt.incentive_status}". Change the decision to Qualified?`)) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await actions.reviewIncentive!(appt.id, "Qualified", null);
+      if (result.error) setError(result.error);
+    });
+  }
+
+  function handleConfirmRejectIncentive(appt: WinsalotAppointmentListRow) {
+    if (!actions.reviewIncentive) return;
+    const reason = rejectIncentiveReason.trim();
+    if (!reason) {
+      setError("A rejection reason is required.");
+      return;
+    }
+    if (
+      appt.incentive_status &&
+      appt.incentive_status !== "Unqualified" &&
+      !confirm(`This appointment is currently reviewed as "${appt.incentive_status}". Change the decision to Rejected?`)
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await actions.reviewIncentive!(appt.id, "Unqualified", reason);
+      if (result.error) setError(result.error);
+      else {
+        setRejectingIncentiveId(null);
+        setRejectIncentiveReason("");
+      }
+    });
+  }
+
   function handleDelete(id: string) {
     if (!actions.remove) return;
     if (!confirm("Permanently delete this appointment? This cannot be undone.")) return;
@@ -138,6 +194,14 @@ export default function WinsalotAppointmentsListClient({
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                     {appt.booked_by === "self" ? "Self-booked" : "Agent-booked"}
+                  </span>
+                  <span
+                    title={appt.incentive_status_reason ?? undefined}
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      appt.incentive_status ? WINSALOT_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                    }`}
+                  >
+                    {appt.incentive_status ?? WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                   </span>
                 </div>
                 <p className="mt-1 text-[13px] text-slate-600">
@@ -185,6 +249,65 @@ export default function WinsalotAppointmentsListClient({
                 )}
               </div>
             </div>
+
+            {isAdmin && actions.reviewIncentive && isWinsalotAppointmentCountable(appt.status) && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Weekly Incentive:</span>
+                {appt.incentive_status !== "Qualified" && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => handleVerifyQualified(appt)}
+                    className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Verify as Qualified
+                  </button>
+                )}
+                {appt.incentive_status !== "Unqualified" && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      setError(null);
+                      setRejectIncentiveReason("");
+                      setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
+                    }}
+                    className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Reject
+                  </button>
+                )}
+              </div>
+            )}
+
+            {rejectingIncentiveId === appt.id && (
+              <div className="mt-2 flex flex-col gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2 sm:w-72">
+                <input
+                  type="text"
+                  value={rejectIncentiveReason}
+                  onChange={(e) => setRejectIncentiveReason(e.target.value)}
+                  placeholder="Rejection reason (required)"
+                  className="rounded border border-rose-300 px-2 py-1 text-[11.5px] text-slate-900"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => handleConfirmRejectIncentive(appt)}
+                    className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isPending ? "Saving…" : "Confirm Reject"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRejectingIncentiveId(null)}
+                    className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {isExpanded && error && <p className="mt-2 text-xs font-medium text-rose-600">{error}</p>}
 

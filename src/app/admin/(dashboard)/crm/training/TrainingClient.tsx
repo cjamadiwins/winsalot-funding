@@ -58,7 +58,7 @@ export default function TrainingClient({ materials }: { materials: CrmTrainingMa
           className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
         >
           <input name="title" placeholder="Title" required className={inputClasses} />
-          <input name="category" placeholder="Category (optional, e.g. Cleaning Provider Recruitment)" className={inputClasses} />
+          <input name="category" placeholder="Category (optional, e.g. Consultation Booking Scripts)" className={inputClasses} />
           <textarea
             name="content"
             placeholder="Script or training content"
