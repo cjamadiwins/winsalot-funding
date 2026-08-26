@@ -65,6 +65,13 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   single-use-on-submit tokens (`winsalot_appointment_tokens`, purposes `reschedule`/`cancel`) —
   never unrestricted CRM access. See `src/lib/winsalot-consultation-emails.ts` for the
   templates and `.env.example` for the reminder cron's setup (`WINSALOT_APPOINTMENT_REMINDER_CRON_SECRET`).
+  **Rotating `WINSALOT_APPOINTMENT_REMINDER_CRON_SECRET` or `WINSALOT_BOOKING_URL` in Vercel only
+  takes effect on the next deployment** — Vercel bakes environment variables into a deployment at
+  build time, it does not hot-reload them into whatever deployment is already live. After editing
+  either variable in Project Settings → Environment Variables, trigger a new Production deployment
+  (push a commit, or use Vercel's "Redeploy") and confirm the *new* deployment's ID/timestamp
+  before assuming the change is live — the reminder cron's 401s and a stale "not configured" email
+  error are both symptoms of this exact gap.
 - **Security**: every public route (`/book-consultation` and its reschedule/cancel token pages)
   reads/writes exclusively through the service-role client server-side (never exposing
   `SUPABASE_SERVICE_ROLE_KEY` to the browser), rate-limits its Server Actions by IP
