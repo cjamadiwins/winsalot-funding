@@ -173,6 +173,64 @@ export async function POST(request: NextRequest) {
   const emailId = event.data.email_id;
   const eventAt = event.created_at ?? new Date().toISOString();
 
+  // Invoice-send/reminder tracking (crm_invoice_emails, migration 0091) is
+  // checked first, before falling into the crm_lead_emails/leadgen_emails
+  // branches below - a completely independent tracked-email table, same
+  // "no RLS policies, service-role only" convention as crm_lead_emails.
+  const { data: trackedInvoiceEmail } = await admin
+    .from("crm_invoice_emails")
+    .select("id, invoice_id, status_at")
+    .eq("resend_email_id", emailId)
+    .maybeSingle();
+
+  if (trackedInvoiceEmail) {
+    console.log(`[resend-webhook] matched email ${emailId} to crm_invoice_emails ${trackedInvoiceEmail.id} (invoice ${trackedInvoiceEmail.invoice_id})`);
+
+    // crm_invoice_emails' status check constraint (migration 0091) only
+    // allows sent/delivered/delayed/bounced/complained/opened/clicked -
+    // it has no 'failed' status or failed_at column at all (unlike
+    // crm_lead_emails), so a "failed" event is only ever logged as an
+    // activity note below, never written onto this row.
+    if (status !== "failed") {
+      const isNewer = new Date(eventAt) >= new Date(trackedInvoiceEmail.status_at);
+      const invoiceEmailUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+      if (isNewer) {
+        invoiceEmailUpdates.status = status;
+        invoiceEmailUpdates.status_at = eventAt;
+      }
+
+      const { error: invoiceEmailUpdateError } = await admin
+        .from("crm_invoice_emails")
+        .update(invoiceEmailUpdates)
+        .eq("id", trackedInvoiceEmail.id);
+      if (invoiceEmailUpdateError) {
+        console.error(`[resend-webhook] failed to update crm_invoice_emails ${trackedInvoiceEmail.id}:`, invoiceEmailUpdateError);
+      }
+    }
+
+    if (!isDuplicateDelivery && trackedInvoiceEmail.invoice_id) {
+      const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+      let notes = `Invoice email ${status} (to ${toEmail}).`;
+      if (event.type === "email.bounced") notes = `Invoice email bounced (to ${toEmail}) - verify or correct this client's email address.`;
+      else if (event.type === "email.complained") notes = `Recipient marked an invoice email as spam (to ${toEmail}).`;
+      else if (event.type === "email.opened") notes = `Client opened the invoice email (to ${toEmail}).`;
+      else if (event.type === "email.clicked") notes = `Client clicked a link in the invoice email (to ${toEmail}).`;
+      else if (event.type === "email.failed") notes = `Invoice email failed to send (to ${toEmail}).`;
+
+      const { data: invoiceRow } = await admin.from("crm_invoices").select("client_id").eq("id", trackedInvoiceEmail.invoice_id).maybeSingle();
+      await admin.from("crm_activities").insert({
+        client_id: invoiceRow?.client_id ?? null,
+        invoice_id: trackedInvoiceEmail.invoice_id,
+        agent_id: null,
+        activity_type: "note",
+        notes,
+        occurred_at: eventAt,
+      });
+    }
+
+    return NextResponse.json({ received: true, tracked: true });
+  }
+
   const { data: tracked } = await admin
     .from("crm_lead_emails")
     .select("id, lead_id, opportunity_id, provider_lead_id, status_at")
