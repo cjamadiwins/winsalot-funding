@@ -16,12 +16,16 @@ import {
   GraduationCap,
   Mail,
   Gift,
+  CalendarClock,
+  CalendarCog,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "CRM", href: "/admin/crm", icon: <LayoutDashboard /> },
+  { label: "Appointments", href: "/admin/crm/appointments", icon: <CalendarClock /> },
+  { label: "Consultation Availability", href: "/admin/crm/consultation-availability", icon: <CalendarCog /> },
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
   { label: "Payroll", href: "/admin/crm/payroll", icon: <Wallet /> },
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },

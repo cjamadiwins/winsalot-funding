@@ -35,3 +35,17 @@ export function getClientIp(request: Request): string {
 
   return "unknown";
 }
+
+// Same extraction as getClientIp above, for a Server Action - which has
+// no Request object of its own to read headers from, only next/headers.
+export async function getClientIpFromHeaders(): Promise<string> {
+  const { headers } = await import("next/headers");
+  const headerList = await headers();
+  const forwardedFor = headerList.get("x-forwarded-for");
+  if (forwardedFor) return forwardedFor.split(",")[0].trim();
+
+  const realIp = headerList.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
+  return "unknown";
+}

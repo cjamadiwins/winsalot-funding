@@ -15,6 +15,63 @@ top of the existing quote system (`/commercial-cleaning-quote`, `/admin`) — it
 requests rather than duplicating them, and reuses the same Supabase project, Supabase Auth,
 and Vercel deployment.
 
+## Consultation Booking
+
+A completely separate booking system from the Lead Gen CRM's built-in `/book/[slug]` page
+(Brent's Essentials, Mantra Collab) — same proven architecture (a server-computed slot list,
+re-validated on submission, a database-level double-booking guard, an occurrence-key-deduped
+reminder job invoked by pg_cron/pg_net rather than the once-daily Vercel Cron this account's
+Hobby plan allows), but its own tables, routes, branding, and email templates, entirely
+independent of that system. See `supabase/migrations/0088_winsalot_consultations.sql` for the
+schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
+
+- **Public booking page**: `/book-consultation` (`https://growth.winsalotcorp.com/book-consultation`).
+  Winsalot Corp branded, 15-minute free consultation, displays available times in the
+  prospect's own local timezone (detected via the browser) while always storing the chosen
+  instant in UTC, and shows the selected timezone before the prospect confirms. Collects
+  contact name, business name, email, phone, service interest (Lead Generation / Business
+  Financing / Both), and optional notes.
+- **Prospect prefill**: a consultation-invite email's CTA (`src/lib/send-prospect-email.ts`)
+  links to `/book-consultation?t=<token>`, a secure, single-purpose, expiring token
+  (`winsalot_appointment_tokens`, purpose `prefill`) minted fresh per send — it only ever
+  resolves to that one prospect's own contact/business/email/phone/service-type fields, never
+  a raw `crm_opportunities.id` and never any other prospect's data.
+- **Agent/admin booking**: a **Book Consultation** button on every prospect-detail page
+  (`/admin/crm/opportunities/[id]`, `/agent/opportunities/[id]`) opens the same slot picker,
+  confirms/edits the prospect's info, and books — sharing the exact same availability rules and
+  double-booking prevention as the public page via one shared core function
+  (`performWinsalotBooking` in `src/lib/winsalot-consultation-book.ts`).
+- **Availability**: admin-only settings at `/admin/crm/consultation-availability` — available
+  weekdays, business hours, business timezone (Eastern Time by default), blocked dates/periods,
+  minimum advance notice, maximum future booking range, and buffer time between appointments.
+  Appointments are always 15 minutes.
+- **Double-booking prevention**: enforced at the database level by a `tstzrange` exclusion
+  constraint on `winsalot_appointments` (`winsalot_appointments_no_overlap`), not only in the
+  UI — two active appointments can never overlap regardless of which code path inserts them.
+- **CRM integration**: a successful booking links the appointment to the correct prospect,
+  advances its stage to `Consultation Booked` (never overwriting a more advanced stage like
+  `Client Won` — see `shouldAdvanceStageForConsultationBooking` in `src/lib/crm-types.ts`), logs
+  a `consultation_booked`/`consultation_rescheduled`/`consultation_cancelled` entry on the
+  prospect's Activity Timeline, and shows up in the admin (`/admin/crm/appointments`) and agent
+  (`/agent/appointments`) appointment views — each recording whether it was agent-booked or
+  self-booked, the booking date, appointment date, service type, and assigned agent.
+- **Appointment actions**: View/Edit/Reschedule/Cancel for admins and agents (agents scoped to
+  their own assigned appointments via RLS); Delete is admin-only. Rescheduling notifies the
+  prospect by email; cancelling always records who cancelled it and why
+  (`cancelled_by_role`/`cancelled_by_user_id`/`cancelled_reason`).
+- **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
+  notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
+  prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,
+  single-use-on-submit tokens (`winsalot_appointment_tokens`, purposes `reschedule`/`cancel`) —
+  never unrestricted CRM access. See `src/lib/winsalot-consultation-emails.ts` for the
+  templates and `.env.example` for the reminder cron's setup (`WINSALOT_APPOINTMENT_REMINDER_CRON_SECRET`).
+- **Security**: every public route (`/book-consultation` and its reschedule/cancel token pages)
+  reads/writes exclusively through the service-role client server-side (never exposing
+  `SUPABASE_SERVICE_ROLE_KEY` to the browser), rate-limits its Server Actions by IP
+  (`src/lib/rate-limit.ts`), validates all input server-side regardless of what the client
+  sent, and relies on RLS policies scoped to `crm_user_role`/`assigned_agent_id` for every
+  authenticated read/write.
+
 ## How it works
 
 1. An agent signs in at **`/agent/login`** and adds a new interested lead from

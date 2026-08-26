@@ -299,6 +299,9 @@ export const ACTIVITY_TYPES = [
   "voicemail",
   "note",
   "outcome",
+  "consultation_booked",
+  "consultation_rescheduled",
+  "consultation_cancelled",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -310,7 +313,27 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   voicemail: "Voicemail",
   note: "Internal note",
   outcome: "Follow-up outcome",
+  consultation_booked: "Consultation booked",
+  consultation_rescheduled: "Consultation rescheduled",
+  consultation_cancelled: "Consultation cancelled",
 };
+
+// Stages a newly-booked consultation must never downgrade - "Change the
+// prospect's stage to Consultation Booked. Do not overwrite a more
+// advanced stage such as Client Won." An opportunity already at
+// Consultation Booked or further along the pipeline (or already closed)
+// keeps its current stage; every earlier stage (including Follow-Up
+// Required) advances.
+const STAGES_NOT_ADVANCED_BY_CONSULTATION_BOOKING: OpportunityStage[] = [
+  "Consultation Booked",
+  "Proposal or Application Sent",
+  "Client Won",
+  "Not Interested",
+];
+
+export function shouldAdvanceStageForConsultationBooking(currentStage: OpportunityStage): boolean {
+  return !STAGES_NOT_ADVANCED_BY_CONSULTATION_BOOKING.includes(currentStage);
+}
 
 export type CrmActivityRow = {
   id: string;

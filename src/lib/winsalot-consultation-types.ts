@@ -1,0 +1,128 @@
+// Winsalot Growth CRM: consultation-booking system types. Deliberately
+// fully independent of the Lead Gen CRM's leadgen-types.ts equivalents -
+// same architecture reused, no shared code, per the brief's requirement
+// that the two systems stay completely separate.
+
+import type { OpportunityType } from "./crm-types";
+
+export const WINSALOT_APPOINTMENT_STATUSES = ["booked", "cancelled"] as const;
+export type WinsalotAppointmentStatus = (typeof WINSALOT_APPOINTMENT_STATUSES)[number];
+
+export const WINSALOT_APPOINTMENT_BOOKED_BY = ["agent", "self"] as const;
+export type WinsalotAppointmentBookedBy = (typeof WINSALOT_APPOINTMENT_BOOKED_BY)[number];
+
+export const WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES = ["admin", "agent", "prospect"] as const;
+export type WinsalotAppointmentCancelledByRole = (typeof WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES)[number];
+
+export type WinsalotAppointmentRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+
+  opportunity_id: string | null;
+
+  contact_name: string;
+  business_name: string;
+  email: string;
+  phone: string;
+  service_type: OpportunityType;
+  notes: string | null;
+
+  appointment_start_at: string; // ISO, UTC
+  appointment_end_at: string; // ISO, UTC
+
+  prospect_timezone: string | null;
+  business_timezone: string;
+
+  status: WinsalotAppointmentStatus;
+
+  booked_by: WinsalotAppointmentBookedBy;
+  booked_by_user_id: string | null;
+  assigned_agent_id: string | null;
+
+  cancelled_at: string | null;
+  cancelled_by_role: WinsalotAppointmentCancelledByRole | null;
+  cancelled_by_user_id: string | null;
+  cancelled_reason: string | null;
+
+  admin_notified_at: string | null;
+};
+
+export type WinsalotAppointmentWithOpportunity = WinsalotAppointmentRow & {
+  crm_opportunities: { id: string; business_name: string; stage: string } | null;
+};
+
+export type WinsalotAvailabilitySettingsRow = {
+  id: string;
+  available_weekdays: number[]; // 0 (Sun) - 6 (Sat)
+  business_start_time: string; // "HH:MM:SS"
+  business_end_time: string; // "HH:MM:SS"
+  business_timezone: string;
+  min_notice_minutes: number;
+  max_advance_days: number;
+  buffer_minutes: number;
+  updated_at: string;
+  updated_by_name: string | null;
+};
+
+export type WinsalotBlackoutRow = {
+  id: string;
+  start_at: string;
+  end_at: string;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type WinsalotTokenPurpose = "prefill" | "reschedule" | "cancel";
+
+export type WinsalotAppointmentTokenRow = {
+  token: string;
+  purpose: WinsalotTokenPurpose;
+  opportunity_id: string | null;
+  appointment_id: string | null;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+};
+
+export const WINSALOT_REMINDER_TYPES = ["24_hour_reminder", "1_hour_reminder"] as const;
+export type WinsalotReminderType = (typeof WINSALOT_REMINDER_TYPES)[number];
+
+export type WinsalotAppointmentReminderRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  appointment_id: string;
+  reminder_type: WinsalotReminderType;
+  occurrence_key: string;
+  scheduled_appointment_at: string;
+  status: "sending" | "sent" | "failed";
+  recipient_email: string | null;
+  resend_email_id: string | null;
+  error_detail: string | null;
+  attempt_count: number;
+  sent_at: string | null;
+};
+
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// A reschedule/cancellation produces a fresh occurrence_key, which is
+// what lets a rescheduled appointment become eligible for brand new
+// 24h/1h reminders while the prior occurrence's send history stays
+// intact - see winsalot-consultation-reminders.ts.
+export function winsalotAppointmentOccurrenceKey(appointmentStartAtIso: string): string {
+  return appointmentStartAtIso;
+}
+
+const SERVICE_TYPE_LABELS: Record<OpportunityType, string> = {
+  lead_generation: "Lead Generation",
+  business_financing: "Business Financing",
+  both_services: "Both",
+};
+
+export function winsalotServiceTypeLabel(type: OpportunityType): string {
+  return SERVICE_TYPE_LABELS[type];
+}
