@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { isEmailSuppressed, createUnsubscribeToken } from "./crm-email-suppression";
 import { buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email-templates";
 import { getSiteUrl } from "./site-url";
+import { createWinsalotPrefillToken } from "./winsalot-consultation-tokens";
 import type { CrmUserRow } from "./crm-types";
 
 export type SendProspectEmailInput = {
@@ -48,10 +49,19 @@ export async function sendProspectEmail(
     return { error: "This prospect has unsubscribed from promotional emails and cannot be emailed." };
   }
 
-  const bookingUrl = process.env.WINSALOT_BOOKING_URL;
-  if (!bookingUrl) {
+  const baseBookingUrl = process.env.WINSALOT_BOOKING_URL;
+  if (!baseBookingUrl) {
     return { error: "WINSALOT_BOOKING_URL is not configured. Set it in the environment before sending consultation emails." };
   }
+
+  // Every send mints its own fresh, single-purpose prefill token (see
+  // src/lib/winsalot-consultation-tokens.ts) rather than linking to
+  // WINSALOT_BOOKING_URL bare - this is what lets the public booking page
+  // safely prefill this exact prospect's own contact/business/service
+  // info without exposing their crm_opportunities.id or allowing the
+  // link to be used to browse any other prospect's record.
+  const prefillToken = await createWinsalotPrefillToken(input.opportunityId);
+  const bookingUrl = `${baseBookingUrl}${baseBookingUrl.includes("?") ? "&" : "?"}t=${prefillToken}`;
 
   const subject = input.subject.trim();
   const message = input.message.trim();

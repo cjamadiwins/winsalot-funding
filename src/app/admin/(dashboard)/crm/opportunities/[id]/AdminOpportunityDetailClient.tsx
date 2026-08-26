@@ -19,12 +19,15 @@ import {
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
+import BookConsultationModal from "@/components/BookConsultationModal";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import {
   addActivityAction,
+  bookConsultationAction,
   closeOpportunityAction,
   deleteOpportunityAction,
+  getConsultationOfferedSlotsAction,
   sendProspectEmailAction,
   updateOpportunityAction,
 } from "./actions";
@@ -65,6 +68,7 @@ export default function AdminOpportunityDetailClient({
   const [showSchedule, setShowSchedule] = useState(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -112,6 +116,14 @@ export default function AdminOpportunityDetailClient({
             className="rounded-full bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Send Email
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => setShowBookModal(true)}
+            className="rounded-full bg-purple-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Book Consultation
           </button>
           <button
             type="button"
@@ -377,6 +389,20 @@ export default function AdminOpportunityDetailClient({
           onClose={() => setShowEmailModal(false)}
           onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
           onSent={() => window.location.reload()}
+        />
+      )}
+
+      {showBookModal && (
+        <BookConsultationModal
+          businessName={opportunity.business_name}
+          contactName={opportunity.contact_name}
+          email={opportunity.email}
+          phone={opportunity.phone}
+          opportunityType={opportunity.opportunity_type}
+          getOfferedSlots={getConsultationOfferedSlotsAction}
+          onBook={(input) => bookConsultationAction(opportunity.id, input)}
+          onClose={() => setShowBookModal(false)}
+          onBooked={() => window.location.reload()}
         />
       )}
     </div>

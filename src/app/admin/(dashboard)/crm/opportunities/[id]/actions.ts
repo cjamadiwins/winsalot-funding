@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
+import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
   ACTIVITY_TYPES,
   CLOSED_STAGES,
@@ -240,5 +242,43 @@ export async function sendProspectEmailAction(
 
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   revalidatePath("/admin/crm");
+  return result;
+}
+
+export async function getConsultationOfferedSlotsAction() {
+  await requireCrmAdmin();
+  return getWinsalotOfferedSlots();
+}
+
+// Admin "Book Consultation" - assigns the new appointment to the
+// prospect's current assigned agent (if any), letting an admin book on
+// behalf of any prospect regardless of who it's assigned to, per the
+// brief's "The assigned agent or admin can... book the consultation
+// while speaking with the prospect."
+export async function bookConsultationAction(opportunityId: string, input: BookConsultationInput): Promise<WinsalotBookingResult> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: opportunity } = await supabase.from("crm_opportunities").select("id, assigned_agent_id").eq("id", opportunityId).maybeSingle();
+  if (!opportunity) return { error: "Prospect not found." };
+
+  const result = await performWinsalotBooking({
+    opportunityId,
+    contactName: input.contactName,
+    businessName: input.businessName,
+    email: input.email,
+    phone: input.phone,
+    serviceType: input.serviceType,
+    notes: input.notes.trim() ? input.notes.trim() : null,
+    startUtcIso: input.startUtcIso,
+    prospectTimezone: null,
+    bookedBy: "agent",
+    bookedByUserId: crmUser.id,
+    assignedAgentId: (opportunity.assigned_agent_id as string | null) ?? null,
+  });
+
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/appointments");
   return result;
 }

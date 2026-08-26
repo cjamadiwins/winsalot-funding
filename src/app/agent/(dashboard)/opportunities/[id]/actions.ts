@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
+import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
   AGENT_SETTABLE_STAGES,
   OPPORTUNITY_TYPES,
@@ -347,5 +349,45 @@ export async function sendProspectEmailAction(
   const result = await sendProspectEmail(supabase, { opportunityId, crmUser, ...input });
 
   revalidateOpportunity(opportunityId);
+  return result;
+}
+
+export async function getConsultationOfferedSlotsAction() {
+  await requireCrmUser();
+  return getWinsalotOfferedSlots();
+}
+
+// Agent "Book Consultation" - the agent-booking half of the two required
+// booking methods (the other being the public self-booking page). Always
+// assigns the new appointment to the signed-in agent themselves - an
+// agent books consultations for their own prospects, never someone
+// else's. requireCrmUser() plus the session-scoped read below (RLS-
+// scoped to assigned_agent_id = auth.uid()) is what actually stops an
+// agent from booking a consultation against a prospect assigned to
+// someone else.
+export async function bookConsultationAction(opportunityId: string, input: BookConsultationInput): Promise<WinsalotBookingResult> {
+  const crmUser = await requireCrmUser();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: opportunity } = await supabase.from("crm_opportunities").select("id").eq("id", opportunityId).maybeSingle();
+  if (!opportunity) return { error: "Prospect not found." };
+
+  const result = await performWinsalotBooking({
+    opportunityId,
+    contactName: input.contactName,
+    businessName: input.businessName,
+    email: input.email,
+    phone: input.phone,
+    serviceType: input.serviceType,
+    notes: input.notes.trim() ? input.notes.trim() : null,
+    startUtcIso: input.startUtcIso,
+    prospectTimezone: null,
+    bookedBy: "agent",
+    bookedByUserId: crmUser.id,
+    assignedAgentId: crmUser.id,
+  });
+
+  revalidateOpportunity(opportunityId);
+  revalidatePath("/agent/appointments");
   return result;
 }

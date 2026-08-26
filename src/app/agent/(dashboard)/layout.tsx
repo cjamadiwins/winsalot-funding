@@ -16,6 +16,7 @@ import {
   BarChart3,
   TrendingUp,
   Wallet,
+  CalendarClock,
 } from "lucide-react";
 import {
   agentSignOutAction,
@@ -26,6 +27,7 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: <LayoutDashboard /> },
+  { label: "Appointments", href: "/agent/appointments", icon: <CalendarClock /> },
   { label: "Email Tracking", href: "/agent/emails", icon: <Mail /> },
   { label: "Sales Training & Call Scripts", href: "/agent/training", icon: <GraduationCap /> },
   { label: "My Attendance", href: "/agent/my-attendance", icon: <CalendarDays /> },
