@@ -100,6 +100,24 @@ export default async function AgentDashboardPage() {
 
   return (
     <div>
+      {/* 1. My Opportunities - cards, search, filters, and the opportunity
+          list (AgentDashboardClient) - moved to the top of the agent's
+          working content, ahead of the dashboard/performance summary and
+          the callback/follow-up sections below. Purely a reorder: every
+          section's own markup, data, and styling is unchanged from before. */}
+      <h2 id="my-opportunities" className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
+        My Opportunities
+      </h2>
+
+      {opportunitiesError && (
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load opportunities: {opportunitiesError.message}
+        </p>
+      )}
+
+      {!opportunitiesError && <AgentDashboardClient opportunities={opportunities} />}
+
+      {/* 2. Dashboard and performance */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-[24px] font-bold text-[var(--color-ink-strong)]">
@@ -168,6 +186,7 @@ export default async function AgentDashboardPage() {
         </p>
       )}
 
+      {/* 3. Scheduled callbacks and follow-ups */}
       {!opportunitiesError && !followUpsError && (
         <div className="mt-8">
           <OverdueOpportunitiesPanel opportunities={opportunities} followUps={followUps} />
@@ -188,17 +207,8 @@ export default async function AgentDashboardPage() {
         </div>
       )}
 
-      <h2 id="my-opportunities" className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
-        My Opportunities
-      </h2>
-
-      {opportunitiesError && (
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Failed to load opportunities: {opportunitiesError.message}
-        </p>
-      )}
-
-      {!opportunitiesError && <AgentDashboardClient opportunities={opportunities} />}
+      {/* 4. Remaining existing sections - none; every section above already
+          accounts for the page's full previous content. */}
     </div>
   );
 }
