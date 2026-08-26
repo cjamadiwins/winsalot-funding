@@ -8,6 +8,48 @@ import { getSiteUrl } from "./site-url";
 import { createWinsalotPrefillToken } from "./winsalot-consultation-tokens";
 import type { CrmUserRow } from "./crm-types";
 
+// Winsalot's own consultation-booking page - the real canonical value
+// WINSALOT_BOOKING_URL should always resolve to in production. Used as a
+// hard safety net, not just a placeholder - see getWinsalotBookingUrlBase
+// below for why.
+const GROWTH_CRM_CANONICAL_BOOKING_URL = "https://growth.winsalotcorp.com/book-consultation";
+const RETIRED_BOOKING_HOSTS = new Set(["cleaning.winsalotcorp.com", "www.cleaning.winsalotcorp.com"]);
+
+// Resolves the base booking-page URL prospect emails should link to -
+// used both for the actual send (below) and for the "Booking link"
+// preview shown in ProspectEmailModal before sending, so the two can
+// never disagree about what will actually be mailed. Vercel bakes
+// environment variables into a deployment's serverless functions at
+// build/deploy time (see docs/crm.md) - a WINSALOT_BOOKING_URL edit in
+// the dashboard has no effect until the next deployment, which has
+// repeatedly left this either unset (blocking every send outright) or
+// still pointing at the retired cleaning.winsalotcorp.com domain in
+// production. Falling back to the real canonical URL - rather than
+// blocking sends entirely, or worse, mailing prospects a link to the
+// retired domain - keeps consultation invites correct regardless of
+// that gap. Logged loudly (Vercel runtime logs) so the misconfiguration
+// stays visible rather than only being noticed in a delivered email.
+export function getWinsalotBookingUrlBase(): string {
+  const explicit = process.env.WINSALOT_BOOKING_URL;
+  if (explicit) {
+    let host: string | undefined;
+    try {
+      host = new URL(explicit).host;
+    } catch {
+      console.error(`[send-prospect-email] WINSALOT_BOOKING_URL ("${explicit}") is not a valid URL - using ${GROWTH_CRM_CANONICAL_BOOKING_URL} instead.`);
+    }
+    if (host !== undefined) {
+      if (!RETIRED_BOOKING_HOSTS.has(host)) return explicit;
+      console.error(`[send-prospect-email] WINSALOT_BOOKING_URL points at the retired ${host} - using ${GROWTH_CRM_CANONICAL_BOOKING_URL} instead.`);
+    }
+  } else {
+    console.error(
+      `[send-prospect-email] WINSALOT_BOOKING_URL is not set - using ${GROWTH_CRM_CANONICAL_BOOKING_URL} instead. Set it in Vercel Project Settings -> Environment Variables (Production) to override, then redeploy - the fix does not take effect until a new deployment is built.`
+    );
+  }
+  return GROWTH_CRM_CANONICAL_BOOKING_URL;
+}
+
 export type SendProspectEmailInput = {
   opportunityId: string;
   crmUser: CrmUserRow;
@@ -49,10 +91,7 @@ export async function sendProspectEmail(
     return { error: "This prospect has unsubscribed from promotional emails and cannot be emailed." };
   }
 
-  const baseBookingUrl = process.env.WINSALOT_BOOKING_URL;
-  if (!baseBookingUrl) {
-    return { error: "WINSALOT_BOOKING_URL is not configured. Set it in the environment before sending consultation emails." };
-  }
+  const baseBookingUrl = getWinsalotBookingUrlBase();
 
   // Every send mints its own fresh, single-purpose prefill token (see
   // src/lib/winsalot-consultation-tokens.ts) rather than linking to

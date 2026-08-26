@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
+import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import AdminOpportunityDetailClient from "./AdminOpportunityDetailClient";
@@ -74,7 +75,7 @@ export default async function AdminOpportunityDetailPage({
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
       currentUserName={crmUser.full_name || crmUser.email}
-      bookingUrl={process.env.WINSALOT_BOOKING_URL ?? ""}
+      bookingUrl={getWinsalotBookingUrlBase()}
     />
   );
 }
