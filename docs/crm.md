@@ -623,17 +623,38 @@ below, since a *server-side* Redirect URL mismatch (the `?token_hash=...` flow v
 
 In the Supabase dashboard, **Authentication → URL Configuration**:
 
-- **Site URL**: set to your production domain, `https://growth.winsalotcorp.com` (currently
-  likely still the default `http://localhost:3000` placeholder, or a domain that doesn't
-  exactly match what's configured for this project).
+- **Site URL**: must be exactly `https://growth.winsalotcorp.com` — no trailing slash, no
+  `cleaning.winsalotcorp.com`, no `localhost` placeholder. This is the fallback landing page for
+  *any* auth redirect that doesn't match the Redirect URLs list below, so a stale value here
+  (e.g. still pointing at the retired `cleaning.winsalotcorp.com`) silently strands every
+  invite/reset link on the wrong domain even though the app-side code and env vars are correct.
 - **Redirect URLs** (add, don't remove anything already relied on elsewhere):
   - `https://growth.winsalotcorp.com/agent/set-password`
+  - `https://growth.winsalotcorp.com/admin/set-password` (the admin forgot-password flow's own
+    redirect target — `src/app/admin/forgot-password/actions.ts` — distinct from the agent one
+    above and easy to miss since only one of the two was previously documented here)
   - `https://growth.winsalotcorp.com/auth/confirm`
   - A wildcard covering every Preview deployment of this Vercel project, e.g.
     `https://winsalot-funding-*-<your-vercel-team-slug>.vercel.app/**` — scoped to this
     project's own deployment URL pattern rather than a bare `https://*.vercel.app/**`, since
     the latter would let *any* Vercel deployment (not just yours) be used as an auth redirect
     target.
+
+**None of this is what causes a same-domain-to-same-domain redirect loop (`ERR_TOO_MANY_REDIRECTS`
+on a single hostname)**, though — that only ever comes from something that redirects requests for
+that exact hostname back to itself or to a domain that redirects back. Neither `src/proxy.ts` nor
+any Server Action in this app ever issues a redirect to a *different* hostname than the one the
+request came in on (every `NextResponse.redirect`/`redirect()` call here targets a relative path,
+which inherits the incoming request's own origin) — verified directly by running a local
+production build and requesting `/`, `/admin`, `/admin/crm`, `/agent/dashboard`, `/admin/login`,
+and `/agent/login` with both `Host: growth.winsalotcorp.com` and `Host: cleaning.winsalotcorp.com`
+headers: every redirect's `Location` stayed relative (same host), never jumping to the other
+domain. If `growth.winsalotcorp.com` is looping in production, check **Vercel → Project Settings
+→ Domains** for this project: `cleaning.winsalotcorp.com` should be configured to redirect to
+`growth.winsalotcorp.com` (one direction only) — `growth.winsalotcorp.com` itself must have no
+"Redirect to" target set at all, since two domains each configured to redirect to the other is
+exactly the loop `ERR_TOO_MANY_REDIRECTS` describes, and it happens entirely at Vercel's edge
+network before any request reaches this app's code.
 
 There is no need for a separate `/crm/setup-password` or `/admin/setup-password` route —
 `/agent/set-password` already is that dedicated page (reads the invitation/reset session,

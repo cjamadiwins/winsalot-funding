@@ -7,13 +7,26 @@ export const LEAD_GEN_HOSTS = new Set([
   "www.leads.winsalotcorp.com",
 ]);
 
-// Winsalot Growth CRM's hosts - both the new production domain and the
-// old one it's replacing. cleaning.winsalotcorp.com is kept here
-// deliberately (not removed) so the same deployment keeps answering on it
-// in parallel while growth.winsalotcorp.com is being tested - see the PR
-// that introduced this comment for the cutover plan. Remove the
-// cleaning.winsalotcorp.com entries only once growth.winsalotcorp.com has
-// been confirmed working in production.
+// Winsalot Growth CRM's hosts. growth.winsalotcorp.com is the canonical
+// production domain - every base-URL/redirect reference in this app
+// (NEXT_PUBLIC_SITE_URL, getSiteUrl()/getAuthRedirectBaseUrl() in
+// site-url.ts, the Supabase Auth Site URL/Redirect URLs - see
+// docs/crm.md's "Supabase dashboard settings to update") should point at
+// it, never at cleaning.winsalotcorp.com. cleaning.winsalotcorp.com is
+// kept in this Set only so this app still recognizes it as a Growth CRM
+// host (never treating it as unrecognized/leadgen) if a request for it
+// ever reaches this deployment directly - it is not meant to be reached
+// that way in normal operation. The actual cleaning -> growth redirect is
+// configured as a Vercel domain-level redirect (Project Settings ->
+// Domains), entirely outside this app's own routing - this app's own
+// proxy.ts/Server Actions never redirect a request to a *different* host
+// than the one it arrived on (every redirect() call here targets a
+// relative path, which inherits the incoming request's own origin).
+// growth.winsalotcorp.com must NOT also have a "Redirect to" target
+// configured in Vercel's Domains settings pointing back at
+// cleaning.winsalotcorp.com - that combination is what produces
+// ERR_TOO_MANY_REDIRECTS, entirely at Vercel's edge, before any request
+// reaches this code.
 export const GROWTH_CRM_HOSTS = new Set([
   "growth.winsalotcorp.com",
   "www.growth.winsalotcorp.com",
