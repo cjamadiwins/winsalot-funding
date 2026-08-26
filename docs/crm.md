@@ -418,21 +418,21 @@ Work through these in order — each one rules out a specific layer:
 5. If none of the above show a problem, query `crm_lead_emails`/`crm_activities` for the lead
    directly to see exactly which events landed and when.
 
-## Quote email control
+## Quote email control (retired)
 
-Customer-facing quote emails are sent only by an admin, only from `/admin/crm/leads/[id]`
-(embedded) or `/admin/requests/[id]` (standalone) — both require `requireCrmAdmin()` /
-`requireAdminUser()`, and agents have no code path that can reach `sendQuoteToCustomerAction`
-at all. An agent's own lead page (`/agent/leads/[id]`) only ever shows a read-only summary of
-the linked quote — there's no send control there to remove.
+The commercial-cleaning quote-request pipeline this section originally described
+(`sendQuoteToCustomerAction`, `/admin/crm/leads/[id]`, `/admin/requests/[id]`) has since been
+fully removed from the codebase as part of the pivot to the Growth CRM's `crm_opportunities`
+pipeline (Lead Generation / Business Financing / Both Services) — there is no live send path
+left that emails a customer a quote. The underlying `quote_requests`/`customer_quote_tokens`
+tables still exist (frozen, not dropped, per this repo's convention) but nothing in the app
+writes to or emails from them anymore.
 
-The email itself now always identifies as Winsalot Corp:
-
-- **From**: `Winsalot Corp <info@winsalotcorp.com>` by default (override with
-  `CUSTOMER_QUOTE_EMAIL_FROM`, falling back to the general `EMAIL_FROM` if that's the only one
-  set). It does **not** default to `quotes@winsalotcorp.com` or any other alias — that address
-  isn't configured, and switching to it is an explicit opt-in for later.
-- **Reply-To**: `info@winsalotcorp.com` by default (override with `EMAIL_REPLY_TO`).
+`Winsalot Quotes <quotes@winsalotcorp.com>` is still reserved for this category in
+`src/lib/email-senders.ts` (`getEmailSender("quotes")`) so that if a customer-facing quote
+email is ever reintroduced, it has a correct, fully isolated identity from day one — it can
+never be reached by the Growth/Funding/Billing categories a live send site actually uses. See
+`src/lib/email-senders.ts`'s own header comment for the full sender-identity design.
 
 ## Automatic quote-status sync
 

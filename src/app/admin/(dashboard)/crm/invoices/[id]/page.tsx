@@ -15,6 +15,7 @@ import {
   cancelInvoiceAction,
   archiveInvoiceAction,
   deleteInvoiceAction,
+  sendInvoiceReceiptAction,
 } from "../actions";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -40,6 +41,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         cancelAction={cancelInvoiceAction}
         archiveAction={archiveInvoiceAction}
         deleteAction={deleteInvoiceAction}
+        sendReceiptAction={sendInvoiceReceiptAction}
       />
     </div>
   );

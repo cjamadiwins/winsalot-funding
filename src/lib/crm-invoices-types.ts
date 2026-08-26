@@ -44,6 +44,7 @@ export const INVOICE_AUDIT_ACTIONS = [
   "unarchived",
   "pdf_downloaded",
   "deleted",
+  "receipt_sent",
 ] as const;
 export type InvoiceAuditAction = (typeof INVOICE_AUDIT_ACTIONS)[number];
 
@@ -118,14 +119,14 @@ export type CrmInvoiceAuditRow = {
   occurred_at: string;
 };
 
-export type EmailEventStatus = "sent" | "delivered" | "delayed" | "bounced" | "complained" | "opened" | "clicked";
+export type EmailEventStatus = "sent" | "delivered" | "delayed" | "bounced" | "complained" | "opened" | "clicked" | "failed";
 
 export type CrmInvoiceEmailRow = {
   id: string;
   created_at: string;
   invoice_id: string;
   resend_email_id: string;
-  email_type: "invoice_sent" | "invoice_reminder";
+  email_type: "invoice_sent" | "invoice_reminder" | "invoice_receipt";
   to_email: string;
   status: EmailEventStatus;
   status_at: string;
@@ -136,6 +137,7 @@ export type CrmInvoiceEmailRow = {
   complained_at: string | null;
   opened_at: string | null;
   clicked_at: string | null;
+  failed_at: string | null;
 };
 
 export type NewLineItemInput = {

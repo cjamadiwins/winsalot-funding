@@ -14,15 +14,10 @@ export async function sendFollowUpEmailForOpportunity(
 ): Promise<{ email: string }> {
   const supabase = await createSupabaseServerClient();
 
-  const fromEmail = process.env.EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
-  const replyToEmail = process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
-
   return sendTrackedCrmEmail(supabase, {
     opportunityId,
     crmUser,
     emailType: "follow_up",
-    fromEmail,
-    replyToEmail,
     subject: "Following Up — Winsalot Corp",
     buildText: buildFollowUpEmailText,
     buildHtml: buildFollowUpEmailHtml,

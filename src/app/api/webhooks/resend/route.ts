@@ -186,26 +186,23 @@ export async function POST(request: NextRequest) {
   if (trackedInvoiceEmail) {
     console.log(`[resend-webhook] matched email ${emailId} to crm_invoice_emails ${trackedInvoiceEmail.id} (invoice ${trackedInvoiceEmail.invoice_id})`);
 
-    // crm_invoice_emails' status check constraint (migration 0091) only
-    // allows sent/delivered/delayed/bounced/complained/opened/clicked -
-    // it has no 'failed' status or failed_at column at all (unlike
-    // crm_lead_emails), so a "failed" event is only ever logged as an
-    // activity note below, never written onto this row.
-    if (status !== "failed") {
-      const isNewer = new Date(eventAt) >= new Date(trackedInvoiceEmail.status_at);
-      const invoiceEmailUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
-      if (isNewer) {
-        invoiceEmailUpdates.status = status;
-        invoiceEmailUpdates.status_at = eventAt;
-      }
+    // crm_invoice_emails' status check constraint (migration 0094) now
+    // covers every status crm_lead_emails does, including 'failed'/
+    // failed_at - "track delivered, bounced and failed statuses through
+    // the Resend webhook."
+    const isNewer = new Date(eventAt) >= new Date(trackedInvoiceEmail.status_at);
+    const invoiceEmailUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+    if (isNewer) {
+      invoiceEmailUpdates.status = status;
+      invoiceEmailUpdates.status_at = eventAt;
+    }
 
-      const { error: invoiceEmailUpdateError } = await admin
-        .from("crm_invoice_emails")
-        .update(invoiceEmailUpdates)
-        .eq("id", trackedInvoiceEmail.id);
-      if (invoiceEmailUpdateError) {
-        console.error(`[resend-webhook] failed to update crm_invoice_emails ${trackedInvoiceEmail.id}:`, invoiceEmailUpdateError);
-      }
+    const { error: invoiceEmailUpdateError } = await admin
+      .from("crm_invoice_emails")
+      .update(invoiceEmailUpdates)
+      .eq("id", trackedInvoiceEmail.id);
+    if (invoiceEmailUpdateError) {
+      console.error(`[resend-webhook] failed to update crm_invoice_emails ${trackedInvoiceEmail.id}:`, invoiceEmailUpdateError);
     }
 
     if (!isDuplicateDelivery && trackedInvoiceEmail.invoice_id) {

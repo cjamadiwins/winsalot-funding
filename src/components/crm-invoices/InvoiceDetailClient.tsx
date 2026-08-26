@@ -8,6 +8,7 @@ import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus, c
 import { formatCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 import type { InvoiceEmailPreview } from "@/app/admin/(dashboard)/crm/invoices/actions";
+import type { CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 
 type ActionResult = { error?: string; invoiceId?: string };
 
@@ -31,12 +32,13 @@ export default function InvoiceDetailClient({
   cancelAction,
   archiveAction,
   deleteAction,
+  sendReceiptAction,
 }: {
   detail: InvoiceDetail;
   updateAction: (invoiceId: string, formData: FormData) => Promise<ActionResult>;
   duplicateAction: (invoiceId: string) => Promise<ActionResult>;
-  previewEmailAction: (invoiceId: string, emailType: "invoice_sent" | "invoice_reminder") => Promise<{ preview?: InvoiceEmailPreview; error?: string }>;
-  sendAction: (invoiceId: string, emailType: "invoice_sent" | "invoice_reminder", confirmed: boolean) => Promise<ActionResult>;
+  previewEmailAction: (invoiceId: string, emailType: CrmInvoiceEmailType) => Promise<{ preview?: InvoiceEmailPreview; error?: string }>;
+  sendAction: (invoiceId: string, emailType: "invoice_sent" | "invoice_reminder", confirmed: boolean, to: string, subject: string, message: string) => Promise<ActionResult>;
   recordPaymentAction: (invoiceId: string, formData: FormData) => Promise<ActionResult>;
   reversePaymentAction: (invoiceId: string, paymentId: string, reason: string) => Promise<ActionResult>;
   markPaidAction: (invoiceId: string) => Promise<ActionResult>;
@@ -44,18 +46,20 @@ export default function InvoiceDetailClient({
   cancelAction: (invoiceId: string, reason: string) => Promise<ActionResult>;
   archiveAction: (invoiceId: string) => Promise<ActionResult>;
   deleteAction: (invoiceId: string) => Promise<ActionResult>;
+  sendReceiptAction: (invoiceId: string, to: string, subject: string, message: string) => Promise<ActionResult>;
 }) {
   const { invoice, client, lineItems, payments, audit } = detail;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draftItems, setDraftItems] = useState<LineItemDraft[]>(lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unit_price: li.unit_price })));
-  const [previewModal, setPreviewModal] = useState<{ emailType: "invoice_sent" | "invoice_reminder"; preview: InvoiceEmailPreview } | null>(null);
+  const [previewModal, setPreviewModal] = useState<{ emailType: CrmInvoiceEmailType; to: string; subject: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const effStatus = effectiveInvoiceStatus(invoice);
   const canEdit = invoice.status !== "Cancelled" && invoice.status !== "Archived";
   const canDelete = canPermanentlyDeleteInvoice(invoice);
+  const hasPayment = payments.some((p) => !p.reversed_at);
 
   function runAction(action: () => Promise<ActionResult>, onSuccess?: (result: ActionResult) => void) {
     setError(null);
@@ -75,20 +79,25 @@ export default function InvoiceDetailClient({
     runAction(() => updateAction(invoice.id, formData), () => setEditing(false));
   }
 
-  async function openPreview(emailType: "invoice_sent" | "invoice_reminder") {
+  async function openPreview(emailType: CrmInvoiceEmailType) {
     setError(null);
     const result = await previewEmailAction(invoice.id, emailType);
     if (result.error || !result.preview) {
       setError(result.error ?? "Failed to build the email preview.");
       return;
     }
-    setPreviewModal({ emailType, preview: result.preview });
+    setPreviewModal({ emailType, to: result.preview.to, subject: result.preview.subject, message: result.preview.message });
   }
 
   function confirmSend() {
     if (!previewModal) return;
-    const isFirstSend = previewModal.emailType === "invoice_sent" && !invoice.first_sent_at;
-    runAction(() => sendAction(invoice.id, previewModal.emailType, isFirstSend), () => setPreviewModal(null));
+    const { emailType, to, subject, message } = previewModal;
+    if (emailType === "invoice_receipt") {
+      runAction(() => sendReceiptAction(invoice.id, to, subject, message), () => setPreviewModal(null));
+      return;
+    }
+    const isFirstSend = emailType === "invoice_sent" && !invoice.first_sent_at;
+    runAction(() => sendAction(invoice.id, emailType, isFirstSend, to, subject, message), () => setPreviewModal(null));
   }
 
   function handleCancel() {
@@ -192,6 +201,11 @@ export default function InvoiceDetailClient({
                 Mark Partially Paid
               </button>
             </>
+          )}
+          {hasPayment && (
+            <button type="button" disabled={isPending} onClick={() => openPreview("invoice_receipt")} className="rounded-full bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-200 disabled:opacity-50">
+              Send Payment Receipt
+            </button>
           )}
           {invoice.status !== "Paid" && (
             <button type="button" disabled={isPending} onClick={handleCancel} className="rounded-full bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200 disabled:opacity-50">
@@ -482,28 +496,58 @@ export default function InvoiceDetailClient({
         </div>
       </section>
 
-      {/* Preview-before-send modal */}
+      {/* Preview-and-edit-before-send modal */}
       {previewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">
-              Preview: {previewModal.emailType === "invoice_reminder" ? "Payment Reminder" : invoice.first_sent_at ? "Resend Invoice" : "Send Invoice"}
+              {previewModal.emailType === "invoice_receipt"
+                ? "Send Payment Receipt"
+                : previewModal.emailType === "invoice_reminder"
+                  ? "Send Payment Reminder"
+                  : invoice.first_sent_at
+                    ? "Resend Invoice"
+                    : "Send Invoice"}
             </h3>
-            <div className="mt-3 space-y-2 text-sm">
-              <div>
-                <span className="font-semibold text-slate-600">To:</span> {previewModal.preview.to}
+            <p className="mt-1 text-[12.5px] text-slate-500">Review and edit the recipient, subject, and message below before sending.</p>
+
+            <div className="mt-3 space-y-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-medium text-slate-600">To</span>
+                <input
+                  type="email"
+                  value={previewModal.to}
+                  onChange={(e) => setPreviewModal((m) => (m ? { ...m, to: e.target.value } : m))}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-medium text-slate-600">Subject</span>
+                <input
+                  type="text"
+                  value={previewModal.subject}
+                  onChange={(e) => setPreviewModal((m) => (m ? { ...m, subject: e.target.value } : m))}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-medium text-slate-600">Message</span>
+                <textarea
+                  value={previewModal.message}
+                  onChange={(e) => setPreviewModal((m) => (m ? { ...m, message: e.target.value } : m))}
+                  rows={14}
+                  className={`${inputClass} font-mono text-[12.5px] leading-relaxed`}
+                />
+              </label>
+            </div>
+
+            {previewModal.emailType !== "invoice_receipt" && (
+              <div className="mt-3">
+                <div className="text-[12px] font-medium text-slate-600">Attached PDF Preview</div>
+                <iframe src={`/admin/crm/invoices/${invoice.id}/pdf`} className="mt-1 h-96 w-full rounded-lg border border-slate-200" title="Invoice PDF preview" />
               </div>
-              <div>
-                <span className="font-semibold text-slate-600">Subject:</span> {previewModal.preview.subject}
-              </div>
-            </div>
-            <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-[13px] text-slate-700">
-              {previewModal.preview.text}
-            </div>
-            <div className="mt-3">
-              <div className="text-[12px] font-medium text-slate-600">Attached PDF Preview</div>
-              <iframe src={`/admin/crm/invoices/${invoice.id}/pdf`} className="mt-1 h-96 w-full rounded-lg border border-slate-200" title="Invoice PDF preview" />
-            </div>
+            )}
+
             <div className="mt-4 flex justify-end gap-3">
               <button type="button" onClick={() => setPreviewModal(null)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 Cancel

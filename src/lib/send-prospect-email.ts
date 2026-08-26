@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
+import { getEmailReplyTo, senderForOpportunityType } from "./email-senders";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { isEmailSuppressed, createUnsubscribeToken } from "./crm-email-suppression";
 import { buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email-templates";
@@ -74,7 +75,7 @@ export async function sendProspectEmail(
 ): Promise<SendProspectEmailResult> {
   const { data: opportunity, error: fetchError } = await supabase
     .from("crm_opportunities")
-    .select("email, contact_name, business_name, stage")
+    .select("email, contact_name, business_name, stage, opportunity_type")
     .eq("id", input.opportunityId)
     .maybeSingle();
 
@@ -112,8 +113,8 @@ export async function sendProspectEmail(
   const unsubscribeToken = await createUnsubscribeToken(toEmail, input.opportunityId);
   const unsubscribeUrl = `${getSiteUrl()}/unsubscribe/${unsubscribeToken}`;
 
-  const fromEmail = process.env.EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
-  const replyToEmail = process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
+  const fromEmail = senderForOpportunityType(opportunity.opportunity_type);
+  const replyToEmail = getEmailReplyTo();
 
   const resend = getResendClient();
   const { data: sendResult, error: emailError } = await resend.emails.send({
