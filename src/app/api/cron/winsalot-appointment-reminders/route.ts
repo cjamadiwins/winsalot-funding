@@ -13,10 +13,24 @@ import { runWinsalotAppointmentReminderJob } from "@/lib/winsalot-consultation-r
 // cron secret never affects the other's.
 export const maxDuration = 60;
 
+// Logs which specific check failed (never the secret value itself) so a 401
+// here can be diagnosed from Vercel runtime logs alone - distinguishing "env
+// var missing on this deployment" from "header present but doesn't match"
+// previously required cross-referencing Supabase Vault and Vercel by hand.
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.WINSALOT_APPOINTMENT_REMINDER_CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
+  if (!secret) {
+    console.warn("winsalot-appointment-reminders: WINSALOT_APPOINTMENT_REMINDER_CRON_SECRET is not set on this deployment");
+    return false;
+  }
+  const header = request.headers.get("authorization");
+  if (header !== `Bearer ${secret}`) {
+    console.warn(
+      `winsalot-appointment-reminders: authorization header ${header ? "did not match the configured secret" : "was missing"}`
+    );
+    return false;
+  }
+  return true;
 }
 
 async function handle(request: NextRequest) {
