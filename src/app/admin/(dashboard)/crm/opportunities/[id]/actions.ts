@@ -8,8 +8,10 @@ import {
   ACTIVITY_TYPES,
   CLOSED_STAGES,
   OPPORTUNITY_STAGES,
+  OPPORTUNITY_TYPES,
   type ActivityType,
   type OpportunityStage,
+  type OpportunityType,
 } from "@/lib/crm-types";
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -53,12 +55,16 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
   const businessName = String(formData.get("business_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const stage = String(formData.get("stage") ?? "").trim();
+  const opportunityType = String(formData.get("opportunity_type") ?? "").trim();
 
   if (!businessName || !phone) {
     throw new Error("Business name and phone are required.");
   }
   if (!OPPORTUNITY_STAGES.includes(stage as OpportunityStage)) {
     throw new Error("Invalid stage.");
+  }
+  if (!OPPORTUNITY_TYPES.includes(opportunityType as OpportunityType)) {
+    throw new Error("Invalid opportunity type.");
   }
 
   const assignedAgentId = String(formData.get("assigned_agent_id") ?? "").trim() || null;
@@ -82,6 +88,7 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
     province_state: textOrNull(formData, "province_state"),
     notes: textOrNull(formData, "notes"),
     stage,
+    opportunity_type: opportunityType,
     assigned_agent_id: assignedAgentId,
 
     industry: textOrNull(formData, "industry"),
@@ -106,11 +113,13 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
   // opportunity enters this stage - never overwritten on a later save (see
   // crm-performance.ts, migration 0080's column comment).
   if (stage === "Proposal or Application Sent") {
-    const type = current.opportunity_type as string;
-    if ((type === "lead_generation" || type === "both_services") && !current.proposal_sent_at) {
+    if ((opportunityType === "lead_generation" || opportunityType === "both_services") && !current.proposal_sent_at) {
       update.proposal_sent_at = new Date().toISOString();
     }
-    if ((type === "business_financing" || type === "both_services") && !current.application_submitted_at) {
+    if (
+      (opportunityType === "business_financing" || opportunityType === "both_services") &&
+      !current.application_submitted_at
+    ) {
       update.application_submitted_at = new Date().toISOString();
     }
   }

@@ -282,6 +282,7 @@ export default function AdminCrmClient({
               <th className="px-4 py-3">City</th>
               <th className="px-4 py-3">Next Follow-up</th>
               <th className="px-4 py-3">Email Status</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -340,13 +341,21 @@ export default function AdminCrmClient({
                       <span className="text-slate-400">—</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/admin/crm/opportunities/${opportunity.id}`}
+                      className="inline-flex rounded-full border border-sky-600 px-3 py-1.5 text-xs font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
+                    >
+                      Manage Prospect
+                    </Link>
+                  </td>
                 </tr>
               );
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                   No opportunities match your filters.
                 </td>
               </tr>

@@ -210,6 +210,7 @@ export default function AgentDashboardClient({ opportunities }: { opportunities:
                 <th className="px-4 py-3">Stage</th>
                 <th className="px-4 py-3">City</th>
                 <th className="px-4 py-3">Next Follow-Up</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -251,6 +252,14 @@ export default function AgentDashboardClient({ opportunities }: { opportunities:
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/agent/opportunities/${opportunity.id}`}
+                      className="inline-flex rounded-full border border-[var(--color-accent)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white"
+                    >
+                      Manage Prospect
+                    </Link>
                   </td>
                 </tr>
               ))}
