@@ -18,6 +18,7 @@ import {
 } from "@/lib/crm-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
+import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import {
   addActivityAction,
   closeOpportunityAction,
@@ -65,14 +66,10 @@ export default function AdminOpportunityDetailClient({
   }
 
   const isClosed = CLOSED_STAGES.includes(opportunity.stage);
-  const showLeadGenFields =
-    opportunity.opportunity_type === "lead_generation" || opportunity.opportunity_type === "both_services";
-  const showFinancingFields =
-    opportunity.opportunity_type === "business_financing" || opportunity.opportunity_type === "both_services";
 
   function handleDelete() {
     if (isClosed) return;
-    if (!confirm(`Permanently delete the opportunity "${opportunity.business_name}"? This cannot be undone.`)) {
+    if (!confirm("Are you sure you want to permanently delete this prospect? This action cannot be undone.")) {
       return;
     }
     runAction(async () => {
@@ -156,152 +153,17 @@ export default function AdminOpportunityDetailClient({
                     ))}
                 </select>
               </Labeled>
-              <Labeled label="Business Name">
-                <input
-                  name="business_name"
-                  defaultValue={opportunity.business_name}
-                  required
-                  className={inputClasses}
-                />
-              </Labeled>
-              <Labeled label="Contact Name">
-                <input name="contact_name" defaultValue={opportunity.contact_name ?? ""} className={inputClasses} />
-              </Labeled>
-              <Labeled label="Phone">
-                <input name="phone" defaultValue={opportunity.phone} required className={inputClasses} />
-              </Labeled>
-              <Labeled label="Email">
-                <input name="email" type="email" defaultValue={opportunity.email ?? ""} className={inputClasses} />
-              </Labeled>
-              <Labeled label="City">
-                <input name="city" defaultValue={opportunity.city ?? ""} className={inputClasses} />
-              </Labeled>
-              <Labeled label="Province / State">
-                <input
-                  name="province_state"
-                  defaultValue={opportunity.province_state ?? ""}
-                  className={inputClasses}
-                />
-              </Labeled>
-
-              {showLeadGenFields && (
-                <>
-                  <Labeled label="Industry">
-                    <input name="industry" defaultValue={opportunity.industry ?? ""} className={inputClasses} />
-                  </Labeled>
-                  <Labeled label="Target Customers">
-                    <input
-                      name="target_customers"
-                      defaultValue={opportunity.target_customers ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Current Marketing Method">
-                    <input
-                      name="current_marketing_method"
-                      defaultValue={opportunity.current_marketing_method ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Number of Appointments Wanted">
-                    <input
-                      name="appointments_wanted"
-                      type="number"
-                      min={0}
-                      defaultValue={opportunity.appointments_wanted ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Estimated Monthly Budget">
-                    <input
-                      name="estimated_monthly_budget"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={opportunity.estimated_monthly_budget ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Consultation Date">
-                    <input
-                      name="consultation_date"
-                      type="datetime-local"
-                      defaultValue={
-                        opportunity.consultation_date ? toDatetimeLocal(opportunity.consultation_date) : ""
-                      }
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                </>
-              )}
-
-              {showFinancingFields && (
-                <>
-                  <Labeled label="Corporation or Sole Proprietorship">
-                    <select
-                      name="business_structure"
-                      defaultValue={opportunity.business_structure ?? ""}
-                      className={inputClasses}
-                    >
-                      <option value="">—</option>
-                      <option value="corporation">Corporation</option>
-                      <option value="sole_proprietorship">Sole Proprietorship</option>
-                    </select>
-                  </Labeled>
-                  <Labeled label="Time in Business">
-                    <input
-                      name="time_in_business"
-                      defaultValue={opportunity.time_in_business ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Average Monthly Revenue">
-                    <input
-                      name="average_monthly_revenue"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={opportunity.average_monthly_revenue ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Financing Amount Requested">
-                    <input
-                      name="financing_amount_requested"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={opportunity.financing_amount_requested ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <Labeled label="Application Status">
-                    <input
-                      name="application_status"
-                      defaultValue={opportunity.application_status ?? ""}
-                      className={inputClasses}
-                    />
-                  </Labeled>
-                  <label className="flex items-center gap-2 pt-6 text-sm font-medium text-slate-800">
-                    <input
-                      type="checkbox"
-                      name="bank_statements_available"
-                      value="true"
-                      defaultChecked={opportunity.bank_statements_available ?? false}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    Six Months of Bank Statements Available
-                  </label>
-                </>
-              )}
             </div>
-            <Labeled label="Notes">
-              <textarea
-                name="notes"
-                defaultValue={opportunity.notes ?? ""}
-                className={`${inputClasses} min-h-[90px] resize-y`}
-              />
-            </Labeled>
+
+            {/* Owns the Opportunity Type selector plus Business Name/
+                Contact/Phone/Email/City/Province-State, every
+                type-conditional Lead Generation/Business Financing field,
+                and Notes - shared with the agent's own editor
+                (src/app/agent/(dashboard)/opportunities/[id]/OpportunityDetailClient.tsx)
+                so the two screens can never drift on what fields exist for
+                which opportunity_type. */}
+            <OpportunityFieldsForm defaultOpportunityType={opportunity.opportunity_type} defaults={opportunity} />
+
             <div className="text-xs text-slate-500">
               Created {new Date(opportunity.created_at).toLocaleString()}
               {opportunity.last_contacted_at &&
