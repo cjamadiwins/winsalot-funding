@@ -44,6 +44,27 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   other: "Other",
 };
 
+// The only two currencies the Clients/Invoices feature supports today -
+// CAD listed first and used as the default for every new client, since
+// Winsalot Corp's clients are Canadian by default; USD is kept (not
+// removed) for when American clients are added later. Enforced with a
+// matching CHECK constraint on crm_clients/crm_invoices/crm_payments
+// (migration 0095) so a currency can never reach the database through
+// any path other than one of these two.
+export const CLIENT_CURRENCIES = ["CAD", "USD"] as const;
+export type ClientCurrency = (typeof CLIENT_CURRENCIES)[number];
+
+export const CLIENT_CURRENCY_LABELS: Record<ClientCurrency, string> = {
+  CAD: "CAD — Canadian Dollar",
+  USD: "USD — US Dollar",
+};
+
+export const DEFAULT_CLIENT_CURRENCY: ClientCurrency = "CAD";
+
+export function isClientCurrency(value: string): value is ClientCurrency {
+  return (CLIENT_CURRENCIES as readonly string[]).includes(value);
+}
+
 export type CrmClientRow = {
   id: string;
   created_at: string;

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { InvoiceDetail } from "@/lib/crm-invoices-data";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus, canPermanentlyDeleteInvoice } from "@/lib/crm-invoices-types";
-import { formatCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
+import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, formatCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 import type { InvoiceEmailPreview } from "@/app/admin/(dashboard)/crm/invoices/actions";
 import type { CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
@@ -246,7 +246,13 @@ export default function InvoiceDetailClient({
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Currency</span>
-              <input type="text" name="currency" defaultValue={invoice.currency} className={inputClass} />
+              <select name="currency" defaultValue={invoice.currency} className={inputClass}>
+                {CLIENT_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CLIENT_CURRENCY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Issue Date</span>

@@ -15,7 +15,7 @@ import {
 } from "@/lib/crm-invoice-emails";
 import { sendCrmInvoiceEmail, type CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 import type { CrmUserRow } from "@/lib/crm-types";
-import type { CrmPaymentRow } from "@/lib/crm-clients-types";
+import { isClientCurrency, type CrmPaymentRow } from "@/lib/crm-clients-types";
 
 type ActionResult = { error?: string; invoiceId?: string };
 
@@ -108,6 +108,12 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
   if (taxRate < 0) return { error: "Tax rate cannot be negative." };
   if (discountAmount < 0) return { error: "Discount cannot be negative." };
 
+  // Defaults to (and, per the brief, should normally just be) the
+  // client's own saved currency - never silently falls back to USD if
+  // that's not actually the client's currency.
+  const currency = parseOptionalText(formData.get("currency")) ?? client.currency;
+  if (!isClientCurrency(currency)) return { error: "Select a valid currency (CAD or USD)." };
+
   const { data: invoice, error } = await supabase
     .from("crm_invoices")
     .insert({
@@ -119,7 +125,7 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
       due_date: parseOptionalText(formData.get("due_date")),
       service_period_start: parseOptionalText(formData.get("service_period_start")),
       service_period_end: parseOptionalText(formData.get("service_period_end")),
-      currency: parseOptionalText(formData.get("currency")) ?? client.currency ?? "USD",
+      currency,
       tax_rate: taxRate,
       discount_amount: discountAmount,
       payment_instructions: parseOptionalText(formData.get("payment_instructions")),
@@ -169,6 +175,9 @@ export async function updateInvoiceAction(invoiceId: string, formData: FormData)
   if (taxRate < 0) return { error: "Tax rate cannot be negative." };
   if (discountAmount < 0) return { error: "Discount cannot be negative." };
 
+  const currency = parseOptionalText(formData.get("currency")) ?? existing.currency;
+  if (!isClientCurrency(currency)) return { error: "Select a valid currency (CAD or USD)." };
+
   const { error: updateError } = await supabase
     .from("crm_invoices")
     .update({
@@ -179,7 +188,7 @@ export async function updateInvoiceAction(invoiceId: string, formData: FormData)
       due_date: parseOptionalText(formData.get("due_date")),
       service_period_start: parseOptionalText(formData.get("service_period_start")),
       service_period_end: parseOptionalText(formData.get("service_period_end")),
-      currency: parseOptionalText(formData.get("currency")) ?? existing.currency,
+      currency,
       tax_rate: taxRate,
       discount_amount: discountAmount,
       payment_instructions: parseOptionalText(formData.get("payment_instructions")),
