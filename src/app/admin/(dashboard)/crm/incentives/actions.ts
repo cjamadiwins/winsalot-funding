@@ -5,7 +5,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeCrmWeeklyIncentive } from "@/lib/crm-incentives";
-import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
+import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import {
   approveWeeklyIncentiveBonus,
   fetchWinsalotIncentiveSettings,
@@ -25,15 +25,15 @@ export async function approveCrmWeeklyBonusAction(weekStart: string, weekEnd: st
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
 
-  const [{ data: agent }, quotes, settings] = await Promise.all([
+  const [{ data: agent }, appointments, settings] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
-    getCrmIncentiveOpportunities(agentId),
+    getCrmIncentiveAppointments(agentId),
     fetchWinsalotIncentiveSettings(supabase),
   ]);
 
   if (!agent) return { error: "Agent not found." };
 
-  const calc = computeCrmWeeklyIncentive(quotes, agentId, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
+  const calc = computeCrmWeeklyIncentive(appointments, agentId, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
 
   const approvedTotalRaw = String(formData.get("approved_total") ?? "").trim();
   const requestedApprovedTotal = approvedTotalRaw ? Number(approvedTotalRaw) : calc.calculatedBonus;
@@ -70,15 +70,15 @@ export async function rejectCrmWeeklyBonusAction(weekStart: string, weekEnd: str
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
 
-  const [{ data: agent }, quotes, settings] = await Promise.all([
+  const [{ data: agent }, appointments, settings] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
-    getCrmIncentiveOpportunities(agentId),
+    getCrmIncentiveAppointments(agentId),
     fetchWinsalotIncentiveSettings(supabase),
   ]);
 
   if (!agent) return { error: "Agent not found." };
 
-  const calc = computeCrmWeeklyIncentive(quotes, agentId, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
+  const calc = computeCrmWeeklyIncentive(appointments, agentId, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
   const reason = String(formData.get("rejection_reason") ?? "").trim();
 
   const result = await rejectWeeklyIncentiveBonus(supabase, {

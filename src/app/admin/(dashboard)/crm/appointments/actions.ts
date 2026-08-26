@@ -10,6 +10,7 @@ import {
   performWinsalotReschedule,
   type WinsalotAppointmentEditInput,
 } from "@/lib/winsalot-consultation-book";
+import type { WinsalotAppointmentIncentiveStatus } from "@/lib/winsalot-consultation-types";
 
 export async function getOfferedSlotsAction(excludeAppointmentId: string) {
   await requireCrmAdmin();
@@ -38,6 +39,72 @@ export async function editAppointmentAction(appointmentId: string, input: Winsal
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
   return result;
+}
+
+// Quick incentive review directly from the Admin Appointments table's
+// Incentive column ("Verify as Qualified" / "Reject" buttons) - a lean
+// alternative to picking a value in the "Manage" panel's full Incentive
+// Status dropdown (which stays available for the finer-grained Cancelled/
+// Invalid/Duplicate categories). Mirrors
+// reviewLeadgenAppointmentIncentiveAction (leadgen/admin/appointments/
+// actions.ts) exactly. Touches only the incentive_status* columns and
+// updated_at - never re-parents the appointment or changes any other
+// field, so it can never duplicate the appointment count or its
+// assigned_agent_id credit. Crediting to the assigned agent and
+// bucketing into their current Monday-Sunday week both fall out of
+// existing, unchanged logic (assigned_agent_id set at booking time;
+// crm-incentives.ts buckets by created_at) - this action only ever
+// writes the review decision itself.
+export async function reviewCrmAppointmentIncentiveAction(
+  appointmentId: string,
+  decision: Extract<WinsalotAppointmentIncentiveStatus, "Qualified" | "Unqualified">,
+  reason: string | null
+): Promise<{ error?: string }> {
+  const adminUser = await requireCrmAdmin();
+
+  if (decision !== "Qualified" && !reason?.trim()) {
+    return { error: "A reason is required to reject an appointment." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: existing } = await supabase
+    .from("winsalot_appointments")
+    .select("incentive_status, opportunity_id")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (!existing) return { error: "Appointment not found." };
+
+  const { error } = await supabase
+    .from("winsalot_appointments")
+    .update({
+      incentive_status: decision,
+      incentive_status_reason: decision === "Qualified" ? null : reason!.trim(),
+      incentive_status_set_by: adminUser.id,
+      incentive_status_set_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appointmentId);
+
+  if (error) return { error: "Failed to save the incentive review." };
+
+  if (existing.opportunity_id) {
+    await supabase.from("crm_activities").insert({
+      opportunity_id: existing.opportunity_id,
+      agent_id: null,
+      activity_type: "note",
+      notes:
+        decision === "Qualified"
+          ? `Consultation appointment verified as Qualified for the Weekly Incentive by ${adminUser.full_name || adminUser.email}.`
+          : `Consultation appointment rejected for the Weekly Incentive by ${adminUser.full_name || adminUser.email}. Reason: ${reason!.trim()}`,
+    });
+  }
+
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/admin/crm/incentives");
+  revalidatePath("/agent/dashboard");
+  revalidatePath("/agent/appointments");
+  if (existing.opportunity_id) revalidatePath(`/admin/crm/opportunities/${existing.opportunity_id}`);
+  return {};
 }
 
 // Admin-only permanent delete - unlike cancellation (which every role

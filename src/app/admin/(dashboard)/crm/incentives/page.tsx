@@ -2,7 +2,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { addDays, crmDateKey } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, computeCrmWeeklyRecordCounts, crmMondayOf } from "@/lib/crm-incentives";
-import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
+import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import {
   monthStartOfWeek,
   normalizeIncentiveEmail,
@@ -38,9 +38,9 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
   const weekEnd = addDays(weekStart, 6);
   const monthStart = monthStartOfWeek(weekStart);
 
-  const [{ data: agents }, quotes, { data: settingsRow }, { data: weekLedgerRows }, { data: monthLedgerRows }, { data: auditRows }] = await Promise.all([
+  const [{ data: agents }, appointments, { data: settingsRow }, { data: weekLedgerRows }, { data: monthLedgerRows }, { data: auditRows }] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true).order("full_name"),
-    getCrmIncentiveOpportunities(),
+    getCrmIncentiveAppointments(),
     admin.from("winsalot_incentive_settings").select("*").maybeSingle(),
     admin.from("winsalot_agent_incentive_ledger").select("*").eq("crm", "cleaning").eq("week_start", weekStart),
     admin.from("winsalot_agent_incentive_ledger").select("agent_email, crm, week_start, approved_total, status").eq("month_start", monthStart),
@@ -62,8 +62,8 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
   }
 
   const rows: AdminIncentiveRow[] = allAgents.map((agent) => {
-    const calc = computeCrmWeeklyIncentive(quotes, agent.id, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
-    const counts = computeCrmWeeklyRecordCounts(quotes, agent.id, weekStart, weekEnd);
+    const calc = computeCrmWeeklyIncentive(appointments, agent.id, weekStart, weekEnd, settings.crmWeeklyQuota, settings.crmWeeklyBonusAmount);
+    const counts = computeCrmWeeklyRecordCounts(appointments, agent.id, weekStart, weekEnd);
     const email = normalizeIncentiveEmail(agent.email);
     return {
       agentId: agent.id,
@@ -85,14 +85,14 @@ export default async function AdminCrmIncentivesPage({ searchParams }: { searchP
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Agent Incentives</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Weekly Incentive: a flat bonus for meeting the weekly clients-won quota. No partial bonus for missing it.
-        Only opportunities closed as Client Won count.
+        Weekly Incentive: a flat bonus for meeting the weekly qualified-appointment quota. No partial bonus for missing it.
+        Only consultation appointments an admin has reviewed as Qualified count.
       </p>
 
       <AdminWeeklyIncentivesClient
         crm="cleaning"
-        recordLabel="Clients Won"
-        recordsHref="/admin/crm"
+        recordLabel="Qualified Consultations"
+        recordsHref="/admin/crm/appointments"
         weekLabel={weekLabel}
         prevWeekHref={`?week=${addDays(weekStart, -7)}`}
         nextWeekHref={`?week=${addDays(weekStart, 7)}`}

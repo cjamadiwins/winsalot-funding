@@ -14,6 +14,36 @@ export type WinsalotAppointmentBookedBy = (typeof WINSALOT_APPOINTMENT_BOOKED_BY
 export const WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES = ["admin", "agent", "prospect"] as const;
 export type WinsalotAppointmentCancelledByRole = (typeof WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES)[number];
 
+// Weekly Incentive qualification review state (migration 0090) - a
+// separate axis from `status` above, mirroring the Lead Gen CRM's
+// LeadgenAppointmentIncentiveStatus (leadgen-types.ts) exactly. `status`
+// tracks the scheduling state (booked/cancelled); incentive_status
+// tracks whether an admin has reviewed this appointment as a *qualified*
+// consultation toward the assigned agent's Weekly Incentive quota. Null
+// means "not yet reviewed" - never counts toward anything (see
+// lib/crm-incentives.ts).
+export const WINSALOT_APPOINTMENT_INCENTIVE_STATUSES = ["Qualified", "Cancelled", "Invalid", "Duplicate", "Unqualified"] as const;
+export type WinsalotAppointmentIncentiveStatus = (typeof WINSALOT_APPOINTMENT_INCENTIVE_STATUSES)[number];
+
+export const WINSALOT_APPOINTMENT_INCENTIVE_STATUS_STYLES: Record<WinsalotAppointmentIncentiveStatus, string> = {
+  Qualified: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-slate-200 text-slate-500",
+  Invalid: "bg-rose-100 text-rose-800",
+  Duplicate: "bg-amber-100 text-amber-800",
+  Unqualified: "bg-rose-100 text-rose-800",
+};
+
+// Shown for a null incentive_status (not yet reviewed by an admin).
+export const WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL = "Not Reviewed";
+export const WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE = "bg-slate-100 text-slate-600";
+
+// "Do not count the same appointment twice" / "cancelled appointments
+// never qualify" - the exact isLeadgenAppointmentCountable rule, applied
+// to this CRM's own simpler two-state `status` column.
+export function isWinsalotAppointmentCountable(status: WinsalotAppointmentStatus): boolean {
+  return status !== "cancelled";
+}
+
 export type WinsalotAppointmentRow = {
   id: string;
   created_at: string;
@@ -46,6 +76,11 @@ export type WinsalotAppointmentRow = {
   cancelled_reason: string | null;
 
   admin_notified_at: string | null;
+
+  incentive_status: WinsalotAppointmentIncentiveStatus | null;
+  incentive_status_set_by: string | null;
+  incentive_status_set_at: string | null;
+  incentive_status_reason: string | null;
 };
 
 export type WinsalotAppointmentWithOpportunity = WinsalotAppointmentRow & {

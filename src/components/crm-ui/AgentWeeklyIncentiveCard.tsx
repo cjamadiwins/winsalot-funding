@@ -66,7 +66,7 @@ export default function AgentWeeklyIncentiveCard({
 }: {
   crm: WinsalotIncentiveCrm;
   weekLabel: string;
-  recordLabel: string; // "qualified appointments" or "qualified quotes"
+  recordLabel: string; // "qualified appointments" or "qualified consultations"
   qualifiedCount: number;
   quota: number;
   percentage: number;

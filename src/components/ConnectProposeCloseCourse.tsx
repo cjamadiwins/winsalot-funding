@@ -10,7 +10,7 @@ type Props = {
 
 const PRIMARY_CTA: Record<Props["crm"], string> = {
   leadgen: "booking the free 15-minute consultation",
-  cleaning: "completing the cleaning quote request (or the next specific step in the quote process)",
+  cleaning: "booking a consultation appointment",
 };
 
 type Stage = "Connect" | "Propose" | "Close";
@@ -260,14 +260,13 @@ export default function ConnectProposeCloseCourse({ crm }: Props) {
         ) : (
           <>
             <p className="mt-4 text-sm text-[var(--color-ink)]">
-              For the Winsalot Growth CRM, the CTA depends on the situation and may include:
+              For the Winsalot Growth CRM, the primary CTA is <strong>booking a consultation appointment</strong>.
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-ink)]">
-              <li>Completing the cleaning quote request</li>
-              <li>Providing the information needed for a quote</li>
-              <li>Receiving/sending the quote</li>
-              <li>Scheduling a specific follow-up</li>
-            </ul>
+            <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm italic text-[var(--color-ink)]">
+              &ldquo;The next step would be a quick consultation so we can go over exactly what fits your
+              business. Let&apos;s get that scheduled. Would Tuesday afternoon or Wednesday morning work
+              better?&rdquo;
+            </div>
           </>
         )}
 

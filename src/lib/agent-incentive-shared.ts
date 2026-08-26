@@ -3,8 +3,8 @@
 // lib/crm-incentives.ts for the Winsalot Growth CRM) and by the central ledger
 // (supabase/migrations/0059_agent_incentive_ledger.sql,
 // lib/agent-incentive-ledger.ts). Deliberately tiny and CRM-agnostic -
-// it has no idea what a "qualified appointment" or "qualified quote" is,
-// only "given a qualified count and a quota, what does this week's flat
+// it has no idea what a "qualified appointment" is for either CRM, only
+// "given a qualified count and a quota, what does this week's flat
 // bonus come out to."
 
 // Brief: "0-3 qualifying records: ₦0. 4 or more: the full weekly bonus
