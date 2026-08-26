@@ -16,12 +16,15 @@ import {
 } from "@/lib/crm-types";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
+import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
+import ProspectEmailModal from "@/components/ProspectEmailModal";
 import {
   addOpportunityActivityAction,
   closeOpportunityAction,
   completeOpportunityFollowUpAction,
   rescheduleOpportunityFollowUpAction,
   scheduleOpportunityFollowUpAction,
+  sendProspectEmailAction,
   updateOpportunityFieldsAction,
   updateOpportunityStageAction,
 } from "./actions";
@@ -34,17 +37,26 @@ export default function OpportunityDetailClient({
   activities,
   followUps,
   currentAgentId,
+  emailHistory,
+  isEmailSuppressed,
+  currentUserName,
+  bookingUrl,
 }: {
   opportunity: CrmOpportunityRow;
   activities: CrmActivityRow[];
   followUps: CrmFollowUpRow[];
   currentAgentId: string;
+  emailHistory: EmailHistoryEntry[];
+  isEmailSuppressed: boolean;
+  currentUserName: string;
+  bookingUrl: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   function runAction(fn: () => Promise<unknown>, onSuccess?: () => void) {
     setError(null);
@@ -106,6 +118,12 @@ export default function OpportunityDetailClient({
 
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
+      {isEmailSuppressed && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          This prospect has unsubscribed from promotional emails and cannot be sent another consultation invite.
+        </p>
+      )}
+
       <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-5">
@@ -113,13 +131,30 @@ export default function OpportunityDetailClient({
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                 Details
               </h2>
-              <button
-                type="button"
-                onClick={() => setEditing((v) => !v)}
-                className="text-[12.5px] font-medium text-[var(--color-accent)]"
-              >
-                {editing ? "Cancel" : "Edit"}
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setEditing((v) => !v)}
+                  className="text-[12.5px] font-medium text-[var(--color-accent)]"
+                >
+                  {editing ? "Cancel" : "Edit"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isEmailSuppressed || !opportunity.email}
+                  onClick={() => setShowEmailModal(true)}
+                  title={
+                    isEmailSuppressed
+                      ? "This prospect has unsubscribed from promotional emails."
+                      : !opportunity.email
+                        ? "This prospect has no email address on file."
+                        : undefined
+                  }
+                  className="rounded-full bg-sky-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Send Email
+                </button>
+              </div>
             </div>
 
             {editing ? (
@@ -362,10 +397,7 @@ export default function OpportunityDetailClient({
             </ul>
           </section>
 
-          {/* TODO: Email Status Panel / outbound-email tracking - skipped
-              for now, matching the old lead detail page's read-only
-              quote-email summary, which no longer applies here (no quote
-              linkage in the new opportunity pipeline). */}
+          <EmailHistoryPanel emails={emailHistory} />
         </div>
 
         <div>
@@ -377,6 +409,20 @@ export default function OpportunityDetailClient({
           />
         </div>
       </div>
+
+      {showEmailModal && opportunity.email && (
+        <ProspectEmailModal
+          businessName={opportunity.business_name}
+          contactName={opportunity.contact_name}
+          toEmail={opportunity.email}
+          opportunityType={opportunity.opportunity_type}
+          agentName={currentUserName}
+          bookingUrl={bookingUrl}
+          onClose={() => setShowEmailModal(false)}
+          onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
+          onSent={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

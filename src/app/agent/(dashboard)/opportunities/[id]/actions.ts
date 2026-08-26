@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
+import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
 import {
   AGENT_SETTABLE_STAGES,
   OPPORTUNITY_TYPES,
@@ -326,4 +327,25 @@ export async function closeOpportunityAction(opportunityId: string, outcome: str
   await closeOpportunity(opportunityId, crmUser, outcome, reason);
   revalidateOpportunity(opportunityId);
   refresh();
+}
+
+// "Send Email" (prospect-email system) - the templated consultation invite,
+// already reviewed/edited by the agent in ProspectEmailModal. Delegates to
+// sendProspectEmail (src/lib/send-prospect-email.ts), shared with the
+// admin's equivalent action. sendProspectEmail reads/writes the
+// opportunity through this *session-scoped* client, so
+// crm_opportunities_agent_select_own/_update_own RLS is what actually
+// stops an agent from emailing a prospect assigned to someone else - it
+// simply won't find the row.
+export async function sendProspectEmailAction(
+  opportunityId: string,
+  input: { subject: string; message: string; ctaText: string }
+): Promise<SendProspectEmailResult> {
+  const crmUser = await requireCrmUser();
+  const supabase = await createSupabaseServerClient();
+
+  const result = await sendProspectEmail(supabase, { opportunityId, crmUser, ...input });
+
+  revalidateOpportunity(opportunityId);
+  return result;
 }
