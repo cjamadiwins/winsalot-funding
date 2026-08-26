@@ -17,12 +17,15 @@ import {
   type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
+import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
+import ProspectEmailModal from "@/components/ProspectEmailModal";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import {
   addActivityAction,
   closeOpportunityAction,
   deleteOpportunityAction,
+  sendProspectEmailAction,
   updateOpportunityAction,
 } from "./actions";
 import {
@@ -42,17 +45,26 @@ export default function AdminOpportunityDetailClient({
   followUps,
   agents,
   latestEmail,
+  emailHistory,
+  isEmailSuppressed,
+  currentUserName,
+  bookingUrl,
 }: {
   opportunity: CrmOpportunityRow;
   activities: CrmActivityRow[];
   followUps: CrmFollowUpRow[];
   agents: CrmUserRow[];
   latestEmail: LatestCrmLeadEmail | null;
+  emailHistory: EmailHistoryEntry[];
+  isEmailSuppressed: boolean;
+  currentUserName: string;
+  bookingUrl: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -85,16 +97,39 @@ export default function AdminOpportunityDetailClient({
           <h1 className="text-2xl font-bold text-slate-900">{opportunity.business_name}</h1>
           <p className="mt-1 text-sm text-slate-500">{OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}</p>
         </div>
-        <button
-          type="button"
-          disabled={isPending || isClosed}
-          onClick={handleDelete}
-          title={isClosed ? "Closed opportunities cannot be deleted — kept for reporting." : undefined}
-          className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Delete Opportunity
-        </button>
+        <div className="flex flex-wrap gap-2.5">
+          <button
+            type="button"
+            disabled={isPending || isEmailSuppressed || !opportunity.email}
+            onClick={() => setShowEmailModal(true)}
+            title={
+              isEmailSuppressed
+                ? "This prospect has unsubscribed from promotional emails."
+                : !opportunity.email
+                  ? "This prospect has no email address on file."
+                  : undefined
+            }
+            className="rounded-full bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Send Email
+          </button>
+          <button
+            type="button"
+            disabled={isPending || isClosed}
+            onClick={handleDelete}
+            title={isClosed ? "Closed opportunities cannot be deleted — kept for reporting." : undefined}
+            className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Delete Opportunity
+          </button>
+        </div>
       </div>
+
+      {isEmailSuppressed && (
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          This prospect has unsubscribed from promotional emails and cannot be sent another consultation invite.
+        </p>
+      )}
 
       {isOverdue(opportunity) && opportunity.next_follow_up_at && (
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
@@ -328,6 +363,22 @@ export default function AdminOpportunityDetailClient({
           )}
         </section>
       </div>
+
+      <EmailHistoryPanel emails={emailHistory} />
+
+      {showEmailModal && opportunity.email && (
+        <ProspectEmailModal
+          businessName={opportunity.business_name}
+          contactName={opportunity.contact_name}
+          toEmail={opportunity.email}
+          opportunityType={opportunity.opportunity_type}
+          agentName={currentUserName}
+          bookingUrl={bookingUrl}
+          onClose={() => setShowEmailModal(false)}
+          onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
+          onSent={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

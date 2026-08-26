@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
+import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
 import {
   ACTIVITY_TYPES,
   CLOSED_STAGES,
@@ -221,4 +222,23 @@ export async function closeOpportunityAction(opportunityId: string, outcome: str
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   revalidatePath("/admin/crm");
   refresh();
+}
+
+// "Send Email" (prospect-email system) - the templated consultation invite,
+// already reviewed/edited by the admin in ProspectEmailModal. Delegates to
+// sendProspectEmail (src/lib/send-prospect-email.ts), shared with the
+// agent's equivalent action, so tracking/status-advance logic can't drift
+// between roles.
+export async function sendProspectEmailAction(
+  opportunityId: string,
+  input: { subject: string; message: string; ctaText: string }
+): Promise<SendProspectEmailResult> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const result = await sendProspectEmail(supabase, { opportunityId, crmUser, ...input });
+
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  revalidatePath("/admin/crm");
+  return result;
 }
