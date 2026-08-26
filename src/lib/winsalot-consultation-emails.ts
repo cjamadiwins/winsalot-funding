@@ -186,6 +186,9 @@ export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): W
 
   let linksHtml = "";
   if (params.rescheduleUrl) linksHtml += ctaButtonHtml(params.rescheduleUrl, "Reschedule Again");
+  if (params.cancelUrl) {
+    linksHtml += `<div style="text-align:center; margin-top:8px;"><a href="${escapeHtml(params.cancelUrl)}" style="font-size:12.5px; color:#9ca3af;">Cancel this consultation</a></div>`;
+  }
 
   const bodyHtml = `${paragraphsHtml([
     `Hi ${params.contactName},`,

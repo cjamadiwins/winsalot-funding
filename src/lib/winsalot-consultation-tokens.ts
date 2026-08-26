@@ -129,3 +129,21 @@ export async function consumeWinsalotActionToken(
   if (!claimed) return { ok: false, error: "This link has already been used." };
   return { ok: true, appointmentId: claimed.appointment_id as string };
 }
+
+// Reverts a token's used_at back to null - only ever called by the
+// caller of consumeWinsalotActionToken when the action it provisionally
+// claimed the token for turns out to fail (e.g. the newly-selected slot
+// was booked by someone else in the meantime, or any other error from
+// performWinsalotReschedule/performWinsalotCancellation), so the exact
+// same link keeps working for the prospect to retry. Consuming first
+// (rather than only marking used after success) still matters - it's
+// what makes two concurrent submits of the same link mutually exclusive
+// - this just undoes that claim when nothing actually happened. Never
+// called after the action actually succeeded.
+export async function releaseWinsalotActionToken(
+  token: string,
+  purpose: Extract<WinsalotTokenPurpose, "reschedule" | "cancel">
+): Promise<void> {
+  const admin = getSupabaseAdmin();
+  await admin.from("winsalot_appointment_tokens").update({ used_at: null }).eq("token", token).eq("purpose", purpose);
+}
