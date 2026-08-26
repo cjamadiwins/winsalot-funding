@@ -1,28 +1,36 @@
-// Agent Performance Report (Cleaning CRM): pure, client-safe stats over a
-// batch of per-lead quote records. Deliberately its own file, not an
-// extension of crm-types.ts, mirroring how the Lead Gen CRM's equivalent
-// report (lib/leadgen-performance.ts) keeps its own date-bucketing logic
-// self-contained rather than bloating the shared types module.
+// Agent Performance Report (Winsalot Growth CRM): pure, client-safe stats
+// over a batch of per-opportunity records. Deliberately its own file, not
+// an extension of crm-types.ts, mirroring how the Lead Gen CRM's
+// equivalent report (lib/leadgen-performance.ts) keeps its own
+// date-bucketing logic self-contained rather than bloating the shared
+// types module.
 //
-// Unlike the Lead Gen report (one weekly target on one event type), this
-// one tracks two goals against every two-week period:
-//   - Quotes Sent: quote_requests.customer_quote_sent_at - the moment an
-//     admin actually sends the customer-facing quote (Send Quote to
-//     Customer), not when a quote is merely requested from a provider.
-//   - Quotes Received: the earliest provider_quote_submissions row for
-//     that quote request - the moment a provider submits a completed
-//     price, not when a request is created or assigned.
-// Both are credited to crm_leads.assigned_agent_id - the agent who owns
-// the customer relationship - never to the provider (providers aren't CRM
-// agents and have no login here), so "received" always reflects who was
-// handling that lead, not who happened to submit the price.
+// Tracks five goals against every two-week period, all credited to
+// crm_opportunities.assigned_agent_id:
+//   - Consultations booked: consultation_date falling in the period
+//     (Lead Generation / Both Services opportunities).
+//   - Qualified opportunities: opportunities *created* in the period that
+//     have progressed past initial contact (stage is Interested,
+//     Consultation Booked, Proposal or Application Sent, or Client Won).
+//   - Applications submitted: application_submitted_at falling in the
+//     period (Business Financing / Both Services opportunities).
+//   - Proposals sent: proposal_sent_at falling in the period.
+//   - Clients won: closed_at falling in the period, stage = Client Won.
+//
+// proposal_sent_at / application_submitted_at are set once by the
+// stage-change server action the first time an opportunity enters that
+// stage - not by a trigger - mirroring how closed_at is already set by
+// closeOpportunityAction.
 
-export const CRM_BIWEEKLY_QUOTES_SENT_TARGET = 4;
-export const CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET = 1;
+export const CRM_BIWEEKLY_CONSULTATIONS_TARGET = 4;
+export const CRM_BIWEEKLY_QUALIFIED_TARGET = 6;
+export const CRM_BIWEEKLY_APPLICATIONS_TARGET = 2;
+export const CRM_BIWEEKLY_PROPOSALS_TARGET = 4;
+export const CRM_BIWEEKLY_WON_TARGET = 2;
 
 // How many past periods (in addition to the current one) computeCrmAgentPerformance
 // returns as history - about 4 months, generous enough for an admin to spot a
-// trend without the list growing unbounded as leads accumulate for years.
+// trend without the list growing unbounded as opportunities accumulate for years.
 const CRM_PERFORMANCE_HISTORY_PERIODS = 8;
 
 // Matches LEADGEN_PERFORMANCE_TIMEZONE (lib/leadgen-performance.ts) - "this
@@ -36,22 +44,35 @@ export const CRM_PERFORMANCE_TIMEZONE = "America/Toronto";
 // two-week boundary the way Monday is for a week).
 const BIWEEKLY_EPOCH_MONDAY = "2024-01-01";
 
-export type CrmPerformanceQuoteRecord = {
-  leadId: string;
+export type CrmPerformanceOpportunityRecord = {
+  opportunityId: string;
   assignedAgentId: string | null;
   businessName: string;
-  quoteSentAt: string | null;
-  quoteReceivedAt: string | null;
+  opportunityType: "lead_generation" | "business_financing" | "both_services";
+  stage: string;
+  createdAt: string;
+  consultationDate: string | null;
+  proposalSentAt: string | null;
+  applicationSubmittedAt: string | null;
+  closedAt: string | null;
 };
+
+const QUALIFIED_STAGES = new Set(["Interested", "Consultation Booked", "Proposal or Application Sent", "Client Won"]);
 
 export type CrmBiweeklyPeriodPerformance = {
   periodStart: string; // YYYY-MM-DD, Monday
   periodEnd: string; // YYYY-MM-DD, second Sunday (13 days after periodStart)
-  quotesSent: number;
-  quotesReceived: number;
-  sentPercentage: number; // capped at 100 for display
-  receivedPercentage: number; // capped at 100 for display
-  overallPercentage: number; // capped at 100, average of the two capped percentages
+  consultationsBooked: number;
+  qualifiedOpportunities: number;
+  applicationsSubmitted: number;
+  proposalsSent: number;
+  clientsWon: number;
+  consultationsPercentage: number; // capped at 100 for display
+  qualifiedPercentage: number;
+  applicationsPercentage: number;
+  proposalsPercentage: number;
+  wonPercentage: number;
+  overallPercentage: number; // capped at 100, average of the five capped percentages
 };
 
 export type CrmAgentPerformance = {
@@ -129,52 +150,73 @@ export function crmPerformanceTier(percentage: number): CrmPerformanceTier {
   return "red";
 }
 
+function pct(count: number, target: number): number {
+  return Math.min(100, Math.round((count / target) * 100));
+}
+
 // Exported so the Monthly Performance history module can compute an
 // arbitrary period's totals the same way this file's own current/history
 // periods are computed, without duplicating (or drifting from) this
-// credited-quote filter.
+// credited-opportunity filter.
 export function computeCrmPeriodPerformance(
-  records: CrmPerformanceQuoteRecord[],
+  records: CrmPerformanceOpportunityRecord[],
   agentId: string,
   periodStart: string,
   periodEnd: string
 ): CrmBiweeklyPeriodPerformance {
-  let quotesSent = 0;
-  let quotesReceived = 0;
+  let consultationsBooked = 0;
+  let qualifiedOpportunities = 0;
+  let applicationsSubmitted = 0;
+  let proposalsSent = 0;
+  let clientsWon = 0;
+
+  const inRange = (iso: string) => {
+    const key = crmDateKey(iso);
+    return key >= periodStart && key <= periodEnd;
+  };
 
   for (const record of records) {
     if (record.assignedAgentId !== agentId) continue;
-    if (record.quoteSentAt) {
-      const key = crmDateKey(record.quoteSentAt);
-      if (key >= periodStart && key <= periodEnd) quotesSent++;
-    }
-    if (record.quoteReceivedAt) {
-      const key = crmDateKey(record.quoteReceivedAt);
-      if (key >= periodStart && key <= periodEnd) quotesReceived++;
-    }
+
+    if (record.consultationDate && inRange(record.consultationDate)) consultationsBooked++;
+    if (QUALIFIED_STAGES.has(record.stage) && inRange(record.createdAt)) qualifiedOpportunities++;
+    if (record.applicationSubmittedAt && inRange(record.applicationSubmittedAt)) applicationsSubmitted++;
+    if (record.proposalSentAt && inRange(record.proposalSentAt)) proposalsSent++;
+    if (record.stage === "Client Won" && record.closedAt && inRange(record.closedAt)) clientsWon++;
   }
 
-  const sentPercentage = Math.min(100, Math.round((quotesSent / CRM_BIWEEKLY_QUOTES_SENT_TARGET) * 100));
-  const receivedPercentage = Math.min(100, Math.round((quotesReceived / CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET) * 100));
+  const consultationsPercentage = pct(consultationsBooked, CRM_BIWEEKLY_CONSULTATIONS_TARGET);
+  const qualifiedPercentage = pct(qualifiedOpportunities, CRM_BIWEEKLY_QUALIFIED_TARGET);
+  const applicationsPercentage = pct(applicationsSubmitted, CRM_BIWEEKLY_APPLICATIONS_TARGET);
+  const proposalsPercentage = pct(proposalsSent, CRM_BIWEEKLY_PROPOSALS_TARGET);
+  const wonPercentage = pct(clientsWon, CRM_BIWEEKLY_WON_TARGET);
 
   return {
     periodStart,
     periodEnd,
-    quotesSent,
-    quotesReceived,
-    sentPercentage,
-    receivedPercentage,
-    overallPercentage: Math.round((sentPercentage + receivedPercentage) / 2),
+    consultationsBooked,
+    qualifiedOpportunities,
+    applicationsSubmitted,
+    proposalsSent,
+    clientsWon,
+    consultationsPercentage,
+    qualifiedPercentage,
+    applicationsPercentage,
+    proposalsPercentage,
+    wonPercentage,
+    overallPercentage: Math.round(
+      (consultationsPercentage + qualifiedPercentage + applicationsPercentage + proposalsPercentage + wonPercentage) / 5
+    ),
   };
 }
 
 // Computes one agent's current biweekly snapshot plus history from a shared
-// batch of per-lead quote records (the caller fetches once and calls this
+// batch of per-opportunity records (the caller fetches once and calls this
 // per agent, rather than one query per agent). `now` is only ever
 // overridden by tests - production callers always use the default (real
 // "now").
 export function computeCrmAgentPerformance(
-  records: CrmPerformanceQuoteRecord[],
+  records: CrmPerformanceOpportunityRecord[],
   agentId: string,
   now: Date = new Date()
 ): CrmAgentPerformance {

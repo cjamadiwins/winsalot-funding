@@ -1,10 +1,18 @@
 import type { CrmAgentPerformance, CrmBiweeklyPeriodPerformance, CrmPerformanceTier } from "@/lib/crm-performance";
-import { CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET, CRM_BIWEEKLY_QUOTES_SENT_TARGET, crmBiweeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
+import {
+  CRM_BIWEEKLY_CONSULTATIONS_TARGET,
+  CRM_BIWEEKLY_QUALIFIED_TARGET,
+  CRM_BIWEEKLY_APPLICATIONS_TARGET,
+  CRM_BIWEEKLY_PROPOSALS_TARGET,
+  CRM_BIWEEKLY_WON_TARGET,
+  crmBiweeklyRangeLabel,
+  crmPerformanceTier,
+} from "@/lib/crm-performance";
 import PerformanceRing from "@/components/crm-ui/PerformanceRing";
 
 // One color per tier, shared by every percentage badge, progress bar, and
-// status pill for a given metric so they never disagree (brief: "Use these
-// colours" - 70-100% green, 40-69% yellow, 0-39% red).
+// status pill for a given metric so they never disagree (70-100% green,
+// 40-69% yellow, 0-39% red).
 const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text: string }> = {
   green: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
   yellow: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
@@ -37,12 +45,15 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
         <div className="mt-5">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Previous Periods</div>
           <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full min-w-[480px] text-left text-[12.5px]">
+            <table className="w-full min-w-[640px] text-left text-[12.5px]">
               <thead className="bg-slate-50">
                 <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                   <th className="p-2.5">Period</th>
-                  <th className="p-2.5">Quotes Sent</th>
-                  <th className="p-2.5">Quotes Received</th>
+                  <th className="p-2.5">Consultations</th>
+                  <th className="p-2.5">Qualified</th>
+                  <th className="p-2.5">Applications</th>
+                  <th className="p-2.5">Proposals</th>
+                  <th className="p-2.5">Clients Won</th>
                   <th className="p-2.5">Overall</th>
                 </tr>
               </thead>
@@ -53,10 +64,19 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
                     <tr key={period.periodStart} className="border-b border-slate-100 last:border-0">
                       <td className="p-2.5 text-slate-600">{crmBiweeklyRangeLabel(period.periodStart, period.periodEnd)}</td>
                       <td className="p-2.5 font-medium text-slate-900">
-                        {period.quotesSent}/{CRM_BIWEEKLY_QUOTES_SENT_TARGET}
+                        {period.consultationsBooked}/{CRM_BIWEEKLY_CONSULTATIONS_TARGET}
                       </td>
                       <td className="p-2.5 font-medium text-slate-900">
-                        {period.quotesReceived}/{CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET}
+                        {period.qualifiedOpportunities}/{CRM_BIWEEKLY_QUALIFIED_TARGET}
+                      </td>
+                      <td className="p-2.5 font-medium text-slate-900">
+                        {period.applicationsSubmitted}/{CRM_BIWEEKLY_APPLICATIONS_TARGET}
+                      </td>
+                      <td className="p-2.5 font-medium text-slate-900">
+                        {period.proposalsSent}/{CRM_BIWEEKLY_PROPOSALS_TARGET}
+                      </td>
+                      <td className="p-2.5 font-medium text-slate-900">
+                        {period.clientsWon}/{CRM_BIWEEKLY_WON_TARGET}
                       </td>
                       <td className="p-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TIER_STYLES[tier].badge}`}>
@@ -76,8 +96,11 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
 }
 
 function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
-  const sentTier = crmPerformanceTier(period.sentPercentage);
-  const receivedTier = crmPerformanceTier(period.receivedPercentage);
+  const consultationsTier = crmPerformanceTier(period.consultationsPercentage);
+  const qualifiedTier = crmPerformanceTier(period.qualifiedPercentage);
+  const applicationsTier = crmPerformanceTier(period.applicationsPercentage);
+  const proposalsTier = crmPerformanceTier(period.proposalsPercentage);
+  const wonTier = crmPerformanceTier(period.wonPercentage);
   const overallTier = crmPerformanceTier(period.overallPercentage);
 
   return (
@@ -85,15 +108,21 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
       <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
         <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" size={180} strokeWidth={14} />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-          <Stat label="Quotes Sent" value={`${period.quotesSent}/${CRM_BIWEEKLY_QUOTES_SENT_TARGET}`} />
-          <Stat label="Quotes Received" value={`${period.quotesReceived}/${CRM_BIWEEKLY_QUOTES_RECEIVED_TARGET}`} />
+          <Stat label="Consultations Booked" value={`${period.consultationsBooked}/${CRM_BIWEEKLY_CONSULTATIONS_TARGET}`} />
+          <Stat label="Qualified Opportunities" value={`${period.qualifiedOpportunities}/${CRM_BIWEEKLY_QUALIFIED_TARGET}`} />
+          <Stat label="Applications Submitted" value={`${period.applicationsSubmitted}/${CRM_BIWEEKLY_APPLICATIONS_TARGET}`} />
+          <Stat label="Proposals Sent" value={`${period.proposalsSent}/${CRM_BIWEEKLY_PROPOSALS_TARGET}`} />
+          <Stat label="Clients Won" value={`${period.clientsWon}/${CRM_BIWEEKLY_WON_TARGET}`} />
           <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
         </div>
       </div>
 
-      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Progress</div>
-      <ProgressGoal label="Quotes Sent Progress" percentage={period.sentPercentage} tier={sentTier} />
-      <ProgressGoal label="Quotes Received Progress" percentage={period.receivedPercentage} tier={receivedTier} />
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Progress</div>
+      <ProgressGoal label="Consultations Booked Progress" percentage={period.consultationsPercentage} tier={consultationsTier} />
+      <ProgressGoal label="Qualified Opportunities Progress" percentage={period.qualifiedPercentage} tier={qualifiedTier} />
+      <ProgressGoal label="Applications Submitted Progress" percentage={period.applicationsPercentage} tier={applicationsTier} />
+      <ProgressGoal label="Proposals Sent Progress" percentage={period.proposalsPercentage} tier={proposalsTier} />
+      <ProgressGoal label="Clients Won Progress" percentage={period.wonPercentage} tier={wonTier} />
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Performance Status</span>

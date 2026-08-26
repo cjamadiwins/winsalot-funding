@@ -260,7 +260,7 @@ export default function ConnectProposeCloseCourse({ crm }: Props) {
         ) : (
           <>
             <p className="mt-4 text-sm text-[var(--color-ink)]">
-              For the Cleaning CRM, the CTA depends on the situation and may include:
+              For the Winsalot Growth CRM, the CTA depends on the situation and may include:
             </p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-ink)]">
               <li>Completing the cleaning quote request</li>

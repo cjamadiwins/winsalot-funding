@@ -7,11 +7,12 @@ import { syncCrmBiweeklyPerformanceHistory } from "@/lib/crm-performance-history
 import type { CrmBiweeklyHistoryRow } from "@/lib/crm-performance-history";
 import CrmAgentMonthlyPerformanceCard from "@/components/CrmAgentMonthlyPerformanceCard";
 
-// Agent's own view of the Cleaning CRM's Monthly Performance report -
-// only ever this agent's own data, never another agent's:
+// Agent's own view of the Winsalot Growth CRM's Monthly Performance
+// report - only ever this agent's own data, never another agent's:
 //  - getCrmPerformanceRecords(crmUser.id) scopes the underlying
-//    crm_leads query itself to this agent's own leads, exactly the way
-//    the existing biweekly page (/agent/performance) already does.
+//    crm_opportunities query itself to this agent's own opportunities,
+//    exactly the way the existing biweekly page (/agent/performance)
+//    already does.
 //  - the one-time freeze-completed-periods sync needs the service-role
 //    admin client (agents have no insert/update grant on
 //    crm_agent_biweekly_performance, only select-own - migration 0052),
@@ -35,7 +36,7 @@ export default async function AgentCrmMonthlyPerformancePage() {
   const { data: historyRows } = await admin
     .from("crm_agent_biweekly_performance")
     .select(
-      "agent_id, agent_name, period_start, period_end, quotes_sent, quotes_sent_target, quotes_sent_percentage, quotes_received, quotes_received_target, quotes_received_percentage, overall_percentage, status"
+      "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, qualified_opportunities, qualified_opportunities_target, qualified_opportunities_percentage, applications_submitted, applications_submitted_target, applications_submitted_percentage, proposals_sent, proposals_sent_target, proposals_sent_percentage, clients_won, clients_won_target, clients_won_percentage, overall_percentage, status"
     )
     .eq("agent_id", crmUser.id);
 
@@ -49,8 +50,9 @@ export default async function AgentCrmMonthlyPerformancePage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-[var(--color-ink-strong)]">Monthly Performance</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Your quotes sent and completed quote requests submitted for the selected month, against goals based on the biweekly targets
-            that fall within it. Previous months stay available after the month changes.
+            Your consultations booked, qualified opportunities, applications submitted, proposals sent, and clients won for the selected
+            month, against goals based on the biweekly targets that fall within it. Previous months stay available after the month
+            changes.
           </p>
         </div>
         <Link href="/agent/performance" className="text-[13px] font-medium text-[var(--color-accent)] hover:underline">

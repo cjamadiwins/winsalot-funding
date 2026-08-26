@@ -3,7 +3,7 @@ import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { computeCrmAgentPerformance } from "@/lib/crm-performance";
 import CrmPerformanceCard from "@/components/CrmPerformanceCard";
 
-// Agent's own view of the Cleaning CRM's Agent Performance Report - just
+// Agent's own view of the Winsalot Growth CRM's Agent Performance Report - just
 // their own card. getCrmPerformanceRecords(agent.id) scopes the underlying
 // query to this agent's own leads, so this can never return another
 // agent's data; the admin's equivalent page (/admin/crm/performance) shows

@@ -8,9 +8,6 @@ import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import {
   LayoutDashboard,
-  Search,
-  UserPlus,
-  HardHat,
   Mail,
   GraduationCap,
   CalendarDays,
@@ -29,9 +26,6 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: <LayoutDashboard /> },
-  { label: "Cleaning Opportunities", href: "/agent/opportunities", icon: <Search /> },
-  { label: "Provider Acquisition", href: "/agent/provider-acquisition", icon: <UserPlus /> },
-  { label: "Providers", href: "/agent/providers", icon: <HardHat /> },
   { label: "Email Tracking", href: "/agent/emails", icon: <Mail /> },
   { label: "Sales Training & Call Scripts", href: "/agent/training", icon: <GraduationCap /> },
   { label: "My Attendance", href: "/agent/my-attendance", icon: <CalendarDays /> },
@@ -60,7 +54,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
   return (
     <div className="crm-theme crm-theme--cleaning">
       <CrmShell
-        brandTitle="Cleaning CRM"
+        brandTitle="Winsalot Growth CRM"
         brandSubtitle={
           <>
             Empowering Businesses,

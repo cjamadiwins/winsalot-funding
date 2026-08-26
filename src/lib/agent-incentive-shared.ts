@@ -1,6 +1,6 @@
 // Weekly Agent Incentive: tiny pure helpers shared by BOTH CRMs' own
 // calculation libs (lib/leadgen-incentives.ts for the Lead Gen CRM,
-// lib/crm-incentives.ts for the Cleaning CRM) and by the central ledger
+// lib/crm-incentives.ts for the Winsalot Growth CRM) and by the central ledger
 // (supabase/migrations/0059_agent_incentive_ledger.sql,
 // lib/agent-incentive-ledger.ts). Deliberately tiny and CRM-agnostic -
 // it has no idea what a "qualified appointment" or "qualified quote" is,

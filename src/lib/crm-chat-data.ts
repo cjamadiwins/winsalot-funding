@@ -13,7 +13,7 @@ export type ChatPageData = {
   announcementUnreadCount: number;
 };
 
-// Loads everything the Cleaning CRM's chat UI needs for one page render,
+// Loads everything the Winsalot Growth CRM's chat UI needs for one page render,
 // from the caller's own session-scoped client - RLS already restricts
 // every query here to rows this specific crm_users employee may see. The
 // one exception is resolving *other* DM participants' display names,

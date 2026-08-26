@@ -1,14 +1,14 @@
 import "server-only";
 import { escapeHtml } from "./html";
 
-// A follow-up nudge sent to a CRM lead who was already sent a quote
-// request but hasn't completed it — the email analog of the "Cleaning
-// Quote Request Follow-Up" call script (see
-// supabase/migrations/0021_followup_call_script.sql). Sent only when an
-// agent or admin clicks "Send Follow-Up Email" on that lead's record,
-// same fixed destination as the quote request email (no token/link
-// specific to this lead).
-export const FOLLOW_UP_URL = "https://cleaning.winsalotcorp.com";
+// A follow-up nudge sent to a Growth CRM opportunity's contact who hasn't
+// responded yet — the email analog of the "Prospect Follow-Up Script"
+// call script (see supabase/migrations/0084_crm_training_growth_content.sql).
+// Sent only when an agent or admin clicks "Send Follow-Up Email" on that
+// opportunity's record. Unlike the retired quote-request follow-up email,
+// there's no public self-serve link to send — Growth CRM opportunities
+// move forward through a phone/email conversation with the assigned
+// agent, not a form.
 
 function firstNameFrom(name: string): string {
   const trimmed = name.trim();
@@ -21,16 +21,11 @@ export function buildFollowUpEmailText(customerName: string): string {
   return [
     `Hello ${firstName},`,
     "",
-    "We wanted to follow up on your cleaning quote request — we haven't heard back from you yet.",
+    "We wanted to follow up — we haven't heard back from you yet about growing your business with Winsalot Corp's lead generation and business financing services.",
     "",
-    "If you still need a free cleaning quote, please click below to get started:",
+    "If you're still interested, just reply to this email or give us a call and we'll pick up right where we left off.",
     "",
-    `Get a Free Cleaning Quote: ${FOLLOW_UP_URL}`,
-    "",
-    "If the button does not work, use this link:",
-    FOLLOW_UP_URL,
-    "",
-    "If you have any questions or already found another provider, just reply to let us know.",
+    "If your plans have changed or you've already found another solution, just let us know.",
     "",
     "Best regards,",
     "Winsalot Corp.",
@@ -41,7 +36,6 @@ export function buildFollowUpEmailText(customerName: string): string {
 
 export function buildFollowUpEmailHtml(customerName: string): string {
   const firstName = firstNameFrom(customerName);
-  const url = FOLLOW_UP_URL;
 
   return `
 <!DOCTYPE html>
@@ -49,7 +43,7 @@ export function buildFollowUpEmailHtml(customerName: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Following Up on Your Cleaning Quote Request</title>
+<title>Following Up — Winsalot Corp</title>
 </head>
 <body style="margin:0; padding:0; background-color:#f4f5f7; font-family: Arial, Helvetica, sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 0;">
@@ -70,42 +64,18 @@ export function buildFollowUpEmailHtml(customerName: string): string {
               </p>
 
               <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#374151;">
-                We wanted to follow up on your cleaning quote request — we haven&apos;t heard back
-                from you yet.
+                We wanted to follow up — we haven&apos;t heard back from you yet about growing your
+                business with Winsalot Corp&apos;s lead generation and business financing services.
               </p>
 
               <p style="margin:0 0 24px 0; font-size:15px; line-height:1.6; color:#374151;">
-                If you still need a free cleaning quote, please click below to get started:
-              </p>
-
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 12px auto;">
-                <tr>
-                  <td align="center" style="border-radius:6px; background-color:#2563eb;">
-                    <!--[if mso]>
-                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:52px;v-text-anchor:middle;width:280px;" arcsize="11%" stroke="f" fillcolor="#2563eb">
-                    <w:anchorlock/>
-                    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:17px;font-weight:bold;">Get a Free Cleaning Quote</center>
-                    </v:roundrect>
-                    <![endif]-->
-                    <!--[if !mso]><!-->
-                    <a href="${url}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       style="display:inline-block; padding:16px 40px; font-size:17px; font-weight:bold; color:#ffffff; text-decoration:none; border-radius:6px; background-color:#2563eb;">
-                      Get a Free Cleaning Quote
-                    </a>
-                    <!--<![endif]-->
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:0 0 24px 0; font-size:13px; line-height:1.6; color:#6b7280; text-align:center;">
-                If the button does not work, use this link:<br>
-                <a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb; text-decoration:underline;">${url}</a>
+                If you&apos;re still interested, just reply to this email or give us a call and
+                we&apos;ll pick up right where we left off.
               </p>
 
               <p style="margin:0 0 24px 0; font-size:15px; line-height:1.6; color:#374151;">
-                If you have any questions or already found another provider, just reply to let us know.
+                If your plans have changed or you&apos;ve already found another solution, just let
+                us know.
               </p>
 
               <p style="margin:0; font-size:15px; line-height:1.6; color:#374151;">
@@ -120,7 +90,7 @@ export function buildFollowUpEmailHtml(customerName: string): string {
           <tr>
             <td style="padding:24px 40px; background-color:#f9fafb; text-align:center; border-top:1px solid #e5e7eb;">
               <p style="margin:0; font-size:12px; line-height:1.5; color:#9ca3af;">
-                You're receiving this because you spoke with Winsalot Corp about a cleaning service.
+                You're receiving this because you spoke with Winsalot Corp about growing your business.
               </p>
             </td>
           </tr>

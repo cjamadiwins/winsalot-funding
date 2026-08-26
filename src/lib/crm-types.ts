@@ -33,130 +33,92 @@ export type AgentAttendanceRow = {
   break2_end: string | null;
 };
 
-export const LEAD_STAGES = [
-  "New interested lead",
-  "Waiting for cleaning details",
-  "Quote requested from provider",
-  "Provider quote received",
-  "Quote sent to customer",
-  "Follow-up required",
-  "Customer accepted",
-  "Customer declined",
-  "No response",
-  "Closed/completed",
-  "Closed – Won",
-  "Closed – Lost",
+// ---------------------------------------------------------------------
+// Winsalot Growth CRM: sales opportunities for the two services Winsalot
+// Corp sells - Lead Generation and Business Financing (or both at once).
+// Replaces the old commercial-cleaning-quote-linked "lead" pipeline
+// (crm_leads) - see supabase/migrations/0080-0085 for the schema and the
+// one-time data migration that carried every existing crm_leads row over
+// as a 'lead_generation' opportunity.
+
+export const OPPORTUNITY_TYPES = ["lead_generation", "business_financing", "both_services"] as const;
+
+export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
+
+export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
+  lead_generation: "Lead Generation",
+  business_financing: "Business Financing",
+  both_services: "Both Services",
+};
+
+export const OPPORTUNITY_STAGES = [
+  "New Prospect",
+  "Contacted",
+  "Interested",
+  "Consultation Booked",
+  "Proposal or Application Sent",
+  "Client Won",
+  "Follow-Up Required",
+  "Not Interested",
 ] as const;
 
-export type LeadStage = (typeof LEAD_STAGES)[number];
+export type OpportunityStage = (typeof OPPORTUNITY_STAGES)[number];
 
-// The only two stages that mean "this lead is done" for overdue-flagging
-// and admin reporting purposes. Deliberately narrower than "every
-// terminal-ish stage" (e.g. the legacy "No response"/"Closed/completed"
-// aren't included) - a lead only stops being eligible for an Overdue flag
-// once it's been deliberately closed Won or Lost, with a reason recorded
-// (see crm_leads_closed_reason_required, migration 0024).
-export const CLOSED_STAGES: LeadStage[] = ["Closed – Won", "Closed – Lost"];
+// The only two stages that mean "this opportunity is done" for
+// overdue-flagging and admin reporting purposes - an opportunity only
+// stops being eligible for an Overdue flag once it's been deliberately
+// closed Won or Lost, with a reason recorded (see
+// crm_opportunities_closed_reason_required, migration 0081).
+export const CLOSED_STAGES: OpportunityStage[] = ["Client Won", "Not Interested"];
 
-// Stages an agent may set themselves via the plain stage dropdown. The
-// remaining stages ("Customer accepted", "Customer declined",
-// "Closed/completed") are system/admin controlled - accept/decline sync
-// automatically from the customer's response, and "Closed/completed" is a
-// dedicated admin-only action. Enforced in the database too (see migration
-// 0009/0024), not just this list.
-//
-// "Closed – Won"/"Closed – Lost" are deliberately *not* in this list even
-// though an agent is allowed to set them (migration 0024's trigger permits
-// it) - closing a lead always requires a reason, so it only ever happens
-// through closeLeadAction (the dedicated Close Lead panel), never through
-// this freeform dropdown.
-export const AGENT_SETTABLE_STAGES: LeadStage[] = [
-  "New interested lead",
-  "Waiting for cleaning details",
-  "Quote requested from provider",
-  "Provider quote received",
-  "Follow-up required",
-  "No response",
+// Stages an agent may set themselves via the plain stage dropdown.
+// "Client Won"/"Not Interested" are deliberately *not* in this list even
+// though an agent is allowed to set them (migration 0081's trigger
+// permits it) - closing an opportunity always requires a reason, so it
+// only ever happens through closeOpportunityAction (the dedicated Close
+// Opportunity panel), never through this freeform dropdown.
+export const AGENT_SETTABLE_STAGES: OpportunityStage[] = [
+  "New Prospect",
+  "Contacted",
+  "Interested",
+  "Consultation Booked",
+  "Proposal or Application Sent",
+  "Follow-Up Required",
 ];
 
-export const SYSTEM_ONLY_STAGES: LeadStage[] = [
-  "Customer accepted",
-  "Customer declined",
-  "Closed/completed",
-];
-
-export const LEAD_STAGE_STYLES: Record<LeadStage, string> = {
-  "New interested lead": "bg-indigo-100 text-indigo-800",
-  "Waiting for cleaning details": "bg-slate-100 text-slate-700",
-  "Quote requested from provider": "bg-amber-100 text-amber-800",
-  "Provider quote received": "bg-sky-100 text-sky-800",
-  "Quote sent to customer": "bg-purple-100 text-purple-800",
-  "Follow-up required": "bg-orange-100 text-orange-800",
-  "Customer accepted": "bg-emerald-100 text-emerald-800",
-  "Customer declined": "bg-rose-100 text-rose-800",
-  "No response": "bg-rose-100 text-rose-800",
-  "Closed/completed": "bg-indigo-100 text-indigo-800",
-  "Closed – Won": "bg-emerald-100 text-emerald-800",
-  "Closed – Lost": "bg-rose-100 text-rose-800",
+export const OPPORTUNITY_STAGE_STYLES: Record<OpportunityStage, string> = {
+  "New Prospect": "bg-indigo-100 text-indigo-800",
+  Contacted: "bg-slate-100 text-slate-700",
+  Interested: "bg-sky-100 text-sky-800",
+  "Consultation Booked": "bg-purple-100 text-purple-800",
+  "Proposal or Application Sent": "bg-amber-100 text-amber-800",
+  "Client Won": "bg-emerald-100 text-emerald-800",
+  "Follow-Up Required": "bg-orange-100 text-orange-800",
+  "Not Interested": "bg-rose-100 text-rose-800",
 };
 
-// Shared tone palette for the agent dashboard's 5 "My Leads" KPI
+// Shared tone palette for the agent dashboard's "My Opportunities" KPI
 // cards - a single source of truth so the cards, and anything else that
 // wants to reference the same concept, can never diverge in colour.
-export const CRM_LEAD_DASHBOARD_CARD_STYLES: Record<"total" | "newLead" | "dueToday" | "overdue" | "followUp", KpiTone> = {
+export const CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES: Record<
+  "total" | "newProspect" | "interested" | "consultations" | "financing" | "leadGen" | "followUp" | "won",
+  KpiTone
+> = {
   total: "blue",
-  newLead: "indigo",
-  dueToday: "amber",
-  overdue: "red",
+  newProspect: "indigo",
+  interested: "cyan",
+  consultations: "purple",
+  financing: "amber",
+  leadGen: "teal",
   followUp: "orange",
+  won: "green",
 };
-
-// ---------------------------------------------------------------------
-// Quote Fulfillment display labels/colors: a clearer, customer/provider-
-// relationship-explicit name and color for 8 of the 12 LeadStage values,
-// used only for dashboard cards, stage badges, and filters. Purely
-// presentational - the underlying LeadStage string stored on crm_leads,
-// every trigger/constraint keyed on it (migrations 0009/0024), and every
-// filter's actual value are all unchanged, so this can never affect
-// which leads a filter matches or what gets saved. A stage not in this
-// map (Follow-up required / No response / Closed – Won / Closed – Lost)
-// keeps its existing label and LEAD_STAGE_STYLES color exactly as
-// before - nothing about them is removed.
-export const QUOTE_FULFILLMENT_STAGE_LABELS: Partial<Record<LeadStage, string>> = {
-  "New interested lead": "New Quote Request",
-  "Waiting for cleaning details": "Waiting on Customer",
-  "Quote requested from provider": "Waiting on Provider",
-  "Provider quote received": "Quote Received",
-  "Quote sent to customer": "Quote Sent to Customer",
-  "Customer accepted": "Customer Accepted",
-  "Customer declined": "Customer Declined",
-  "Closed/completed": "Job Completed",
-};
-
-export const QUOTE_FULFILLMENT_STAGE_STYLES: Partial<Record<LeadStage, string>> = {
-  "New interested lead": "bg-blue-100 text-blue-800",
-  "Waiting for cleaning details": "bg-orange-100 text-orange-800",
-  "Quote requested from provider": "bg-purple-100 text-purple-800",
-  "Provider quote received": "bg-teal-100 text-teal-800",
-  "Quote sent to customer": "bg-sky-100 text-sky-800",
-  "Customer accepted": "bg-green-100 text-green-800",
-  "Customer declined": "bg-red-100 text-red-800",
-  "Closed/completed": "bg-emerald-200 text-emerald-900",
-};
-
-export function quoteFulfillmentStageLabel(stage: LeadStage): string {
-  return QUOTE_FULFILLMENT_STAGE_LABELS[stage] ?? stage;
-}
-
-export function quoteFulfillmentStageStyle(stage: LeadStage): string {
-  return QUOTE_FULFILLMENT_STAGE_STYLES[stage] ?? LEAD_STAGE_STYLES[stage];
-}
 
 export const CLOSE_OUTCOMES = ["won", "lost"] as const;
 export type CloseOutcome = (typeof CLOSE_OUTCOMES)[number];
 
-export function stageForCloseOutcome(outcome: CloseOutcome): LeadStage {
-  return outcome === "won" ? "Closed – Won" : "Closed – Lost";
+export function stageForCloseOutcome(outcome: CloseOutcome): OpportunityStage {
+  return outcome === "won" ? "Client Won" : "Not Interested";
 }
 
 // Every status a Resend delivery event can put an email in. Deliberately
@@ -198,56 +160,73 @@ export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
   failed: "bg-rose-100 text-rose-800",
 };
 
-export const EMAIL_TYPES = ["quote_request", "follow_up"] as const;
+export const EMAIL_TYPES = ["follow_up"] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
 
 export const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
-  quote_request: "Quote request",
   follow_up: "Follow-up",
 };
 
-export type CrmLeadRow = {
+export type CrmOpportunityRow = {
   id: string;
   created_at: string;
+  opportunity_type: OpportunityType;
+  stage: OpportunityStage;
+
+  // Shared core fields.
   business_name: string;
   contact_name: string | null;
   phone: string;
   email: string | null;
-  city: string;
-  service_address: string | null;
-  service_requested: string;
-  property_type: string | null;
-  approximate_size: string | null;
-  cleaning_frequency: string | null;
-  preferred_start_date: string | null;
-  best_time_to_contact: string | null;
-  lead_source: string | null;
-  notes: string | null;
-  stage: LeadStage;
+  city: string | null;
+  province_state: string | null;
   assigned_agent_id: string | null;
   created_by: string | null;
+  notes: string | null;
   next_follow_up_at: string | null;
   last_contacted_at: string | null;
-  quote_request_id: string | null;
+  closed_reason: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+
+  // Lead Generation fields.
+  industry: string | null;
+  target_customers: string | null;
+  current_marketing_method: string | null;
+  appointments_wanted: number | null;
+  estimated_monthly_budget: number | null;
+  consultation_date: string | null;
+
+  // Business Financing fields.
+  business_structure: "corporation" | "sole_proprietorship" | null;
+  time_in_business: string | null;
+  average_monthly_revenue: number | null;
+  financing_amount_requested: number | null;
+  bank_statements_available: boolean | null;
+  application_status: string | null;
+
+  // Stage-reached timestamps, set once by the server action the first
+  // time an opportunity enters that stage (see crm-performance.ts).
+  proposal_sent_at: string | null;
+  application_submitted_at: string | null;
+
   last_email_status: EmailEventStatus | null;
   last_email_status_at: string | null;
   last_email_type: EmailType | null;
   last_email_to: string | null;
-  closed_reason: string | null;
-  closed_at: string | null;
-  closed_by: string | null;
 };
 
 // A single tracked send (crm_lead_emails) - the Resend email id plus a
 // timestamp per delivery event. Not read directly by any UI today (every
 // event is also mirrored onto crm_activities, and the "latest status" is
-// mirrored onto crm_leads), but kept as a typed row shape for the webhook
-// handler and any future per-email drill-down.
+// mirrored onto crm_opportunities), but kept as a typed row shape for the
+// webhook handler and any future per-email drill-down.
 export type CrmLeadEmailRow = {
   id: string;
   created_at: string;
-  lead_id: string;
+  lead_id: string | null;
+  opportunity_id: string | null;
   agent_id: string | null;
   activity_id: string | null;
   resend_email_id: string;
@@ -266,11 +245,10 @@ export type CrmLeadEmailRow = {
   failed_at: string | null;
 };
 
-// Display-safe subset of CrmLeadEmailRow for a lead's most recently sent
-// tracked email, fetched via the service-role client only after RLS has
-// already confirmed the caller can see that lead (same pattern as the
-// linkedQuote lookup on this page) - crm_lead_emails has no RLS policies
-// of its own (see migration 0022).
+// Display-safe subset of CrmLeadEmailRow for an opportunity's most
+// recently sent tracked email, fetched via the service-role client only
+// after RLS has already confirmed the caller can see that opportunity -
+// crm_lead_emails has no RLS policies of its own (see migration 0022).
 export type LatestCrmLeadEmail = Pick<
   CrmLeadEmailRow,
   | "email_type"
@@ -288,21 +266,29 @@ export type LatestCrmLeadEmail = Pick<
   | "failed_at"
 >;
 
-export type NewCrmLeadInput = {
+export type NewCrmOpportunityInput = {
+  opportunity_type: OpportunityType;
   business_name: string;
   contact_name?: string;
   phone: string;
   email?: string;
-  city: string;
-  service_address?: string;
-  service_requested: string;
-  property_type?: string;
-  approximate_size?: string;
-  cleaning_frequency?: string;
-  preferred_start_date?: string;
-  best_time_to_contact?: string;
-  lead_source?: string;
+  city?: string;
+  province_state?: string;
   notes?: string;
+
+  industry?: string;
+  target_customers?: string;
+  current_marketing_method?: string;
+  appointments_wanted?: number;
+  estimated_monthly_budget?: number;
+  consultation_date?: string;
+
+  business_structure?: "corporation" | "sole_proprietorship";
+  time_in_business?: string;
+  average_monthly_revenue?: number;
+  financing_amount_requested?: number;
+  bank_statements_available?: boolean;
+  application_status?: string;
 };
 
 export const ACTIVITY_TYPES = [
@@ -328,7 +314,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
 export type CrmActivityRow = {
   id: string;
   created_at: string;
-  lead_id: string;
+  lead_id: string | null;
+  opportunity_id: string | null;
   agent_id: string | null;
   activity_type: ActivityType;
   notes: string | null;
@@ -336,7 +323,7 @@ export type CrmActivityRow = {
   next_follow_up_at: string | null;
 };
 
-// The Cleaning CRM's operating timezone for Due Today/Overdue
+// The Winsalot Growth CRM's operating timezone for Due Today/Overdue
 // day-boundary comparisons. This matters because the app runs on Vercel
 // serverless functions, whose Node process is UTC regardless of where
 // staff actually are - comparing calendar dates via Date's local-time
@@ -365,28 +352,29 @@ function crmDateKey(date: Date): string {
 
 // Overdue is judged against the exact scheduled date *and time* - a
 // follow-up scheduled for 2pm is overdue the moment 2pm passes, not at
-// midnight. A lead stops being eligible the moment it's Closed – Won or
-// Closed – Lost (see CLOSED_STAGES above), regardless of any other stage.
-export function isOverdue(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">): boolean {
-  if (!lead.next_follow_up_at) return false;
-  if (CLOSED_STAGES.includes(lead.stage)) return false;
-  return new Date(lead.next_follow_up_at).getTime() < Date.now();
+// midnight. An opportunity stops being eligible the moment it's Client
+// Won or Not Interested (see CLOSED_STAGES above), regardless of any
+// other stage.
+export function isOverdue(opportunity: Pick<CrmOpportunityRow, "next_follow_up_at" | "stage">): boolean {
+  if (!opportunity.next_follow_up_at) return false;
+  if (CLOSED_STAGES.includes(opportunity.stage)) return false;
+  return new Date(opportunity.next_follow_up_at).getTime() < Date.now();
 }
 
 // "Due today" means scheduled for today (in America/Toronto) but not yet
 // overdue - once the scheduled time passes it moves into isOverdue()
 // instead, so the two are mutually exclusive rather than both being true
 // for the rest of the day.
-export function isDueToday(lead: Pick<CrmLeadRow, "next_follow_up_at" | "stage">): boolean {
-  if (!lead.next_follow_up_at) return false;
-  if (CLOSED_STAGES.includes(lead.stage)) return false;
-  if (isOverdue(lead)) return false;
-  return crmDateKey(new Date(lead.next_follow_up_at)) === crmDateKey(new Date());
+export function isDueToday(opportunity: Pick<CrmOpportunityRow, "next_follow_up_at" | "stage">): boolean {
+  if (!opportunity.next_follow_up_at) return false;
+  if (CLOSED_STAGES.includes(opportunity.stage)) return false;
+  if (isOverdue(opportunity)) return false;
+  return crmDateKey(new Date(opportunity.next_follow_up_at)) === crmDateKey(new Date());
 }
 
 // "3 days overdue" / "5 hours overdue" / "12 minutes overdue" - used
-// anywhere an overdue lead or follow-up is shown so agents/admins see how
-// late it is at a glance, not just that it's late.
+// anywhere an overdue opportunity or follow-up is shown so agents/admins
+// see how late it is at a glance, not just that it's late.
 export function overdueDurationLabel(scheduledIso: string): string {
   const elapsedMs = Date.now() - new Date(scheduledIso).getTime();
   if (elapsedMs <= 0) return "";
@@ -402,16 +390,17 @@ export function overdueDurationLabel(scheduledIso: string): string {
 }
 
 // Follow-Up Calendar: dedicated scheduled callbacks (crm_followups),
-// distinct from the crm_activities timeline. crm_leads.next_follow_up_at
+// distinct from the crm_activities timeline. crm_opportunities.next_follow_up_at
 // is kept in sync with these automatically by a database trigger (see
-// migration 0011) - it's the earliest pending callback for that lead, not
-// something application code writes directly anymore.
+// migration 0082) - it's the earliest pending callback for that
+// opportunity, not something application code writes directly anymore.
 export type FollowUpStatus = "pending" | "completed";
 
 export type CrmFollowUpRow = {
   id: string;
   created_at: string;
-  lead_id: string;
+  lead_id: string | null;
+  opportunity_id: string | null;
   scheduled_by: string | null;
   scheduled_at: string;
   note: string | null;
@@ -421,14 +410,18 @@ export type CrmFollowUpRow = {
 };
 
 // Joined shape used wherever a follow-up is displayed outside the context
-// of its own lead page (the calendar, the admin follow-ups view) and
-// needs to show which lead/business it's for without a second round trip.
-export type CrmFollowUpWithLead = CrmFollowUpRow & {
-  crm_leads: Pick<CrmLeadRow, "id" | "business_name" | "phone" | "city" | "assigned_agent_id"> | null;
+// of its own opportunity page (the calendar, the admin follow-ups view)
+// and needs to show which opportunity/business it's for without a second
+// round trip.
+export type CrmFollowUpWithOpportunity = CrmFollowUpRow & {
+  crm_opportunities: Pick<
+    CrmOpportunityRow,
+    "id" | "business_name" | "phone" | "city" | "assigned_agent_id" | "opportunity_type"
+  > | null;
 };
 
 // Same exact-timestamp rule as isOverdue() above, applied to an individual
-// scheduled callback rather than the lead as a whole.
+// scheduled callback rather than the opportunity as a whole.
 export function isFollowUpOverdue(followUp: Pick<CrmFollowUpRow, "scheduled_at" | "status">): boolean {
   if (followUp.status !== "pending") return false;
   return new Date(followUp.scheduled_at).getTime() < Date.now();
@@ -447,8 +440,8 @@ export function isFollowUpUpcoming(followUp: Pick<CrmFollowUpRow, "scheduled_at"
 }
 
 // Sales Training & Call Scripts: read-only reference content for agents.
-// Kept as its own top-level section rather than part of the lead-management
-// screen so it doesn't compete for space there.
+// Kept as its own top-level section rather than part of the
+// opportunity-management screen so it doesn't compete for space there.
 export type CrmTrainingMaterialRow = {
   id: string;
   created_at: string;
@@ -459,8 +452,7 @@ export type CrmTrainingMaterialRow = {
   created_by: string | null;
   link_url: string | null;
   link_label: string | null;
-  // Optional grouping label (migration 0026) - null for every entry
-  // seeded before Provider Acquisition existed, which renders under a
+  // Optional grouping label (migration 0026) - null renders under a
   // default "General Training" heading.
   category: string | null;
 };

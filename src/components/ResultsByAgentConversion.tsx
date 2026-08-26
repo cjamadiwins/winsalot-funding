@@ -12,31 +12,33 @@ import {
   formatConversionRate,
   isoInRange,
   type CrmConversionRow,
-  type CrmLeadToQuoteRecord,
+  type CrmOpportunityConversionRecord,
   type CrmResultsDateFilter,
 } from "@/lib/crm-conversion";
 import KpiCard from "@/components/crm-ui/KpiCard";
 
-// Cleaning CRM's "Results by Agent" section for the Lead-to-Quote Rate
-// KPI - Quotes Sent / Total Leads * 100, following the same Today/This
-// Week/This Month/All Time filters as the Lead Generation CRM's
-// equivalent chart (ResultsByAgentChart.tsx), and reused as-is for the
-// agent's own single-row view on /agent/dashboard (agents.length === 1
-// there hides the separate overall card and per-agent list header, since
-// they'd otherwise just repeat the same one row - RLS already ensures an
-// agent's `records` only ever contains their own leads).
+// Winsalot Growth CRM's "Results by Agent" section for the
+// Prospect-to-Client Rate KPI - Clients Won / Total Prospects * 100,
+// following the same Today/This Week/This Month/All Time filters as the
+// Lead Generation CRM's equivalent chart (ResultsByAgentChart.tsx), and
+// reused as-is for the agent's own single-row view on /agent/dashboard
+// (agents.length === 1 there hides the separate overall card and
+// per-agent list header, since they'd otherwise just repeat the same one
+// row - RLS already ensures an agent's `records` only ever contains their
+// own opportunities).
 export default function ResultsByAgentConversion({
   agents,
   records,
   serverNowIso,
-  leadHrefBase,
+  opportunityHrefBase,
 }: {
   agents: { id: string; full_name: string; email?: string }[];
-  records: CrmLeadToQuoteRecord[];
+  records: CrmOpportunityConversionRecord[];
   serverNowIso: string;
-  // "/admin/crm/leads" or "/agent/leads" - the base path this section's
-  // drilldown links land on (each CRM role has its own lead detail route).
-  leadHrefBase: string;
+  // "/admin/crm/opportunities" or "/agent/opportunities" - the base path
+  // this section's drilldown links land on (each CRM role has its own
+  // opportunity detail route).
+  opportunityHrefBase: string;
 }) {
   const [filter, setFilter] = useState<CrmResultsDateFilter>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -50,9 +52,9 @@ export default function ResultsByAgentConversion({
   );
   const range = useMemo(() => crmResultsDateRange(filter, now), [filter, now]);
 
-  function quotesSentInRange(agentId?: string) {
+  function clientsWonInRange(agentId?: string) {
     return records
-      .filter((record) => record.quoteSentAt)
+      .filter((record) => record.stage === "Client Won")
       .filter((record) => isoInRange(record.createdAt, range))
       .filter((record) => !agentId || record.assignedAgentId === agentId);
   }
@@ -82,14 +84,14 @@ export default function ResultsByAgentConversion({
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-cyan-700">
-          {isSingleAgent ? "Your Lead-to-Quote Rate" : "Results by Agent"}
+          {isSingleAgent ? "Your Prospect-to-Client Rate" : "Results by Agent"}
         </h2>
         {filterButtons}
       </div>
 
       <div className="mt-4 max-w-xs">
         <KpiCard
-          label="Lead-to-Quote Rate"
+          label="Prospect-to-Client Rate"
           value={formatConversionRate(overall.rate)}
           icon={<TrendingUp />}
           tone="cyan"
@@ -104,11 +106,11 @@ export default function ResultsByAgentConversion({
         // agent), so no extra agent filter is needed here even in the
         // single-agent case.
         <ConversionDrilldown
-          title={`Quotes sent — ${CRM_RESULTS_DATE_FILTER_LABEL[filter]}`}
-          count={overall.quotesSent}
-          totalLeads={overall.totalLeads}
-          leadHrefBase={leadHrefBase}
-          records={quotesSentInRange()}
+          title={`Clients won — ${CRM_RESULTS_DATE_FILTER_LABEL[filter]}`}
+          count={overall.clientsWon}
+          totalProspects={overall.totalProspects}
+          opportunityHrefBase={opportunityHrefBase}
+          records={clientsWonInRange()}
         />
       )}
 
@@ -121,26 +123,26 @@ export default function ResultsByAgentConversion({
                 <button
                   type="button"
                   onClick={() => setExpanded((current) => (current === row.agentId ? null : row.agentId))}
-                  title={`${row.agentName} — Lead-to-Quote Rate: ${formatConversionRate(row.rate)}`}
+                  title={`${row.agentName} — Prospect-to-Client Rate: ${formatConversionRate(row.rate)}`}
                   className={`cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition ${
                     expanded === row.agentId ? "bg-cyan-600 text-white" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                   }`}
                 >
-                  {formatConversionRate(row.rate)} Lead-to-Quote
+                  {formatConversionRate(row.rate)} Prospect-to-Client
                 </button>
               </div>
               <p className="mt-1.5 text-[12.5px] text-slate-500">
-                {row.quotesSent} quote{row.quotesSent === 1 ? "" : "s"} sent of {row.totalLeads} lead
-                {row.totalLeads === 1 ? "" : "s"}
+                {row.clientsWon} client{row.clientsWon === 1 ? "" : "s"} won of {row.totalProspects} prospect
+                {row.totalProspects === 1 ? "" : "s"}
               </p>
 
               {expanded === row.agentId && (
                 <ConversionDrilldown
-                  title={`${row.agentName} — Quotes sent (${CRM_RESULTS_DATE_FILTER_LABEL[filter]})`}
-                  count={row.quotesSent}
-                  totalLeads={row.totalLeads}
-                  leadHrefBase={leadHrefBase}
-                  records={quotesSentInRange(row.agentId)}
+                  title={`${row.agentName} — Clients won (${CRM_RESULTS_DATE_FILTER_LABEL[filter]})`}
+                  count={row.clientsWon}
+                  totalProspects={row.totalProspects}
+                  opportunityHrefBase={opportunityHrefBase}
+                  records={clientsWonInRange(row.agentId)}
                 />
               )}
             </div>
@@ -154,32 +156,32 @@ export default function ResultsByAgentConversion({
 function ConversionDrilldown({
   title,
   count,
-  totalLeads,
+  totalProspects,
   records,
-  leadHrefBase,
+  opportunityHrefBase,
 }: {
   title: string;
   count: number;
-  totalLeads: number;
-  records: CrmLeadToQuoteRecord[];
-  leadHrefBase: string;
+  totalProspects: number;
+  records: CrmOpportunityConversionRecord[];
+  opportunityHrefBase: string;
 }) {
   return (
     <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50/50 p-3.5">
       <div className="flex items-center justify-between text-[12px] font-semibold text-cyan-800">
         <span>{title}</span>
         <span className="tabular-nums">
-          {count} / {totalLeads}
+          {count} / {totalProspects}
         </span>
       </div>
       {records.length === 0 ? (
-        <p className="mt-2 text-[12.5px] text-slate-500">No quotes sent in this period.</p>
+        <p className="mt-2 text-[12.5px] text-slate-500">No clients won in this period.</p>
       ) : (
         <ul className="mt-2 space-y-1">
           {records.map((record) => (
-            <li key={record.leadId}>
+            <li key={record.opportunityId}>
               <Link
-                href={`${leadHrefBase}/${record.leadId}`}
+                href={`${opportunityHrefBase}/${record.opportunityId}`}
                 className="text-[12.5px] font-medium text-sky-700 hover:text-sky-900 hover:underline"
               >
                 {record.businessName}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { LEAD_GEN_HOSTS, CLEANING_QUOTE_HOSTS, isLeadGenHost, isCleaningHost, authCookieName } from "@/lib/hosts";
+import { LEAD_GEN_HOSTS, isLeadGenHost, isGrowthCrmHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0];
@@ -10,21 +10,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.rewrite(new URL("/lead-generation", request.url));
   }
 
-  if (pathname === "/" && CLEANING_QUOTE_HOSTS.has(host)) {
-    return NextResponse.rewrite(new URL("/commercial-cleaning-quote", request.url));
-  }
+  // Growth CRM hosts render "/" directly (src/app/page.tsx is already the
+  // Growth CRM landing page) - no rewrite needed, unlike the Lead Gen
+  // host above.
 
   // Cross-CRM isolation: /admin and /agent belong exclusively to the
-  // Cleaning CRM, /leadgen/* exclusively to the Lead Gen CRM. Both Vercel
+  // Growth CRM, /leadgen/* exclusively to the Lead Gen CRM. Both Vercel
   // projects deploy this exact same codebase, so without this check
   // either CRM's routes render identically on the other's domain - this
   // is exactly what produced leads.winsalotcorp.com/admin displaying the
-  // Cleaning CRM. Redirecting to "/" is safe on both hosts: the rewrite
-  // rules above already give each host its own correct landing page.
+  // Growth CRM. Redirecting to "/" is safe on both hosts: the Lead Gen
+  // host still gets its own rewrite above, and "/" is a fine landing page
+  // on a Growth CRM host too.
   if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
-  if (isCleaningHost(host) && pathname.startsWith("/leadgen")) {
+  if (isGrowthCrmHost(host) && pathname.startsWith("/leadgen")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

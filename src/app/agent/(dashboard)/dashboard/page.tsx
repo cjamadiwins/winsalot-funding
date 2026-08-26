@@ -2,11 +2,10 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { AgentAttendanceRow, CrmFollowUpWithLead, CrmLeadRow } from "@/lib/crm-types";
-import type { ProviderFollowUpWithLead } from "@/lib/provider-types";
+import type { AgentAttendanceRow, CrmFollowUpWithOpportunity, CrmOpportunityRow } from "@/lib/crm-types";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
-import { getCrmLeadToQuoteRecords } from "@/lib/crm-conversion-data";
+import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
+import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
@@ -16,57 +15,33 @@ import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCa
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
-import OverdueLeadsPanel from "./OverdueLeadsPanel";
-import ProviderFollowUps from "./ProviderFollowUps";
+import OverdueOpportunitiesPanel from "./OverdueOpportunitiesPanel";
 import AttendanceCard from "./AttendanceCard";
 
-export default async function AgentDashboardPage({
-  searchParams,
-}: {
-  // stage/followup are set by the "My Leads" stat cards below (see
-  // AgentDashboardClient.tsx) to pre-filter the list on the same page -
-  // same convention as the Leads CRM's clickable dashboard cards.
-  searchParams: Promise<{ stage?: string; followup?: string }>;
-}) {
+export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
-  const { stage, followup } = await searchParams;
 
   const weekStart = crmMondayOf(crmDateKey(new Date()));
   const weekEnd = crmAddDays(weekStart, 6);
   const incentiveMonthStart = monthStartOfWeek(weekStart);
 
-  // RLS (crm_leads_agent_select_own / crm_followups_agent_select_own_lead)
-  // already restricts both of these to leads assigned to the signed-in
-  // agent, so no extra filtering is needed here.
+  // RLS (crm_opportunities_agent_select_own / crm_followups_agent_select_own_opportunity)
+  // already restricts both of these to opportunities assigned to the
+  // signed-in agent, so no extra filtering is needed here - the session
+  // client is enough, no service-role client required.
   const [
-    { data: leadsData, error: leadsError },
+    { data: opportunitiesData, error: opportunitiesError },
     { data: followUpsData, error: followUpsError },
-    { data: providerFollowUpsData, error: providerFollowUpsError },
     { data: attendanceData, error: attendanceError },
   ] = await Promise.all([
-    supabase.from("crm_leads").select("*").order("created_at", { ascending: false }),
+    supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase
       .from("crm_followups")
-      .select("*, crm_leads(id, business_name, phone, city, assigned_agent_id)")
+      .select("*, crm_opportunities(id, business_name, phone, city, assigned_agent_id, opportunity_type)")
       .eq("status", "pending")
-      // crm_followups also holds opportunity- and provider-lead-targeted
-      // rows (migrations 0013/0026) - this dashboard's Follow-Up Calendar
-      // is lead-only, so exclude those explicitly rather than relying on
-      // RLS alone (which permits all three target types).
-      .not("lead_id", "is", null)
-      .order("scheduled_at", { ascending: true }),
-    // Provider Acquisition's own "Provider Follow-ups" section (brief
-    // section 9) - deliberately a separate query/section from the
-    // Follow-Up Calendar above, never mixed with customer-lead callbacks.
-    supabase
-      .from("crm_followups")
-      .select(
-        "*, provider_leads(id, business_name, contact_person, phone, email, status, assigned_agent_id, intake_completed_at, cleaning_provider_id)"
-      )
-      .eq("status", "pending")
-      .not("provider_lead_id", "is", null)
+      .not("opportunity_id", "is", null)
       .order("scheduled_at", { ascending: true }),
     supabase
       .from("agent_attendance")
@@ -78,9 +53,8 @@ export default async function AgentDashboardPage({
       .maybeSingle(),
   ]);
 
-  const leads = (leadsData ?? []) as CrmLeadRow[];
-  const followUps = (followUpsData ?? []) as CrmFollowUpWithLead[];
-  const providerFollowUps = (providerFollowUpsData ?? []) as ProviderFollowUpWithLead[];
+  const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
+  const followUps = (followUpsData ?? []) as CrmFollowUpWithOpportunity[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
 
   // Same helpers /agent/performance uses (getCrmPerformanceRecords +
@@ -91,28 +65,28 @@ export default async function AgentDashboardPage({
   const performance = computeCrmAgentPerformance(performanceRecords, crmUser.id);
   const performanceTier = crmPerformanceTier(performance.current.overallPercentage);
 
-  // Lead-to-Quote Rate (Results by Agent) - scoped to just this agent's
-  // own leads (getCrmLeadToQuoteRecords(crmUser.id) never even receives
-  // another agent's rows over the wire), so an agent only ever sees their
-  // own rate here.
-  const conversionRecords = await getCrmLeadToQuoteRecords(crmUser.id);
+  // Prospect-to-Client Rate (Results by Agent) - scoped to just this
+  // agent's own opportunities (getCrmOpportunityConversionRecords(crmUser.id)
+  // never even receives another agent's rows over the wire), so an agent
+  // only ever sees their own rate here.
+  const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
 
-  // Weekly Agent Incentive - scoped to just this agent's own quotes
-  // (getCrmIncentiveQuotes(crmUser.id) never even receives another
+  // Weekly Agent Incentive - scoped to just this agent's own opportunities
+  // (getCrmIncentiveOpportunities(crmUser.id) never even receives another
   // agent's rows over the wire, same pattern as getCrmPerformanceRecords
   // above). Settings/ledger reads go through the session client (RLS:
   // winsalot_incentive_settings_agent_select /
   // winsalot_agent_incentive_ledger_agent_select_own); the cross-CRM
   // month-to-date total is the one deliberate service-role exception -
   // see fetchAgentMonthToDateApproved's header comment.
-  const [incentiveQuotes, incentiveSettings, incentiveLedgerRow, incentiveMonthToDateApproved] = await Promise.all([
-    getCrmIncentiveQuotes(crmUser.id),
+  const [incentiveOpportunities, incentiveSettings, incentiveLedgerRow, incentiveMonthToDateApproved] = await Promise.all([
+    getCrmIncentiveOpportunities(crmUser.id),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "cleaning", crmUser.email, weekStart),
     fetchAgentMonthToDateApproved(admin, crmUser.email, incentiveMonthStart),
   ]);
   const weeklyIncentive = computeCrmWeeklyIncentive(
-    incentiveQuotes,
+    incentiveOpportunities,
     crmUser.id,
     weekStart,
     weekEnd,
@@ -136,10 +110,10 @@ export default async function AgentDashboardPage({
           </p>
         </div>
         <Link
-          href="/agent/leads/new"
+          href="/agent/opportunities/new"
           className="whitespace-nowrap rounded-full bg-[var(--color-accent)] px-5 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
         >
-          + Add Lead
+          + New Opportunity
         </Link>
       </div>
 
@@ -149,7 +123,7 @@ export default async function AgentDashboardPage({
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
             <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
-              {performance.current.quotesSent} quotes sent · {performance.current.quotesReceived} received
+              {performance.current.consultationsBooked} consultations · {performance.current.clientsWon} won
             </div>
             <div className="mt-0.5 text-[12.5px] text-[var(--crm-text-muted)]">
               Period: {crmBiweeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}
@@ -165,13 +139,13 @@ export default async function AgentDashboardPage({
         agents={[{ id: crmUser.id, full_name: crmUser.full_name, email: crmUser.email }]}
         records={conversionRecords}
         serverNowIso={new Date().toISOString()}
-        leadHrefBase="/agent/leads"
+        opportunityHrefBase="/agent/opportunities"
       />
 
       <AgentWeeklyIncentiveCard
         crm="cleaning"
         weekLabel={formatIncentiveWeekLabel(weekStart, weekEnd)}
-        recordLabel="qualified quotes"
+        recordLabel="won opportunities"
         qualifiedCount={weeklyIncentive.qualifiedCount}
         quota={weeklyIncentive.quota}
         percentage={weeklyIncentive.percentage}
@@ -194,9 +168,9 @@ export default async function AgentDashboardPage({
         </p>
       )}
 
-      {!leadsError && !followUpsError && (
+      {!opportunitiesError && !followUpsError && (
         <div className="mt-8">
-          <OverdueLeadsPanel leads={leads} followUps={followUps} />
+          <OverdueOpportunitiesPanel opportunities={opportunities} followUps={followUps} />
         </div>
       )}
 
@@ -210,46 +184,21 @@ export default async function AgentDashboardPage({
       )}
       {!followUpsError && (
         <div className="mt-3">
-          <FollowUpCalendar followUps={followUps} leads={leads} />
+          <FollowUpCalendar followUps={followUps} opportunities={opportunities} />
         </div>
       )}
 
-      <h2 className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
-        Provider Follow-ups
-      </h2>
-      {providerFollowUpsError && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Failed to load provider follow-ups: {providerFollowUpsError.message}
-        </p>
-      )}
-      {!providerFollowUpsError && (
-        <div className="mt-3">
-          <ProviderFollowUps followUps={providerFollowUps} />
-        </div>
-      )}
-
-      <h2 id="my-leads" className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
-        My Leads
+      <h2 id="my-opportunities" className="mt-10 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">
+        My Opportunities
       </h2>
 
-      {leadsError && (
+      {opportunitiesError && (
         <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Failed to load leads: {leadsError.message}
+          Failed to load opportunities: {opportunitiesError.message}
         </p>
       )}
 
-      {!leadsError && (
-        <AgentDashboardClient
-          // Force a remount when the URL filter changes, since Next.js
-          // reuses this client component across same-route navigations -
-          // without this, clicking a different stat card while already
-          // on the dashboard wouldn't re-seed the filter state below.
-          key={`${stage ?? "all"}|${followup ?? "all"}`}
-          leads={leads}
-          initialStageFilter={stage}
-          initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
-        />
-      )}
+      {!opportunitiesError && <AgentDashboardClient opportunities={opportunities} />}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { sanitizeChatContent, isRecentDuplicateMessage } from "./chat-shared";
 import type { ActiveEmployeeOption } from "./chat-types";
 
-// Server Actions for the Cleaning CRM's own Employee Chat - reads and
+// Server Actions for the Winsalot Growth CRM's own Employee Chat - reads and
 // writes ONLY crm_users and the crm_* chat tables (see
 // supabase/migrations/0073_chat_crm_isolation.sql). Never touches
 // leadgen_users or any leadgen_* table - that isolation is the whole
@@ -158,7 +158,7 @@ export async function searchCrmActiveEmployeesAction(query: string): Promise<{ e
   if (trimmed.length < 1) return { results: [] };
 
   // Service-role client deliberately: an agent's own crm_users RLS only
-  // lets them see their own row, but every active Cleaning CRM employee
+  // lets them see their own row, but every active Winsalot Growth CRM employee
   // needs to be searchable by name for Direct Messages - this returns
   // only {id, name, isAdmin}, never email or any other field, and never
   // queries leadgen_users.

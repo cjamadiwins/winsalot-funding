@@ -1,27 +1,20 @@
-// Cleaning CRM: pure, client-safe calculations for the Lead-to-Quote Rate
-// KPI card (admin "Results by Agent" on /admin/crm/leads, agent's own
-// card on /agent/dashboard). Mirrors the Lead Generation CRM's equivalent
-// module (lib/leadgen-agent-results.ts) - same Today/This Week/This
-// Month/All Time filter set and Monday-start week - duplicated rather
-// than shared, matching this codebase's existing convention of keeping
-// the two CRMs' logic fully independent (see crm-types.ts's CRM_TIMEZONE
-// comment).
+// Winsalot Growth CRM: pure, client-safe calculations for the
+// Prospect-to-Client Rate KPI card (admin "Results by Agent" on
+// /admin/crm/opportunities, agent's own card on /agent/dashboard). Mirrors
+// the Lead Generation CRM's equivalent module (lib/leadgen-agent-results.ts)
+// - same Today/This Week/This Month/All Time filter set and Monday-start
+// week - duplicated rather than shared, matching this codebase's existing
+// convention of keeping the two CRMs' logic fully independent (see
+// crm-types.ts's CRM_TIMEZONE comment).
 //
-// Both Total Leads and Quotes Sent are gated by the same cohort: leads
-// *created* within the active date range, and of those, how many
-// currently have a quote sent (quoteSentAt set, regardless of exactly
-// when within/after that range it was sent). This is the same "created
-// in this period, does it currently show the later outcome" rule the
-// Lead Gen CRM's own Results by Agent chart already uses for its
-// Appointments Booked metric - it keeps the rate a same-cohort ratio
-// that can never exceed 100%.
-//
-// quoteSentAt itself is quote_requests.customer_quote_sent_at - the same
-// "when does a quote count as sent" timestamp the Agent Performance
-// Report already uses (crm-performance.ts), not crm_leads.stage, which
-// only reflects a lead's *current* stage and would undercount once a
-// lead progresses past "Quote sent to customer" (e.g. to Customer
-// accepted/declined).
+// Both Total Prospects and Clients Won are gated by the same cohort:
+// opportunities *created* within the active date range, and of those, how
+// many currently have stage = 'Client Won' (regardless of exactly when
+// within/after that range they were won). This is the same "created in
+// this period, does it currently show the later outcome" rule the Lead
+// Gen CRM's own Results by Agent chart already uses for its Appointments
+// Booked metric - it keeps the rate a same-cohort ratio that can never
+// exceed 100%.
 
 import { crmDateKey } from "./crm-performance";
 
@@ -78,8 +71,8 @@ export function crmResultsDateRange(filter: CrmResultsDateFilter, now: Date = ne
 }
 
 // Exported so any UI that needs to build its own drilldown list (the
-// exact leads behind a rate for the current filter/agent) can reuse the
-// identical in-range rule this file's own counts already use.
+// exact opportunities behind a rate for the current filter/agent) can
+// reuse the identical in-range rule this file's own counts already use.
 export function isoInRange(iso: string | null, range: CrmResultsDateRange): boolean {
   if (!range) return true;
   if (!iso) return false;
@@ -87,12 +80,12 @@ export function isoInRange(iso: string | null, range: CrmResultsDateRange): bool
   return key >= range.start && key <= range.end;
 }
 
-// Lead-to-Quote Rate = Quotes Sent / Total Leads * 100 for the same
-// cohort (leads created within the active date range) - 0 with no leads
-// in that cohort, never NaN/Infinity.
-export function leadToQuoteRate(quotesSent: number, totalLeads: number): number {
-  if (totalLeads <= 0) return 0;
-  return (quotesSent / totalLeads) * 100;
+// Prospect-to-Client Rate = Clients Won / Total Prospects * 100 for the
+// same cohort (opportunities created within the active date range) - 0
+// with no opportunities in that cohort, never NaN/Infinity.
+export function prospectToClientRate(clientsWon: number, totalProspects: number): number {
+  if (totalProspects <= 0) return 0;
+  return (clientsWon / totalProspects) * 100;
 }
 
 // "20.0%" - one decimal place, per brief.
@@ -100,25 +93,25 @@ export function formatConversionRate(rate: number): string {
   return `${rate.toFixed(1)}%`;
 }
 
-export type CrmLeadToQuoteRecord = {
-  leadId: string;
+export type CrmOpportunityConversionRecord = {
+  opportunityId: string;
   businessName: string;
   assignedAgentId: string | null;
   createdAt: string;
-  quoteSentAt: string | null;
+  stage: string;
 };
 
 export type CrmConversionRow = {
   agentId: string;
   agentName: string;
-  totalLeads: number;
-  quotesSent: number;
+  totalProspects: number;
+  clientsWon: number;
   rate: number;
 };
 
 export function buildCrmAgentConversionResults(
   agents: { id: string; full_name: string; email?: string }[],
-  records: CrmLeadToQuoteRecord[],
+  records: CrmOpportunityConversionRecord[],
   filter: CrmResultsDateFilter,
   now: Date = new Date()
 ): CrmConversionRow[] {
@@ -129,8 +122,8 @@ export function buildCrmAgentConversionResults(
     byAgent.set(agent.id, {
       agentId: agent.id,
       agentName: agent.full_name || agent.email || "Agent",
-      totalLeads: 0,
-      quotesSent: 0,
+      totalProspects: 0,
+      clientsWon: 0,
       rate: 0,
     });
   }
@@ -139,39 +132,40 @@ export function buildCrmAgentConversionResults(
     if (!record.assignedAgentId) continue;
     const row = byAgent.get(record.assignedAgentId);
     // Former/inactive agent no longer in the active roster - excluded the
-    // same way the leads table's own agent dropdown already excludes them.
+    // same way the opportunities table's own agent dropdown already
+    // excludes them.
     if (!row) continue;
     if (!isoInRange(record.createdAt, range)) continue;
 
-    row.totalLeads++;
-    if (record.quoteSentAt) row.quotesSent++;
+    row.totalProspects++;
+    if (record.stage === "Client Won") row.clientsWon++;
   }
 
-  for (const row of byAgent.values()) row.rate = leadToQuoteRate(row.quotesSent, row.totalLeads);
+  for (const row of byAgent.values()) row.rate = prospectToClientRate(row.clientsWon, row.totalProspects);
 
   return Array.from(byAgent.values());
 }
 
 export type CrmOverallConversion = {
-  totalLeads: number;
-  quotesSent: number;
+  totalProspects: number;
+  clientsWon: number;
   rate: number;
 };
 
 export function computeCrmOverallConversion(
-  records: CrmLeadToQuoteRecord[],
+  records: CrmOpportunityConversionRecord[],
   filter: CrmResultsDateFilter,
   now: Date = new Date()
 ): CrmOverallConversion {
   const range = crmResultsDateRange(filter, now);
-  let totalLeads = 0;
-  let quotesSent = 0;
+  let totalProspects = 0;
+  let clientsWon = 0;
 
   for (const record of records) {
     if (!isoInRange(record.createdAt, range)) continue;
-    totalLeads++;
-    if (record.quoteSentAt) quotesSent++;
+    totalProspects++;
+    if (record.stage === "Client Won") clientsWon++;
   }
 
-  return { totalLeads, quotesSent, rate: leadToQuoteRate(quotesSent, totalLeads) };
+  return { totalProspects, clientsWon, rate: prospectToClientRate(clientsWon, totalProspects) };
 }

@@ -44,13 +44,14 @@ function normalizeWebhookSecret(raw: string | undefined): string | undefined {
 }
 
 export async function POST(request: NextRequest) {
-  // This one route.ts is deployed to both the cleaning CRM
-  // (cleaning.winsalotcorp.com) and the Lead Gen CRM (leads.winsalotcorp.com)
-  // Vercel projects, and each has its own webhook registered in Resend with
-  // its own distinct signing secret - so both env vars need to be checked
-  // here, not just one. RESEND_WEBHOOK_SECRET is the cleaning CRM's secret
-  // (see docs/crm.md's webhook setup instructions); RESEND_LEADGEN_WEBHOOK_SECRET
-  // is the Lead Gen CRM's.
+  // This one route.ts is deployed to both the Winsalot Growth CRM
+  // (growth.winsalotcorp.com, formerly cleaning.winsalotcorp.com) and the
+  // Lead Gen CRM (leads.winsalotcorp.com) Vercel projects, and each has
+  // its own webhook registered in Resend with its own distinct signing
+  // secret - so both env vars need to be checked here, not just one.
+  // RESEND_WEBHOOK_SECRET is the Growth CRM's secret (see docs/crm.md's
+  // webhook setup instructions); RESEND_LEADGEN_WEBHOOK_SECRET is the
+  // Lead Gen CRM's.
   const leadgenWebhookSecret = normalizeWebhookSecret(process.env.RESEND_LEADGEN_WEBHOOK_SECRET);
   const cleaningWebhookSecret = normalizeWebhookSecret(process.env.RESEND_WEBHOOK_SECRET);
   const candidateSecrets = [leadgenWebhookSecret, cleaningWebhookSecret].filter((secret): secret is string => !!secret);
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
 
   const { data: tracked } = await admin
     .from("crm_lead_emails")
-    .select("id, lead_id, provider_lead_id, status_at")
+    .select("id, lead_id, opportunity_id, provider_lead_id, status_at")
     .eq("resend_email_id", emailId)
     .maybeSingle();
 
@@ -307,7 +308,11 @@ export async function POST(request: NextRequest) {
 
   console.log(
     `[resend-webhook] matched email ${emailId} to crm_lead_emails ${tracked.id} ` +
-      (tracked.lead_id ? `(lead ${tracked.lead_id})` : `(provider lead ${tracked.provider_lead_id})`)
+      (tracked.opportunity_id
+        ? `(opportunity ${tracked.opportunity_id})`
+        : tracked.lead_id
+          ? `(lead ${tracked.lead_id})`
+          : `(provider lead ${tracked.provider_lead_id})`)
   );
 
   // Only advance the row's "latest status" if this event isn't older than
@@ -327,16 +332,17 @@ export async function POST(request: NextRequest) {
     console.error(`[resend-webhook] failed to update crm_lead_emails ${tracked.id}:`, updateError);
   }
 
-  // Only mirror onto the target record (a crm_leads lead or a
-  // provider_leads provider) if this row is its most recently sent tracked
-  // email — an older email's late-arriving webhook should never overwrite
-  // what a newer email already reported. Exactly one of lead_id/
-  // provider_lead_id is ever set on a crm_lead_emails row (see migration
-  // 0026), so this branches once and reuses the same isNewer/eventAt logic
-  // for either target.
-  const targetTable = tracked.lead_id ? "crm_leads" : "provider_leads";
-  const targetColumn = tracked.lead_id ? "lead_id" : "provider_lead_id";
-  const targetId = tracked.lead_id ?? tracked.provider_lead_id;
+  // Only mirror onto the target record (a crm_opportunities opportunity, a
+  // historical crm_leads lead, or a provider_leads provider) if this row
+  // is its most recently sent tracked email — an older email's
+  // late-arriving webhook should never overwrite what a newer email
+  // already reported. Exactly one of opportunity_id/lead_id/
+  // provider_lead_id is ever set on a crm_lead_emails row (see migrations
+  // 0026/0085), so this branches once and reuses the same isNewer/eventAt
+  // logic for whichever target applies.
+  const targetTable = tracked.opportunity_id ? "crm_opportunities" : tracked.lead_id ? "crm_leads" : "provider_leads";
+  const targetColumn = tracked.opportunity_id ? "opportunity_id" : tracked.lead_id ? "lead_id" : "provider_lead_id";
+  const targetId = tracked.opportunity_id ?? tracked.lead_id ?? tracked.provider_lead_id;
 
   const { data: latestForTarget } = await admin
     .from("crm_lead_emails")
@@ -359,7 +365,7 @@ export async function POST(request: NextRequest) {
   }
 
   const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
-  const recordLabel = tracked.lead_id ? "lead" : "provider";
+  const recordLabel = tracked.opportunity_id ? "opportunity" : tracked.lead_id ? "lead" : "provider";
   let notes = `Email ${EMAIL_STATUS_LABELS[status].toLowerCase()} (to ${toEmail}) — "${event.data.subject}".`;
   if (event.type === "email.bounced") {
     notes = `Email bounced (to ${toEmail}) — ${event.data.bounce.message}. Verify or correct this ${recordLabel}'s email address.`;
@@ -376,6 +382,7 @@ export async function POST(request: NextRequest) {
   if (!isDuplicateDelivery) {
     const { error: activityError } = await admin.from("crm_activities").insert({
       lead_id: tracked.lead_id,
+      opportunity_id: tracked.opportunity_id,
       provider_lead_id: tracked.provider_lead_id,
       agent_id: null,
       activity_type: "email",

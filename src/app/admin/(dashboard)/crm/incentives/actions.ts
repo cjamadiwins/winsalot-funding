@@ -5,7 +5,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeCrmWeeklyIncentive } from "@/lib/crm-incentives";
-import { getCrmIncentiveQuotes } from "@/lib/crm-incentive-data";
+import { getCrmIncentiveOpportunities } from "@/lib/crm-incentive-data";
 import {
   approveWeeklyIncentiveBonus,
   fetchWinsalotIncentiveSettings,
@@ -27,7 +27,7 @@ export async function approveCrmWeeklyBonusAction(weekStart: string, weekEnd: st
 
   const [{ data: agent }, quotes, settings] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
-    getCrmIncentiveQuotes(agentId),
+    getCrmIncentiveOpportunities(agentId),
     fetchWinsalotIncentiveSettings(supabase),
   ]);
 
@@ -72,7 +72,7 @@ export async function rejectCrmWeeklyBonusAction(weekStart: string, weekEnd: str
 
   const [{ data: agent }, quotes, settings] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("id", agentId).maybeSingle(),
-    getCrmIncentiveQuotes(agentId),
+    getCrmIncentiveOpportunities(agentId),
     fetchWinsalotIncentiveSettings(supabase),
   ]);
 
