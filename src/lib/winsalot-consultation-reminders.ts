@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getResendClient } from "./resend";
+import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { createWinsalotActionToken } from "./winsalot-consultation-tokens";
 import { buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
@@ -198,9 +199,9 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
       try {
         const resend = getResendClient();
         const { data: sendResult, error: sendError } = await resend.emails.send({
-          from: process.env.EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>",
+          from: getEmailSender("growth"),
           to: appt.email,
-          replyTo: process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com",
+          replyTo: getEmailReplyTo(),
           subject: email.subject,
           text: email.text,
           html: email.html,

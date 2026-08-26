@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
+import { getEmailReplyTo, senderForOpportunityType } from "./email-senders";
 import { getSupabaseAdmin } from "./supabase-admin";
 import type { CrmUserRow, EmailType } from "./crm-types";
 
@@ -8,8 +9,6 @@ type SendTrackedCrmEmailInput = {
   opportunityId: string;
   crmUser: CrmUserRow;
   emailType: EmailType;
-  fromEmail: string;
-  replyToEmail: string;
   subject: string;
   buildText: (name: string) => string;
   buildHtml: (name: string) => string;
@@ -31,7 +30,7 @@ export async function sendTrackedCrmEmail(
 ): Promise<{ email: string }> {
   const { data: opportunity, error: fetchError } = await supabase
     .from("crm_opportunities")
-    .select("email, contact_name, business_name")
+    .select("email, contact_name, business_name, opportunity_type")
     .eq("id", input.opportunityId)
     .maybeSingle();
 
@@ -45,9 +44,9 @@ export async function sendTrackedCrmEmail(
   const name = opportunity.contact_name || opportunity.business_name;
   const resend = getResendClient();
   const { data: sendResult, error: emailError } = await resend.emails.send({
-    from: input.fromEmail,
+    from: senderForOpportunityType(opportunity.opportunity_type),
     to: opportunity.email,
-    replyTo: input.replyToEmail,
+    replyTo: getEmailReplyTo(),
     subject: input.subject,
     text: input.buildText(name),
     html: input.buildHtml(name),

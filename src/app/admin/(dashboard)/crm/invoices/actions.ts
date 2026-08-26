@@ -5,9 +5,17 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchInvoiceDetail } from "@/lib/crm-invoices-data";
 import { canPermanentlyDeleteInvoice, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
-import { buildInvoiceReminderEmail, buildInvoiceSentEmail } from "@/lib/crm-invoice-emails";
-import { sendCrmInvoiceEmail } from "@/lib/send-crm-invoice-email";
+import {
+  buildDefaultInvoiceReceiptMessage,
+  buildDefaultInvoiceReminderMessage,
+  buildDefaultInvoiceSentMessage,
+  defaultInvoiceReceiptSubject,
+  defaultInvoiceReminderSubject,
+  DEFAULT_INVOICE_SENT_SUBJECT,
+} from "@/lib/crm-invoice-emails";
+import { sendCrmInvoiceEmail, type CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 import type { CrmUserRow } from "@/lib/crm-types";
+import type { CrmPaymentRow } from "@/lib/crm-clients-types";
 
 type ActionResult = { error?: string; invoiceId?: string };
 
@@ -257,12 +265,20 @@ export async function duplicateInvoiceAction(invoiceId: string): Promise<ActionR
   return { invoiceId: newInvoice.id };
 }
 
-export type InvoiceEmailPreview = { to: string; subject: string; text: string; html: string };
+export type InvoiceEmailPreview = { to: string; subject: string; message: string };
 
-// Powers the "preview before send" requirement - returns exactly what
-// would be sent (recipient, subject, body) without sending anything, so
-// the admin reviews it before the actual send/reminder action runs.
-export async function previewInvoiceEmailAction(invoiceId: string, emailType: "invoice_sent" | "invoice_reminder"): Promise<{ preview?: InvoiceEmailPreview; error?: string }> {
+function invoiceClientDisplayName(invoice: Pick<CrmInvoiceRow, "billing_contact_name">, clientCompanyName: string): string {
+  return invoice.billing_contact_name || clientCompanyName;
+}
+
+// Powers the "preview and edit the recipient, subject and email message"
+// requirement - returns the *default* recipient/subject/message for this
+// email type, without sending anything. The admin edits any of the
+// three in the UI, then sendInvoiceAction/sendInvoiceReceiptAction below
+// receive whatever the admin ends up with (default or edited) and send
+// exactly that - this function never re-runs at send time, so the
+// preview and the real send can never disagree.
+export async function previewInvoiceEmailAction(invoiceId: string, emailType: CrmInvoiceEmailType): Promise<{ preview?: InvoiceEmailPreview; error?: string }> {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
@@ -271,8 +287,35 @@ export async function previewInvoiceEmailAction(invoiceId: string, emailType: "i
   const client = (invoice as unknown as { crm_clients: { company_name: string; email: string | null } }).crm_clients;
   if (!client?.email) return { error: "This client has no email address on file. Add one before sending." };
 
-  const body = emailType === "invoice_sent" ? buildInvoiceSentEmail(invoice as CrmInvoiceRow, client.company_name) : buildInvoiceReminderEmail(invoice as CrmInvoiceRow, client.company_name);
-  return { preview: { to: client.email, ...body } };
+  const displayName = invoiceClientDisplayName(invoice, client.company_name);
+
+  if (emailType === "invoice_receipt") {
+    const { data: payment } = await supabase
+      .from("crm_payments")
+      .select("*")
+      .eq("invoice_id", invoiceId)
+      .is("reversed_at", null)
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!payment) return { error: "This invoice has no recorded payment to send a receipt for." };
+    return {
+      preview: {
+        to: client.email,
+        subject: defaultInvoiceReceiptSubject(invoice.invoice_number),
+        message: buildDefaultInvoiceReceiptMessage(invoice as CrmInvoiceRow, displayName, payment as CrmPaymentRow),
+      },
+    };
+  }
+
+  const subject = emailType === "invoice_sent" ? DEFAULT_INVOICE_SENT_SUBJECT : defaultInvoiceReminderSubject(invoice.invoice_number);
+  const message =
+    emailType === "invoice_sent"
+      ? buildDefaultInvoiceSentMessage(invoice as CrmInvoiceRow, displayName)
+      : buildDefaultInvoiceReminderMessage(invoice as CrmInvoiceRow, displayName);
+
+  return { preview: { to: client.email, subject, message } };
 }
 
 // The single send/resend/reminder entry point. `confirmed` must be true
@@ -281,9 +324,25 @@ export async function previewInvoiceEmailAction(invoiceId: string, emailType: "i
 // of what the confirmation modal already required client-side. A resend
 // or reminder never creates a new invoice or a new invoice_number; both
 // operate on this exact row (see sendCrmInvoiceEmail's own comment).
-export async function sendInvoiceAction(invoiceId: string, emailType: "invoice_sent" | "invoice_reminder", confirmed: boolean): Promise<ActionResult> {
+// `to`/`subject`/`message` are whatever the admin ended up with in the
+// preview step (the default, or their own edit) - never rebuilt here.
+export async function sendInvoiceAction(
+  invoiceId: string,
+  emailType: "invoice_sent" | "invoice_reminder",
+  confirmed: boolean,
+  to: string,
+  subject: string,
+  message: string
+): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
+
+  const trimmedTo = to.trim();
+  const trimmedSubject = subject.trim();
+  const trimmedMessage = message.trim();
+  if (!trimmedTo || !trimmedSubject || !trimmedMessage) {
+    return { error: "Recipient, subject, and message are all required." };
+  }
 
   const { data: invoice, error } = await supabase.from("crm_invoices").select("*, crm_clients(company_name, email)").eq("id", invoiceId).maybeSingle();
   if (error || !invoice) return { error: "Invoice not found." };
@@ -292,7 +351,6 @@ export async function sendInvoiceAction(invoiceId: string, emailType: "invoice_s
   }
 
   const client = (invoice as unknown as { crm_clients: { company_name: string; email: string | null } }).crm_clients;
-  if (!client?.email) return { error: "This client has no email address on file. Add one before sending." };
 
   const isFirstSend = emailType === "invoice_sent" && !invoice.first_sent_at;
   if (isFirstSend && !confirmed) {
@@ -305,8 +363,10 @@ export async function sendInvoiceAction(invoiceId: string, emailType: "invoice_s
     await sendCrmInvoiceEmail({
       supabase,
       invoice: invoice as CrmInvoiceRow,
-      clientCompanyName: client.company_name,
-      clientEmail: client.email,
+      clientCompanyName: client?.company_name ?? "Client",
+      toEmail: trimmedTo,
+      subject: trimmedSubject,
+      message: trimmedMessage,
       lineItems: lineItems ?? [],
       emailType,
       admin,
@@ -318,6 +378,55 @@ export async function sendInvoiceAction(invoiceId: string, emailType: "invoice_s
   revalidatePath(`/admin/crm/invoices/${invoiceId}`);
   revalidatePath("/admin/crm/invoices");
   revalidatePath(`/admin/crm/clients/${invoice.client_id}`);
+  return { invoiceId };
+}
+
+// "Optionally email a payment receipt" - allowed any time the invoice
+// has at least one non-reversed payment (typically once it's Paid, but
+// not restricted to that status, since a partial payment can also
+// warrant a receipt for the amount actually collected so far).
+export async function sendInvoiceReceiptAction(invoiceId: string, to: string, subject: string, message: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const trimmedTo = to.trim();
+  const trimmedSubject = subject.trim();
+  const trimmedMessage = message.trim();
+  if (!trimmedTo || !trimmedSubject || !trimmedMessage) {
+    return { error: "Recipient, subject, and message are all required." };
+  }
+
+  const { data: invoice, error } = await supabase.from("crm_invoices").select("*, crm_clients(company_name, email)").eq("id", invoiceId).maybeSingle();
+  if (error || !invoice) return { error: "Invoice not found." };
+
+  const { count: paymentCount } = await supabase
+    .from("crm_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("invoice_id", invoiceId)
+    .is("reversed_at", null);
+  if (!paymentCount) return { error: "This invoice has no recorded payment to send a receipt for." };
+
+  const client = (invoice as unknown as { crm_clients: { company_name: string; email: string | null } }).crm_clients;
+
+  const { data: lineItems } = await supabase.from("crm_invoice_line_items").select("*").eq("invoice_id", invoiceId).order("sort_order");
+
+  try {
+    await sendCrmInvoiceEmail({
+      supabase,
+      invoice: invoice as CrmInvoiceRow,
+      clientCompanyName: client?.company_name ?? "Client",
+      toEmail: trimmedTo,
+      subject: trimmedSubject,
+      message: trimmedMessage,
+      lineItems: lineItems ?? [],
+      emailType: "invoice_receipt",
+      admin,
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send the payment receipt." };
+  }
+
+  revalidatePath(`/admin/crm/invoices/${invoiceId}`);
   return { invoiceId };
 }
 

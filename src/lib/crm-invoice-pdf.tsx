@@ -1,7 +1,8 @@
 import "server-only";
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import type { CrmInvoiceRow, CrmInvoiceLineItemRow } from "./crm-invoices-types";
 import { formatCurrency } from "./crm-clients-types";
+import { WINSALOT_LOGO_DATA_URI } from "./winsalot-logo-base64";
 
 // Professional Winsalot Corp branded invoice PDF - same brand language
 // (dark-blue header, "Empowering Businesses, One Solution at a Time.",
@@ -14,6 +15,8 @@ import { formatCurrency } from "./crm-clients-types";
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b" },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
+  brandRow: { flexDirection: "row", alignItems: "center" },
+  logo: { width: 36, height: 36, marginRight: 10 },
   brand: { fontSize: 20, fontWeight: 700, color: "#1e3a8a" },
   tagline: { fontSize: 9, color: "#475569", marginTop: 2 },
   contact: { fontSize: 8, color: "#64748b", marginTop: 8 },
@@ -63,7 +66,11 @@ export function InvoicePdfDocument({ invoice, clientCompanyName, lineItems }: In
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>Winsalot Corp</Text>
+            <View style={styles.brandRow}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer's own Image element, not an HTML <img> - it has no alt prop at all. */}
+              <Image src={WINSALOT_LOGO_DATA_URI} style={styles.logo} />
+              <Text style={styles.brand}>Winsalot Corp</Text>
+            </View>
             <Text style={styles.tagline}>Empowering Businesses, One Solution at a Time.</Text>
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
           </View>

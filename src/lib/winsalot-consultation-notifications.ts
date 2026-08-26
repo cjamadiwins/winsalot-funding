@@ -1,5 +1,6 @@
 import "server-only";
 import { getResendClient } from "./resend";
+import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getSiteUrl } from "./site-url";
 import { createWinsalotActionToken } from "./winsalot-consultation-tokens";
@@ -19,16 +20,14 @@ import type { WinsalotAppointmentRow } from "./winsalot-consultation-types";
 // a fully independent implementation, its own recipients, and its own
 // email templates.
 
-const FROM_EMAIL = () => process.env.EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
-const REPLY_TO_EMAIL = () => process.env.EMAIL_REPLY_TO || "info@winsalotcorp.com";
 const ADMIN_NOTIFICATION_EMAIL = () => process.env.NOTIFICATION_EMAIL || "info@winsalotcorp.com";
 
 async function sendEmail(to: string, subject: string, text: string, html: string): Promise<{ error?: string }> {
   const resend = getResendClient();
   const { error } = await resend.emails.send({
-    from: FROM_EMAIL(),
+    from: getEmailSender("growth"),
     to,
-    replyTo: REPLY_TO_EMAIL(),
+    replyTo: getEmailReplyTo(),
     subject,
     text,
     html,

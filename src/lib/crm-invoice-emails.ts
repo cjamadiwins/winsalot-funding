@@ -1,12 +1,20 @@
 import { escapeHtml } from "./html";
-import { formatCurrency } from "./crm-clients-types";
+import { formatCurrency, PAYMENT_METHOD_LABELS, type CrmPaymentRow } from "./crm-clients-types";
 import type { CrmInvoiceRow } from "./crm-invoices-types";
 
-// Winsalot Corp branded invoice email templates. Same visual language as
-// winsalot-consultation-emails.ts (dark-blue header, tagline, footer) -
-// written as its own independent copy rather than shared, matching this
+// Winsalot Billing branded invoice email templates. Same visual language
+// as winsalot-consultation-emails.ts (dark-blue header, tagline, footer)
+// - written as its own independent copy rather than shared, matching this
 // codebase's existing convention of keeping each feature's email
 // templates self-contained.
+//
+// Every "build...Email" function below returns the *default* subject and
+// plain-text message for that email type - the admin can edit both
+// before sending (see previewInvoiceEmailAction/sendInvoiceAction in
+// crm/invoices/actions.ts), so renderInvoiceEmailBody is the one place
+// that actually turns a subject+message (default or edited) into the
+// final branded HTML, keeping default and edited sends visually
+// identical.
 
 export type InvoiceEmailBody = { subject: string; text: string; html: string };
 
@@ -51,20 +59,27 @@ function shell(bodyHtml: string, title: string): string {
 `;
 }
 
-function paragraphsHtml(lines: string[]): string {
-  return lines
-    .map((line) => (line === "" ? "" : `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#374151;">${escapeHtml(line)}</p>`))
+// Converts a plain-text message (the admin's own editable subject/message
+// input) into the same branded paragraph styling every invoice email
+// uses - blank-line-separated blocks become paragraphs, a single
+// newline within a block becomes a line break, so an edited message
+// renders exactly as the admin sees it in the preview textarea.
+function messageToHtml(message: string): string {
+  return message
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map(
+      (paragraph) =>
+        `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#374151;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
+    )
     .join("\n");
 }
 
-function detailsTableHtml(rows: [string, string][]): string {
-  const rowsHtml = rows
-    .map(
-      ([label, value]) =>
-        `<tr><td style="padding:4px 0; font-size:13px; color:#6b7280; width:160px;">${escapeHtml(label)}</td><td style="padding:4px 0; font-size:14px; color:#111827; font-weight:600;">${escapeHtml(value)}</td></tr>`
-    )
-    .join("\n");
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; margin:16px 0; border-top:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:12px 0;">${rowsHtml}</table>`;
+// The one place a subject+message (default or admin-edited) becomes the
+// actual email that gets sent.
+export function renderInvoiceEmailBody(subject: string, message: string): InvoiceEmailBody {
+  return { subject, text: message, html: shell(messageToHtml(message), subject) };
 }
 
 function formatInvoiceDate(value: string | null): string {
@@ -72,69 +87,132 @@ function formatInvoiceDate(value: string | null): string {
   return new Date(value + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-function invoiceDetailRows(invoice: CrmInvoiceRow, clientCompanyName: string): [string, string][] {
+function formatServicePeriod(invoice: Pick<CrmInvoiceRow, "service_period_start" | "service_period_end">): string {
+  if (!invoice.service_period_start && !invoice.service_period_end) return "Not specified";
+  return `${formatInvoiceDate(invoice.service_period_start)} - ${formatInvoiceDate(invoice.service_period_end)}`;
+}
+
+const SIGNATURE_LINES = [
+  "Best regards,",
+  "Winsalot Billing",
+  "Winsalot Corp",
+  "Empowering Businesses, One Solution at a Time.",
+  "info@winsalotcorp.com",
+  "647-300-1270",
+  "winsalotcorp.com",
+];
+
+export const DEFAULT_INVOICE_SENT_SUBJECT = "Your Monthly Invoice from Winsalot Corp";
+
+// The exact default monthly invoice email template from the brief, with
+// every bracketed field replaced from the real invoice/client data.
+// "Amount due" is the invoice's remaining balance (equal to the total on
+// a fresh, unpaid invoice, but still correct if this is a resend after a
+// partial payment).
+export function buildDefaultInvoiceSentMessage(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "service_period_start" | "service_period_end" | "balance" | "currency" | "due_date">,
+  clientDisplayName: string
+): string {
   return [
-    ["Invoice Number", invoice.invoice_number],
-    ["Billed To", clientCompanyName],
-    ["Issue Date", formatInvoiceDate(invoice.issue_date)],
-    ["Due Date", formatInvoiceDate(invoice.due_date)],
-    ["Total", formatCurrency(invoice.total, invoice.currency)],
-    ["Balance Due", formatCurrency(invoice.balance, invoice.currency)],
-  ];
+    `Hi ${clientDisplayName},`,
+    "",
+    "Thank you for choosing Winsalot Corp.",
+    "",
+    "Please find your monthly invoice attached to this email.",
+    "",
+    `Invoice number: ${invoice.invoice_number}`,
+    `Invoice period: ${formatServicePeriod(invoice)}`,
+    `Amount due: ${formatCurrency(invoice.balance, invoice.currency)}`,
+    `Due date: ${formatInvoiceDate(invoice.due_date)}`,
+    "",
+    "If you have already made the payment, please disregard this notice. If you have any questions about your invoice, reply to this email and we will be happy to assist you.",
+    "",
+    "We appreciate your business and look forward to continuing to support your growth.",
+    "",
+    ...SIGNATURE_LINES,
+  ].join("\n");
 }
 
-export function buildInvoiceSentEmail(invoice: CrmInvoiceRow, clientCompanyName: string): InvoiceEmailBody {
-  const subject = `Invoice ${invoice.invoice_number} from Winsalot Corp`;
-
-  const textLines = [
-    `Hi ${clientCompanyName},`,
-    "",
-    `Please find attached Invoice ${invoice.invoice_number} from Winsalot Corp.`,
-    "",
-    `Issue Date: ${formatInvoiceDate(invoice.issue_date)}`,
-    `Due Date: ${formatInvoiceDate(invoice.due_date)}`,
-    `Total: ${formatCurrency(invoice.total, invoice.currency)}`,
-    `Balance Due: ${formatCurrency(invoice.balance, invoice.currency)}`,
-  ];
-  if (invoice.payment_instructions) textLines.push("", "Payment Instructions:", invoice.payment_instructions);
-  if (invoice.client_facing_notes) textLines.push("", invoice.client_facing_notes);
-  textLines.push("", "Thank you for your business.", "", "Best regards,", "Winsalot Corp", "Empowering Businesses, One Solution at a Time.", "647-300-1270", "info@winsalotcorp.com", "winsalotcorp.com");
-
-  const bodyHtml = `
-    ${paragraphsHtml([`Hi ${clientCompanyName},`, "", `Please find attached Invoice ${invoice.invoice_number} from Winsalot Corp.`])}
-    ${detailsTableHtml(invoiceDetailRows(invoice, clientCompanyName))}
-    ${invoice.payment_instructions ? paragraphsHtml(["Payment Instructions:", invoice.payment_instructions]) : ""}
-    ${invoice.client_facing_notes ? paragraphsHtml([invoice.client_facing_notes]) : ""}
-    ${paragraphsHtml(["Thank you for your business."])}
-  `;
-
-  return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
+export function buildInvoiceSentEmail(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "service_period_start" | "service_period_end" | "balance" | "currency" | "due_date">,
+  clientDisplayName: string
+): InvoiceEmailBody {
+  return renderInvoiceEmailBody(DEFAULT_INVOICE_SENT_SUBJECT, buildDefaultInvoiceSentMessage(invoice, clientDisplayName));
 }
 
-export function buildInvoiceReminderEmail(invoice: CrmInvoiceRow, clientCompanyName: string): InvoiceEmailBody {
-  const subject = `Payment Reminder: Invoice ${invoice.invoice_number} from Winsalot Corp`;
+export function defaultInvoiceReminderSubject(invoiceNumber: string): string {
+  return `Payment Reminder: Invoice ${invoiceNumber} from Winsalot Corp`;
+}
 
-  const textLines = [
-    `Hi ${clientCompanyName},`,
+// "Payment reminders must clearly show: client name, invoice number,
+// original due date, total, amount paid, outstanding balance, payment
+// instructions."
+export function buildDefaultInvoiceReminderMessage(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "due_date" | "total" | "amount_paid" | "balance" | "currency" | "payment_instructions">,
+  clientDisplayName: string
+): string {
+  const lines = [
+    `Hi ${clientDisplayName},`,
     "",
     `This is a friendly reminder that Invoice ${invoice.invoice_number} from Winsalot Corp has a balance due.`,
     "",
-    `Due Date: ${formatInvoiceDate(invoice.due_date)}`,
-    `Balance Due: ${formatCurrency(invoice.balance, invoice.currency)}`,
+    `Invoice number: ${invoice.invoice_number}`,
+    `Original due date: ${formatInvoiceDate(invoice.due_date)}`,
+    `Total: ${formatCurrency(invoice.total, invoice.currency)}`,
+    `Amount paid: ${formatCurrency(invoice.amount_paid, invoice.currency)}`,
+    `Outstanding balance: ${formatCurrency(invoice.balance, invoice.currency)}`,
   ];
-  if (invoice.payment_instructions) textLines.push("", "Payment Instructions:", invoice.payment_instructions);
-  textLines.push("", "If you've already sent payment, please disregard this reminder.", "", "Best regards,", "Winsalot Corp");
+  if (invoice.payment_instructions) lines.push("", "Payment Instructions:", invoice.payment_instructions);
+  lines.push("", "If you've already sent payment, please disregard this reminder.", "", ...SIGNATURE_LINES);
+  return lines.join("\n");
+}
 
-  const bodyHtml = `
-    ${paragraphsHtml([`Hi ${clientCompanyName},`, "", `This is a friendly reminder that Invoice ${invoice.invoice_number} from Winsalot Corp has a balance due.`])}
-    ${detailsTableHtml([
-      ["Invoice Number", invoice.invoice_number],
-      ["Due Date", formatInvoiceDate(invoice.due_date)],
-      ["Balance Due", formatCurrency(invoice.balance, invoice.currency)],
-    ])}
-    ${invoice.payment_instructions ? paragraphsHtml(["Payment Instructions:", invoice.payment_instructions]) : ""}
-    ${paragraphsHtml(["If you've already sent payment, please disregard this reminder."])}
-  `;
+export function buildInvoiceReminderEmail(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "due_date" | "total" | "amount_paid" | "balance" | "currency" | "payment_instructions">,
+  clientDisplayName: string
+): InvoiceEmailBody {
+  return renderInvoiceEmailBody(defaultInvoiceReminderSubject(invoice.invoice_number), buildDefaultInvoiceReminderMessage(invoice, clientDisplayName));
+}
 
-  return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
+export function defaultInvoiceReceiptSubject(invoiceNumber: string): string {
+  return `Payment Receipt: Invoice ${invoiceNumber} from Winsalot Corp`;
+}
+
+// "When an invoice is marked Paid, allow admin to send a receipt
+// showing: invoice number, amount paid, payment date, payment method,
+// payment reference, remaining balance or zero balance." `payment` is
+// the specific payment record the receipt is for (usually the one that
+// completed the invoice); `invoice.balance` reflects the true remaining
+// balance across every payment, not just this one.
+export function buildDefaultInvoiceReceiptMessage(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "balance" | "currency">,
+  clientDisplayName: string,
+  payment: Pick<CrmPaymentRow, "amount" | "currency" | "payment_date" | "payment_method" | "reference_number">
+): string {
+  const remainingBalance = Number(invoice.balance);
+  const lines = [
+    `Hi ${clientDisplayName},`,
+    "",
+    "Thank you for your payment. Here is your receipt.",
+    "",
+    `Invoice number: ${invoice.invoice_number}`,
+    `Amount paid: ${formatCurrency(payment.amount, payment.currency)}`,
+    `Payment date: ${formatInvoiceDate(payment.payment_date)}`,
+    `Payment method: ${payment.payment_method ? PAYMENT_METHOD_LABELS[payment.payment_method] : "Not specified"}`,
+    `Payment reference: ${payment.reference_number || "-"}`,
+    `Remaining balance: ${remainingBalance > 0 ? formatCurrency(remainingBalance, invoice.currency) : `${formatCurrency(0, invoice.currency)} (paid in full)`}`,
+    "",
+    "Thank you for your business.",
+    "",
+    ...SIGNATURE_LINES,
+  ];
+  return lines.join("\n");
+}
+
+export function buildInvoiceReceiptEmail(
+  invoice: Pick<CrmInvoiceRow, "invoice_number" | "balance" | "currency">,
+  clientDisplayName: string,
+  payment: Pick<CrmPaymentRow, "amount" | "currency" | "payment_date" | "payment_method" | "reference_number">
+): InvoiceEmailBody {
+  return renderInvoiceEmailBody(defaultInvoiceReceiptSubject(invoice.invoice_number), buildDefaultInvoiceReceiptMessage(invoice, clientDisplayName, payment));
 }
