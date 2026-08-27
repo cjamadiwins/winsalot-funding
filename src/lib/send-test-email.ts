@@ -5,6 +5,7 @@ import { getLeadgenSenderEmail, getLeadgenReplyToEmail, buildLeadgenBookingEmail
 import { buildAppointmentEmailBody } from "./leadgen-appointment-emails";
 import { buildWinsalotConfirmationEmail, buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
 import { buildInvoiceSentEmail, buildInvoiceReminderEmail, buildInvoiceReceiptEmail } from "./crm-invoice-emails";
+import { getDefaultProspectEmailTemplate, buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email-templates";
 import { renderLeadgenTemplate, LEADGEN_BOOKING_BUTTON_LABEL, LEADGEN_CONSULTATION_CTA_LABEL, type LeadgenAppointmentRow, type LeadgenEmailTemplateRow } from "./leadgen-types";
 
 // Admin-only "Send Test Email" function (brief item 8): lets an admin see
@@ -26,8 +27,9 @@ function testSubject(subject: string): string {
 }
 
 // ---------------------------------------------------------------------
-// Growth CRM (crm_* tables): invoices + the Winsalot consultation-
-// booking appointment emails.
+// Growth CRM (crm_* tables): invoices, the Winsalot consultation-booking
+// appointment emails, and the crm_opportunities prospect consultation-
+// invite email (src/lib/prospect-email-templates.ts).
 // ---------------------------------------------------------------------
 
 export const CRM_TEST_EMAIL_TYPES = [
@@ -37,6 +39,7 @@ export const CRM_TEST_EMAIL_TYPES = [
   { id: "appointment_confirmed", label: "Appointment - Confirmed" },
   { id: "appointment_reminder_24h", label: "Appointment - 24-Hour Reminder" },
   { id: "appointment_reminder_1h", label: "Appointment - 1-Hour Reminder" },
+  { id: "prospect_consultation_invite", label: "Prospect - Consultation Invitation" },
 ] as const;
 
 export type CrmTestEmailType = (typeof CRM_TEST_EMAIL_TYPES)[number]["id"];
@@ -100,6 +103,20 @@ export async function sendCrmTestEmail(type: CrmTestEmailType, toEmail: string):
       email = buildWinsalotReminderEmail({ ...SAMPLE_APPOINTMENT_PARAMS, reminderType: "1_hour_reminder" });
       from = getEmailSender("growth");
       break;
+    case "prospect_consultation_invite": {
+      const defaults = getDefaultProspectEmailTemplate("lead_generation", {
+        businessName: "Acme Test Co.",
+        contactName: "Jordan Sample",
+        agentName: "Alex Agent",
+      });
+      email = {
+        subject: defaults.subject,
+        text: buildProspectEmailText({ message: defaults.message, ctaText: defaults.ctaText, bookingUrl: SAMPLE_BOOKING_URL }),
+        html: buildProspectEmailHtml({ message: defaults.message, ctaText: defaults.ctaText, bookingUrl: SAMPLE_BOOKING_URL }),
+      };
+      from = getEmailSender("growth");
+      break;
+    }
   }
 
   const resend = getResendClient();
