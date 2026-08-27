@@ -11,11 +11,9 @@ const buttonClasses =
 
 export default function AgentsClient({
   agents,
-  leadCounts,
   currentUserId,
 }: {
   agents: CrmUserRow[];
-  leadCounts: Record<string, number>;
   currentUserId: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -112,7 +110,6 @@ export default function AgentsClient({
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Leads</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3" />
             </tr>
@@ -121,7 +118,7 @@ export default function AgentsClient({
             {agents.map((agent) => (
               <tr key={agent.id} className="border-b border-slate-100 last:border-0 align-top">
                 {editingId === agent.id ? (
-                  <td colSpan={6} className="px-4 py-4">
+                  <td colSpan={5} className="px-4 py-4">
                     <form
                       action={(formData) =>
                         runAction(
@@ -162,7 +159,6 @@ export default function AgentsClient({
                     <td className="px-4 py-3 font-medium text-slate-900">{agent.full_name}</td>
                     <td className="px-4 py-3 text-slate-600">{agent.email}</td>
                     <td className="px-4 py-3 text-slate-600 capitalize">{agent.role}</td>
-                    <td className="px-4 py-3 text-slate-600">{leadCounts[agent.id] ?? 0}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -213,7 +209,7 @@ export default function AgentsClient({
 
             {agents.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                   No agents yet.
                 </td>
               </tr>
