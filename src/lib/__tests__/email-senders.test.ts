@@ -8,11 +8,11 @@ afterEach(() => {
 });
 
 describe("getEmailSender", () => {
-  it("uses the correct default identity for every category", () => {
-    expect(getEmailSender("growth")).toBe("Winsalot Growth <growth@winsalotcorp.com>");
-    expect(getEmailSender("funding")).toBe("Winsalot Funding <funding@winsalotcorp.com>");
-    expect(getEmailSender("billing")).toBe("Winsalot Billing <billing@winsalotcorp.com>");
-    expect(getEmailSender("quotes")).toBe("Winsalot Quotes <quotes@winsalotcorp.com>");
+  it("uses the correct default identity for every category - a recognizable personal name, distinct addresses", () => {
+    expect(getEmailSender("growth")).toBe("C.J. at Winsalot Corp <growth@winsalotcorp.com>");
+    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <funding@winsalotcorp.com>");
+    expect(getEmailSender("billing")).toBe("C.J. at Winsalot Corp <billing@winsalotcorp.com>");
+    expect(getEmailSender("quotes")).toBe("C.J. at Winsalot Corp <quotes@winsalotcorp.com>");
   });
 
   it("never returns the quotes@ identity for growth, funding, or billing", () => {
@@ -24,9 +24,9 @@ describe("getEmailSender", () => {
   it("each category's override is isolated - setting one never changes another", () => {
     process.env.GROWTH_EMAIL_FROM = "Custom Growth <custom-growth@winsalotcorp.com>";
     expect(getEmailSender("growth")).toBe("Custom Growth <custom-growth@winsalotcorp.com>");
-    expect(getEmailSender("funding")).toBe("Winsalot Funding <funding@winsalotcorp.com>");
-    expect(getEmailSender("billing")).toBe("Winsalot Billing <billing@winsalotcorp.com>");
-    expect(getEmailSender("quotes")).toBe("Winsalot Quotes <quotes@winsalotcorp.com>");
+    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <funding@winsalotcorp.com>");
+    expect(getEmailSender("billing")).toBe("C.J. at Winsalot Corp <billing@winsalotcorp.com>");
+    expect(getEmailSender("quotes")).toBe("C.J. at Winsalot Corp <quotes@winsalotcorp.com>");
   });
 });
 

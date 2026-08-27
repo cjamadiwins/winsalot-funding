@@ -41,7 +41,12 @@ export default async function AdminCrmEmailsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
+        <Link href="/admin/crm/emails/test" className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+          Send Test Email
+        </Link>
+      </div>
       <p className="mt-1 text-sm text-slate-500">
         Every follow-up email sent to an opportunity&apos;s contact from the CRM, with its live Sent / Delivered / Bounced / Failed status
         from Resend.

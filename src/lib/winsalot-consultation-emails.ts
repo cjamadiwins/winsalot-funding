@@ -3,11 +3,12 @@ import type { OpportunityType } from "./crm-types";
 import { winsalotServiceTypeLabel } from "./winsalot-consultation-types";
 
 // Winsalot-branded email templates for the consultation-booking system.
-// Same visual language as the existing prospect-email system
-// (src/lib/prospect-email-templates.ts - dark-blue header, sky CTA
-// button, Winsalot Corp footer) but written as fully independent
-// functions here, and never shared with (or imported by) any Lead Gen
-// CRM / Brent's Essentials / Mantra Collab email code.
+// Same plain personal-email visual language as the existing prospect-
+// email system (src/lib/prospect-email-templates.ts - black text on a
+// white background, no banner, plain text links instead of buttons,
+// Winsalot Corp footer) but written as fully independent functions here,
+// and never shared with (or imported by) any Lead Gen CRM / Brent's
+// Essentials / Mantra Collab email code.
 
 export type WinsalotEmailBody = { subject: string; text: string; html: string };
 
@@ -28,25 +29,19 @@ function shell(bodyHtml: string, title: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title)}</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f5f7; font-family: Arial, Helvetica, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 0;">
+<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif; color:#111827;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; max-width:600px; width:100%;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; padding:24px 20px;">
           <tr>
-            <td style="background-color:#1e3a8a; padding:28px 40px; text-align:center;">
-              <span style="color:#ffffff; font-size:20px; font-weight:bold; letter-spacing:0.5px;">Winsalot Corp</span>
-              <div style="color:#bfdbfe; font-size:12.5px; margin-top:4px;">Empowering Businesses, One Solution at a Time.</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px;">
+            <td>
               ${bodyHtml}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px; background-color:#f9fafb; text-align:center; border-top:1px solid #e5e7eb;">
-              <p style="margin:0; font-size:12px; line-height:1.6; color:#9ca3af;">
+            <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
+              <p style="margin:0; font-size:12px; line-height:1.6; color:#6b7280;">
                 Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
               </p>
             </td>
@@ -65,13 +60,17 @@ function paragraphsHtml(lines: string[]): string {
     .map((line) =>
       line === ""
         ? ""
-        : `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#374151;">${escapeHtml(line)}</p>`
+        : `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#111827;">${escapeHtml(line)}</p>`
     )
     .join("\n");
 }
 
+// A plain inline text link, not a colored button graphic - per the
+// deliverability brief, a promotional-looking button is exactly the
+// visual cue that pushes a transactional appointment email toward
+// Gmail's Promotions tab.
 function ctaButtonHtml(url: string, label: string): string {
-  return `<div style="text-align:center; margin:24px 0 8px;"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block; background-color:#0284c7; color:#ffffff; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 24px; border-radius:9999px;">${escapeHtml(label)}</a></div>`;
+  return `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6;"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:#1a56db; text-decoration:underline;">${escapeHtml(label)}</a></p>`;
 }
 
 export type ConsultationEmailParams = {
@@ -89,7 +88,7 @@ export type ConsultationEmailParams = {
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const serviceLabel = winsalotServiceTypeLabel(params.serviceType);
-  const subject = "Your 15-Minute Winsalot Consultation Is Confirmed";
+  const subject = "Your consultation is confirmed";
 
   const textLines = [
     `Hi ${params.contactName},`,
@@ -117,7 +116,7 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
   );
 
   const detailsHtml = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 20px; font-size:14px; color:#374151;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 20px; font-size:14px; color:#111827;">
       <tr><td style="padding:4px 0; font-weight:bold; width:110px;">Business:</td><td style="padding:4px 0;">${escapeHtml(params.businessName)}</td></tr>
       <tr><td style="padding:4px 0; font-weight:bold;">Service:</td><td style="padding:4px 0;">${escapeHtml(serviceLabel)}</td></tr>
       <tr><td style="padding:4px 0; font-weight:bold;">Date:</td><td style="padding:4px 0;">${escapeHtml(date)}</td></tr>
@@ -169,7 +168,7 @@ export function buildWinsalotInternalBookingNotification(
 
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your Winsalot Consultation Has Been Rescheduled";
+  const subject = "Your consultation has been rescheduled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -211,7 +210,7 @@ export function buildWinsalotCancellationEmail(params: {
   timezone: string;
 }): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your Winsalot Consultation Has Been Cancelled";
+  const subject = "Your consultation has been cancelled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -232,7 +231,7 @@ export function buildWinsalotReminderEmail(
 ): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const when = params.reminderType === "24_hour_reminder" ? "tomorrow" : "in about 1 hour";
-  const subject = params.reminderType === "24_hour_reminder" ? "Reminder: Your Winsalot Consultation Is Tomorrow" : "Reminder: Your Winsalot Consultation Is Coming Up";
+  const subject = params.reminderType === "24_hour_reminder" ? "Reminder: consultation tomorrow" : "Reminder: consultation in 1 hour";
 
   const lines = [
     `Hi ${params.contactName},`,

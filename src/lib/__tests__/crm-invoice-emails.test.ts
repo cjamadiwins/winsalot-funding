@@ -5,7 +5,7 @@ import {
   buildDefaultInvoiceSentMessage,
   defaultInvoiceReceiptSubject,
   defaultInvoiceReminderSubject,
-  DEFAULT_INVOICE_SENT_SUBJECT,
+  defaultInvoiceSentSubject,
   renderInvoiceEmailBody,
 } from "../crm-invoice-emails";
 
@@ -24,8 +24,12 @@ const baseInvoice = {
 describe("buildDefaultInvoiceSentMessage - exact default monthly invoice template", () => {
   const message = buildDefaultInvoiceSentMessage(baseInvoice, "Brent's Essentials");
 
-  it("uses the exact required subject", () => {
-    expect(DEFAULT_INVOICE_SENT_SUBJECT).toBe("Your Monthly Invoice from Winsalot Corp");
+  it("uses the exact required subject, naming the invoice", () => {
+    expect(defaultInvoiceSentSubject("INV-2026-0007")).toBe("Invoice INV-2026-0007 from Winsalot Corp");
+  });
+
+  it("starts with the exact required opening line", () => {
+    expect(message).toContain("Thank you for choosing Winsalot Corp. Below is your monthly invoice.");
   });
 
   it("replaces every bracketed field with real data", () => {

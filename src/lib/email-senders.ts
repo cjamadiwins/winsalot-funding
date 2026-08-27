@@ -22,19 +22,28 @@ import "server-only";
 
 export type EmailCategory = "growth" | "funding" | "billing" | "quotes";
 
+// A recognizable, personal-looking sender name (rather than a corporate/
+// department-style one like "Winsalot Growth") reads less like bulk
+// marketing mail to Gmail's classifier, which is the single biggest
+// lever this app has over landing in Promotions instead of the primary
+// inbox. Shared across every category by default - each category's
+// SENDER_OVERRIDE_ENV_VAR below can still override it independently
+// (e.g. a category that genuinely wants its own identity back).
+const DEFAULT_SENDER_DISPLAY_NAME = "C.J. at Winsalot Corp";
+
 const SENDER_DEFAULTS: Record<EmailCategory, { displayName: string; address: string }> = {
   // Growth consultations: bookings, confirmations, reminders,
   // rescheduling, cancellations, and the sales-prospect (opportunity)
   // consultation-invite/follow-up emails for lead_generation and
   // both_services opportunities.
-  growth: { displayName: "Winsalot Growth", address: "growth@winsalotcorp.com" },
+  growth: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "growth@winsalotcorp.com" },
   // Business-financing opportunity emails (opportunity_type ===
   // "business_financing").
-  funding: { displayName: "Winsalot Funding", address: "funding@winsalotcorp.com" },
+  funding: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "funding@winsalotcorp.com" },
   // Invoices, payment reminders, and payment receipts.
-  billing: { displayName: "Winsalot Billing", address: "billing@winsalotcorp.com" },
+  billing: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "billing@winsalotcorp.com" },
   // Reserved for the retired cleaning-quote system - see module comment.
-  quotes: { displayName: "Winsalot Quotes", address: "quotes@winsalotcorp.com" },
+  quotes: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "quotes@winsalotcorp.com" },
 };
 
 // Namespaced per category on purpose - see module comment above.

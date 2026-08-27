@@ -405,15 +405,19 @@ function CommunicationsSection({
     if (!template) return;
 
     if (key === "consultation_invitation") {
-      // No lead in scope here, so there's no real first name - "there" is
-      // a generic but never-broken greeting. Everything else (client
-      // name, booking/services links, signature) comes from real client
-      // data via the same Brent's Essentials fallback used on lead pages.
+      // No lead in scope here, so there's no real first name or real
+      // prospect business name - "there" / "your business" are generic
+      // but never-broken fallbacks (the template's subject and body both
+      // reference {{business_name}} now - see migration 0096). Everything
+      // else (client name, booking/services links, signature) comes from
+      // real client data via the same Brent's Essentials fallback used on
+      // lead pages.
       const branding = resolveLeadgenEmailBranding(client, client.booking_link, client.services_info_link);
       const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
       const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
-      setSubject(template.subject);
-      setBody(renderLeadgenTemplate(template.body, { first_name: "there", client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection }));
+      const vars = { first_name: "there", business_name: "your business", client_business_name: branding.clientName, booking_section: bookingSection, services_section: servicesSection };
+      setSubject(renderLeadgenTemplate(template.subject, vars));
+      setBody(renderLeadgenTemplate(template.body, vars));
       setBookingUrl(branding.bookingUrl ?? "");
       setServicesUrl(branding.servicesUrl ?? "");
       return;

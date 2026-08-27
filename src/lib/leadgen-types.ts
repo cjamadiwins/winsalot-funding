@@ -383,23 +383,27 @@ export type LeadgenAppointmentRow = {
   status_set_at: string | null;
 };
 
-// Shared literal button text for the consultation booking button, used
-// both when rendering the plain-text {{booking_section}} placeholder
-// (see leadgenBookingInviteSection below) and when the send actions
-// swap that exact marker for a real HTML button - see
-// leadgenBookingButtonHtml (style: "booking") in lib/leadgen-email.ts.
-// Styled to match the cleaning-quote emails' blue CTA button; the raw
-// Calendly URL is deliberately never shown as visible text in the
-// email - only this label and the "click here to book your
-// consultation" fallback link. Used by the "Send 15-Minute Consultation
-// Invitation" and "Send Follow-Up Email" buttons.
-export const LEADGEN_BOOKING_BUTTON_LABEL = "Book Your Free 15-Minute Appointment";
+// Shared literal link text for the consultation booking link, used both
+// when rendering the plain-text {{booking_section}} placeholder (see
+// leadgenBookingInviteSection below) and when the send actions swap
+// that exact marker for a real HTML link - see leadgenBookingButtonHtml
+// (style: "booking") in lib/leadgen-email.ts. Rendered as a plain text
+// link (not a colored button graphic) per the deliverability brief - a
+// large promotional button reads as bulk marketing to Gmail's
+// classifier. The raw Calendly URL is deliberately never shown as
+// visible text in the email - only this label and the "click here to
+// book your consultation" fallback link. Used by the "Send 15-Minute
+// Consultation Invitation" and "Send Follow-Up Email" buttons.
+export const LEADGEN_BOOKING_BUTTON_LABEL = "Book a free 15-minute consultation";
 // Label for the "Send Consultation Email" button specifically (template
 // key consultation_information) - kept distinct from
 // LEADGEN_BOOKING_BUTTON_LABEL above (used by the separate consultation
 // invitation/follow-up templates) so this one email's button text can
-// change without touching those.
-export const LEADGEN_CONSULTATION_CTA_LABEL = "Book Your Free 15-Minute Consultation";
+// change without touching those. Also reused as-is for the Mantra
+// Collab intro email's own booking link (see sendMantraCollabIntroEmailAction
+// and LeadDetailClient.tsx's mantraBookingSection) so every initial
+// prospect-outreach email uses identical, brief-exact wording.
+export const LEADGEN_CONSULTATION_CTA_LABEL = "Book a free 15-minute consultation";
 
 // Root-cause fix for the "Thank you for your interest in ." bug: these
 // template keys require a specific lead (first name) and are meant to be
@@ -414,14 +418,20 @@ export const LEADGEN_CONSULTATION_CTA_LABEL = "Book Your Free 15-Minute Consulta
 // from that composer's template dropdown entirely so this can't happen
 // again.
 //
+// "mantra_collab_intro" needs the same real-data treatment (a real
+// {{business_name}}/{{booking_section}} or its booking link silently
+// vanishes exactly like the bug above) but has no lead-specific
+// composer special-case built for it, so it's excluded here too rather
+// than left to strip blank.
+//
 // "consultation_invitation" is deliberately NOT in this list:
 // ClientDetailClient.tsx's applyTemplate() special-cases that one key to
-// render it correctly with a generic "there" greeting (no lead name
-// available) plus the real client_business_name/booking/services values
-// via resolveLeadgenEmailBranding below, instead of stripping it - see
-// that component for the render logic and sendClientCommunicationAction
+// render it correctly with a generic "there"/"your business" fallback
+// (no lead in scope) plus the real client_business_name/booking/services
+// values via resolveLeadgenEmailBranding below, instead of stripping it -
+// see that component for the render logic and sendClientCommunicationAction
 // for the matching server-side HTML-button build.
-export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "consultation_follow_up"];
+export const LEADGEN_LEAD_ONLY_TEMPLATE_KEYS = ["consultation_information", "consultation_follow_up", "mantra_collab_intro"];
 
 // Brent's Essentials is currently the only real Lead Generation CRM
 // client, and the brief asked for these exact values as a hard-coded

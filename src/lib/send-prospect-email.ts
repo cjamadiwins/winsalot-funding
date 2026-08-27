@@ -124,6 +124,15 @@ export async function sendProspectEmail(
     subject,
     text: buildProspectEmailText({ message, ctaText, bookingUrl, unsubscribeUrl }),
     html: buildProspectEmailHtml({ message, ctaText, bookingUrl, unsubscribeUrl }),
+    // Commercial outreach - carries a real List-Unsubscribe header (in
+    // addition to the visible footer link above) so mail clients that
+    // support one-click unsubscribe (Gmail included) can surface it
+    // directly, which meaningfully helps keep this address's sender
+    // reputation - and therefore inbox placement - healthy.
+    headers: {
+      "List-Unsubscribe": `<mailto:${replyToEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
   });
 
   if (emailError || !sendResult) {

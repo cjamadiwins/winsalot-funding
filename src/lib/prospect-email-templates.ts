@@ -123,6 +123,12 @@ export function buildProspectEmailText(input: {
   ].join("\n");
 }
 
+// Plain personal-email layout per the deliverability brief: no banner,
+// no colored background, no large button - just black-on-white text and
+// a single inline text link, so the email reads like something a person
+// sent from their own inbox rather than a marketing campaign (the single
+// biggest lever this app has over landing in Gmail's Promotions tab
+// instead of the primary inbox).
 export function buildProspectEmailHtml(input: {
   message: string;
   ctaText: string;
@@ -134,7 +140,7 @@ export function buildProspectEmailHtml(input: {
     .split(/\n{2,}/)
     .map(
       (paragraph) =>
-        `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#374151;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
+        `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#111827;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
     )
     .join("\n");
 
@@ -146,41 +152,29 @@ export function buildProspectEmailHtml(input: {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(input.ctaText)} — Winsalot Corp</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f5f7; font-family: Arial, Helvetica, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 0;">
+<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif; color:#111827;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; max-width:600px; width:100%;">
-
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; padding:24px 20px;">
           <tr>
-            <td style="background-color:#1e3a8a; padding:28px 40px; text-align:center;">
-              <span style="color:#ffffff; font-size:20px; font-weight:bold; letter-spacing:0.5px;">Winsalot Corp</span>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:40px;">
+            <td>
               ${paragraphs}
-              <div style="text-align:center; margin:28px 0 8px;">
-                <a href="${escapeHtml(input.bookingUrl)}" target="_blank" rel="noopener noreferrer"
-                   style="display:inline-block; background-color:#0284c7; color:#ffffff; text-decoration:none; font-weight:bold; font-size:15px; padding:14px 28px; border-radius:9999px;">
-                  ${escapeHtml(input.ctaText)}
-                </a>
-              </div>
+              <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
+                <a href="${escapeHtml(input.bookingUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1a56db; text-decoration:underline;">${escapeHtml(input.ctaText)}</a>
+              </p>
             </td>
           </tr>
-
           <tr>
-            <td style="padding:24px 40px; background-color:#f9fafb; text-align:center; border-top:1px solid #e5e7eb;">
-              <p style="margin:0 0 8px 0; font-size:12px; line-height:1.5; color:#9ca3af;">
+            <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
+              <p style="margin:0 0 6px 0; font-size:12px; line-height:1.5; color:#6b7280;">
                 You're receiving this because you spoke with Winsalot Corp about growing your business.
               </p>
-              <p style="margin:0; font-size:12px; line-height:1.5; color:#9ca3af;">
-                <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#9ca3af; text-decoration:underline;">Unsubscribe from future emails</a>
+              <p style="margin:0; font-size:12px; line-height:1.5; color:#6b7280;">
+                <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280; text-decoration:underline;">Unsubscribe from future emails</a>
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
