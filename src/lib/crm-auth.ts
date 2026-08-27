@@ -38,6 +38,23 @@ export async function requireCrmUser(): Promise<CrmUserRow> {
 // Same as requireCrmUser, but also requires role='admin'. Used to gate
 // /admin/crm/* pages in addition to the existing requireAdminUser() check
 // on the whole /admin/* area.
+//
+// Root-cause fix for the reported "/admin redirect loop" bug: this used
+// to redirect a failing check back to "/admin" - but "/admin" itself
+// (AdminRootPage) unconditionally redirects to "/admin/crm", which calls
+// this exact function again. Any signed-in user who could reach this
+// point without an active admin row (a deactivated admin, or - since
+// Supabase Auth is one project shared by both CRMs - a Lead Gen CRM-only
+// account that got past requireAdminUser's own now-fixed gap) bounced
+// between "/admin" and "/admin/crm" forever instead of ever landing on a
+// real page. Redirecting to "/admin/login" instead breaks that loop for
+// good, matching how every sibling gate in this app already behaves
+// (requireCrmUser -> /agent/login, requireLeadgenUser -> /leadgen/login).
+// A signed-in active agent (a legitimate account for this same CRM, just
+// the wrong role for this page) is only redirected, not signed out -
+// preserving their own /agent session; anything else observed here (no
+// row, inactive, or wrong CRM) is also signed out so it can't linger as
+// a valid-looking cookie.
 export async function requireCrmAdmin(): Promise<CrmUserRow> {
   const supabase = await createSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -53,8 +70,13 @@ export async function requireCrmAdmin(): Promise<CrmUserRow> {
     .eq("active", true)
     .maybeSingle();
 
-  if (!crmUser || crmUser.role !== "admin") {
-    redirect("/admin");
+  if (crmUser && crmUser.role !== "admin") {
+    redirect("/admin/login?error=This account does not have admin access.");
+  }
+
+  if (!crmUser) {
+    await supabase.auth.signOut();
+    redirect("/admin/login?error=This account is not set up for Growth CRM admin access.");
   }
 
   return crmUser as CrmUserRow;

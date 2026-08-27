@@ -8,11 +8,30 @@ import { createSupabaseServerClient } from "./supabase-server";
 // every admin Server Action calls this too. See the "Execution order" /
 // Server Functions note in the Next.js proxy docs.
 //
-// Also blocks CRM agent accounts from this (pre-existing) quote dashboard.
-// A row in crm_users with role='agent' is explicitly not an admin; anyone
-// else (no crm_users row at all, or role='admin') keeps today's behavior
-// of full access - this only ever narrows access for accounts created
-// through the new /admin/crm/agents flow, never for existing admins.
+// Root-cause fix for the reported "/admin redirect loop" bug: this used
+// to let a signed-in Supabase Auth user through whenever their crm_users
+// row was simply missing (comment used to say "no crm_users row at all...
+// keeps today's behavior of full access", from when a pre-CRM /admin
+// account with its own dashboard page existed). That page is gone -
+// AdminRootPage (src/app/admin/(dashboard)/page.tsx) now unconditionally
+// redirects "/admin" -> "/admin/crm", and every real page under /admin
+// (starting with /admin/crm itself) requires an *active* crm_users
+// admin row via requireCrmAdmin(). A user who reached here with no
+// crm_users row - including, since Supabase Auth is one project shared
+// by both CRMs, a Lead Gen CRM-only account that happens to sign in
+// successfully at /admin/login - therefore bounced forever between
+// "/admin" and "/admin/crm" instead of ever reaching a page or an error.
+// A deactivated admin (active=false) hit the exact same loop, since this
+// function never checked `active` at all.
+//
+// Requiring an active row here (not just excluding role='agent') closes
+// that gap and matches every sibling gate in this app (requireCrmAdmin,
+// requireCrmUser for /agent, requireLeadgenUser for /leadgen), all of
+// which already require an active row for their own CRM before granting
+// entry. A role='agent' account is still just redirected away (not
+// signed out) since that's a legitimate account for this same CRM's
+// /agent area - only a missing/inactive/wrong-CRM session is fully
+// signed out here, so it can't linger as a valid-looking cookie.
 export async function requireAdminUser() {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
@@ -31,12 +50,17 @@ export async function requireAdminUser() {
 
   const { data: crmUser } = await supabase
     .from("crm_users")
-    .select("role")
+    .select("role, active")
     .eq("id", data.user.id)
     .maybeSingle();
 
   if (crmUser?.role === "agent") {
     redirect("/admin/login?error=This account does not have access to the quote dashboard.");
+  }
+
+  if (!crmUser || !crmUser.active) {
+    await supabase.auth.signOut();
+    redirect("/admin/login?error=This account is not set up for Growth CRM admin access.");
   }
 
   return data.user;
