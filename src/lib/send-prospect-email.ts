@@ -122,13 +122,15 @@ export async function sendProspectEmail(
     to: toEmail,
     replyTo: replyToEmail,
     subject,
-    text: buildProspectEmailText({ message, ctaText, bookingUrl, unsubscribeUrl }),
-    html: buildProspectEmailHtml({ message, ctaText, bookingUrl, unsubscribeUrl }),
-    // Commercial outreach - carries a real List-Unsubscribe header (in
-    // addition to the visible footer link above) so mail clients that
-    // support one-click unsubscribe (Gmail included) can surface it
-    // directly, which meaningfully helps keep this address's sender
-    // reputation - and therefore inbox placement - healthy.
+    text: buildProspectEmailText({ message, ctaText, bookingUrl }),
+    html: buildProspectEmailHtml({ message, ctaText, bookingUrl }),
+    // Commercial outreach - the CASL-required unsubscribe mechanism lives
+    // entirely in this List-Unsubscribe header rather than a visible
+    // footer in the body (see prospect-email-templates.ts), so mail
+    // clients that support one-click unsubscribe (Gmail included) surface
+    // it directly next to the sender name, which meaningfully helps keep
+    // this address's sender reputation - and therefore inbox placement -
+    // healthy.
     headers: {
       "List-Unsubscribe": `<mailto:${replyToEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",

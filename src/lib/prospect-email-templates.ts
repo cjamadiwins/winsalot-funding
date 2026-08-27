@@ -101,46 +101,36 @@ export function getDefaultProspectEmailTemplate(
   };
 }
 
-// Renders the user-edited message + CTA + booking link + unsubscribe
-// footer into the final email bodies sent via Resend. `message` is split
-// on blank lines into paragraphs; a single newline within a paragraph
-// (e.g. the multi-line signature block) becomes a <br> rather than a new
-// paragraph, so the signature stays visually together.
-export function buildProspectEmailText(input: {
-  message: string;
-  ctaText: string;
-  bookingUrl: string;
-  unsubscribeUrl: string;
-}): string {
-  return [
-    input.message.trim(),
-    "",
-    `${input.ctaText}: ${input.bookingUrl}`,
-    "",
-    "---",
-    "You're receiving this because you spoke with Winsalot Corp about growing your business.",
-    `Unsubscribe from future emails: ${input.unsubscribeUrl}`,
-  ].join("\n");
+// Renders the user-edited message + CTA + booking link into the final
+// email bodies sent via Resend. `message` is split on blank lines into
+// paragraphs; a single newline within a paragraph (e.g. the multi-line
+// signature block) becomes a <br> rather than a new paragraph, so the
+// signature stays visually together.
+//
+// No visible unsubscribe footer here - CASL still requires a working
+// unsubscribe mechanism on this commercial outreach, but it's carried
+// entirely by the List-Unsubscribe/List-Unsubscribe-Post headers
+// sendProspectEmail sets on every send (see send-prospect-email.ts).
+// Gmail and Outlook both render those headers as a native one-click
+// "Unsubscribe" link next to the sender name, so the mechanism stays
+// real and visible without a marketing-style footer in the body - the
+// same plain personal-email body the Lead Generation CRM sends.
+export function buildProspectEmailText(input: { message: string; ctaText: string; bookingUrl: string }): string {
+  return [input.message.trim(), "", `${input.ctaText}: ${input.bookingUrl}`].join("\n");
 }
 
 // Plain personal-email layout matching the Lead Generation CRM's own
 // (src/lib/leadgen-email.ts's textToSimpleHtml/leadgenButtonHtml): a bare
 // div, no <!DOCTYPE>/<html>/<head>/<body>/<table> document wrapper, no
-// banner, no colored background, no large button - just black-on-white
-// text and a single inline text link, so the email reads like something a
-// person sent from their own inbox rather than a marketing campaign built
-// from an HTML email template. This is the single biggest lever this app
-// has over landing in Gmail's Promotions tab instead of the primary
-// inbox. The one deliberate difference from the Lead Gen CRM's structure
-// is the footer below - CASL requires a working unsubscribe mechanism on
-// this kind of commercial outreach, which the Lead Gen CRM's emails don't
-// send to cold prospects, so it can't simply be dropped to match.
-export function buildProspectEmailHtml(input: {
-  message: string;
-  ctaText: string;
-  bookingUrl: string;
-  unsubscribeUrl: string;
-}): string {
+// banner, no colored background, no large button, no footer - just
+// black-on-white text and a single inline text link, so the email reads
+// like something a person sent from their own inbox rather than a
+// marketing campaign built from an HTML email template. This is the
+// single biggest lever this app has over landing in Gmail's Promotions
+// tab instead of the primary inbox. See buildProspectEmailText above for
+// where the CASL-required unsubscribe mechanism actually lives now that
+// it's no longer a visible footer here.
+export function buildProspectEmailHtml(input: { message: string; ctaText: string; bookingUrl: string }): string {
   const paragraphs = input.message
     .trim()
     .split(/\n{2,}/)
@@ -154,10 +144,6 @@ export function buildProspectEmailHtml(input: {
 ${paragraphs}
 <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
   <a href="${escapeHtml(input.bookingUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1a56db; text-decoration:underline;">${escapeHtml(input.ctaText)}</a>
-</p>
-<p style="margin:16px 0 0 0; padding-top:16px; border-top:1px solid #e5e7eb; font-size:12px; line-height:1.5; color:#6b7280;">
-  You're receiving this because you spoke with Winsalot Corp about growing your business.<br>
-  <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280; text-decoration:underline;">Unsubscribe from future emails</a>
 </p>
 </div>`;
 }
