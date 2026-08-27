@@ -22,7 +22,6 @@ export default function ProspectEmailModal({
   contactName,
   toEmail,
   opportunityType,
-  agentName,
   bookingUrl,
   onClose,
   onSend,
@@ -32,7 +31,6 @@ export default function ProspectEmailModal({
   contactName: string | null;
   toEmail: string;
   opportunityType: OpportunityType;
-  agentName: string;
   bookingUrl: string;
   onClose: () => void;
   onSend: (input: { subject: string; message: string; ctaText: string }) => Promise<SendProspectEmailResult>;
@@ -41,7 +39,6 @@ export default function ProspectEmailModal({
   const defaults = getDefaultProspectEmailTemplate(opportunityType, {
     businessName,
     contactName: contactName ?? "",
-    agentName,
   });
 
   const [subject, setSubject] = useState(defaults.subject);

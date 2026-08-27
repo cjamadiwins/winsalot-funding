@@ -22,14 +22,13 @@ import "server-only";
 
 export type EmailCategory = "growth" | "funding" | "billing" | "quotes";
 
-// A recognizable, personal-looking sender name (rather than a corporate/
-// department-style one like "Winsalot Growth") reads less like bulk
-// marketing mail to Gmail's classifier, which is the single biggest
-// lever this app has over landing in Promotions instead of the primary
-// inbox. Shared across every category by default - each category's
-// SENDER_OVERRIDE_ENV_VAR below can still override it independently
-// (e.g. a category that genuinely wants its own identity back).
-const DEFAULT_SENDER_DISPLAY_NAME = "C.J. at Winsalot Corp";
+// Every Growth CRM email is branded as the company, never a named person -
+// no agent's name may appear as the sender display name (brief: "Change
+// the sender display name from 'C.J. at Winsalot Corp' or any
+// agent-specific name to 'Winsalot Corp'"). Shared across every category
+// by default - each category's SENDER_OVERRIDE_ENV_VAR below can still
+// override it independently.
+const DEFAULT_SENDER_DISPLAY_NAME = "Winsalot Corp";
 
 // growth/funding default to info@winsalotcorp.com - the same already-
 // verified, already-warmed address the Lead Generation CRM sends from

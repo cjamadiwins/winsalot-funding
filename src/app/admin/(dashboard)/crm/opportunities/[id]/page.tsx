@@ -13,7 +13,7 @@ export default async function AdminOpportunityDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const crmUser = await requireCrmAdmin();
+  await requireCrmAdmin();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
   // Admin already has full access to this page (requireCrmAdmin above) -
@@ -74,7 +74,6 @@ export default async function AdminOpportunityDetailPage({
       latestEmail={latestEmail as LatestCrmLeadEmail | null}
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
-      currentUserName={crmUser.full_name || crmUser.email}
       bookingUrl={getWinsalotBookingUrlBase()}
     />
   );

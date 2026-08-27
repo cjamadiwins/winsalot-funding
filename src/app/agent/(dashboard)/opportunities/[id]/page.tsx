@@ -64,7 +64,6 @@ export default async function AgentOpportunityDetailPage({
       currentAgentId={crmUser.id}
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
-      currentUserName={crmUser.full_name || crmUser.email}
       bookingUrl={getWinsalotBookingUrlBase()}
     />
   );
