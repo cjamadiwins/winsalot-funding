@@ -19,9 +19,9 @@ export default async function CrmTestEmailPage() {
       </Link>
       <h1 className="mt-2 text-2xl font-bold text-slate-900">Send Test Email</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Send a sample of any invoice or appointment email to your own inbox before it goes to a real client or prospect. Every test
-        subject is prefixed with &ldquo;[TEST]&rdquo; and uses obviously fake sample data - nothing here touches a real invoice or
-        appointment record.
+        Send a sample of any invoice, appointment, or prospect-consultation email to your own inbox before it goes to a real client or
+        prospect. Every test subject is prefixed with &ldquo;[TEST]&rdquo; and uses obviously fake sample data - nothing here touches a
+        real invoice, appointment, or prospect record.
       </p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
