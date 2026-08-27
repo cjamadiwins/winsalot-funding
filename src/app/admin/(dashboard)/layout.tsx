@@ -20,6 +20,9 @@ import {
   CalendarCog,
   Building2,
   Receipt,
+  FileSignature,
+  ClipboardList,
+  Workflow,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -31,6 +34,9 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
   { label: "Clients", href: "/admin/crm/clients", icon: <Building2 /> },
   { label: "Invoices", href: "/admin/crm/invoices", icon: <Receipt /> },
+  { label: "Client Onboarding", href: "/admin/crm/onboarding", icon: <Workflow /> },
+  { label: "Client Agreements", href: "/admin/crm/agreements", icon: <FileSignature /> },
+  { label: "Client Intake", href: "/admin/crm/intake", icon: <ClipboardList /> },
   { label: "Payroll", href: "/admin/crm/payroll", icon: <Wallet /> },
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },
   { label: "Incentives", href: "/admin/crm/incentives", icon: <Gift /> },
