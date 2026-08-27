@@ -31,15 +31,26 @@ export type EmailCategory = "growth" | "funding" | "billing" | "quotes";
 // (e.g. a category that genuinely wants its own identity back).
 const DEFAULT_SENDER_DISPLAY_NAME = "C.J. at Winsalot Corp";
 
+// growth/funding default to info@winsalotcorp.com - the same already-
+// verified, already-warmed address the Lead Generation CRM sends from
+// (see src/lib/leadgen-email.ts) and that's been in production use across
+// this app for years (agent invites, quote emails, etc.). A dedicated
+// growth@/funding@ mailbox with little to no sending history looks new
+// and unrecognized to Gmail's per-sender reputation model - splitting a
+// small volume of prospect email across several freshly-introduced
+// addresses is exactly the kind of thing that pushes mail into Promotions
+// instead of Primary, independent of content. Both categories keep their
+// own override var below so either can still be pointed at its own
+// address later, once that address has its own real sending history.
 const SENDER_DEFAULTS: Record<EmailCategory, { displayName: string; address: string }> = {
   // Growth consultations: bookings, confirmations, reminders,
   // rescheduling, cancellations, and the sales-prospect (opportunity)
   // consultation-invite/follow-up emails for lead_generation and
   // both_services opportunities.
-  growth: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "growth@winsalotcorp.com" },
+  growth: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "info@winsalotcorp.com" },
   // Business-financing opportunity emails (opportunity_type ===
   // "business_financing").
-  funding: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "funding@winsalotcorp.com" },
+  funding: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "info@winsalotcorp.com" },
   // Invoices, payment reminders, and payment receipts.
   billing: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "billing@winsalotcorp.com" },
   // Reserved for the retired cleaning-quote system - see module comment.
