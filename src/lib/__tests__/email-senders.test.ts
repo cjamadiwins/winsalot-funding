@@ -8,9 +8,9 @@ afterEach(() => {
 });
 
 describe("getEmailSender", () => {
-  it("uses the correct default identity for every category - a recognizable personal name, distinct addresses", () => {
-    expect(getEmailSender("growth")).toBe("C.J. at Winsalot Corp <growth@winsalotcorp.com>");
-    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <funding@winsalotcorp.com>");
+  it("uses the correct default identity for every category - growth/funding share the Lead Gen CRM's already-trusted info@ address, billing/quotes keep their own", () => {
+    expect(getEmailSender("growth")).toBe("C.J. at Winsalot Corp <info@winsalotcorp.com>");
+    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <info@winsalotcorp.com>");
     expect(getEmailSender("billing")).toBe("C.J. at Winsalot Corp <billing@winsalotcorp.com>");
     expect(getEmailSender("quotes")).toBe("C.J. at Winsalot Corp <quotes@winsalotcorp.com>");
   });
@@ -24,7 +24,7 @@ describe("getEmailSender", () => {
   it("each category's override is isolated - setting one never changes another", () => {
     process.env.GROWTH_EMAIL_FROM = "Custom Growth <custom-growth@winsalotcorp.com>";
     expect(getEmailSender("growth")).toBe("Custom Growth <custom-growth@winsalotcorp.com>");
-    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <funding@winsalotcorp.com>");
+    expect(getEmailSender("funding")).toBe("C.J. at Winsalot Corp <info@winsalotcorp.com>");
     expect(getEmailSender("billing")).toBe("C.J. at Winsalot Corp <billing@winsalotcorp.com>");
     expect(getEmailSender("quotes")).toBe("C.J. at Winsalot Corp <quotes@winsalotcorp.com>");
   });
@@ -51,9 +51,10 @@ describe("senderForOpportunityType", () => {
     expect(senderForOpportunityType("business_financing")).toBe(getEmailSender("funding"));
   });
 
-  it("never sends a business_financing opportunity email from the Growth or Cleaning identity", () => {
+  it("never sends a business_financing opportunity email from the Cleaning identity, and still routes through the Funding category even if a Growth override is set", () => {
+    process.env.GROWTH_EMAIL_FROM = "Custom Growth <custom-growth@winsalotcorp.com>";
     const sender = senderForOpportunityType("business_financing");
-    expect(sender).not.toContain("growth@winsalotcorp.com");
+    expect(sender).not.toContain("custom-growth@winsalotcorp.com");
     expect(sender).not.toContain("quotes@winsalotcorp.com");
   });
 });

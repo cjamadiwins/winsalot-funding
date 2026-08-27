@@ -123,12 +123,18 @@ export function buildProspectEmailText(input: {
   ].join("\n");
 }
 
-// Plain personal-email layout per the deliverability brief: no banner,
-// no colored background, no large button - just black-on-white text and
-// a single inline text link, so the email reads like something a person
-// sent from their own inbox rather than a marketing campaign (the single
-// biggest lever this app has over landing in Gmail's Promotions tab
-// instead of the primary inbox).
+// Plain personal-email layout matching the Lead Generation CRM's own
+// (src/lib/leadgen-email.ts's textToSimpleHtml/leadgenButtonHtml): a bare
+// div, no <!DOCTYPE>/<html>/<head>/<body>/<table> document wrapper, no
+// banner, no colored background, no large button - just black-on-white
+// text and a single inline text link, so the email reads like something a
+// person sent from their own inbox rather than a marketing campaign built
+// from an HTML email template. This is the single biggest lever this app
+// has over landing in Gmail's Promotions tab instead of the primary
+// inbox. The one deliberate difference from the Lead Gen CRM's structure
+// is the footer below - CASL requires a working unsubscribe mechanism on
+// this kind of commercial outreach, which the Lead Gen CRM's emails don't
+// send to cold prospects, so it can't simply be dropped to match.
 export function buildProspectEmailHtml(input: {
   message: string;
   ctaText: string;
@@ -144,42 +150,14 @@ export function buildProspectEmailHtml(input: {
     )
     .join("\n");
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(input.ctaText)} — Winsalot Corp</title>
-</head>
-<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif; color:#111827;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; padding:24px 20px;">
-          <tr>
-            <td>
-              ${paragraphs}
-              <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
-                <a href="${escapeHtml(input.bookingUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1a56db; text-decoration:underline;">${escapeHtml(input.ctaText)}</a>
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
-              <p style="margin:0 0 6px 0; font-size:12px; line-height:1.5; color:#6b7280;">
-                You're receiving this because you spoke with Winsalot Corp about growing your business.
-              </p>
-              <p style="margin:0; font-size:12px; line-height:1.5; color:#6b7280;">
-                <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280; text-decoration:underline;">Unsubscribe from future emails</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-`;
+  return `<div style="font-family: Arial, Helvetica, sans-serif; font-size:15px; line-height:1.6; color:#111827;">
+${paragraphs}
+<p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
+  <a href="${escapeHtml(input.bookingUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1a56db; text-decoration:underline;">${escapeHtml(input.ctaText)}</a>
+</p>
+<p style="margin:16px 0 0 0; padding-top:16px; border-top:1px solid #e5e7eb; font-size:12px; line-height:1.5; color:#6b7280;">
+  You're receiving this because you spoke with Winsalot Corp about growing your business.<br>
+  <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280; text-decoration:underline;">Unsubscribe from future emails</a>
+</p>
+</div>`;
 }
