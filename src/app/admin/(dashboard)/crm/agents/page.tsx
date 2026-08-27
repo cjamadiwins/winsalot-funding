@@ -7,17 +7,10 @@ export default async function AdminCrmAgentsPage() {
   const currentAdmin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: agents, error: agentsError }, { data: leadCounts, error: countsError }] =
-    await Promise.all([
-      supabase.from("crm_users").select("*").order("created_at", { ascending: false }),
-      supabase.from("crm_leads").select("assigned_agent_id"),
-    ]);
-
-  const counts: Record<string, number> = {};
-  for (const row of leadCounts ?? []) {
-    if (!row.assigned_agent_id) continue;
-    counts[row.assigned_agent_id] = (counts[row.assigned_agent_id] ?? 0) + 1;
-  }
+  const { data: agents, error: agentsError } = await supabase
+    .from("crm_users")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   return (
     <div>
@@ -26,19 +19,15 @@ export default async function AdminCrmAgentsPage() {
         Add calling agents and manage who has access to the CRM.
       </p>
 
-      {(agentsError || countsError) && (
+      {agentsError && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Failed to load agents: {(agentsError ?? countsError)?.message}
+          Failed to load agents: {agentsError.message}
         </p>
       )}
 
-      {!agentsError && !countsError && (
+      {!agentsError && (
         <div className="mt-6">
-          <AgentsClient
-            agents={(agents ?? []) as CrmUserRow[]}
-            leadCounts={counts}
-            currentUserId={currentAdmin.id}
-          />
+          <AgentsClient agents={(agents ?? []) as CrmUserRow[]} currentUserId={currentAdmin.id} />
         </div>
       )}
     </div>
