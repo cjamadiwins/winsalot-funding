@@ -19,16 +19,18 @@ export type ProspectEmailDefaults = {
   ctaText: string;
 };
 
+// Matches the Lead Generation CRM's own consultation-invite wording
+// (leadgen_email_templates, key "consultation_information", combined with
+// buildLeadgenConsultationCtaEmail's signature block in leadgen-email.ts)
+// - a short "thank you for speaking with us" note, one sentence on how we
+// can help, a direct ask to book, then a brief signature. Kept as close
+// as this domain allows: unlike the Lead Gen CRM's client-outreach email
+// (signed "{client} Team", since it's the client's own outreach, not an
+// individual's), a Growth CRM prospect email is always from a specific
+// agent reaching out personally, so the signature keeps their real name
+// rather than switching to a generic "Team" sign-off.
 function signatureBlock(agentName: string): string {
-  return [
-    "Best regards,",
-    agentName,
-    "Winsalot Corp",
-    "Empowering Businesses, One Solution at a Time.",
-    "647-300-1270",
-    "info@winsalotcorp.com",
-    "winsalotcorp.com",
-  ].join("\n");
+  return ["Best,", agentName, "Winsalot Corp", "Website: winsalotcorp.com"].join("\n");
 }
 
 export function getDefaultProspectEmailTemplate(
@@ -38,6 +40,7 @@ export function getDefaultProspectEmailTemplate(
   const businessName = params.businessName;
   const contactName = params.contactName || "there";
   const agentName = params.agentName;
+  const ctaText = "Book a free 15-minute consultation";
 
   if (opportunityType === "business_financing") {
     return {
@@ -45,17 +48,17 @@ export function getDefaultProspectEmailTemplate(
       message: [
         `Hi ${contactName},`,
         "",
-        "Thank you for speaking with us.",
+        "Thank you for taking the time to speak with us.",
         "",
-        "Winsalot Corp helps established Canadian businesses explore financing options through our network of business-funding partners.",
+        "We would love the opportunity to show you how Winsalot Corp can help you explore financing options and take the next step for your business.",
         "",
-        "During a free 15-minute consultation, we can learn about your business, discuss your financing needs and explain the information that may be required to determine whether suitable options are available.",
+        "Please click the button below to schedule your free 15-minute consultation. There is no obligation, and all financing is subject to lender assessment and approval.",
         "",
-        "There is no obligation, and all financing is subject to lender assessment and approval.",
+        "You can reply to this email, or use the booking link below to choose a convenient time:",
         "",
         signatureBlock(agentName),
       ].join("\n"),
-      ctaText: "Explore Your Business Financing Options",
+      ctaText,
     };
   }
 
@@ -65,19 +68,17 @@ export function getDefaultProspectEmailTemplate(
       message: [
         `Hi ${contactName},`,
         "",
-        "Thank you for speaking with us.",
+        "Thank you for taking the time to speak with us.",
         "",
-        "Winsalot Corp supports businesses in two important areas: generating new sales opportunities and exploring business-financing options.",
+        "We would love the opportunity to show you how Winsalot Corp can help generate more qualified leads for your business and explore financing options to support your growth.",
         "",
-        "We would like to learn more about your goals and determine which type of support may be most useful for your business.",
+        "Please click the button below to schedule your free 15-minute consultation. There is no obligation, and financing options, when requested, are subject to lender assessment and approval.",
         "",
-        "Schedule a free 15-minute consultation with our team to discuss your business needs.",
-        "",
-        "There is no obligation. Financing options, when requested, are subject to lender assessment and approval.",
+        "You can reply to this email, or use the booking link below to choose a convenient time:",
         "",
         signatureBlock(agentName),
       ].join("\n"),
-      ctaText: "Book a Free 15-Minute Business Consultation",
+      ctaText,
     };
   }
 
@@ -87,17 +88,17 @@ export function getDefaultProspectEmailTemplate(
     message: [
       `Hi ${contactName},`,
       "",
-      "Thank you for speaking with us.",
+      "Thank you for taking the time to speak with us.",
       "",
-      "Winsalot Corp helps businesses connect with potential customers through professional B2B outreach and appointment setting. We would like to learn more about your business, the customers you want to reach and your current growth objectives.",
+      "We would love the opportunity to show you how Winsalot Corp can help improve your operations, generate more qualified leads, streamline your workflow, and grow your business.",
       "",
-      "You can schedule a free 15-minute consultation with our team to discuss how we may be able to support your business.",
+      "Please click the button below to schedule your free 15-minute consultation.",
       "",
-      "There is no obligation.",
+      "You can reply to this email, or use the booking link below to choose a convenient time:",
       "",
       signatureBlock(agentName),
     ].join("\n"),
-    ctaText: "Book a Free 15-Minute Growth Consultation",
+    ctaText,
   };
 }
 
