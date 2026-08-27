@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { escapeHtml } from "./html";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { LEADGEN_CONSULTATION_CTA_LABEL } from "./leadgen-types";
 
 // Sender/reply-to for every email this CRM sends. Defaults to
 // info@winsalotcorp.com - the sender already verified and in production
@@ -11,9 +12,12 @@ import { getSupabaseAdmin } from "./supabase-admin";
 // switched on by setting LEADGEN_EMAIL_FROM once that address is
 // confirmed verified in the Resend dashboard - never hardcoded here,
 // since sending from an unverified address would silently fail or land
-// in spam.
+// in spam. The display name is a recognizable person ("C.J. at Winsalot
+// Corp") rather than a generic company name - matching the Growth CRM's
+// own default (src/lib/email-senders.ts) - since Gmail is more likely to
+// route mail from an apparent company/department name into Promotions.
 export function getLeadgenSenderEmail(): string {
-  return process.env.LEADGEN_EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
+  return process.env.LEADGEN_EMAIL_FROM || "C.J. at Winsalot Corp <info@winsalotcorp.com>";
 }
 
 export function getLeadgenReplyToEmail(): string {
@@ -54,49 +58,49 @@ function sanitizePlainEmailBody(body: string): string {
   return stripHtmlTags(body).replace(/\n{3,}/g, "\n\n").trim();
 }
 
-// A real, styled HTML button (not just a plain link) for the
-// consultation booking link - renders as a clickable button in every
-// major desktop and mobile email client, with the raw URL underneath as
-// a plain-text fallback for clients that strip inline styles.
+// A plain inline text link (no colored button graphic, no background
+// fill) for the consultation booking link - a large promotional-looking
+// button is exactly the kind of visual cue that pushes an email into
+// Gmail's Promotions tab, so every CTA in this CRM's outbound mail
+// renders as ordinary link text a person would send from their own
+// inbox instead. Kept as its own function (rather than folded into
+// leadgenBookingButtonHtml) since callers still address them
+// separately - see the style: "button"/"booking" distinction below.
 export function leadgenButtonHtml(url: string, label: string): string {
   const safeUrl = escapeHtml(url);
   const safeLabel = escapeHtml(label);
-  return `<div style="margin: 20px 0; font-family: sans-serif;">
-  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#059669;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 28px;border-radius:9999px;">${safeLabel}</a>
-  <div style="margin-top:10px;font-size:12px;color:#64748b;">Or copy and paste this link into your browser: <a href="${safeUrl}" style="color:#0284c7;">${safeUrl}</a></div>
-</div>`;
+  return `<p style="margin: 16px 0; font-family: sans-serif; font-size:15px; line-height:1.6; color:#1e293b;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#1a56db;text-decoration:underline;">${safeLabel}</a>
+</p>`;
 }
 
-// The consultation booking button - matches the primary CTA button style
-// used in the cleaning-quote emails (see quote-request-email.ts /
-// customer-quote-email.ts: blue #2563eb, 6px rounded corners, bold white
-// text) per an explicit "make it look like the cleaning quote email
-// button" request. Unlike leadgenButtonHtml (the green services
-// button), the fallback line never shows the raw URL - only clickable
-// text ("click here to book your consultation"), per an explicit
-// "do not show the full Calendly URL" instruction.
+// The consultation booking link - same plain-text-link treatment as
+// leadgenButtonHtml above (previously a large blue button graphic,
+// replaced per the deliverability brief's "no large promotional
+// buttons" / "use a simple text link instead" requirement). The raw
+// Calendly URL is still never shown as visible text - only this label,
+// exactly like before.
 export function leadgenBookingButtonHtml(url: string, label: string): string {
   const safeUrl = escapeHtml(url);
   const safeLabel = escapeHtml(label);
-  return `<div style="margin: 20px 0; font-family: sans-serif; text-align:center;">
-  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:bold;text-decoration:none;padding:16px 40px;border-radius:6px;">${safeLabel}</a>
-  <div style="margin-top:10px;font-size:13px;color:#6b7280;">If the button does not work, open this booking link:</div>
-  <div style="margin-top:4px;font-size:13px;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;word-break:break-all;">${safeUrl}</a></div>
-</div>`;
+  return `<p style="margin: 16px 0; font-family: sans-serif; font-size:15px; line-height:1.6; color:#1e293b;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#1a56db;text-decoration:underline;">${safeLabel}</a>
+</p>`;
 }
 
 // Builds the HTML body for the consultation invitation/follow-up emails:
 // everything renders exactly like a normal leadgen email EXCEPT each
 // literal "[BUTTON LABEL]\n\n<url>" marker (produced by
 // leadgenBookingInviteSection()/leadgenServicesInviteSection() in
-// lib/leadgen-types.ts), which is swapped for a real HTML button - the
-// green services-button style (leadgenButtonHtml, default) or, when
-// style: "booking" is set on that entry, the blue booking-button style
-// with no visible raw URL (leadgenBookingButtonHtml). Any marker that's
-// missing (no URL configured) or was edited out of `body` (e.g. in the
-// Send Follow-Up Email editor) is simply skipped - this never errors, it
-// degrades to plain-HTML rendering around whatever markers *are* still
-// present.
+// lib/leadgen-types.ts), which is swapped for a plain text link - the
+// services-link marker (leadgenButtonHtml, default) or, when
+// style: "booking" is set on that entry, the booking-link marker with
+// no visible raw URL (leadgenBookingButtonHtml). Both render identically
+// as ordinary link text, not a colored button graphic, per the
+// deliverability brief. Any marker that's missing (no URL configured) or
+// was edited out of `body` (e.g. in the Send Follow-Up Email editor) is
+// simply skipped - this never errors, it degrades to plain-HTML
+// rendering around whatever markers *are* still present.
 export function buildLeadgenBookingEmailHtml(
   body: string,
   buttons: { url: string | null | undefined; label: string; style?: "button" | "booking" }[]
@@ -164,15 +168,13 @@ export function buildLeadgenConsultationCtaEmail(
   // (same never-show-a-broken-link rule as leadgenBookingParagraph).
   const signatureText = websiteUrl ? `Best,\n${clientName} Team\n${clientName}\n${websiteUrl}` : `Best,\n${clientName} Team\n${clientName}`;
 
+  // Plain inline text link, not a colored button graphic - per the
+  // deliverability brief's "no large promotional buttons" requirement.
   const buildCtaHtml = () => {
     const safeUrl = escapeHtml(bookingUrl);
-    return `<div style="margin:20px 0 14px 0;font-family:sans-serif;text-align:center;">
-  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:17px;font-weight:700;line-height:1.3;text-decoration:none;padding:16px 24px;border-radius:6px;">
-    ${escapeHtml(buttonLabel)}
-  </a>
-  <div style="margin-top:10px;font-size:13px;color:#475569;">If the button does not work, open this link:</div>
-  <div style="margin-top:4px;font-size:13px;line-height:1.5;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;word-break:break-all;">${safeUrl}</a></div>
-</div>`;
+    return `<p style="margin:16px 0;font-family:sans-serif;font-size:15px;line-height:1.6;color:#1e293b;">
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#1a56db;text-decoration:underline;">${escapeHtml(buttonLabel)}</a>
+</p>`;
   };
 
   const buildSignatureHtml = () => {
@@ -281,7 +283,7 @@ export async function sendLeadgenEmail(
   // - Brent's Essentials in name only when the lead's own client
   // actually resolves to that.
   if (input.templateKey === "consultation_information") {
-    const hasButtonLabel = finalHtml.includes("Book Your Free 15-Minute Consultation");
+    const hasButtonLabel = finalHtml.includes(LEADGEN_CONSULTATION_CTA_LABEL);
     const hasBookingLink = /href="https?:\/\/[^"]+"/.test(finalHtml);
     // finalHtml is HTML - the signature-building code (buildLeadgenConsultationCtaEmail)
     // runs the client name through escapeHtml before writing it in, so an

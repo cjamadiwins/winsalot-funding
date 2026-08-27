@@ -11,7 +11,7 @@ import {
   buildDefaultInvoiceSentMessage,
   defaultInvoiceReceiptSubject,
   defaultInvoiceReminderSubject,
-  DEFAULT_INVOICE_SENT_SUBJECT,
+  defaultInvoiceSentSubject,
 } from "@/lib/crm-invoice-emails";
 import { sendCrmInvoiceEmail, type CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 import type { CrmUserRow } from "@/lib/crm-types";
@@ -318,7 +318,7 @@ export async function previewInvoiceEmailAction(invoiceId: string, emailType: Cr
     };
   }
 
-  const subject = emailType === "invoice_sent" ? DEFAULT_INVOICE_SENT_SUBJECT : defaultInvoiceReminderSubject(invoice.invoice_number);
+  const subject = emailType === "invoice_sent" ? defaultInvoiceSentSubject(invoice.invoice_number) : defaultInvoiceReminderSubject(invoice.invoice_number);
   const message =
     emailType === "invoice_sent"
       ? buildDefaultInvoiceSentMessage(invoice as CrmInvoiceRow, displayName)

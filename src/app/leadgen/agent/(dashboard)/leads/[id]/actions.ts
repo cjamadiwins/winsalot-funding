@@ -12,7 +12,6 @@ import {
   LEADGEN_CONSULTATION_CTA_LABEL,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_PROVINCES,
-  leadgenServicesButtonLabel,
   resolveLeadgenEmailBranding,
   type LeadgenAppointmentStatus,
   type LeadgenLeadStatus,
@@ -369,10 +368,9 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     toEmail,
     subject,
     body,
-    html: buildLeadgenBookingEmailHtml(body, [
-      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
-      { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
-    ]),
+    // Initial outreach email: exactly one link (the booking link), per
+    // the deliverability brief.
+    html: buildLeadgenBookingEmailHtml(body, [{ url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" }]),
     sentBy: agent.id,
     clientVisible: false,
   });
@@ -449,10 +447,9 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     toEmail,
     subject,
     body,
-    html: buildLeadgenBookingEmailHtml(body, [
-      { url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" },
-      { url: branding.servicesUrl, label: leadgenServicesButtonLabel(branding.clientName) },
-    ]),
+    // One link only - same deliverability reasoning as the initial
+    // invitation above.
+    html: buildLeadgenBookingEmailHtml(body, [{ url: branding.bookingUrl, label: LEADGEN_BOOKING_BUTTON_LABEL, style: "booking" }]),
     sentBy: agent.id,
     clientVisible: false,
   });
@@ -519,10 +516,10 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
     toEmail,
     subject,
     body,
-    html: buildLeadgenBookingEmailHtml(body, [
-      { url: bookingUrl, label: "Book a Free 15-Minute Consultation", style: "booking" },
-      { url: "https://mantracollab.com", label: "Visit Mantra Collab" },
-    ]),
+    // One link only (the booking link), per the deliverability brief -
+    // the "Visit Mantra Collab" website link is dropped from this
+    // initial outreach email.
+    html: buildLeadgenBookingEmailHtml(body, [{ url: bookingUrl, label: LEADGEN_CONSULTATION_CTA_LABEL, style: "booking" }]),
     sentBy: agent.id,
     clientVisible: false,
   });

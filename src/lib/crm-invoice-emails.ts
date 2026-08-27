@@ -2,19 +2,21 @@ import { escapeHtml } from "./html";
 import { formatCurrency, PAYMENT_METHOD_LABELS, type CrmPaymentRow } from "./crm-clients-types";
 import type { CrmInvoiceRow } from "./crm-invoices-types";
 
-// Winsalot Billing branded invoice email templates. Same visual language
-// as winsalot-consultation-emails.ts (dark-blue header, tagline, footer)
-// - written as its own independent copy rather than shared, matching this
-// codebase's existing convention of keeping each feature's email
-// templates self-contained.
+// Winsalot Billing invoice email templates. Plain personal-email layout
+// per the deliverability brief: no banner, no colored background - just
+// black-on-white text, so a genuinely transactional email (an invoice
+// the client is expecting) doesn't visually read as marketing and land
+// in Promotions. Written as its own independent copy rather than shared
+// with winsalot-consultation-emails.ts, matching this codebase's
+// existing convention of keeping each feature's email templates
+// self-contained.
 //
 // Every "build...Email" function below returns the *default* subject and
 // plain-text message for that email type - the admin can edit both
 // before sending (see previewInvoiceEmailAction/sendInvoiceAction in
 // crm/invoices/actions.ts), so renderInvoiceEmailBody is the one place
 // that actually turns a subject+message (default or edited) into the
-// final branded HTML, keeping default and edited sends visually
-// identical.
+// final HTML, keeping default and edited sends visually identical.
 
 export type InvoiceEmailBody = { subject: string; text: string; html: string };
 
@@ -27,25 +29,19 @@ function shell(bodyHtml: string, title: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title)}</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f5f7; font-family: Arial, Helvetica, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 0;">
+<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif; color:#111827;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; max-width:600px; width:100%;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; padding:24px 20px;">
           <tr>
-            <td style="background-color:#1e3a8a; padding:28px 40px; text-align:center;">
-              <span style="color:#ffffff; font-size:20px; font-weight:bold; letter-spacing:0.5px;">Winsalot Corp</span>
-              <div style="color:#bfdbfe; font-size:12.5px; margin-top:4px;">Empowering Businesses, One Solution at a Time.</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px;">
+            <td>
               ${bodyHtml}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px; background-color:#f9fafb; text-align:center; border-top:1px solid #e5e7eb;">
-              <p style="margin:0; font-size:12px; line-height:1.6; color:#9ca3af;">
+            <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
+              <p style="margin:0; font-size:12px; line-height:1.6; color:#6b7280;">
                 Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
               </p>
             </td>
@@ -60,7 +56,7 @@ function shell(bodyHtml: string, title: string): string {
 }
 
 // Converts a plain-text message (the admin's own editable subject/message
-// input) into the same branded paragraph styling every invoice email
+// input) into the same plain paragraph styling every invoice email
 // uses - blank-line-separated blocks become paragraphs, a single
 // newline within a block becomes a line break, so an edited message
 // renders exactly as the admin sees it in the preview textarea.
@@ -71,7 +67,7 @@ function messageToHtml(message: string): string {
     .filter(Boolean)
     .map(
       (paragraph) =>
-        `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#374151;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
+        `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.6; color:#111827;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
     )
     .join("\n");
 }
@@ -102,13 +98,20 @@ const SIGNATURE_LINES = [
   "winsalotcorp.com",
 ];
 
-export const DEFAULT_INVOICE_SENT_SUBJECT = "Your Monthly Invoice from Winsalot Corp";
+// Names the exact invoice, per the deliverability brief - a subject like
+// "Your Monthly Invoice from Winsalot Corp" repeats identically across
+// every client/month and reads as a mail-merge blast; naming the invoice
+// number instead reads as one specific, expected transactional notice.
+export function defaultInvoiceSentSubject(invoiceNumber: string): string {
+  return `Invoice ${invoiceNumber} from Winsalot Corp`;
+}
 
 // The exact default monthly invoice email template from the brief, with
 // every bracketed field replaced from the real invoice/client data.
 // "Amount due" is the invoice's remaining balance (equal to the total on
 // a fresh, unpaid invoice, but still correct if this is a resend after a
-// partial payment).
+// partial payment). The opening line is the brief's exact required
+// wording, verbatim.
 export function buildDefaultInvoiceSentMessage(
   invoice: Pick<CrmInvoiceRow, "invoice_number" | "service_period_start" | "service_period_end" | "balance" | "currency" | "due_date">,
   clientDisplayName: string
@@ -116,9 +119,7 @@ export function buildDefaultInvoiceSentMessage(
   return [
     `Hi ${clientDisplayName},`,
     "",
-    "Thank you for choosing Winsalot Corp.",
-    "",
-    "Please find your monthly invoice attached to this email.",
+    "Thank you for choosing Winsalot Corp. Below is your monthly invoice.",
     "",
     `Invoice number: ${invoice.invoice_number}`,
     `Invoice period: ${formatServicePeriod(invoice)}`,
@@ -137,7 +138,7 @@ export function buildInvoiceSentEmail(
   invoice: Pick<CrmInvoiceRow, "invoice_number" | "service_period_start" | "service_period_end" | "balance" | "currency" | "due_date">,
   clientDisplayName: string
 ): InvoiceEmailBody {
-  return renderInvoiceEmailBody(DEFAULT_INVOICE_SENT_SUBJECT, buildDefaultInvoiceSentMessage(invoice, clientDisplayName));
+  return renderInvoiceEmailBody(defaultInvoiceSentSubject(invoice.invoice_number), buildDefaultInvoiceSentMessage(invoice, clientDisplayName));
 }
 
 export function defaultInvoiceReminderSubject(invoiceNumber: string): string {

@@ -25,7 +25,12 @@ export default async function LeadgenAdminEmailsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">Email Tracking</h1>
+        <Link href="/leadgen/admin/emails/test" className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+          Send Test Email
+        </Link>
+      </div>
       <p className="mt-1 text-sm text-slate-500">All Lead Generation CRM email delivery records across every agent and lead.</p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">

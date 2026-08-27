@@ -17,8 +17,8 @@ import {
   renderLeadgenTemplate,
   leadgenBookingParagraph,
   leadgenBookingInviteSection,
-  leadgenServicesInviteSection,
   resolveLeadgenEmailBranding,
+  LEADGEN_CONSULTATION_CTA_LABEL,
   isMantraCollabClient,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
@@ -197,27 +197,34 @@ export default function LeadDetailClient({
   const rawBookingUrl = bookingLink?.trim() || null;
 
   const firstName = (lead.contact_name || lead.decision_maker_name || lead.business_name).split(" ")[0];
-  const defaultSubject = consultationTemplate?.subject ?? "Book Your Free 15-Minute Business Growth Consultation";
-  const defaultBody = consultationTemplate
-    ? renderLeadgenTemplate(consultationTemplate.body, {
-        first_name: firstName,
-        booking_paragraph: leadgenBookingParagraph(rawBookingUrl),
-      })
-    : "";
+  const consultationVars = {
+    first_name: firstName,
+    business_name: lead.business_name,
+    client_business_name: branding.clientName,
+    booking_paragraph: leadgenBookingParagraph(rawBookingUrl),
+  };
+  const defaultSubject = renderLeadgenTemplate(consultationTemplate?.subject ?? "Quick question about {{business_name}}", consultationVars);
+  const defaultBody = consultationTemplate ? renderLeadgenTemplate(consultationTemplate.body, consultationVars) : "";
   const bookingSection = leadgenBookingInviteSection(branding.bookingUrl, LEADGEN_BOOKING_BUTTON_LABEL);
-  const servicesSection = leadgenServicesInviteSection(branding.servicesUrl, branding.clientName);
   // booking_paragraph is aliased to the same marker text as
   // booking_section: some saved templates use that placeholder name
   // (matching the original "Send Consultation Email" template) instead
   // of booking_section, and without this alias it renders as nothing,
   // silently dropping the booking button from wherever it was placed in
-  // the template body.
-  const invitationVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection, services_section: servicesSection };
-  const invitationSubject = consultationInvitationTemplate?.subject ?? "Book Your Free 15-Minute Consultation";
+  // the template body. business_name is the lead's own company (not
+  // branding.clientName, which is Brent's Essentials/Mantra Collab's own
+  // name) - available for a subject/body like "Quick question about
+  // {{business_name}}". services_section is deliberately not provided
+  // here - the initial outreach and follow-up emails carry exactly one
+  // link (the booking link) per the deliverability brief, so a template
+  // referencing {{services_section}} now renders it as nothing rather
+  // than a second promotional link.
+  const invitationVars = { first_name: firstName, business_name: lead.business_name, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection };
+  const invitationSubject = renderLeadgenTemplate(consultationInvitationTemplate?.subject ?? "Quick question about {{business_name}}", invitationVars);
   const invitationBody = consultationInvitationTemplate ? renderLeadgenTemplate(consultationInvitationTemplate.body, invitationVars) : "";
 
-  const followUpVars = { first_name: firstName, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection, services_section: servicesSection };
-  const followUpSubject = consultationFollowUpTemplate?.subject ?? "Following Up: Your Free 15-Minute Consultation";
+  const followUpVars = { first_name: firstName, business_name: lead.business_name, client_business_name: branding.clientName, booking_section: bookingSection, booking_paragraph: bookingSection };
+  const followUpSubject = renderLeadgenTemplate(consultationFollowUpTemplate?.subject ?? "Following up: {{business_name}}", followUpVars);
   const followUpBody = consultationFollowUpTemplate
     ? renderLeadgenTemplate(consultationFollowUpTemplate.body, followUpVars)
     : `Hi ${firstName},\n\nJust following up on your FREE 15-minute AI Business Growth Consultation invitation.\n\nUse the button below to choose a convenient time for your consultation:\n\n${bookingSection}\n\nWe look forward to speaking with you and helping your business grow.\n\nRegards,\n\nWinsalot Corp.`;
@@ -239,16 +246,19 @@ export default function LeadDetailClient({
   }
   const latestEmail = emails[0] ?? null;
 
-  // "Send Mantra Collab Email" - fixed subject/body/two buttons, only
-  // ever rendered/sendable for a Mantra Collab lead (see the button
-  // below). Same [LABEL]\n\nurl marker convention as booking_section/
-  // services_section above, so buildLeadgenBookingEmailHtml (server
-  // side, in the send action) swaps each for a real HTML button.
+  // "Send Mantra Collab Email" - fixed subject/body/one link, only ever
+  // rendered/sendable for a Mantra Collab lead (see the button below).
+  // Same [LABEL]\n\nurl marker convention as booking_section above, so
+  // buildLeadgenBookingEmailHtml (server side, in the send action) swaps
+  // it for a real link. Deliberately just one link (the booking link) -
+  // the old second "Visit Mantra Collab" website link is dropped per the
+  // deliverability brief's "only one booking link" requirement for
+  // initial outreach; visit_section renders as nothing if an older saved
+  // template still references {{visit_section}}.
   const isMantra = isMantraCollabClient(client);
-  const mantraBookingSection = `[Book a Free 15-Minute Consultation]\n\n${branding.bookingUrl ?? ""}`;
-  const mantraVisitSection = "[Visit Mantra Collab]\n\nhttps://mantracollab.com";
-  const mantraVars = { first_name: firstName, booking_section: mantraBookingSection, visit_section: mantraVisitSection };
-  const mantraSubject = mantraCollabTemplate?.subject ?? "Grow Your Business with Mantra Collab";
+  const mantraBookingSection = `[${LEADGEN_CONSULTATION_CTA_LABEL}]\n\n${branding.bookingUrl ?? ""}`;
+  const mantraVars = { first_name: firstName, business_name: lead.business_name, booking_section: mantraBookingSection };
+  const mantraSubject = renderLeadgenTemplate(mantraCollabTemplate?.subject ?? "Quick question about {{business_name}}", mantraVars);
   const mantraBody = mantraCollabTemplate ? renderLeadgenTemplate(mantraCollabTemplate.body, mantraVars) : "";
 
   // The one primary "campaign email" button, now shown at the top beside
