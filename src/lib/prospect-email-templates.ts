@@ -20,18 +20,22 @@ export type ProspectEmailDefaults = {
 };
 
 // Matches the Lead Generation CRM's own consultation-invite wording
-// (leadgen_email_templates, key "consultation_information", combined with
-// buildLeadgenConsultationCtaEmail's signature block in leadgen-email.ts)
-// - a short "thank you for speaking with us" note, one sentence on how we
-// can help, a direct ask to book, then a brief signature. Kept as close
-// as this domain allows: unlike the Lead Gen CRM's client-outreach email
-// (signed "{client} Team", since it's the client's own outreach, not an
-// individual's), a Growth CRM prospect email is always from a specific
-// agent reaching out personally, so the signature keeps their real name
-// rather than switching to a generic "Team" sign-off.
-function signatureBlock(agentName: string): string {
-  return ["Best,", agentName, "Winsalot Corp", "Website: winsalotcorp.com"].join("\n");
+// (leadgen_email_templates, key "consultation_information") - a short
+// "thank you for speaking with us" note, one sentence on how we can help,
+// a direct ask to book, then a brief signature. Every Growth CRM
+// communication email is branded as the company only - no agent's name
+// appears anywhere in the email (sender display name, greeting, or
+// closing), matching the Lead Gen CRM's own "{client} Team" convention of
+// signing as the business rather than an individual.
+function firstNameOnly(fullName: string): string {
+  const trimmed = fullName.trim();
+  return trimmed ? trimmed.split(/\s+/)[0] : "";
 }
+
+// Fixed, brand-only closing - matches the exact closing already used by
+// the Winsalot consultation-booking emails
+// (src/lib/winsalot-consultation-emails.ts).
+const CONSULTATION_EMAIL_CLOSING = ["Best regards,", "Winsalot Corp", "Empowering Businesses, One Solution at a Time."].join("\n");
 
 // Fixed subject/CTA label for every Growth CRM prospect email, regardless
 // of opportunity_type - matches the Lead Generation CRM's own
@@ -43,10 +47,11 @@ const CONSULTATION_EMAIL_CTA_LABEL = "Book a Free 15-Minute Consultation";
 
 export function getDefaultProspectEmailTemplate(
   opportunityType: OpportunityType,
-  params: { businessName: string; contactName: string; agentName: string }
+  params: { businessName: string; contactName: string }
 ): ProspectEmailDefaults {
-  const contactName = params.contactName || "there";
-  const agentName = params.agentName;
+  // Recipient's first name only when available, otherwise "there" - never
+  // an agent's name.
+  const contactName = firstNameOnly(params.contactName) || "there";
   const ctaText = CONSULTATION_EMAIL_CTA_LABEL;
 
   if (opportunityType === "business_financing") {
@@ -63,7 +68,7 @@ export function getDefaultProspectEmailTemplate(
         "",
         "You can reply to this email, or use the booking link below to choose a convenient time:",
         "",
-        signatureBlock(agentName),
+        CONSULTATION_EMAIL_CLOSING,
       ].join("\n"),
       ctaText,
     };
@@ -83,7 +88,7 @@ export function getDefaultProspectEmailTemplate(
         "",
         "You can reply to this email, or use the booking link below to choose a convenient time:",
         "",
-        signatureBlock(agentName),
+        CONSULTATION_EMAIL_CLOSING,
       ].join("\n"),
       ctaText,
     };
@@ -103,7 +108,7 @@ export function getDefaultProspectEmailTemplate(
       "",
       "You can reply to this email, or use the booking link below to choose a convenient time:",
       "",
-      signatureBlock(agentName),
+      CONSULTATION_EMAIL_CLOSING,
     ].join("\n"),
     ctaText,
   };

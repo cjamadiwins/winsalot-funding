@@ -107,7 +107,6 @@ export async function sendCrmTestEmail(type: CrmTestEmailType, toEmail: string):
       const defaults = getDefaultProspectEmailTemplate("lead_generation", {
         businessName: "Acme Test Co.",
         contactName: "Jordan Sample",
-        agentName: "Alex Agent",
       });
       email = {
         subject: defaults.subject,

@@ -50,7 +50,6 @@ export default function AdminOpportunityDetailClient({
   latestEmail,
   emailHistory,
   isEmailSuppressed,
-  currentUserName,
   bookingUrl,
 }: {
   opportunity: CrmOpportunityRow;
@@ -60,7 +59,6 @@ export default function AdminOpportunityDetailClient({
   latestEmail: LatestCrmLeadEmail | null;
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
-  currentUserName: string;
   bookingUrl: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -384,7 +382,6 @@ export default function AdminOpportunityDetailClient({
           contactName={opportunity.contact_name}
           toEmail={opportunity.email}
           opportunityType={opportunity.opportunity_type}
-          agentName={currentUserName}
           bookingUrl={bookingUrl}
           onClose={() => setShowEmailModal(false)}
           onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
