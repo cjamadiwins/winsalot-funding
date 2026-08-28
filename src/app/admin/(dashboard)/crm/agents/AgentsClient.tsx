@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { CrmUserRow } from "@/lib/crm-types";
-import { inviteAgentAction, removeAgentAction, updateAgentAction } from "./actions";
+import type { AgentOnboardingAdminRow } from "@/lib/crm-onboarding-types";
+import { inviteAgentAction, removeAgentAction, reviewAgentOnboardingAction, updateAgentAction } from "./actions";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -11,9 +12,11 @@ const buttonClasses =
 
 export default function AgentsClient({
   agents,
+  onboardingRows,
   currentUserId,
 }: {
   agents: CrmUserRow[];
+  onboardingRows: AgentOnboardingAdminRow[];
   currentUserId: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -23,7 +26,7 @@ export default function AgentsClient({
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  function runAction(fn: () => Promise<{ error?: string } | void>, onDone?: () => void) {
+  function runAction(fn: () => Promise<{ error?: string }>, onDone?: () => void) {
     setError(null);
     setSuccessMessage(null);
     startTransition(async () => {
@@ -111,14 +114,17 @@ export default function AgentsClient({
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Onboarding</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {agents.map((agent) => (
+            {agents.map((agent) => {
+              const onboarding = onboardingRows.find((row) => row.agent_id === agent.id);
+              return (
               <tr key={agent.id} className="border-b border-slate-100 last:border-0 align-top">
                 {editingId === agent.id ? (
-                  <td colSpan={5} className="px-4 py-4">
+                  <td colSpan={6} className="px-4 py-4">
                     <form
                       action={(formData) =>
                         runAction(
@@ -168,8 +174,23 @@ export default function AgentsClient({
                         {agent.active ? "Active" : "Deactivated"}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {onboarding ? (
+                        <div className="space-y-1">
+                          <span className="font-semibold capitalize">{onboarding.status.replaceAll("_", " ")}</span>
+                          <div>{onboarding.completed_required}/{onboarding.total_required} training</div>
+                          {onboarding.quiz_score !== null && <div>Quiz: {onboarding.quiz_score}%</div>}
+                        </div>
+                      ) : <span>Existing account</span>}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
+                        {onboarding?.status === "submitted" && (
+                          <>
+                            <button type="button" disabled={isPending} onClick={() => runAction(() => reviewAgentOnboardingAction(agent.id, "approved"), () => setSuccessMessage(`${agent.full_name} now has full CRM access.`))} className="text-xs font-semibold text-emerald-700">Approve</button>
+                            <button type="button" disabled={isPending} onClick={() => { const note = prompt("What should the agent update?"); if (note) runAction(() => reviewAgentOnboardingAction(agent.id, "changes_requested", note), () => setSuccessMessage("Changes requested.")); }} className="text-xs font-semibold text-amber-700">Request changes</button>
+                          </>
+                        )}
                         <button
                           type="button"
                           onClick={() => setEditingId(agent.id)}
@@ -205,11 +226,11 @@ export default function AgentsClient({
                   </>
                 )}
               </tr>
-            ))}
+            );})}
 
             {agents.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   No agents yet.
                 </td>
               </tr>

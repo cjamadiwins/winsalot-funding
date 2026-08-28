@@ -39,5 +39,15 @@ export async function agentLoginAction(formData: FormData) {
     );
   }
 
+  const { data: onboarding } = await supabase
+    .from("crm_agent_onboarding")
+    .select("status")
+    .eq("agent_id", data.user.id)
+    .maybeSingle();
+
+  if (onboarding && onboarding.status !== "approved") {
+    redirect("/agent/onboarding");
+  }
+
   redirect(redirectTo);
 }

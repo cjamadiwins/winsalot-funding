@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getAuthRedirectBaseUrl } from "@/lib/site-url";
+import { fetchActiveAssignedModules, fetchOwnProgressByModuleId } from "@/lib/crm-training-data";
+import { isModuleCompletedForUser } from "@/lib/crm-training-types";
 
 // Every action below returns { error } instead of throwing. Next.js
 // redacts any error *thrown* from a Server Action in production builds
@@ -62,7 +64,69 @@ export async function inviteAgentAction(formData: FormData): Promise<ActionResul
     return { error: "Failed to save the agent record." };
   }
 
+  const { error: onboardingError } = await admin.from("crm_agent_onboarding").insert({
+    agent_id: authUser.user.id,
+    status: "invited",
+  });
+
+  if (onboardingError) {
+    await admin.auth.admin.deleteUser(authUser.user.id);
+    return { error: "Failed to create the agent onboarding record." };
+  }
+
   revalidatePath("/admin/crm/agents");
+  return {};
+}
+
+export async function reviewAgentOnboardingAction(
+  agentId: string,
+  decision: "approved" | "changes_requested",
+  note = ""
+): Promise<ActionResult> {
+  const currentAdmin = await requireCrmAdmin();
+  if (decision === "changes_requested" && !note.trim()) {
+    return { error: "Add a note explaining what the agent needs to update." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: record } = await supabase
+    .from("crm_agent_onboarding")
+    .select("*")
+    .eq("agent_id", agentId)
+    .maybeSingle();
+  if (!record) return { error: "This agent does not have an onboarding record." };
+  if (record.status !== "submitted") return { error: "The agent must submit onboarding before review." };
+
+  if (decision === "approved") {
+    const [modulesResult, progressResult] = await Promise.all([
+      fetchActiveAssignedModules(supabase),
+      fetchOwnProgressByModuleId(supabase, agentId),
+    ]);
+    const incomplete = modulesResult.data.filter((module) =>
+      module.is_required && !isModuleCompletedForUser(module, progressResult.data.get(module.id))
+    );
+    const recordComplete = record.phone && record.emergency_contact_name &&
+      record.emergency_contact_phone && record.policies_acknowledged_at &&
+      record.attendance_acknowledged_at && record.confidentiality_acknowledged_at &&
+      record.quiz_passed_at && record.acknowledgement_at;
+    if (!recordComplete || incomplete.length > 0) {
+      return { error: "This onboarding record is not complete and cannot be approved." };
+    }
+  }
+
+  const { error } = await supabase
+    .from("crm_agent_onboarding")
+    .update({
+      status: decision,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: currentAdmin.id,
+      review_note: note.trim() || null,
+    })
+    .eq("agent_id", agentId);
+  if (error) return { error: "Failed to save the onboarding decision." };
+
+  revalidatePath("/admin/crm/agents");
+  revalidatePath("/agent/onboarding");
   return {};
 }
 
