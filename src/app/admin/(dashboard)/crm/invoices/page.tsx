@@ -7,10 +7,10 @@ import { createInvoiceAction } from "./actions";
 export default async function AdminInvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; client?: string; create?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; client?: string; create?: string; deleted?: string }>;
 }) {
   await requireCrmAdmin();
-  const { search, status, client, create } = await searchParams;
+  const { search, status, client, create, deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   const [{ data: invoices, error }, summary, { data: clients }] = await Promise.all([
@@ -42,6 +42,7 @@ export default async function AdminInvoicesPage({
             createAction={createInvoiceAction}
             initialFilters={{ search: search ?? "", status: status ?? "", client: client ?? "" }}
             autoOpenCreateForClientId={create}
+            justDeleted={deleted === "1"}
           />
         </div>
       )}

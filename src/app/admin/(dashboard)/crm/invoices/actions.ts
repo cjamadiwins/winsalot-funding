@@ -646,10 +646,11 @@ export async function archiveInvoiceAction(invoiceId: string): Promise<ActionRes
   return { invoiceId };
 }
 
-// "Only allow permanent deletion of an invoice when it is still a Draft
-// and has no payment, sending, or activity history" - re-checked here
-// on the server per canPermanentlyDeleteInvoice(), regardless of what
-// the confirmation UI already showed.
+// "Allow permanent deletion only when the invoice status is Draft or
+// Cancelled. Do not allow Sent, Partially Paid, or Paid invoices to be
+// deleted because they are financial records." Re-checked here on the
+// server per canPermanentlyDeleteInvoice(), regardless of what the
+// confirmation UI already showed.
 export async function deleteInvoiceAction(invoiceId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
@@ -657,12 +658,24 @@ export async function deleteInvoiceAction(invoiceId: string): Promise<ActionResu
   const { data: invoice } = await supabase.from("crm_invoices").select("*").eq("id", invoiceId).maybeSingle();
   if (!invoice) return { error: "Invoice not found." };
   if (!canPermanentlyDeleteInvoice(invoice)) {
-    return { error: "Only a Draft invoice with no payment, sending, or activity history can be permanently deleted. Cancel or archive it instead." };
+    return { error: "Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records." };
+  }
+
+  // amount_paid only counts non-reversed payments, but a fully reversed
+  // crm_payments row still exists and its invoice_id FK is ON DELETE
+  // RESTRICT - checked explicitly so that case surfaces this friendly
+  // message instead of a raw database constraint error.
+  const { count: paymentCount } = await supabase.from("crm_payments").select("id", { count: "exact", head: true }).eq("invoice_id", invoiceId);
+  if (paymentCount) {
+    return { error: "This invoice has payment history and cannot be permanently deleted. Cancel or archive it instead." };
   }
 
   const clientId = invoice.client_id;
-  await recordInvoiceAudit(supabase, invoice, "deleted", performedByName(admin), `Invoice ${invoice.invoice_number} permanently deleted.`);
+  await recordInvoiceAudit(supabase, invoice, "deleted", performedByName(admin), `Invoice ${invoice.invoice_number} permanently deleted by ${performedByName(admin)}.`);
 
+  // The invoice's own line items cascade-delete with it (ON DELETE
+  // CASCADE on crm_invoice_line_items.invoice_id) - no separate delete
+  // needed here.
   const { error } = await supabase.from("crm_invoices").delete().eq("id", invoiceId);
   if (error) return { error: `Failed to delete this invoice: ${error.message}` };
 

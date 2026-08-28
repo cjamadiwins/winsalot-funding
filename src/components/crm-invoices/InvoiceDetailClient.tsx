@@ -113,11 +113,11 @@ export default function InvoiceDetailClient({
 
   function handleDelete() {
     if (!canDelete) {
-      window.alert("Only a Draft invoice with no payment, sending, or activity history can be permanently deleted. Cancel or archive it instead.");
+      window.alert("Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records.");
       return;
     }
-    if (!window.confirm("Permanently delete this draft invoice? This cannot be undone.")) return;
-    runAction(() => deleteAction(invoice.id), () => router.push("/admin/crm/invoices"));
+    if (!window.confirm(`Permanently delete invoice ${invoice.invoice_number}? This action cannot be undone.`)) return;
+    runAction(() => deleteAction(invoice.id), () => router.push("/admin/crm/invoices?deleted=1"));
   }
 
   function handleMarkPartiallyPaid() {
@@ -229,8 +229,13 @@ export default function InvoiceDetailClient({
       )}
       {canDelete && (
         <div className="mt-2">
-          <button type="button" disabled={isPending} onClick={handleDelete} className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
-            Permanently Delete Draft
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleDelete}
+            className="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            Delete Invoice
           </button>
         </div>
       )}

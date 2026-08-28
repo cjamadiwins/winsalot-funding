@@ -166,21 +166,14 @@ export type NewCrmInvoiceInput = {
   line_items: NewLineItemInput[];
 };
 
-// Only a Draft with absolutely no payment/sending/activity history may
-// ever be permanently deleted (brief: "Only allow permanent deletion of
-// an invoice when it is still a Draft and has no payment, sending, or
-// activity history.").
-export function canPermanentlyDeleteInvoice(invoice: Pick<
-  CrmInvoiceRow,
-  "status" | "amount_paid" | "first_sent_at" | "last_sent_at" | "last_reminder_at"
->): boolean {
-  return (
-    invoice.status === "Draft" &&
-    Number(invoice.amount_paid) === 0 &&
-    !invoice.first_sent_at &&
-    !invoice.last_sent_at &&
-    !invoice.last_reminder_at
-  );
+// "Allow permanent deletion only when the invoice status is Draft or
+// Cancelled. Do not allow Sent, Partially Paid, or Paid invoices to be
+// deleted because they are financial records." A Cancelled invoice can
+// still carry a real payment (e.g. partially paid, then cancelled) - the
+// amount_paid check keeps that a financial record too, even though its
+// status alone would otherwise qualify it.
+export function canPermanentlyDeleteInvoice(invoice: Pick<CrmInvoiceRow, "status" | "amount_paid">): boolean {
+  return (invoice.status === "Draft" || invoice.status === "Cancelled") && Number(invoice.amount_paid) === 0;
 }
 
 // A Sent/Partially Paid invoice whose due date has passed reads as
