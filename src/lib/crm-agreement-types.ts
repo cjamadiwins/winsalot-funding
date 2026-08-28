@@ -8,6 +8,10 @@
 // The Free Pilot Program option (migration 0098) is a second branch
 // through this same schema, distinguished by campaign_type on
 // crm_client_agreements - see that migration's header comment.
+//
+// The Manage action (migration 0099) adds admin Edit/Delete on top of
+// this same schema - see that migration's header comment for which
+// fields stay locked once a record is signed and why.
 
 export const AGREEMENT_STATUSES = ["draft", "sent", "signed", "superseded", "archived"] as const;
 export type AgreementStatus = (typeof AGREEMENT_STATUSES)[number];
@@ -53,6 +57,17 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
 export const PILOT_STATUSES = ["not_started", "active", "results_review", "converted", "extended", "closed"] as const;
 export type PilotStatus = (typeof PILOT_STATUSES)[number];
 
+export const AGREEMENT_CURRENCIES = ["CAD", "USD"] as const;
+export type AgreementCurrency = (typeof AGREEMENT_CURRENCIES)[number];
+
+// The Manage action's admin-only "Client Status" label (migration 0099) -
+// a separate, purely informational tracking field. It is never read by
+// deriveCrmOnboardingStage()/deriveCrmPilotStage() below and never
+// decides which admin actions appear - that keeps being driven entirely
+// by the real, derived stage, exactly as before this field existed.
+export const CLIENT_MANUAL_STATUSES = ["Draft", "Pilot", "Active", "Completed", "Paused", "Cancelled"] as const;
+export type ClientManualStatus = (typeof CLIENT_MANUAL_STATUSES)[number];
+
 export type CrmAgreementTemplateRow = {
   id: string;
   created_at: string;
@@ -81,12 +96,18 @@ export type CrmClientAgreementRow = {
   legal_business_name: string;
   contact_person: string;
   business_email: string;
+  phone: string | null;
 
   service_type: AgreementServiceType;
   target_type: AgreementTargetType;
   monthly_target: number;
   monthly_fee: number;
   setup_fee: number | null;
+  currency: AgreementCurrency;
+
+  // Manage action's admin-only tracking label (migration 0099) - see
+  // CLIENT_MANUAL_STATUSES above.
+  manual_status: ClientManualStatus | null;
 
   target_industries: string[];
   target_locations: string[];
@@ -125,6 +146,18 @@ export type CrmClientAgreementRow = {
   opened_at: string | null;
   accepted_at: string | null;
 };
+
+// Whether an agreement's commercial/legal terms are locked - the single
+// source of truth the Manage action's server actions and modal UI both
+// use (migration 0099), so "what's editable" can never disagree between
+// them. Mirrors the exact condition the crm_client_agreements_guard_signed()
+// database trigger enforces: once a client has actually signed
+// (accepted_at is set), those terms are immutable - only Convert/Extend
+// (a brand-new agreement) can change them. Contact info, phone, the
+// manual Client Status label, and notes are never locked by this check.
+export function isAgreementLocked(agreement: Pick<CrmClientAgreementRow, "accepted_at">): boolean {
+  return agreement.accepted_at !== null;
+}
 
 export const AGREEMENT_EVENT_TYPES = [
   "created",

@@ -5,6 +5,7 @@ import {
   nextRequiredAction,
   deriveCrmPilotStage,
   nextRequiredPilotAction,
+  isAgreementLocked,
   AGREEMENT_SERVICE_TYPE_LABELS,
   INVOICE_TRACKER_STATUS_LABELS,
   CAMPAIGN_TYPE_LABELS,
@@ -90,6 +91,24 @@ export default async function AdminCrmOnboardingPage() {
       paymentReceived: invoice?.status === "payment_received",
       campaignStatus: clientStatus,
       canRecordInvoice: !isPilot && agreement.status === "signed" && hasSubmission && !invoice,
+      manualStatus: agreement.manual_status,
+      manage: {
+        legalBusinessName: agreement.legal_business_name,
+        contactPerson: agreement.contact_person,
+        businessEmail: agreement.business_email,
+        phone: agreement.phone,
+        additionalNotes: agreement.additional_notes,
+        manualStatus: agreement.manual_status,
+        serviceType: agreement.service_type,
+        campaignType: agreement.campaign_type,
+        monthlyTarget: agreement.monthly_target,
+        monthlyFee: agreement.monthly_fee,
+        setupFee: agreement.setup_fee,
+        currency: agreement.currency,
+        campaignStartDate: agreement.campaign_start_date,
+        pilotEndDate: agreement.pilot_end_date,
+        isLocked: isAgreementLocked(agreement),
+      },
     };
   });
 

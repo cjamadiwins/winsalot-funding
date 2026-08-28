@@ -6,6 +6,7 @@ import {
   deriveCrmPilotStage,
   findIntakeAgreementConflicts,
   agreedTargetLabel,
+  isAgreementLocked,
   PILOT_PROGRAM_DISCLOSURE,
   type CrmAgreementTemplateRow,
 } from "../crm-agreement-types";
@@ -249,6 +250,16 @@ describe("deriveCrmPilotStage", () => {
         submission: null,
       })
     ).toBe("Pilot Closed");
+  });
+});
+
+describe("isAgreementLocked", () => {
+  it("is unlocked when the agreement has never been signed", () => {
+    expect(isAgreementLocked({ accepted_at: null })).toBe(false);
+  });
+
+  it("is locked once accepted_at is set", () => {
+    expect(isAgreementLocked({ accepted_at: "2026-06-21T09:00:00Z" })).toBe(true);
   });
 });
 
