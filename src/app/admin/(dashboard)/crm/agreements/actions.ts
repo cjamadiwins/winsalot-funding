@@ -41,20 +41,13 @@ async function logOnboardingActivity(
   });
 }
 
-// Prefers the latest *approved* template (item 3: agreements should use
-// legally-reviewed wording once it exists) but falls back to the latest
-// draft_pending_review version so the business can still send agreements
-// before legal sign-off - the PDF/preview/email all render the same
-// "DRAFT - PENDING LEGAL REVIEW" banner in that case (see
-// crm-agreement-pdf.tsx), so nobody can mistake it for final wording.
+// This is a lead-generation service agreement, not a lending agreement -
+// no legal-review approval step gates which template is used. Always the
+// latest version.
 async function getActiveAgreementTemplate(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 ): Promise<CrmAgreementTemplateRow | null> {
-  const { data } = await supabase
-    .from("crm_agreement_templates")
-    .select("*")
-    .order("legal_status", { ascending: true }) // 'approved' sorts before 'draft_pending_review' alphabetically
-    .order("version", { ascending: false });
+  const { data } = await supabase.from("crm_agreement_templates").select("*").order("version", { ascending: false });
 
   if (!data || data.length === 0) return null;
   return data[0] as CrmAgreementTemplateRow;
@@ -358,26 +351,6 @@ export async function resendAgreementAction(agreementId: string): Promise<Action
   await admin_.from("crm_agreement_events").insert({ agreement_id: agreementId, event_type: "resent", actor_type: "admin", actor_id: admin.id });
 
   revalidatePath(`/admin/crm/agreements/${agreementId}`);
-  return {};
-}
-
-// Marks the latest draft_pending_review template approved - item 3:
-// "Keep this notice until the admin approves the final agreement
-// wording." Approving never touches any already-created agreement (each
-// snapshots its own template_id), only which template new agreements use
-// going forward.
-export async function approveAgreementTemplateAction(templateId: string): Promise<ActionResult> {
-  const admin = await requireCrmAdmin();
-  const supabase = await createSupabaseServerClient();
-
-  const { error } = await supabase
-    .from("crm_agreement_templates")
-    .update({ legal_status: "approved", approved_by: admin.id, approved_at: new Date().toISOString() })
-    .eq("id", templateId)
-    .eq("legal_status", "draft_pending_review");
-
-  if (error) return { error: "Failed to approve the template." };
-  revalidatePath("/admin/crm/agreements");
   return {};
 }
 

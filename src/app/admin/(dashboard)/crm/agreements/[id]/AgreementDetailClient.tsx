@@ -19,7 +19,6 @@ import {
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
-  type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
   type CrmAgreementEventRow,
   type CrmAgreementInvoiceRow,
@@ -54,7 +53,6 @@ function toDraftInput(a: CrmClientAgreementRow): AgreementDraftInput {
 
 export default function AgreementDetailClient({
   agreement,
-  template,
   sections,
   events,
   intakeConfigId,
@@ -63,7 +61,6 @@ export default function AgreementDetailClient({
   openRecordInvoice,
 }: {
   agreement: CrmClientAgreementRow;
-  template: CrmAgreementTemplateRow;
   sections: RenderedAgreementSection[];
   events: CrmAgreementEventRow[];
   intakeConfigId: string | null;
@@ -114,12 +111,6 @@ export default function AgreementDetailClient({
       <p className="text-sm text-slate-500">Version {agreement.version}</p>
 
       {error && <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-
-      {template.legal_status !== "approved" && (
-        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          DRAFT — PENDING LEGAL REVIEW
-        </div>
-      )}
 
       {editing ? (
         <div className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">

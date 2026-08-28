@@ -34,7 +34,6 @@ export default async function AdminAgreementDetailPage({
   return (
     <AgreementDetailClient
       agreement={agreement as CrmClientAgreementRow}
-      template={template as CrmAgreementTemplateRow}
       sections={sections}
       events={events ?? []}
       intakeConfigId={intakeConfig?.id ?? null}

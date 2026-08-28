@@ -34,10 +34,12 @@
 -- anon access to any of these tables.
 
 -- ---------------------------------------------------------------------
--- Agreement templates: shared legal boilerplate. Every agreement
+-- Agreement templates: shared boilerplate for the Client Service
+-- Agreement (a lead-generation service agreement, not a lending
+-- agreement - no legal-review approval step gates it). Every agreement
 -- snapshots which template version it was built from (template_id on
--- crm_client_agreements below), so approving a later template version
--- never rewrites the wording an already-sent/signed agreement showed its
+-- crm_client_agreements below), so a later template version edit never
+-- rewrites the wording an already-sent/signed agreement showed its
 -- client.
 -- ---------------------------------------------------------------------
 create table if not exists public.crm_agreement_templates (
@@ -49,11 +51,7 @@ create table if not exists public.crm_agreement_templates (
   -- {{placeholder}} tokens (monthly_target, service_noun_plural, etc.)
   -- filled in at render time by src/lib/crm-agreement-types.ts - never
   -- baked in here as static per-client text.
-  content jsonb not null,
-  legal_status text not null default 'draft_pending_review'
-    check (legal_status in ('draft_pending_review', 'approved')),
-  approved_by uuid references public.crm_users(id) on delete set null,
-  approved_at timestamptz
+  content jsonb not null
 );
 
 create unique index if not exists crm_agreement_templates_version_idx
@@ -80,14 +78,11 @@ create policy "crm_agreement_templates_admin_all" on public.crm_agreement_templa
   using (public.crm_user_role(auth.uid()) = 'admin')
   with check (public.crm_user_role(auth.uid()) = 'admin');
 
--- Seed version 1, unapproved - covers every required section (qualified-
--- lead/appointment definition, services, monthly target, fees/payment
--- terms, client responsibilities, confidentiality, data ownership,
--- renewal/cancellation, no-guarantee clause, signature fields) but has
--- not been reviewed by counsel, so it starts and stays "Draft - pending
--- legal review" until an admin explicitly approves it from the Client
--- Agreements section.
-insert into public.crm_agreement_templates (version, content, legal_status)
+-- Seed version 1 - covers every required section (qualified-lead/
+-- appointment definition, services, monthly target, fees/payment terms,
+-- client responsibilities, confidentiality, data ownership, renewal/
+-- cancellation, no-guarantee clause, signature fields).
+insert into public.crm_agreement_templates (version, content)
 values (
   1,
   '[
@@ -101,8 +96,7 @@ values (
     {"key": "renewal_cancellation", "title": "Renewal and Cancellation", "body": "This Agreement renews and may be cancelled on the renewal and cancellation terms set out in this Agreement."},
     {"key": "no_guarantee", "title": "No Guarantee of Sales", "body": "Winsalot Corp does not guarantee that any lead or appointment delivered under this Agreement will result in a sale, booking, or any other business outcome for the Client."},
     {"key": "signatures", "title": "Signatures", "body": "By signing below, each party agrees to be bound by the terms of this Agreement."}
-  ]'::jsonb,
-  'draft_pending_review'
+  ]'::jsonb
 );
 
 -- ---------------------------------------------------------------------

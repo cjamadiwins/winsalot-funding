@@ -41,9 +41,6 @@ export type CrmAgreementTemplateRow = {
   updated_at: string;
   version: number;
   content: { key: string; title: string; body: string }[];
-  legal_status: "draft_pending_review" | "approved";
-  approved_by: string | null;
-  approved_at: string | null;
 };
 
 export type CrmClientAgreementRow = {

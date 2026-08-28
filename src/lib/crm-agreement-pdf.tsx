@@ -22,7 +22,6 @@ const styles = StyleSheet.create({
   contact: { fontSize: 8, color: "#64748b", marginTop: 8 },
   docTitle: { fontSize: 18, fontWeight: 700, color: "#1e293b", textAlign: "right" },
   docMeta: { fontSize: 9, color: "#475569", textAlign: "right", marginTop: 2 },
-  draftBanner: { backgroundColor: "#fef3c7", color: "#92400e", fontSize: 9, fontWeight: 700, padding: 6, textAlign: "center", marginBottom: 16 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
   label: { fontSize: 8, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 },
   value: { fontSize: 10, color: "#1e293b" },
@@ -52,7 +51,6 @@ export type AgreementPdfProps = {
 
 export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps) {
   const sections = renderAgreementTemplate(template, agreement);
-  const isDraft = agreement.status !== "signed";
 
   return (
     <Document title={`Client Service Agreement - ${agreement.legal_business_name}`}>
@@ -73,8 +71,6 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <Text style={styles.docMeta}>Status: {agreement.status}</Text>
           </View>
         </View>
-
-        {isDraft && <Text style={styles.draftBanner}>DRAFT — PENDING LEGAL REVIEW</Text>}
 
         <View style={styles.sectionRow}>
           <View>

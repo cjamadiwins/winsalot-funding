@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { CrmClientAgreementRow, CrmAgreementTemplateRow } from "@/lib/crm-agreement-types";
+import type { CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import NewAgreementForm from "./NewAgreementForm";
-import ApproveTemplateButton from "./ApproveTemplateButton";
 
 export default async function AdminCrmAgreementsPage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: agreements }, { data: opportunities }, { data: clients }, { data: templates }] = await Promise.all([
+  const [{ data: agreements }, { data: opportunities }, { data: clients }] = await Promise.all([
     supabase.from("crm_client_agreements").select("*").order("created_at", { ascending: false }),
     supabase
       .from("crm_opportunities")
@@ -18,30 +17,16 @@ export default async function AdminCrmAgreementsPage() {
       .order("created_at", { ascending: false })
       .limit(100),
     supabase.from("crm_clients").select("id, company_name, primary_contact_name, email").order("company_name", { ascending: true }),
-    supabase.from("crm_agreement_templates").select("*").order("version", { ascending: false }),
   ]);
 
   const agreementRows = (agreements ?? []) as CrmClientAgreementRow[];
   const agreementedOpportunityIds = new Set(agreementRows.map((a) => a.opportunity_id).filter(Boolean));
   const availableOpportunities = (opportunities ?? []).filter((o) => !agreementedOpportunityIds.has(o.id));
-  const latestTemplate = (templates ?? [])[0] as CrmAgreementTemplateRow | undefined;
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Client Agreements</h1>
       <p className="mt-1 text-sm text-slate-500">Create and manage client service agreements. Not visible to agents.</p>
-
-      {latestTemplate && (
-        <div
-          className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
-            latestTemplate.legal_status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-800"
-          }`}
-        >
-          Agreement template v{latestTemplate.version}:{" "}
-          {latestTemplate.legal_status === "approved" ? "Approved" : "Draft — Pending Legal Review"}
-          {latestTemplate.legal_status !== "approved" && <ApproveTemplateButton templateId={latestTemplate.id} />}
-        </div>
-      )}
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
         <h2 className="text-base font-bold text-slate-900">Start Onboarding</h2>

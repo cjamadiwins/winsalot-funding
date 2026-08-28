@@ -48,7 +48,6 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
   await recordAgreementOpenedAction(token);
 
   const sections = renderAgreementTemplate(template as Pick<CrmAgreementTemplateRow, "content">, agreement as CrmClientAgreementRow);
-  const isDraft = (template as CrmAgreementTemplateRow).legal_status !== "approved";
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -56,12 +55,6 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
         <h1 className="text-2xl font-bold text-slate-900">Winsalot Corp</h1>
         <p className="text-sm text-slate-500">Empowering Businesses, One Solution at a Time.</p>
       </div>
-
-      {isDraft && (
-        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">
-          DRAFT — PENDING LEGAL REVIEW
-        </div>
-      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-bold text-slate-900">Client Service Agreement</h2>
