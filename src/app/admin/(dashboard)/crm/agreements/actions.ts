@@ -24,7 +24,8 @@ import {
   type CrmClientAgreementRow,
 } from "@/lib/crm-agreement-types";
 import { createAgreementToken } from "@/lib/crm-agreement-tokens";
-import { sendAgreementSignEmail } from "@/lib/crm-agreement-emails";
+import { sendAgreementSignEmail, sendAgreementSignedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
+import { notifyAdminsOfAgreementNotificationFailure } from "@/lib/crm-agreement-notifications";
 import { getSiteUrl } from "@/lib/site-url";
 
 type ActionResult = { error?: string };
@@ -439,6 +440,43 @@ export async function getAgreementSignLinkAction(agreementId: string): Promise<A
 
   const token = await createAgreementToken(agreementId);
   return { url: `${getSiteUrl()}/agreement-sign/${token}` };
+}
+
+// Item 3's "Retry" button: re-attempts sending the admin's own "signed"
+// notification email for an already-signed agreement whose previous
+// attempt failed. Never re-fires the in-app "signed" notification itself
+// (notifyAdminsOfSignedAgreement already fired once at signing time) -
+// only the email, and only the failure notification if it fails again.
+export async function retryAgreementAdminNotificationEmailAction(agreementId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("*").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.status !== "signed") return { error: "This agreement has not been signed yet." };
+
+  const { data: template } = await supabase.from("crm_agreement_templates").select("content").eq("id", agreement.template_id).maybeSingle();
+  if (!template) return { error: "This agreement's template could not be found." };
+
+  const adminNotificationEmail = getGrowthCrmNotificationEmail();
+  const emailResult = await sendAgreementSignedAdminNotificationEmail(agreement as CrmClientAgreementRow, template, adminNotificationEmail);
+
+  if (emailResult.error) {
+    await supabase
+      .from("crm_client_agreements")
+      .update({ admin_notification_failed_at: new Date().toISOString(), admin_notification_error: emailResult.error })
+      .eq("id", agreementId);
+    await notifyAdminsOfAgreementNotificationFailure({ agreementId, businessName: agreement.legal_business_name, reason: emailResult.error });
+    return { error: `Retry failed: ${emailResult.error}` };
+  }
+
+  await supabase
+    .from("crm_client_agreements")
+    .update({ admin_notified_at: new Date().toISOString(), admin_notification_failed_at: null, admin_notification_error: null })
+    .eq("id", agreementId);
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return {};
 }
 
 // Item 10: the lightweight invoice/payment tracker, entirely separate

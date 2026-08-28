@@ -30,11 +30,13 @@ export default function IntakeBuilderClient({
   agreement,
   submission,
   edits,
+  retryAdminNotificationAction,
 }: {
   config: CrmIntakeConfigRow;
   agreement: CrmClientAgreementRow;
   submission: CrmIntakeSubmissionRow | null;
   edits: CrmIntakeSubmissionEditRow[];
+  retryAdminNotificationAction: (submissionId: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -210,6 +212,21 @@ export default function IntakeBuilderClient({
       {submission && (
         <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
           <h2 className="text-base font-bold text-slate-900">Client Submission</h2>
+
+          {submission.admin_notification_failed_at && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <span>The intake-submitted admin notification email failed to send: {submission.admin_notification_error ?? "Unknown error."}</span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => runAction(() => retryAdminNotificationAction(submission.id))}
+                className="rounded-full bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isPending ? "Retrying…" : "Retry"}
+              </button>
+            </div>
+          )}
+
           <div className="mt-3 space-y-3">
             {questions.map((question) => {
               const conflict = conflictByField.get(question.key);

@@ -7,6 +7,8 @@ import {
   findIntakeAgreementConflicts,
   agreedTargetLabel,
   isAgreementLocked,
+  signedAgreementNotificationTitle,
+  intakeSubmittedNotificationTitle,
   PILOT_PROGRAM_DISCLOSURE,
   type CrmAgreementTemplateRow,
 } from "../crm-agreement-types";
@@ -260,6 +262,18 @@ describe("isAgreementLocked", () => {
 
   it("is locked once accepted_at is set", () => {
     expect(isAgreementLocked({ accepted_at: "2026-06-21T09:00:00Z" })).toBe(true);
+  });
+});
+
+describe("signedAgreementNotificationTitle", () => {
+  it("produces the exact required message", () => {
+    expect(signedAgreementNotificationTitle("Real Test Business", "AGR-2026-0001")).toBe("Real Test Business signed agreement AGR-2026-0001.");
+  });
+});
+
+describe("intakeSubmittedNotificationTitle", () => {
+  it("produces the exact required message", () => {
+    expect(intakeSubmittedNotificationTitle("Real Test Business")).toBe("Real Test Business submitted their client intake form.");
   });
 });
 

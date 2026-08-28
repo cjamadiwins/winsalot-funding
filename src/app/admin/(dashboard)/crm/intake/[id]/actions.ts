@@ -7,7 +7,8 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
 import { DEFAULT_INTAKE_QUESTIONS, type CrmIntakeQuestion, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import { createIntakeToken } from "@/lib/crm-agreement-tokens";
-import { sendIntakeFormEmail } from "@/lib/crm-agreement-emails";
+import { sendIntakeFormEmail, sendIntakeSubmittedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
+import { notifyAdminsOfIntakeNotificationFailure } from "@/lib/crm-agreement-notifications";
 
 type ActionResult = { error?: string };
 
@@ -126,6 +127,41 @@ export async function resendIntakeFormAction(configId: string): Promise<ActionRe
   const emailResult = await sendIntakeFormEmail(agreement as CrmClientAgreementRow, token);
   if (emailResult.error) return { error: `Failed to resend: ${emailResult.error}` };
 
+  return {};
+}
+
+// Item 3's "Retry" button: re-attempts sending the admin's own "intake
+// submitted" notification email for a submission whose previous attempt
+// failed. Never re-fires the in-app "submitted" notification itself -
+// only the email, and only the failure notification if it fails again.
+export async function retryIntakeAdminNotificationEmailAction(submissionId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: submission } = await supabase.from("crm_intake_submissions").select("id, intake_config_id, client_id").eq("id", submissionId).maybeSingle();
+  if (!submission) return { error: "Submission not found." };
+
+  const { data: client } = await supabase.from("crm_clients").select("company_name").eq("id", submission.client_id).maybeSingle();
+  const businessName = client?.company_name ?? "A client";
+
+  const adminNotificationEmail = getGrowthCrmNotificationEmail();
+  const emailResult = await sendIntakeSubmittedAdminNotificationEmail({ businessName, intakeConfigId: submission.intake_config_id }, adminNotificationEmail);
+
+  if (emailResult.error) {
+    await supabase
+      .from("crm_intake_submissions")
+      .update({ admin_notification_failed_at: new Date().toISOString(), admin_notification_error: emailResult.error })
+      .eq("id", submissionId);
+    await notifyAdminsOfIntakeNotificationFailure({ intakeConfigId: submission.intake_config_id, businessName, reason: emailResult.error });
+    return { error: `Retry failed: ${emailResult.error}` };
+  }
+
+  await supabase
+    .from("crm_intake_submissions")
+    .update({ admin_notified_at: new Date().toISOString(), admin_notification_failed_at: null, admin_notification_error: null })
+    .eq("id", submissionId);
+
+  revalidatePath(`/admin/crm/intake/${submission.intake_config_id}`);
   return {};
 }
 

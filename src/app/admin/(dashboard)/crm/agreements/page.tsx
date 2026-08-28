@@ -41,6 +41,7 @@ export default async function AdminCrmAgreementsPage() {
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
+              <th className="px-4 py-3">Agreement #</th>
               <th className="px-4 py-3">Business Name</th>
               <th className="px-4 py-3">Campaign Type</th>
               <th className="px-4 py-3">Service Type</th>
@@ -52,6 +53,7 @@ export default async function AdminCrmAgreementsPage() {
           <tbody>
             {agreementRows.map((agreement) => (
               <tr key={agreement.id} className="border-b border-slate-100 last:border-0">
+                <td className="px-4 py-3 text-slate-600">{agreement.agreement_number}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">{agreement.legal_business_name}</td>
                 <td className="px-4 py-3 text-slate-600">{CAMPAIGN_TYPE_LABELS[agreement.campaign_type]}</td>
                 <td className="px-4 py-3 text-slate-600">{agreement.service_type}</td>
@@ -66,7 +68,7 @@ export default async function AdminCrmAgreementsPage() {
             ))}
             {agreementRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No agreements yet.
                 </td>
               </tr>

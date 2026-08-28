@@ -77,6 +77,7 @@ export default function AgreementDetailClient({
   invoice,
   openRecordInvoice,
   pilotResults,
+  retryAdminNotificationAction,
 }: {
   agreement: CrmClientAgreementRow;
   sections: RenderedAgreementSection[];
@@ -86,6 +87,7 @@ export default function AgreementDetailClient({
   invoice: CrmAgreementInvoiceRow | null;
   openRecordInvoice: boolean;
   pilotResults: CrmPilotResultsRow | null;
+  retryAdminNotificationAction: (agreementId: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const isPilot = agreement.campaign_type === "free_pilot";
@@ -147,11 +149,25 @@ export default function AgreementDetailClient({
         </div>
       </div>
       <p className="text-sm text-slate-500">
-        Version {agreement.version}
+        Agreement {agreement.agreement_number} · Version {agreement.version}
         {isPilot && <span className="ml-2 capitalize text-slate-400">· Pilot status: {agreement.pilot_status.replace(/_/g, " ")}</span>}
       </p>
 
       {error && <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+
+      {agreement.admin_notification_failed_at && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>The signed-agreement admin notification email failed to send: {agreement.admin_notification_error ?? "Unknown error."}</span>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => runAction(() => retryAdminNotificationAction(agreement.id))}
+            className="rounded-full bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {isPending ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      )}
 
       {editing ? (
         <div className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
