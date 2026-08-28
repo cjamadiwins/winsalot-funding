@@ -5,8 +5,33 @@
 // quote system - see the PR that introduced this file for details).
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const code = typeof params.code === "string" ? params.code : null;
+  const tokenHash = typeof params.token_hash === "string" ? params.token_hash : null;
+  const type = typeof params.type === "string" ? params.type : null;
+  const authError = typeof params.error_description === "string" ? params.error_description : null;
+
+  // Supabase can fall back to the configured Site URL when a requested
+  // redirect path is not allow-listed. Keep the email flow one-click by
+  // forwarding every supported auth-link format from the homepage to the
+  // CRM's dedicated password page/confirmation endpoint.
+  if (code) {
+    redirect(`/agent/set-password?code=${encodeURIComponent(code)}`);
+  }
+  if (tokenHash && type) {
+    redirect(`/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=${encodeURIComponent(type)}&next=/agent/set-password`);
+  }
+  if (authError) {
+    redirect(`/agent/set-password?error=${encodeURIComponent(authError)}`);
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--color-bg)] px-6 text-center text-[var(--color-ink)]">
       <Image src="/winsalot-logo.png" alt="Winsalot Corp" width={80} height={80} className="h-20 w-20 object-contain" priority />
