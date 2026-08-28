@@ -205,6 +205,11 @@ export default function AdminInvoicesClient({
             <LineItemsEditor items={lineItems} onChange={setLineItems} currency={selectedClient?.currency ?? "USD"} />
           </div>
 
+          <label className="mt-3 flex items-center gap-2">
+            <input type="checkbox" name="is_free_invoice" className="h-4 w-4" />
+            <span className="text-[12.5px] font-medium text-slate-600">This is a free invoice (no payment required)</span>
+          </label>
+
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Payment Instructions</span>

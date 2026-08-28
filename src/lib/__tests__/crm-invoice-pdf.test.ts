@@ -35,6 +35,7 @@ const invoice = {
   cancelled_by: null,
   cancel_reason: null,
   archived_at: null,
+  is_free_invoice: false,
 } as unknown as CrmInvoiceRow;
 
 const lineItems: CrmInvoiceLineItemRow[] = [

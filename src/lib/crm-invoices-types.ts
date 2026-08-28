@@ -91,6 +91,8 @@ export type CrmInvoiceRow = {
   cancel_reason: string | null;
 
   archived_at: string | null;
+
+  is_free_invoice: boolean;
 };
 
 export type CrmInvoiceWithClient = CrmInvoiceRow & {
@@ -193,4 +195,20 @@ export function isInvoiceOverdue(invoice: Pick<CrmInvoiceRow, "status" | "due_da
 
 export function effectiveInvoiceStatus(invoice: Pick<CrmInvoiceRow, "status" | "due_date">): InvoiceStatus {
   return isInvoiceOverdue(invoice) ? "Overdue" : invoice.status;
+}
+
+// Mirrors crm_invoice_line_items.line_total (a generated column:
+// quantity * unit_price) so the create/update/send actions can validate
+// a submitted line-item set before it ever reaches the database, rather
+// than trusting whatever the client happened to send.
+export function computeInvoiceSubtotal(items: { quantity: number; unit_price: number }[]): number {
+  return items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+}
+
+// "Never generate a $0.00 invoice when valid line-item values were
+// entered" - true only when the submitted line items genuinely sum to
+// nothing (none saved, or every one is $0) and the invoice hasn't been
+// deliberately marked free.
+export function invoiceNeedsFreeConfirmation(items: { quantity: number; unit_price: number }[], isFreeInvoice: boolean): boolean {
+  return !isFreeInvoice && computeInvoiceSubtotal(items) <= 0;
 }

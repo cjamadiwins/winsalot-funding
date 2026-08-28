@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canPermanentlyDeleteInvoice, effectiveInvoiceStatus, isInvoiceOverdue } from "../crm-invoices-types";
+import { canPermanentlyDeleteInvoice, computeInvoiceSubtotal, effectiveInvoiceStatus, invoiceNeedsFreeConfirmation, isInvoiceOverdue } from "../crm-invoices-types";
 
 describe("canPermanentlyDeleteInvoice", () => {
   const base = { status: "Draft" as const, amount_paid: 0, first_sent_at: null, last_sent_at: null, last_reminder_at: null };
@@ -56,5 +56,43 @@ describe("effectiveInvoiceStatus", () => {
   it("reports the stored status otherwise", () => {
     expect(effectiveInvoiceStatus({ status: "Paid", due_date: "2000-01-01" })).toBe("Paid");
     expect(effectiveInvoiceStatus({ status: "Draft", due_date: null })).toBe("Draft");
+  });
+});
+
+describe("computeInvoiceSubtotal", () => {
+  it("matches the reported bug's exact scenario: Lead Gen, qty 1, rate CAD $750", () => {
+    expect(computeInvoiceSubtotal([{ quantity: 1, unit_price: 750 }])).toBe(750);
+  });
+
+  it("sums quantity * unit_price across every line item", () => {
+    expect(
+      computeInvoiceSubtotal([
+        { quantity: 2, unit_price: 100 },
+        { quantity: 1, unit_price: 50 },
+      ])
+    ).toBe(250);
+  });
+
+  it("is 0 for no line items", () => {
+    expect(computeInvoiceSubtotal([])).toBe(0);
+  });
+});
+
+describe("invoiceNeedsFreeConfirmation", () => {
+  it("does not require confirmation for a valid, non-zero line item", () => {
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 750 }], false)).toBe(false);
+  });
+
+  it("requires confirmation when there are no line items and it isn't marked free", () => {
+    expect(invoiceNeedsFreeConfirmation([], false)).toBe(true);
+  });
+
+  it("requires confirmation when every line item is $0 and it isn't marked free", () => {
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 0 }], false)).toBe(true);
+  });
+
+  it("never requires confirmation once the invoice is marked free, even at $0", () => {
+    expect(invoiceNeedsFreeConfirmation([], true)).toBe(false);
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 0 }], true)).toBe(false);
   });
 });

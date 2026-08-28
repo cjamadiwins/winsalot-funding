@@ -155,6 +155,12 @@ export function InvoicePdfDocument({ invoice, clientCompanyName, lineItems }: In
           </View>
         </View>
 
+        {invoice.is_free_invoice ? (
+          <View style={styles.notesBlock}>
+            <Text style={{ fontSize: 9.5, color: "#047857", fontWeight: 700 }}>This is a complimentary invoice - no payment is required.</Text>
+          </View>
+        ) : null}
+
         {invoice.payment_instructions ? (
           <View style={styles.notesBlock}>
             <Text style={styles.notesLabel}>Payment Instructions</Text>
