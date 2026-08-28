@@ -9,7 +9,6 @@ import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingRe
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
   ACTIVITY_TYPES,
-  CLOSED_STAGES,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_TYPES,
   type ActivityType,
@@ -135,25 +134,31 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
   revalidatePath("/admin/crm");
 }
 
-// Closed opportunities are never deleted (kept searchable/visible for
-// reporting) - this check gives a clear message before the attempt is
-// even made; the database enforces it too regardless
-// (crm_opportunities_prevent_closed_delete_trigger, migration 0081), so
-// this can't be bypassed by calling the action directly.
+// Administrators may permanently delete an opportunity regardless of its
+// stage - Open, Won ("Client Won"), Lost ("Not Interested"), or any other
+// closed stage. This used to be blocked for closed stages (kept "for
+// reporting"), both here and by a database trigger
+// (crm_opportunities_prevent_closed_delete_trigger); both blocks are gone
+// now (see migration 0104 for the trigger removal) since admins need to
+// be able to remove a record regardless of status - e.g. a test
+// opportunity that was mistakenly closed out.
+//
+// Every foreign key that points at crm_opportunities is ON DELETE CASCADE
+// or ON DELETE SET NULL (crm_activities/crm_followups/crm_lead_emails/
+// winsalot_appointment_tokens cascade; crm_client_agreements/
+// crm_email_suppressions/crm_intake_configs/crm_intake_submissions/
+// crm_unsubscribe_tokens/winsalot_appointments set null - see migrations
+// 0082, 0085, 0087, 0088, 0097), so a plain delete here can never fail
+// with a foreign-key-constraint error; nothing else needs to be deleted
+// or unlinked by hand first.
+//
+// requireCrmAdmin() plus crm_opportunities having no agent delete RLS
+// policy at all (only crm_opportunities_admin_all covers delete) keeps
+// this admin-only regardless of what calls it.
 export async function deleteOpportunityAction(opportunityId: string) {
   await requireCrmAdmin();
 
   const supabase = await createSupabaseServerClient();
-
-  const { data: opportunity } = await supabase
-    .from("crm_opportunities")
-    .select("stage")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (opportunity && CLOSED_STAGES.includes(opportunity.stage as OpportunityStage)) {
-    throw new Error("Closed opportunities cannot be deleted. They're kept for reporting.");
-  }
 
   const { error } = await supabase.from("crm_opportunities").delete().eq("id", opportunityId);
 

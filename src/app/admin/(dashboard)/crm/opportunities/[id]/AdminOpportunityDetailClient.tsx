@@ -4,7 +4,6 @@ import { useState, useTransition, type ReactNode } from "react";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
-  CLOSED_STAGES,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_TYPE_LABELS,
   isOverdue,
@@ -67,6 +66,7 @@ export default function AdminOpportunityDetailClient({
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -79,16 +79,24 @@ export default function AdminOpportunityDetailClient({
     });
   }
 
-  const isClosed = CLOSED_STAGES.includes(opportunity.stage);
-
+  // Administrators may permanently delete an opportunity regardless of
+  // its stage (Open, Won/Client Won, Lost/Not Interested) - every FK
+  // pointing at crm_opportunities is ON DELETE CASCADE/SET NULL (see
+  // migrations 0082/0085/0087/0088/0097), so a plain delete here is
+  // always safe, and the database no longer blocks a closed-stage delete
+  // (migration 0104 dropped that trigger). Only an admin can ever reach
+  // this page/action (requireCrmAdmin, plus crm_opportunities has no
+  // agent delete policy at all), so this stays admin-only regardless.
   function handleDelete() {
-    if (isClosed) return;
-    if (!confirm("Are you sure you want to permanently delete this prospect? This action cannot be undone.")) {
+    if (!confirm("Are you sure you want to permanently delete this opportunity? This action cannot be undone.")) {
       return;
     }
     runAction(async () => {
       await deleteOpportunityAction(opportunity.id);
-      window.location.href = "/admin/crm";
+      setDeleteSuccess(true);
+      setTimeout(() => {
+        window.location.href = "/admin/crm";
+      }, 1200);
     });
   }
 
@@ -125,15 +133,20 @@ export default function AdminOpportunityDetailClient({
           </button>
           <button
             type="button"
-            disabled={isPending || isClosed}
+            disabled={isPending || deleteSuccess}
             onClick={handleDelete}
-            title={isClosed ? "Closed opportunities cannot be deleted — kept for reporting." : undefined}
             className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Delete Opportunity
           </button>
         </div>
       </div>
+
+      {deleteSuccess && (
+        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          Opportunity deleted successfully.
+        </p>
+      )}
 
       {isEmailSuppressed && (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

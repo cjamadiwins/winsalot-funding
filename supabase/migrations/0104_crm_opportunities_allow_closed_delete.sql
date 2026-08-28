@@ -1,0 +1,24 @@
+-- Growth CRM Opportunities: allow an administrator to permanently delete
+-- an opportunity regardless of its stage (Open, Won, Lost, or any other
+-- closed stage).
+--
+-- Migration 0081 added crm_opportunities_prevent_closed_delete_trigger so
+-- a closed ('Client Won' / 'Not Interested') opportunity could never be
+-- deleted, keeping it "for reporting." That's no longer the desired
+-- behavior - an admin needs to be able to remove a record regardless of
+-- status (e.g. a test opportunity that was closed out by mistake), and
+-- crm_opportunities already has no agent-facing delete RLS policy at all
+-- (only crm_opportunities_admin_all covers delete), so dropping this
+-- trigger only ever affects an admin's own delete, never an agent's.
+--
+-- Every foreign key that points at crm_opportunities is already
+-- ON DELETE CASCADE or ON DELETE SET NULL (crm_activities, crm_followups,
+-- crm_lead_emails, winsalot_appointment_tokens cascade;
+-- crm_client_agreements, crm_email_suppressions, crm_intake_configs,
+-- crm_intake_submissions, crm_unsubscribe_tokens, winsalot_appointments
+-- set null - see migrations 0082, 0085, 0087, 0088, 0097) - none of them
+-- use ON DELETE RESTRICT - so removing this trigger cannot introduce a
+-- foreign-key-constraint error on delete; every related record is already
+-- safely cascaded or unlinked by the schema itself.
+drop trigger if exists crm_opportunities_prevent_closed_delete_trigger on public.crm_opportunities;
+drop function if exists public.crm_opportunities_prevent_closed_delete();
