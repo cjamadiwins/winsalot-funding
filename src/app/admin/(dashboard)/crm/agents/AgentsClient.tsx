@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { CrmUserRow } from "@/lib/crm-types";
 import type { AgentOnboardingAdminRow } from "@/lib/crm-onboarding-types";
-import { inviteAgentAction, removeAgentAction, reviewAgentOnboardingAction, updateAgentAction } from "./actions";
+import { inviteAgentAction, removeAgentAction, resendAgentAccessEmailAction, reviewAgentOnboardingAction, updateAgentAction } from "./actions";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -190,6 +190,19 @@ export default function AgentsClient({
                             <button type="button" disabled={isPending} onClick={() => runAction(() => reviewAgentOnboardingAction(agent.id, "approved"), () => setSuccessMessage(`${agent.full_name} now has full CRM access.`))} className="text-xs font-semibold text-emerald-700">Approve</button>
                             <button type="button" disabled={isPending} onClick={() => { const note = prompt("What should the agent update?"); if (note) runAction(() => reviewAgentOnboardingAction(agent.id, "changes_requested", note), () => setSuccessMessage("Changes requested.")); }} className="text-xs font-semibold text-amber-700">Request changes</button>
                           </>
+                        )}
+                        {agent.role === "agent" && onboarding && onboarding.status !== "approved" && (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => runAction(
+                              () => resendAgentAccessEmailAction(agent.id),
+                              () => setSuccessMessage(`A new access email was sent to ${agent.email}.`)
+                            )}
+                            className="text-xs font-semibold text-violet-700 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Resend access email
+                          </button>
                         )}
                         <button
                           type="button"

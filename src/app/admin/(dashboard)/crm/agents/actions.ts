@@ -130,6 +130,35 @@ export async function reviewAgentOnboardingAction(
   return {};
 }
 
+export async function resendAgentAccessEmailAction(agentId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+
+  const admin = getSupabaseAdmin();
+  const { data: agent, error: agentError } = await admin
+    .from("crm_users")
+    .select("email, role, active")
+    .eq("id", agentId)
+    .maybeSingle();
+
+  if (agentError || !agent || agent.role !== "agent") {
+    return { error: "Agent account not found." };
+  }
+  if (!agent.active) {
+    return { error: "Reactivate this agent before resending access." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(agent.email, {
+    redirectTo: `${getAuthRedirectBaseUrl()}/agent/set-password`,
+  });
+
+  if (error) {
+    return { error: error.message || "Failed to resend the access email." };
+  }
+
+  return {};
+}
+
 // Hard-removes an agent's login entirely. crm_users.id references
 // auth.users(id) on delete cascade, so the crm_users row goes with it;
 // crm_leads/crm_activities only reference crm_users with on delete set
