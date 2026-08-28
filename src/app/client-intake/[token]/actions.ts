@@ -2,6 +2,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { consumeIntakeToken, markIntakeTokenOpened } from "@/lib/crm-agreement-tokens";
+import { sendIntakeSubmittedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
+import { notifyAdminsOfIntakeSubmission, notifyAdminsOfIntakeNotificationFailure } from "@/lib/crm-agreement-notifications";
 
 type ActionResult = { error?: string };
 
@@ -27,15 +29,19 @@ export async function submitClientIntakeAction(token: string, answers: Record<st
   const { data: existing } = await admin.from("crm_intake_submissions").select("id").eq("intake_config_id", config.id).maybeSingle();
   if (existing) return { error: "This intake form has already been submitted." };
 
-  const { error: insertError } = await admin.from("crm_intake_submissions").insert({
-    intake_config_id: config.id,
-    client_id: config.client_id,
-    agreement_id: config.agreement_id,
-    opportunity_id: config.opportunity_id,
-    answers,
-  });
+  const { data: submission, error: insertError } = await admin
+    .from("crm_intake_submissions")
+    .insert({
+      intake_config_id: config.id,
+      client_id: config.client_id,
+      agreement_id: config.agreement_id,
+      opportunity_id: config.opportunity_id,
+      answers,
+    })
+    .select("id")
+    .single();
 
-  if (insertError) return { error: "Failed to submit your intake form. Please try again." };
+  if (insertError || !submission) return { error: "Failed to submit your intake form. Please try again." };
 
   await admin.from("crm_activities").insert({
     client_id: config.client_id,
@@ -44,22 +50,26 @@ export async function submitClientIntakeAction(token: string, answers: Record<st
     notes: "Client intake form submitted.",
   });
 
-  // Notify admins in-app (item 9: "Notify the admin"), same
-  // dedupe-by-link-path pattern used by notifyAdminsOfCrmLeaveRequest -
-  // never more than one notification per admin for the same submission.
-  const [{ data: admins }, { data: client }] = await Promise.all([
-    admin.from("crm_users").select("id").eq("role", "admin").eq("active", true),
-    admin.from("crm_clients").select("company_name").eq("id", config.client_id).maybeSingle(),
-  ]);
-  if (admins && admins.length > 0) {
-    const linkPath = "/admin/crm/onboarding";
-    await admin.from("crm_notifications").insert(
-      admins.map((a) => ({
-        user_id: a.id as string,
-        title: `Intake form submitted for ${client?.company_name ?? "a client"}.`,
-        link_path: linkPath,
-      }))
-    );
+  const { data: client } = await admin.from("crm_clients").select("company_name").eq("id", config.client_id).maybeSingle();
+  const businessName = client?.company_name ?? "A client";
+
+  // Item 2: in-app admin notification always fires, independent of
+  // whether the admin's own notification EMAIL below succeeds.
+  await notifyAdminsOfIntakeSubmission({ intakeConfigId: config.id, businessName });
+
+  const adminNotificationEmail = getGrowthCrmNotificationEmail();
+  const emailResult = await sendIntakeSubmittedAdminNotificationEmail({ businessName, intakeConfigId: config.id }, adminNotificationEmail);
+  if (emailResult.error) {
+    await admin
+      .from("crm_intake_submissions")
+      .update({ admin_notification_failed_at: new Date().toISOString(), admin_notification_error: emailResult.error })
+      .eq("id", submission.id);
+    // Item 3: notify the admin (in-app) that their own notification
+    // email failed, with the reason - the Retry button lives on the
+    // intake detail page this links to.
+    await notifyAdminsOfIntakeNotificationFailure({ intakeConfigId: config.id, businessName, reason: emailResult.error });
+  } else {
+    await admin.from("crm_intake_submissions").update({ admin_notified_at: new Date().toISOString() }).eq("id", submission.id);
   }
 
   return {};

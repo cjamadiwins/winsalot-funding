@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { CrmClientAgreementRow, CrmIntakeConfigRow, CrmIntakeSubmissionRow, CrmIntakeSubmissionEditRow } from "@/lib/crm-agreement-types";
+import { retryIntakeAdminNotificationEmailAction } from "./actions";
 import IntakeBuilderClient from "./IntakeBuilderClient";
 
 export default async function AdminIntakeBuilderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export default async function AdminIntakeBuilderPage({ params }: { params: Promi
       agreement={agreement as CrmClientAgreementRow}
       submission={(submission as CrmIntakeSubmissionRow) ?? null}
       edits={(edits ?? []) as CrmIntakeSubmissionEditRow[]}
+      retryAdminNotificationAction={retryIntakeAdminNotificationEmailAction}
     />
   );
 }

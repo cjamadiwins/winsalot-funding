@@ -2,7 +2,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { consumeAgreementToken, markAgreementTokenOpened } from "@/lib/crm-agreement-tokens";
-import { sendSignedAgreementCopies } from "@/lib/crm-agreement-emails";
+import { sendSignedAgreementClientCopy, sendAgreementSignedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
+import { notifyAdminsOfSignedAgreement, notifyAdminsOfAgreementNotificationFailure } from "@/lib/crm-agreement-notifications";
 import { DEFAULT_INTAKE_QUESTIONS, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 
 type ActionResult = { error?: string };
@@ -87,14 +88,45 @@ export async function acceptAgreementAction(input: AcceptAgreementInput): Promis
   const signedAgreement = { ...agreement, status: "signed", signer_full_name: input.fullLegalName.trim(), accepted_at: acceptedAt } as CrmClientAgreementRow;
 
   if (template) {
-    const notificationEmail = process.env.NOTIFICATION_EMAIL || "info@winsalotcorp.com";
-    const emailResult = await sendSignedAgreementCopies(signedAgreement, template, notificationEmail);
-    if (emailResult.error) {
+    const clientCopyResult = await sendSignedAgreementClientCopy(signedAgreement, template);
+    if (clientCopyResult.error) {
       // The signature itself is already saved - a failed copy email is
       // reported but never blocks the client from seeing "signed"
       // confirmation, since the signature (the legally meaningful part)
       // already succeeded.
-      console.error("[agreement-sign] Failed to send signed copies:", emailResult.error);
+      console.error("[agreement-sign] Failed to send the client's signed copy:", clientCopyResult.error);
+    }
+
+    // Item 1: in-app admin notification always fires, independent of
+    // whether the admin's own notification EMAIL below succeeds - the
+    // two are separate required channels.
+    await notifyAdminsOfSignedAgreement({
+      agreementId: agreement.id,
+      businessName: signedAgreement.legal_business_name,
+      agreementNumber: signedAgreement.agreement_number,
+    });
+
+    const adminNotificationEmail = getGrowthCrmNotificationEmail();
+    const adminEmailResult = await sendAgreementSignedAdminNotificationEmail(signedAgreement, template, adminNotificationEmail);
+    if (adminEmailResult.error) {
+      console.error("[agreement-sign] Failed to send the admin notification email:", adminEmailResult.error);
+      await admin
+        .from("crm_client_agreements")
+        .update({ admin_notification_failed_at: new Date().toISOString(), admin_notification_error: adminEmailResult.error })
+        .eq("id", agreement.id);
+      // Item 3: notify the admin (in-app) that their own notification
+      // email failed, with the reason - the Retry button lives on the
+      // agreement detail page this links to.
+      await notifyAdminsOfAgreementNotificationFailure({
+        agreementId: agreement.id,
+        businessName: signedAgreement.legal_business_name,
+        reason: adminEmailResult.error,
+      });
+    } else {
+      await admin
+        .from("crm_client_agreements")
+        .update({ admin_notified_at: new Date().toISOString(), admin_notification_failed_at: null, admin_notification_error: null })
+        .eq("id", agreement.id);
     }
   }
 

@@ -145,6 +145,15 @@ export type CrmClientAgreementRow = {
   sent_at: string | null;
   opened_at: string | null;
   accepted_at: string | null;
+
+  // Human-readable identifier (migration 0102), same generated pattern as
+  // crm_invoices.invoice_number. Tracks whether the admin's own "signed"
+  // notification email actually sent - independent of the client-facing
+  // sign-request email's own sent_at/opened_at above.
+  agreement_number: string;
+  admin_notified_at: string | null;
+  admin_notification_failed_at: string | null;
+  admin_notification_error: string | null;
 };
 
 // Whether an agreement's commercial/legal terms are locked - the single
@@ -157,6 +166,17 @@ export type CrmClientAgreementRow = {
 // manual Client Status label, and notes are never locked by this check.
 export function isAgreementLocked(agreement: Pick<CrmClientAgreementRow, "accepted_at">): boolean {
   return agreement.accepted_at !== null;
+}
+
+// Single source of truth for the required admin-notification wording
+// (in-app notification title and email subject/heading both use these,
+// so they can never disagree).
+export function signedAgreementNotificationTitle(businessName: string, agreementNumber: string): string {
+  return `${businessName} signed agreement ${agreementNumber}.`;
+}
+
+export function intakeSubmittedNotificationTitle(businessName: string): string {
+  return `${businessName} submitted their client intake form.`;
 }
 
 export const AGREEMENT_EVENT_TYPES = [
@@ -269,6 +289,12 @@ export type CrmIntakeSubmissionRow = {
   answers: Record<string, string>;
   corrected_answers: Record<string, string> | null;
   submitted_at: string;
+
+  // Tracks whether the admin's own "intake submitted" notification email
+  // actually sent (migration 0102) - independent of submitted_at above.
+  admin_notified_at: string | null;
+  admin_notification_failed_at: string | null;
+  admin_notification_error: string | null;
 };
 
 export type CrmIntakeSubmissionEditRow = {

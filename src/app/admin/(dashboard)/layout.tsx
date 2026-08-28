@@ -55,10 +55,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadCrmChatUnreadCount(supabase, user.id),
+    // Item 9: badge stays visible until the admin has read the
+    // notification for that signed agreement / intake submission -
+    // reuses the same crm_notifications rows the bell already shows,
+    // never a separate "reviewed" flag that could drift out of sync.
+    supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/agreements%"),
+    supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/intake%"),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -67,6 +73,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const navItems: CrmNavItem[] = NAV_ITEMS.map((item) => {
     if (item.href === "/admin/crm/leave-requests") return { ...item, badgeCount: pendingLeaveCount ?? 0 };
     if (item.href === "/admin/crm/chat") return { ...item, badgeCount: chatUnreadCount };
+    if (item.href === "/admin/crm/agreements") return { ...item, badgeCount: unreadAgreementCount ?? 0 };
+    if (item.href === "/admin/crm/intake") return { ...item, badgeCount: unreadIntakeCount ?? 0 };
     return item;
   });
 

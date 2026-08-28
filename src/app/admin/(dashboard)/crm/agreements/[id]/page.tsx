@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { renderAgreementTemplate, type CrmAgreementTemplateRow, type CrmClientAgreementRow, type CrmPilotResultsRow } from "@/lib/crm-agreement-types";
+import { retryAgreementAdminNotificationEmailAction } from "../actions";
 import AgreementDetailClient from "./AgreementDetailClient";
 
 export default async function AdminAgreementDetailPage({
@@ -42,6 +43,7 @@ export default async function AdminAgreementDetailPage({
       invoice={invoice ?? null}
       openRecordInvoice={recordInvoice === "1"}
       pilotResults={(pilotResults as CrmPilotResultsRow) ?? null}
+      retryAdminNotificationAction={retryAgreementAdminNotificationEmailAction}
     />
   );
 }
