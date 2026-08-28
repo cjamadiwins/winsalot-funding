@@ -91,6 +91,8 @@ export type CrmInvoiceRow = {
   cancel_reason: string | null;
 
   archived_at: string | null;
+
+  is_free_invoice: boolean;
 };
 
 export type CrmInvoiceWithClient = CrmInvoiceRow & {
@@ -164,21 +166,14 @@ export type NewCrmInvoiceInput = {
   line_items: NewLineItemInput[];
 };
 
-// Only a Draft with absolutely no payment/sending/activity history may
-// ever be permanently deleted (brief: "Only allow permanent deletion of
-// an invoice when it is still a Draft and has no payment, sending, or
-// activity history.").
-export function canPermanentlyDeleteInvoice(invoice: Pick<
-  CrmInvoiceRow,
-  "status" | "amount_paid" | "first_sent_at" | "last_sent_at" | "last_reminder_at"
->): boolean {
-  return (
-    invoice.status === "Draft" &&
-    Number(invoice.amount_paid) === 0 &&
-    !invoice.first_sent_at &&
-    !invoice.last_sent_at &&
-    !invoice.last_reminder_at
-  );
+// "Allow permanent deletion only when the invoice status is Draft or
+// Cancelled. Do not allow Sent, Partially Paid, or Paid invoices to be
+// deleted because they are financial records." A Cancelled invoice can
+// still carry a real payment (e.g. partially paid, then cancelled) - the
+// amount_paid check keeps that a financial record too, even though its
+// status alone would otherwise qualify it.
+export function canPermanentlyDeleteInvoice(invoice: Pick<CrmInvoiceRow, "status" | "amount_paid">): boolean {
+  return (invoice.status === "Draft" || invoice.status === "Cancelled") && Number(invoice.amount_paid) === 0;
 }
 
 // A Sent/Partially Paid invoice whose due date has passed reads as
@@ -193,4 +188,20 @@ export function isInvoiceOverdue(invoice: Pick<CrmInvoiceRow, "status" | "due_da
 
 export function effectiveInvoiceStatus(invoice: Pick<CrmInvoiceRow, "status" | "due_date">): InvoiceStatus {
   return isInvoiceOverdue(invoice) ? "Overdue" : invoice.status;
+}
+
+// Mirrors crm_invoice_line_items.line_total (a generated column:
+// quantity * unit_price) so the create/update/send actions can validate
+// a submitted line-item set before it ever reaches the database, rather
+// than trusting whatever the client happened to send.
+export function computeInvoiceSubtotal(items: { quantity: number; unit_price: number }[]): number {
+  return items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+}
+
+// "Never generate a $0.00 invoice when valid line-item values were
+// entered" - true only when the submitted line items genuinely sum to
+// nothing (none saved, or every one is $0) and the invoice hasn't been
+// deliberately marked free.
+export function invoiceNeedsFreeConfirmation(items: { quantity: number; unit_price: number }[], isFreeInvoice: boolean): boolean {
+  return !isFreeInvoice && computeInvoiceSubtotal(items) <= 0;
 }

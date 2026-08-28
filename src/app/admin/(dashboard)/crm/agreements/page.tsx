@@ -13,6 +13,7 @@ export default async function AdminCrmAgreementsPage() {
     supabase
       .from("crm_opportunities")
       .select("id, business_name, contact_name, email, stage")
+      .eq("is_internal_test", false)
       .order("stage", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(100),

@@ -113,11 +113,11 @@ export default function InvoiceDetailClient({
 
   function handleDelete() {
     if (!canDelete) {
-      window.alert("Only a Draft invoice with no payment, sending, or activity history can be permanently deleted. Cancel or archive it instead.");
+      window.alert("Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records.");
       return;
     }
-    if (!window.confirm("Permanently delete this draft invoice? This cannot be undone.")) return;
-    runAction(() => deleteAction(invoice.id), () => router.push("/admin/crm/invoices"));
+    if (!window.confirm(`Permanently delete invoice ${invoice.invoice_number}? This action cannot be undone.`)) return;
+    runAction(() => deleteAction(invoice.id), () => router.push("/admin/crm/invoices?deleted=1"));
   }
 
   function handleMarkPartiallyPaid() {
@@ -145,6 +145,9 @@ export default function InvoiceDetailClient({
           <h1 className="text-2xl font-bold text-slate-900">{invoice.invoice_number}</h1>
           <div className="mt-1 flex items-center gap-2">
             <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${INVOICE_STATUS_STYLES[effStatus]}`}>{INVOICE_STATUS_LABELS[effStatus]}</span>
+            {invoice.is_free_invoice && (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-800">Free Invoice</span>
+            )}
             {client && (
               <Link href={`/admin/crm/clients/${client.id}`} className="text-sm text-sky-600 hover:underline">
                 {client.company_name}
@@ -226,8 +229,13 @@ export default function InvoiceDetailClient({
       )}
       {canDelete && (
         <div className="mt-2">
-          <button type="button" disabled={isPending} onClick={handleDelete} className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
-            Permanently Delete Draft
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleDelete}
+            className="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            Delete Invoice
           </button>
         </div>
       )}
@@ -284,6 +292,11 @@ export default function InvoiceDetailClient({
             <span className="text-[12px] font-medium text-slate-600">Line Items</span>
             <LineItemsEditor items={draftItems} onChange={setDraftItems} currency={invoice.currency} />
           </div>
+
+          <label className="mt-3 flex items-center gap-2">
+            <input type="checkbox" name="is_free_invoice" defaultChecked={invoice.is_free_invoice} className="h-4 w-4" />
+            <span className="text-[12.5px] font-medium text-slate-600">This is a free invoice (no payment required)</span>
+          </label>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">

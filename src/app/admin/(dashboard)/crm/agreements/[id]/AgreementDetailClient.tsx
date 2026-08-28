@@ -7,6 +7,7 @@ import {
   updateAgreementDraftAction,
   sendAgreementAction,
   resendAgreementAction,
+  getAgreementSignLinkAction,
   recordAgreementInvoiceAction,
   activatePilotAction,
   startPilotResultsReviewAction,
@@ -90,6 +91,7 @@ export default function AgreementDetailClient({
   const isPilot = agreement.campaign_type === "free_pilot";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [copyLinkMessage, setCopyLinkMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(agreement.status === "draft");
   const [draft, setDraft] = useState<AgreementDraftInput>(toDraftInput(agreement));
   const [reviewedConfirmation, setReviewedConfirmation] = useState(false);
@@ -310,10 +312,14 @@ export default function AgreementDetailClient({
               </>
             ) : (
               <>
-                <Info label="Monthly Fee" value={`$${agreement.monthly_fee.toLocaleString()}`} />
-                <Info label="Setup Fee" value={agreement.setup_fee ? `$${agreement.setup_fee.toLocaleString()}` : "None"} />
+                <Info label="Monthly Fee" value={`$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}`} />
+                <Info label="Setup Fee" value={agreement.setup_fee ? `$${agreement.setup_fee.toLocaleString()} ${agreement.currency}` : "None"} />
                 <Info label="Campaign Start Date" value={agreement.campaign_start_date ?? "-"} />
                 <Info label="Billing Frequency" value={agreement.billing_frequency} />
+                <Info label="Payment Due Terms" value={agreement.payment_due_terms ?? "-"} />
+                <Info label="Initial Agreement Term" value={agreement.initial_term ?? "-"} />
+                <Info label="Renewal Terms" value={agreement.renewal_terms ?? "-"} />
+                <Info label="Cancellation Terms" value={agreement.cancellation_terms ?? "-"} />
               </>
             )}
           </dl>
@@ -350,17 +356,38 @@ export default function AgreementDetailClient({
           )}
 
           {agreement.status === "sent" && (
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                if (!confirm("Resend the agreement email? The client will receive another copy of the sign-link.")) return;
-                runAction(() => resendAgreementAction(agreement.id));
-              }}
-              className={`${buttonClasses} mt-6`}
-            >
-              Resend Agreement
-            </button>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!confirm("Resend the agreement email? The client will receive another copy of the sign-link.")) return;
+                  runAction(() => resendAgreementAction(agreement.id));
+                }}
+                className={buttonClasses}
+              >
+                Resend Agreement
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() =>
+                  runAction(async () => {
+                    const result = await getAgreementSignLinkAction(agreement.id);
+                    if (result.error) return { error: result.error };
+                    if (result.url) {
+                      await navigator.clipboard.writeText(result.url);
+                      setCopyLinkMessage("Signing link copied to clipboard.");
+                    }
+                    return {};
+                  })
+                }
+                className="text-sm font-semibold text-sky-600 hover:text-sky-700"
+              >
+                Copy Signing Link
+              </button>
+              {copyLinkMessage && <span className="text-[12.5px] font-semibold text-emerald-700">{copyLinkMessage}</span>}
+            </div>
           )}
 
           {agreement.status === "signed" && (

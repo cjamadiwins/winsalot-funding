@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchInvoiceDetail } from "@/lib/crm-invoices-data";
-import { canPermanentlyDeleteInvoice, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
+import { canPermanentlyDeleteInvoice, invoiceNeedsFreeConfirmation, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
 import {
   buildDefaultInvoiceReceiptMessage,
   buildDefaultInvoiceReminderMessage,
@@ -102,11 +102,21 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
 
   const { items, error: lineItemsError } = parseLineItems(formData.get("line_items"));
   if (lineItemsError) return { error: lineItemsError };
+  if (items.length === 0) return { error: "An invoice needs at least one line item with a description, quantity, and rate." };
 
   const taxRate = Number(formData.get("tax_rate") ?? 0) || 0;
   const discountAmount = Number(formData.get("discount_amount") ?? 0) || 0;
   if (taxRate < 0) return { error: "Tax rate cannot be negative." };
   if (discountAmount < 0) return { error: "Discount cannot be negative." };
+
+  // "Never generate a $0.00 invoice when valid line-item values were
+  // entered" - if the submitted line items sum to nothing, that's either
+  // a mistake (a description with no quantity/rate) or a deliberate
+  // complimentary invoice; either way the admin must say which.
+  const isFreeInvoice = formData.get("is_free_invoice") === "on";
+  if (invoiceNeedsFreeConfirmation(items, isFreeInvoice)) {
+    return { error: 'This invoice totals $0.00. Enter a valid quantity and rate for each line item, or check "This is a free invoice" to confirm no payment is expected.' };
+  }
 
   // Defaults to (and, per the brief, should normally just be) the
   // client's own saved currency - never silently falls back to USD if
@@ -119,6 +129,7 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
     .insert({
       created_by: admin.id,
       client_id: clientId,
+      status: "Draft",
       billing_contact_name: parseOptionalText(formData.get("billing_contact_name")),
       billing_address: parseOptionalText(formData.get("billing_address")) ?? client.billing_address,
       issue_date: parseOptionalText(formData.get("issue_date")) ?? new Date().toISOString().slice(0, 10),
@@ -128,6 +139,7 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
       currency,
       tax_rate: taxRate,
       discount_amount: discountAmount,
+      is_free_invoice: isFreeInvoice,
       payment_instructions: parseOptionalText(formData.get("payment_instructions")),
       admin_notes: parseOptionalText(formData.get("admin_notes")),
       client_facing_notes: parseOptionalText(formData.get("client_facing_notes")),
@@ -136,12 +148,10 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
     .single();
   if (error || !invoice) return { error: `Failed to create this invoice: ${error?.message ?? "Unknown error."}` };
 
-  if (items.length > 0) {
-    const { error: lineItemInsertError } = await supabase.from("crm_invoice_line_items").insert(
-      items.map((item, index) => ({ invoice_id: invoice.id, description: item.description, quantity: item.quantity, unit_price: item.unit_price, sort_order: index }))
-    );
-    if (lineItemInsertError) return { error: `Invoice created, but failed to save line items: ${lineItemInsertError.message}` };
-  }
+  const { error: lineItemInsertError } = await supabase.from("crm_invoice_line_items").insert(
+    items.map((item, index) => ({ invoice_id: invoice.id, description: item.description, quantity: item.quantity, unit_price: item.unit_price, sort_order: index }))
+  );
+  if (lineItemInsertError) return { error: `Invoice created, but failed to save line items: ${lineItemInsertError.message}` };
 
   await recordInvoiceAudit(supabase, invoice, "created", performedByName(admin));
   await logInvoiceActivity(supabase, invoice, admin, "invoice_created", `Invoice ${invoice.invoice_number} created by ${performedByName(admin)}.`);
@@ -175,6 +185,11 @@ export async function updateInvoiceAction(invoiceId: string, formData: FormData)
   if (taxRate < 0) return { error: "Tax rate cannot be negative." };
   if (discountAmount < 0) return { error: "Discount cannot be negative." };
 
+  const isFreeInvoice = formData.get("is_free_invoice") === "on";
+  if (invoiceNeedsFreeConfirmation(items, isFreeInvoice)) {
+    return { error: 'This invoice totals $0.00. Enter a valid quantity and rate for each line item, or check "This is a free invoice" to confirm no payment is expected.' };
+  }
+
   const currency = parseOptionalText(formData.get("currency")) ?? existing.currency;
   if (!isClientCurrency(currency)) return { error: "Select a valid currency (CAD or USD)." };
 
@@ -191,6 +206,7 @@ export async function updateInvoiceAction(invoiceId: string, formData: FormData)
       currency,
       tax_rate: taxRate,
       discount_amount: discountAmount,
+      is_free_invoice: isFreeInvoice,
       payment_instructions: parseOptionalText(formData.get("payment_instructions")),
       admin_notes: parseOptionalText(formData.get("admin_notes")),
       client_facing_notes: parseOptionalText(formData.get("client_facing_notes")),
@@ -246,6 +262,7 @@ export async function duplicateInvoiceAction(invoiceId: string): Promise<ActionR
       currency: invoice.currency,
       tax_rate: invoice.tax_rate,
       discount_amount: invoice.discount_amount,
+      is_free_invoice: invoice.is_free_invoice,
       payment_instructions: invoice.payment_instructions,
       admin_notes: invoice.admin_notes,
       client_facing_notes: invoice.client_facing_notes,
@@ -357,6 +374,9 @@ export async function sendInvoiceAction(
   if (error || !invoice) return { error: "Invoice not found." };
   if (invoice.status === "Cancelled" || invoice.status === "Archived") {
     return { error: `This invoice is ${invoice.status} and cannot be emailed.` };
+  }
+  if (!invoice.is_free_invoice && Number(invoice.subtotal) <= 0) {
+    return { error: 'This invoice totals $0.00 and cannot be sent. Edit it to add valid line items, or mark it as a free invoice.' };
   }
 
   const client = (invoice as unknown as { crm_clients: { company_name: string; email: string | null } }).crm_clients;
@@ -626,10 +646,11 @@ export async function archiveInvoiceAction(invoiceId: string): Promise<ActionRes
   return { invoiceId };
 }
 
-// "Only allow permanent deletion of an invoice when it is still a Draft
-// and has no payment, sending, or activity history" - re-checked here
-// on the server per canPermanentlyDeleteInvoice(), regardless of what
-// the confirmation UI already showed.
+// "Allow permanent deletion only when the invoice status is Draft or
+// Cancelled. Do not allow Sent, Partially Paid, or Paid invoices to be
+// deleted because they are financial records." Re-checked here on the
+// server per canPermanentlyDeleteInvoice(), regardless of what the
+// confirmation UI already showed.
 export async function deleteInvoiceAction(invoiceId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
@@ -637,12 +658,24 @@ export async function deleteInvoiceAction(invoiceId: string): Promise<ActionResu
   const { data: invoice } = await supabase.from("crm_invoices").select("*").eq("id", invoiceId).maybeSingle();
   if (!invoice) return { error: "Invoice not found." };
   if (!canPermanentlyDeleteInvoice(invoice)) {
-    return { error: "Only a Draft invoice with no payment, sending, or activity history can be permanently deleted. Cancel or archive it instead." };
+    return { error: "Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records." };
+  }
+
+  // amount_paid only counts non-reversed payments, but a fully reversed
+  // crm_payments row still exists and its invoice_id FK is ON DELETE
+  // RESTRICT - checked explicitly so that case surfaces this friendly
+  // message instead of a raw database constraint error.
+  const { count: paymentCount } = await supabase.from("crm_payments").select("id", { count: "exact", head: true }).eq("invoice_id", invoiceId);
+  if (paymentCount) {
+    return { error: "This invoice has payment history and cannot be permanently deleted. Cancel or archive it instead." };
   }
 
   const clientId = invoice.client_id;
-  await recordInvoiceAudit(supabase, invoice, "deleted", performedByName(admin), `Invoice ${invoice.invoice_number} permanently deleted.`);
+  await recordInvoiceAudit(supabase, invoice, "deleted", performedByName(admin), `Invoice ${invoice.invoice_number} permanently deleted by ${performedByName(admin)}.`);
 
+  // The invoice's own line items cascade-delete with it (ON DELETE
+  // CASCADE on crm_invoice_line_items.invoice_id) - no separate delete
+  // needed here.
   const { error } = await supabase.from("crm_invoices").delete().eq("id", invoiceId);
   if (error) return { error: `Failed to delete this invoice: ${error.message}` };
 

@@ -1,25 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { canPermanentlyDeleteInvoice, effectiveInvoiceStatus, isInvoiceOverdue } from "../crm-invoices-types";
+import { canPermanentlyDeleteInvoice, computeInvoiceSubtotal, effectiveInvoiceStatus, invoiceNeedsFreeConfirmation, isInvoiceOverdue } from "../crm-invoices-types";
 
 describe("canPermanentlyDeleteInvoice", () => {
-  const base = { status: "Draft" as const, amount_paid: 0, first_sent_at: null, last_sent_at: null, last_reminder_at: null };
+  const base = { status: "Draft" as const, amount_paid: 0 };
 
   it("allows deleting a pristine Draft", () => {
     expect(canPermanentlyDeleteInvoice(base)).toBe(true);
   });
 
-  it("blocks deleting a non-Draft invoice", () => {
+  it("allows deleting a Cancelled invoice with no payment history", () => {
+    expect(canPermanentlyDeleteInvoice({ ...base, status: "Cancelled" })).toBe(true);
+  });
+
+  it("blocks deleting Sent, Partially Paid, and Paid invoices - they are financial records", () => {
     expect(canPermanentlyDeleteInvoice({ ...base, status: "Sent" })).toBe(false);
+    expect(canPermanentlyDeleteInvoice({ ...base, status: "Partially Paid" })).toBe(false);
+    expect(canPermanentlyDeleteInvoice({ ...base, status: "Paid" })).toBe(false);
   });
 
-  it("blocks deleting a Draft that has ever been sent", () => {
-    expect(canPermanentlyDeleteInvoice({ ...base, first_sent_at: "2026-01-01T00:00:00Z" })).toBe(false);
-    expect(canPermanentlyDeleteInvoice({ ...base, last_sent_at: "2026-01-01T00:00:00Z" })).toBe(false);
-    expect(canPermanentlyDeleteInvoice({ ...base, last_reminder_at: "2026-01-01T00:00:00Z" })).toBe(false);
+  it("blocks deleting an Archived invoice", () => {
+    expect(canPermanentlyDeleteInvoice({ ...base, status: "Archived" })).toBe(false);
   });
 
-  it("blocks deleting a Draft that has any payment recorded", () => {
+  it("blocks deleting a Draft or Cancelled invoice that has any payment recorded", () => {
     expect(canPermanentlyDeleteInvoice({ ...base, amount_paid: 50 })).toBe(false);
+    expect(canPermanentlyDeleteInvoice({ ...base, status: "Cancelled", amount_paid: 50 })).toBe(false);
   });
 });
 
@@ -56,5 +61,43 @@ describe("effectiveInvoiceStatus", () => {
   it("reports the stored status otherwise", () => {
     expect(effectiveInvoiceStatus({ status: "Paid", due_date: "2000-01-01" })).toBe("Paid");
     expect(effectiveInvoiceStatus({ status: "Draft", due_date: null })).toBe("Draft");
+  });
+});
+
+describe("computeInvoiceSubtotal", () => {
+  it("matches the reported bug's exact scenario: Lead Gen, qty 1, rate CAD $750", () => {
+    expect(computeInvoiceSubtotal([{ quantity: 1, unit_price: 750 }])).toBe(750);
+  });
+
+  it("sums quantity * unit_price across every line item", () => {
+    expect(
+      computeInvoiceSubtotal([
+        { quantity: 2, unit_price: 100 },
+        { quantity: 1, unit_price: 50 },
+      ])
+    ).toBe(250);
+  });
+
+  it("is 0 for no line items", () => {
+    expect(computeInvoiceSubtotal([])).toBe(0);
+  });
+});
+
+describe("invoiceNeedsFreeConfirmation", () => {
+  it("does not require confirmation for a valid, non-zero line item", () => {
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 750 }], false)).toBe(false);
+  });
+
+  it("requires confirmation when there are no line items and it isn't marked free", () => {
+    expect(invoiceNeedsFreeConfirmation([], false)).toBe(true);
+  });
+
+  it("requires confirmation when every line item is $0 and it isn't marked free", () => {
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 0 }], false)).toBe(true);
+  });
+
+  it("never requires confirmation once the invoice is marked free, even at $0", () => {
+    expect(invoiceNeedsFreeConfirmation([], true)).toBe(false);
+    expect(invoiceNeedsFreeConfirmation([{ quantity: 1, unit_price: 0 }], true)).toBe(false);
   });
 });

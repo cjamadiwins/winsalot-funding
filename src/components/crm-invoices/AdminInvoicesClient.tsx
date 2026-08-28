@@ -26,6 +26,7 @@ export default function AdminInvoicesClient({
   createAction,
   initialFilters,
   autoOpenCreateForClientId,
+  justDeleted,
 }: {
   invoices: CrmInvoiceWithClient[];
   summary: InvoiceDashboardSummary;
@@ -33,6 +34,7 @@ export default function AdminInvoicesClient({
   createAction: (formData: FormData) => Promise<ActionResult>;
   initialFilters: { search: string; status: string; client: string };
   autoOpenCreateForClientId?: string;
+  justDeleted?: boolean;
 }) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(!!autoOpenCreateForClientId);
@@ -40,6 +42,7 @@ export default function AdminInvoicesClient({
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([{ description: "", quantity: 1, unit_price: 0 }]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [showDeletedBanner, setShowDeletedBanner] = useState(!!justDeleted);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
 
@@ -58,6 +61,14 @@ export default function AdminInvoicesClient({
 
   return (
     <div>
+      {showDeletedBanner && (
+        <p className="mb-4 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          Invoice deleted successfully.
+          <button type="button" onClick={() => setShowDeletedBanner(false)} className="text-emerald-700 hover:text-emerald-900">
+            &times;
+          </button>
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">Invoiced This Month</div>
@@ -204,6 +215,11 @@ export default function AdminInvoicesClient({
             <span className="text-[12px] font-medium text-slate-600">Line Items</span>
             <LineItemsEditor items={lineItems} onChange={setLineItems} currency={selectedClient?.currency ?? "USD"} />
           </div>
+
+          <label className="mt-3 flex items-center gap-2">
+            <input type="checkbox" name="is_free_invoice" className="h-4 w-4" />
+            <span className="text-[12.5px] font-medium text-slate-600">This is a free invoice (no payment required)</span>
+          </label>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
