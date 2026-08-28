@@ -44,7 +44,7 @@ describe("crm_agent_visible_clients() never exposes financial data", () => {
 });
 
 describe("Financial tables keep admin-only RLS, no agent policy", () => {
-  for (const table of ["crm_invoices", "crm_payments", "crm_invoice_line_items", "crm_client_agents"]) {
+  for (const table of ["crm_invoices", "crm_payments", "crm_invoice_line_items", "crm_client_agents", "crm_test_data_audit"]) {
     it(`${table} has exactly one admin-only policy and no agent-facing policy`, () => {
       const policyMatches = [...allMigrationSql.matchAll(new RegExp(`create policy "([^"]+)" on public\\.${table}`, "g"))];
       expect(policyMatches.length).toBeGreaterThan(0);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLIENT_CURRENCIES,
+  canPermanentlyDeleteTestPayment,
   clientHasRelatedRecords,
   DEFAULT_CLIENT_CURRENCY,
   describeClientRelatedRecords,
@@ -52,6 +53,16 @@ describe("formatCurrency", () => {
 
   it("formats CAD correctly", () => {
     expect(formatCurrency(10, "CAD")).toContain("10.00");
+  });
+});
+
+describe("canPermanentlyDeleteTestPayment", () => {
+  it("allows deleting a payment flagged as test data", () => {
+    expect(canPermanentlyDeleteTestPayment({ is_test_data: true })).toBe(true);
+  });
+
+  it("never allows deleting a real (non-test) payment through this path", () => {
+    expect(canPermanentlyDeleteTestPayment({ is_test_data: false })).toBe(false);
   });
 });
 

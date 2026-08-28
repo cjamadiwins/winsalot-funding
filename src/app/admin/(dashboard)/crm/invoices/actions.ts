@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchInvoiceDetail } from "@/lib/crm-invoices-data";
-import { canPermanentlyDeleteInvoice, invoiceNeedsFreeConfirmation, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
+import { canPermanentlyDeleteInvoice, canPermanentlyDeleteTestInvoice, invoiceNeedsFreeConfirmation, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
 import {
   buildDefaultInvoiceReceiptMessage,
   buildDefaultInvoiceReminderMessage,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/crm-invoice-emails";
 import { sendCrmInvoiceEmail, type CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 import type { CrmUserRow } from "@/lib/crm-types";
-import { isClientCurrency, type CrmPaymentRow } from "@/lib/crm-clients-types";
+import { canPermanentlyDeleteTestPayment, isClientCurrency, type CrmPaymentRow } from "@/lib/crm-clients-types";
 
 type ActionResult = { error?: string; invoiceId?: string };
 
@@ -681,5 +681,206 @@ export async function deleteInvoiceAction(invoiceId: string): Promise<ActionResu
 
   revalidatePath("/admin/crm/invoices");
   revalidatePath(`/admin/crm/clients/${clientId}`);
+  return {};
+}
+
+async function recordTestDataAudit(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  entry: {
+    recordType: "invoice" | "payment";
+    recordNumber: string;
+    clientId: string | null;
+    clientName: string;
+    amount: number;
+    currency: string;
+  },
+  admin: CrmUserRow
+) {
+  await supabase.from("crm_test_data_audit").insert({
+    record_type: entry.recordType,
+    record_number: entry.recordNumber,
+    client_id: entry.clientId,
+    client_name: entry.clientName,
+    amount: entry.amount,
+    currency: entry.currency,
+    deleted_by: admin.id,
+    deleted_by_name: performedByName(admin),
+  });
+}
+
+// "Allow an administrator to permanently delete a test invoice
+// regardless of its previous status, including its associated test
+// payments, line items, activity records, and generated test files." A
+// deliberately separate, narrower path from deleteInvoiceAction above:
+// only ever usable on an invoice explicitly flagged is_test_data (never
+// a real invoice, no matter its status), admin-only, requires the caller
+// to have already typed "DELETE" to confirm. Every visible activity
+// trail for this invoice (crm_invoice_audit rows - PDF downloaded,
+// reminder sent, receipt sent, payment recorded/reversed, marked
+// partially paid, cancelled, archived) is purged outright rather than
+// left to orphan via the column's normal ON DELETE SET NULL, and its
+// test payments are deleted before the invoice itself (crm_payments.
+// invoice_id is ON DELETE RESTRICT). Line items, invoice emails, and
+// crm_activities rows all cascade-delete automatically. The only trace
+// left behind is one private crm_test_data_audit row, which is never
+// read by Activity History, the dashboard, a client record, or any
+// financial-totals query.
+export async function deleteTestInvoiceAction(invoiceId: string, confirmationText: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: invoice } = await supabase.from("crm_invoices").select("*, crm_clients(company_name)").eq("id", invoiceId).maybeSingle();
+  if (!invoice) return { error: "Invoice not found." };
+  if (!canPermanentlyDeleteTestInvoice(invoice)) {
+    return { error: "This invoice is not identified as test data and cannot be deleted regardless of status. Use the standard Delete Invoice action instead." };
+  }
+  if (confirmationText.trim() !== "DELETE") {
+    return { error: 'Type "DELETE" to confirm permanent deletion.' };
+  }
+
+  const client = (invoice as unknown as { crm_clients: { company_name: string } | null }).crm_clients;
+  const clientName = client?.company_name ?? "Unknown client";
+  const clientId = invoice.client_id;
+  const invoiceNumber = invoice.invoice_number;
+  const amount = Number(invoice.total);
+  const currency = invoice.currency;
+
+  const { error: auditDeleteError } = await supabase.from("crm_invoice_audit").delete().eq("invoice_id", invoiceId);
+  if (auditDeleteError) return { error: `Failed to clear this test invoice's activity history: ${auditDeleteError.message}` };
+
+  const { error: paymentsDeleteError } = await supabase.from("crm_payments").delete().eq("invoice_id", invoiceId);
+  if (paymentsDeleteError) return { error: `Failed to delete this test invoice's payments: ${paymentsDeleteError.message}` };
+
+  const { error } = await supabase.from("crm_invoices").delete().eq("id", invoiceId);
+  if (error) return { error: `Failed to delete this test invoice: ${error.message}` };
+
+  await recordTestDataAudit(supabase, { recordType: "invoice", recordNumber: invoiceNumber, clientId, clientName, amount, currency }, admin);
+
+  revalidatePath("/admin/crm/invoices");
+  revalidatePath(`/admin/crm/clients/${clientId}`);
+  revalidatePath("/admin/crm");
+  return {};
+}
+
+// The Recent Payments Manage menu's "Delete test payment" - the same
+// narrow, is_test_data-gated escape hatch as deleteTestInvoiceAction
+// above, but for a single payment that may or may not have an owning
+// invoice. Deleting the row fires crm_invoices_recalc_payments (if it
+// has an invoice_id), which immediately recalculates that invoice's
+// amount_paid/balance/status - Collected This Month, Recent Payments,
+// Outstanding Balance, and client totals all read live from crm_payments/
+// crm_invoices, so they reflect the deletion the moment this returns.
+export async function deleteTestPaymentAction(paymentId: string, confirmationText: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: payment } = await supabase.from("crm_payments").select("*, crm_clients(company_name)").eq("id", paymentId).maybeSingle();
+  if (!payment) return { error: "Payment not found." };
+  if (!canPermanentlyDeleteTestPayment(payment)) {
+    return { error: "This payment is not identified as test data and cannot be permanently deleted." };
+  }
+  if (confirmationText.trim() !== "DELETE") {
+    return { error: 'Type "DELETE" to confirm permanent deletion.' };
+  }
+
+  const client = (payment as unknown as { crm_clients: { company_name: string } | null }).crm_clients;
+  const clientName = client?.company_name ?? "Unknown client";
+  const invoiceId = payment.invoice_id;
+
+  const { error } = await supabase.from("crm_payments").delete().eq("id", paymentId);
+  if (error) return { error: `Failed to delete this test payment: ${error.message}` };
+
+  await recordTestDataAudit(
+    supabase,
+    {
+      recordType: "payment",
+      recordNumber: payment.reference_number || `Payment recorded ${payment.payment_date}`,
+      clientId: payment.client_id,
+      clientName,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+    },
+    admin
+  );
+
+  if (invoiceId) revalidatePath(`/admin/crm/invoices/${invoiceId}`);
+  revalidatePath("/admin/crm/invoices");
+  revalidatePath(`/admin/crm/clients/${payment.client_id}`);
+  revalidatePath("/admin/crm");
+  return {};
+}
+
+// Generic "Edit payment details" for the Recent Payments Manage menu -
+// unlike recordInvoicePaymentAction, this doesn't require an invoiceId
+// (a payment may be standalone) and never changes which invoice it
+// belongs to. A reversed payment is a closed financial record and is
+// never editable.
+export async function updatePaymentAction(paymentId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: payment } = await supabase.from("crm_payments").select("*").eq("id", paymentId).maybeSingle();
+  if (!payment) return { error: "Payment not found." };
+  if (payment.reversed_at) return { error: "A reversed payment cannot be edited." };
+
+  const amount = Number(formData.get("amount"));
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a valid payment amount greater than zero." };
+  const paymentDate = String(formData.get("payment_date") ?? "").trim() || payment.payment_date;
+  const paymentMethod = parseOptionalText(formData.get("payment_method"));
+  const referenceNumber = parseOptionalText(formData.get("reference_number"));
+  const notes = parseOptionalText(formData.get("notes"));
+
+  const { error } = await supabase
+    .from("crm_payments")
+    .update({ amount, payment_date: paymentDate, payment_method: paymentMethod, reference_number: referenceNumber, notes })
+    .eq("id", paymentId);
+  if (error) return { error: `Failed to update this payment: ${error.message}` };
+
+  if (payment.invoice_id) {
+    const { data: invoice } = await supabase.from("crm_invoices").select("id, client_id, invoice_number").eq("id", payment.invoice_id).maybeSingle();
+    if (invoice) {
+      await recordInvoiceAudit(supabase, invoice, "edited", performedByName(admin), `Payment updated to ${payment.currency} ${amount.toFixed(2)}.`);
+      revalidatePath(`/admin/crm/invoices/${invoice.id}`);
+    }
+  }
+
+  revalidatePath("/admin/crm/invoices");
+  revalidatePath(`/admin/crm/clients/${payment.client_id}`);
+  return {};
+}
+
+// Standalone "Reverse payment" for the Recent Payments Manage menu -
+// unlike reverseInvoicePaymentAction, this works for a payment with no
+// owning invoice (invoice_id null) as well as one that has an invoice,
+// without needing the invoiceId as a separate argument.
+export async function reversePaymentAction(paymentId: string, reason: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: payment } = await supabase.from("crm_payments").select("*").eq("id", paymentId).maybeSingle();
+  if (!payment) return { error: "Payment not found." };
+  if (payment.reversed_at) return { error: "This payment has already been reversed." };
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { error: "A reason is required to reverse a payment." };
+
+  const { error } = await supabase
+    .from("crm_payments")
+    .update({ reversed_at: new Date().toISOString(), reversed_by: admin.id, reversal_reason: trimmedReason })
+    .eq("id", paymentId)
+    .is("reversed_at", null);
+  if (error) return { error: `Failed to reverse this payment: ${error.message}` };
+
+  if (payment.invoice_id) {
+    const { data: invoice } = await supabase.from("crm_invoices").select("id, client_id, invoice_number").eq("id", payment.invoice_id).maybeSingle();
+    if (invoice) {
+      await recordInvoiceAudit(supabase, invoice, "payment_reversed", performedByName(admin), trimmedReason);
+      await logInvoiceActivity(supabase, invoice, admin, "payment_reversed", `A payment on invoice ${invoice.invoice_number} was reversed by ${performedByName(admin)}: ${trimmedReason}`);
+      revalidatePath(`/admin/crm/invoices/${invoice.id}`);
+    }
+  }
+
+  revalidatePath("/admin/crm/invoices");
+  revalidatePath(`/admin/crm/clients/${payment.client_id}`);
   return {};
 }

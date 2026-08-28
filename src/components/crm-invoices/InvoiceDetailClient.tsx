@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { InvoiceDetail } from "@/lib/crm-invoices-data";
-import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus, canPermanentlyDeleteInvoice } from "@/lib/crm-invoices-types";
-import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, formatCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
+import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus, canPermanentlyDeleteInvoice, canPermanentlyDeleteTestInvoice } from "@/lib/crm-invoices-types";
+import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, formatCurrency, PAYMENT_METHOD_LABELS, canPermanentlyDeleteTestPayment } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import type { InvoiceEmailPreview } from "@/app/admin/(dashboard)/crm/invoices/actions";
 import type { CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 
@@ -32,6 +33,8 @@ export default function InvoiceDetailClient({
   cancelAction,
   archiveAction,
   deleteAction,
+  deleteTestInvoiceAction,
+  deleteTestPaymentAction,
   sendReceiptAction,
 }: {
   detail: InvoiceDetail;
@@ -46,19 +49,28 @@ export default function InvoiceDetailClient({
   cancelAction: (invoiceId: string, reason: string) => Promise<ActionResult>;
   archiveAction: (invoiceId: string) => Promise<ActionResult>;
   deleteAction: (invoiceId: string) => Promise<ActionResult>;
+  deleteTestInvoiceAction: (invoiceId: string, confirmationText: string) => Promise<ActionResult>;
+  deleteTestPaymentAction: (paymentId: string, confirmationText: string) => Promise<ActionResult>;
   sendReceiptAction: (invoiceId: string, to: string, subject: string, message: string) => Promise<ActionResult>;
 }) {
   const { invoice, client, lineItems, payments, audit } = detail;
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
+  const searchParams = useSearchParams();
+  const canEdit = invoice.status !== "Cancelled" && invoice.status !== "Archived";
+  // Lazily seeded from ?edit=1 (set by the invoice list's Manage menu's
+  // "Edit Invoice" item) so this page opens straight into the editor -
+  // read once on mount, not re-synced on every searchParams change.
+  const [editing, setEditing] = useState(() => canEdit && searchParams.get("edit") === "1");
   const [draftItems, setDraftItems] = useState<LineItemDraft[]>(lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unit_price: li.unit_price })));
   const [previewModal, setPreviewModal] = useState<{ emailType: CrmInvoiceEmailType; to: string; subject: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingDeletePayment, setConfirmingDeletePayment] = useState<string | null>(null);
 
   const effStatus = effectiveInvoiceStatus(invoice);
-  const canEdit = invoice.status !== "Cancelled" && invoice.status !== "Archived";
-  const canDelete = canPermanentlyDeleteInvoice(invoice);
+  const isTestInvoice = canPermanentlyDeleteTestInvoice(invoice);
+  const canDelete = isTestInvoice || canPermanentlyDeleteInvoice(invoice);
   const hasPayment = payments.some((p) => !p.reversed_at);
 
   function runAction(action: () => Promise<ActionResult>, onSuccess?: (result: ActionResult) => void) {
@@ -116,8 +128,23 @@ export default function InvoiceDetailClient({
       window.alert("Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records.");
       return;
     }
-    if (!window.confirm(`Permanently delete invoice ${invoice.invoice_number}? This action cannot be undone.`)) return;
-    runAction(() => deleteAction(invoice.id), () => router.push("/admin/crm/invoices?deleted=1"));
+    setConfirmingDelete(true);
+  }
+
+  function confirmDeleteInvoice() {
+    runAction(
+      () => (isTestInvoice ? deleteTestInvoiceAction(invoice.id, "DELETE") : deleteAction(invoice.id)),
+      () => router.push("/admin/crm/invoices?deleted=1")
+    );
+  }
+
+  function handleDeleteTestPayment(paymentId: string) {
+    setConfirmingDeletePayment(paymentId);
+  }
+
+  function confirmDeleteTestPayment() {
+    if (!confirmingDeletePayment) return;
+    runAction(() => deleteTestPaymentAction(confirmingDeletePayment, "DELETE"), () => setConfirmingDeletePayment(null));
   }
 
   function handleMarkPartiallyPaid() {
@@ -147,6 +174,9 @@ export default function InvoiceDetailClient({
             <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${INVOICE_STATUS_STYLES[effStatus]}`}>{INVOICE_STATUS_LABELS[effStatus]}</span>
             {invoice.is_free_invoice && (
               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-800">Free Invoice</span>
+            )}
+            {isTestInvoice && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10.5px] font-semibold text-amber-800">Test Data</span>
             )}
             {client && (
               <Link href={`/admin/crm/clients/${client.id}`} className="text-sm text-sky-600 hover:underline">
@@ -238,6 +268,20 @@ export default function InvoiceDetailClient({
             Delete Invoice
           </button>
         </div>
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDeleteModal
+          title="Permanently Delete Invoice"
+          recordLabel="Invoice #"
+          recordNumber={invoice.invoice_number}
+          clientName={client?.company_name ?? "Unknown client"}
+          amountLabel={formatCurrency(invoice.total, invoice.currency)}
+          warning={isTestInvoice ? "This invoice is identified as test data - deleting it also permanently removes its test payments, line items, and activity records." : undefined}
+          isPending={isPending}
+          onConfirm={confirmDeleteInvoice}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       )}
 
       {/* Editor / view */}
@@ -488,11 +532,18 @@ export default function InvoiceDetailClient({
                   <td className="px-4 py-3">{p.reference_number || "-"}</td>
                   <td className="px-4 py-3">{p.recorded_by_name}</td>
                   <td className="px-4 py-3 text-right">
-                    {!p.reversed_at && (
-                      <button type="button" disabled={isPending} onClick={() => handleReversePayment(p.id)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
-                        Reverse
-                      </button>
-                    )}
+                    <div className="flex items-center justify-end gap-3">
+                      {!p.reversed_at && (
+                        <button type="button" disabled={isPending} onClick={() => handleReversePayment(p.id)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
+                          Reverse
+                        </button>
+                      )}
+                      {canPermanentlyDeleteTestPayment(p) && (
+                        <button type="button" disabled={isPending} onClick={() => handleDeleteTestPayment(p.id)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
+                          Delete test payment
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -500,6 +551,20 @@ export default function InvoiceDetailClient({
           </table>
         </div>
       </section>
+
+      {confirmingDeletePayment && (
+        <ConfirmDeleteModal
+          title="Permanently Delete Payment"
+          recordLabel="Payment"
+          recordNumber={payments.find((p) => p.id === confirmingDeletePayment)?.reference_number || "Test payment"}
+          clientName={client?.company_name ?? "Unknown client"}
+          amountLabel={formatCurrency(payments.find((p) => p.id === confirmingDeletePayment)?.amount ?? 0, invoice.currency)}
+          warning="This payment is identified as test data."
+          isPending={isPending}
+          onConfirm={confirmDeleteTestPayment}
+          onCancel={() => setConfirmingDeletePayment(null)}
+        />
+      )}
 
       {/* Audit trail */}
       <section className="mt-8 mb-8">

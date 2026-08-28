@@ -2,7 +2,16 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchInvoiceDashboardSummary, fetchInvoiceList } from "@/lib/crm-invoices-data";
 import AdminInvoicesClient from "@/components/crm-invoices/AdminInvoicesClient";
-import { createInvoiceAction } from "./actions";
+import {
+  createInvoiceAction,
+  archiveInvoiceAction,
+  cancelInvoiceAction,
+  deleteInvoiceAction,
+  deleteTestInvoiceAction,
+  updatePaymentAction,
+  reversePaymentAction,
+  deleteTestPaymentAction,
+} from "./actions";
 
 export default async function AdminInvoicesPage({
   searchParams,
@@ -40,6 +49,13 @@ export default async function AdminInvoicesPage({
             summary={summary}
             clients={(clients ?? []).map((c) => ({ id: c.id, company_name: c.company_name, email: c.email, billing_address: c.billing_address, currency: c.currency }))}
             createAction={createInvoiceAction}
+            archiveAction={archiveInvoiceAction}
+            cancelAction={cancelInvoiceAction}
+            deleteAction={deleteInvoiceAction}
+            deleteTestInvoiceAction={deleteTestInvoiceAction}
+            updatePaymentAction={updatePaymentAction}
+            reversePaymentAction={reversePaymentAction}
+            deleteTestPaymentAction={deleteTestPaymentAction}
             initialFilters={{ search: search ?? "", status: status ?? "", client: client ?? "" }}
             autoOpenCreateForClientId={create}
             justDeleted={deleted === "1"}

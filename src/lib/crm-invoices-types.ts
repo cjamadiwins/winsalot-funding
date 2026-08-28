@@ -93,6 +93,7 @@ export type CrmInvoiceRow = {
   archived_at: string | null;
 
   is_free_invoice: boolean;
+  is_test_data: boolean;
 };
 
 export type CrmInvoiceWithClient = CrmInvoiceRow & {
@@ -174,6 +175,16 @@ export type NewCrmInvoiceInput = {
 // status alone would otherwise qualify it.
 export function canPermanentlyDeleteInvoice(invoice: Pick<CrmInvoiceRow, "status" | "amount_paid">): boolean {
   return (invoice.status === "Draft" || invoice.status === "Cancelled") && Number(invoice.amount_paid) === 0;
+}
+
+// A separate, narrower escape hatch from canPermanentlyDeleteInvoice()
+// above: an invoice explicitly identified as test data (is_test_data)
+// may be permanently deleted regardless of its status or payment
+// history - including its test payments, line items, activity records,
+// and generated files (see deleteTestInvoiceAction). This never applies
+// to a real invoice, since is_test_data is never set for one.
+export function canPermanentlyDeleteTestInvoice(invoice: Pick<CrmInvoiceRow, "is_test_data">): boolean {
+  return invoice.is_test_data === true;
 }
 
 // A Sent/Partially Paid invoice whose due date has passed reads as
