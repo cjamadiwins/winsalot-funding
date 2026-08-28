@@ -2,7 +2,9 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
 import { getNextPayday, getUpcomingPaydays, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
+import type { HolidayPayAssignmentRow, HolidayRow } from "@/lib/holiday-pay";
 import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
+import HolidayPayAdminSection from "@/components/payroll/HolidayPayAdminSection";
 import {
   approvePayrollAction,
   cancelPayrollAction,
@@ -12,6 +14,17 @@ import {
   reopenPayrollAction,
   updatePayrollAction,
 } from "./actions";
+import {
+  assignHolidayAction,
+  createHolidayAction,
+  deactivateHolidayAction,
+  deleteHolidayAction,
+  loadHolidayPaySummaryAction,
+  overrideAssignmentAmountAction,
+  reactivateHolidayAction,
+  removeAssignmentAction,
+  updateHolidayAction,
+} from "./holiday-actions";
 
 export default async function AdminCrmPayrollPage() {
   await requireCrmAdmin();
@@ -21,13 +34,17 @@ export default async function AdminCrmPayrollPage() {
     { data: agents, error: agentsError },
     { data: records, error: recordsError },
     { data: auditLog, error: auditLogError },
+    { data: holidays, error: holidaysError },
+    { data: assignments, error: assignmentsError },
   ] = await Promise.all([
     supabase.from("crm_users").select("*").eq("role", "agent").order("full_name"),
     supabase.from("crm_payroll").select("*").order("payday", { ascending: false }),
     supabase.from("crm_payroll_audit_log").select("*").order("created_at", { ascending: false }),
+    supabase.from("holidays").select("*").is("deleted_at", null).order("holiday_date", { ascending: false }),
+    supabase.from("holiday_pay_assignments").select("*").not("crm_user_id", "is", null),
   ]);
 
-  const error = agentsError ?? recordsError ?? auditLogError;
+  const error = agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError;
 
   return (
     <div>
@@ -58,6 +75,7 @@ export default async function AdminCrmPayrollPage() {
             nextPayday={getNextPayday()}
             upcomingPaydays={getUpcomingPaydays(4)}
             loadAttendanceAction={loadAttendanceSummaryAction}
+            loadHolidayPayAction={loadHolidayPaySummaryAction}
             createAction={createPayrollAction}
             updateAction={updatePayrollAction}
             approveAction={approvePayrollAction}
@@ -65,6 +83,27 @@ export default async function AdminCrmPayrollPage() {
             cancelAction={cancelPayrollAction}
             reopenAction={reopenPayrollAction}
           />
+
+          <div className="mt-8">
+            <HolidayPayAdminSection
+              crmLabel="Winsalot Growth CRM"
+              agents={((agents ?? []) as CrmUserRow[]).map((a) => ({
+                id: a.id,
+                full_name: a.full_name,
+                email: a.email,
+              }))}
+              holidays={(holidays ?? []) as HolidayRow[]}
+              assignments={(assignments ?? []) as HolidayPayAssignmentRow[]}
+              createHolidayAction={createHolidayAction}
+              updateHolidayAction={updateHolidayAction}
+              deactivateHolidayAction={deactivateHolidayAction}
+              reactivateHolidayAction={reactivateHolidayAction}
+              deleteHolidayAction={deleteHolidayAction}
+              assignHolidayAction={assignHolidayAction}
+              removeAssignmentAction={removeAssignmentAction}
+              overrideAssignmentAmountAction={overrideAssignmentAmountAction}
+            />
+          </div>
         </div>
       )}
     </div>

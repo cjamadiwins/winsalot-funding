@@ -65,6 +65,7 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
       basePayEarned: record.base_pay_earned,
       incentiveBonus: record.bonus_commission,
       otherAdditions: record.other_additions,
+      holidayPay: record.holiday_pay,
       internetAllowance: record.internet_allowance,
       deductions: record.deductions,
       totalPay: record.total_pay,
@@ -146,6 +147,10 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Other Additions</dt>
                 <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.other_additions)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--color-text-muted)]">Holiday Pay</dt>
+                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.holiday_pay)}</dd>
               </div>
             </dl>
 

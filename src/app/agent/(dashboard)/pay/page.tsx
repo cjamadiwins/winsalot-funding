@@ -1,7 +1,9 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { getNextPayday, type PayrollRecord } from "@/lib/payroll";
+import type { HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
 import MyPayView from "@/components/payroll/MyPayView";
+import HolidayPaySection from "@/components/payroll/HolidayPaySection";
 
 export default async function AgentPayPage() {
   const agent = await requireCrmUser();
@@ -10,11 +12,17 @@ export default async function AgentPayPage() {
   // RLS (crm_payroll_agent_select_own) restricts this to this agent's own
   // rows regardless of the .eq() below - the filter here is just for
   // query efficiency, not the security boundary.
-  const { data: records, error } = await supabase
-    .from("crm_payroll")
-    .select("*")
-    .eq("agent_id", agent.id)
-    .order("payday", { ascending: false });
+  const [{ data: records, error }, { data: holidayAssignments, error: holidayError }] = await Promise.all([
+    supabase.from("crm_payroll").select("*").eq("agent_id", agent.id).order("payday", { ascending: false }),
+    // holiday_pay_assignments_agent_select_own RLS restricts this to this
+    // agent's own rows regardless of the .eq() below - same defense-in-
+    // depth pattern as the payroll query above.
+    supabase
+      .from("holiday_pay_assignments")
+      .select("*, holidays(*)")
+      .eq("crm_user_id", agent.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   return (
     <div>
@@ -30,7 +38,7 @@ export default async function AgentPayPage() {
       )}
 
       {!error && (
-        <div className="mt-6">
+        <div className="mt-6 space-y-6">
           <MyPayView
             companyName="Winsalot Corp"
             crmLabel="Winsalot Growth CRM"
@@ -38,6 +46,9 @@ export default async function AgentPayPage() {
             nextPayday={getNextPayday()}
             records={(records ?? []) as PayrollRecord[]}
           />
+          {!holidayError && (
+            <HolidayPaySection assignments={(holidayAssignments ?? []) as HolidayPayAssignmentWithHoliday[]} />
+          )}
         </div>
       )}
     </div>

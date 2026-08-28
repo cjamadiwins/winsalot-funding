@@ -125,6 +125,7 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
+  const holidayPay = parseNonNegativeAmount(formData, "holiday_pay");
   const deductions = parseNonNegativeAmount(formData, "deductions");
   const adminNotes = String(formData.get("admin_notes") ?? "").trim() || null;
   const adjustmentReason = String(formData.get("adjustment_reason") ?? "").trim();
@@ -142,6 +143,7 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
+    holidayPay === null ||
     deductions === null
   ) {
     return { error: "Amounts and day/hour counts must be zero or a positive number." };
@@ -178,6 +180,7 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
       admin_notes: adminNotes,
     })
@@ -208,6 +211,7 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
       base_pay_earned: basePayEarned,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
     },
   });
@@ -254,6 +258,7 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
+  const holidayPay = parseNonNegativeAmount(formData, "holiday_pay");
   const deductions = parseNonNegativeAmount(formData, "deductions");
   const adminNotes = String(formData.get("admin_notes") ?? "").trim() || null;
   const adjustmentReason = String(formData.get("adjustment_reason") ?? "").trim();
@@ -271,6 +276,7 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
+    holidayPay === null ||
     deductions === null
   ) {
     return { error: "Amounts and day/hour counts must be zero or a positive number." };
@@ -304,6 +310,7 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
       admin_notes: adminNotes,
       updated_at: new Date().toISOString(),
@@ -327,6 +334,7 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     approved_paid_leave_hours: existing.approved_paid_leave_hours,
     bonus_commission: existing.bonus_commission,
     other_additions: existing.other_additions,
+    holiday_pay: existing.holiday_pay,
     internet_allowance: existing.internet_allowance,
     deductions: existing.deductions,
     admin_notes: existing.admin_notes,
@@ -341,6 +349,7 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
     approved_paid_leave_hours: approvedPaidLeaveHours,
     bonus_commission: bonusCommission,
     other_additions: otherAdditions,
+    holiday_pay: holidayPay,
     internet_allowance: internetAllowance,
     deductions,
     admin_notes: adminNotes,

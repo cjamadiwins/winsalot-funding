@@ -138,6 +138,7 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
+  const holidayPay = parseNonNegativeAmount(formData, "holiday_pay");
   const deductions = parseNonNegativeAmount(formData, "deductions");
   const adminNotes = String(formData.get("admin_notes") ?? "").trim() || null;
   const adjustmentReason = String(formData.get("adjustment_reason") ?? "").trim();
@@ -155,6 +156,7 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
+    holidayPay === null ||
     deductions === null
   ) {
     return { error: "Amounts and day/hour counts must be zero or a positive number." };
@@ -195,6 +197,7 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
       admin_notes: adminNotes,
     })
@@ -225,6 +228,7 @@ export async function createPayrollAction(formData: FormData): Promise<ActionRes
       base_pay_earned: basePayEarned,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
     },
   });
@@ -271,6 +275,7 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
   const internetAllowance = parseNonNegativeAmount(formData, "internet_allowance");
   const bonusCommission = parseNonNegativeAmount(formData, "bonus_commission");
   const otherAdditions = parseNonNegativeAmount(formData, "other_additions");
+  const holidayPay = parseNonNegativeAmount(formData, "holiday_pay");
   const deductions = parseNonNegativeAmount(formData, "deductions");
   const adminNotes = String(formData.get("admin_notes") ?? "").trim() || null;
   const adjustmentReason = String(formData.get("adjustment_reason") ?? "").trim();
@@ -288,6 +293,7 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     internetAllowance === null ||
     bonusCommission === null ||
     otherAdditions === null ||
+    holidayPay === null ||
     deductions === null
   ) {
     return { error: "Amounts and day/hour counts must be zero or a positive number." };
@@ -321,6 +327,7 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
       internet_allowance: internetAllowance,
       bonus_commission: bonusCommission,
       other_additions: otherAdditions,
+      holiday_pay: holidayPay,
       deductions,
       admin_notes: adminNotes,
     })
@@ -343,6 +350,7 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     approved_paid_leave_hours: existing.approved_paid_leave_hours,
     bonus_commission: existing.bonus_commission,
     other_additions: existing.other_additions,
+    holiday_pay: existing.holiday_pay,
     internet_allowance: existing.internet_allowance,
     deductions: existing.deductions,
     admin_notes: existing.admin_notes,
@@ -357,6 +365,7 @@ export async function updatePayrollAction(recordId: string, formData: FormData):
     approved_paid_leave_hours: approvedPaidLeaveHours,
     bonus_commission: bonusCommission,
     other_additions: otherAdditions,
+    holiday_pay: holidayPay,
     internet_allowance: internetAllowance,
     deductions,
     admin_notes: adminNotes,
