@@ -18,6 +18,7 @@ import {
   Wallet,
   CalendarClock,
   Building2,
+  BookOpenCheck,
 } from "lucide-react";
 import {
   agentSignOutAction,
@@ -32,6 +33,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "My Clients", href: "/agent/clients", icon: <Building2 /> },
   { label: "Email Tracking", href: "/agent/emails", icon: <Mail /> },
   { label: "Sales Training & Call Scripts", href: "/agent/training", icon: <GraduationCap /> },
+  { label: "Winsalot Training", href: "/agent/winsalot-training", icon: <BookOpenCheck /> },
   { label: "My Attendance", href: "/agent/my-attendance", icon: <CalendarDays /> },
   { label: "Leave Requests", href: "/agent/leave-requests", icon: <CalendarOff /> },
   { label: "Chat", href: "/agent/chat", icon: <MessageSquare /> },

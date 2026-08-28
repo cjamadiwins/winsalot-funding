@@ -23,6 +23,7 @@ import {
   FileSignature,
   ClipboardList,
   Workflow,
+  BookOpenCheck,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -44,6 +45,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Leave Requests", href: "/admin/crm/leave-requests", icon: <CalendarOff /> },
   { label: "Chat", href: "/admin/crm/chat", icon: <MessageSquare /> },
   { label: "Training", href: "/admin/crm/training", icon: <GraduationCap /> },
+  { label: "Winsalot Training", href: "/admin/crm/winsalot-training", icon: <BookOpenCheck /> },
   { label: "Email Tracking", href: "/admin/crm/emails", icon: <Mail /> },
 ];
 
