@@ -5,12 +5,12 @@ import { useState } from "react";
 type Props = {
   /** Which CRM this course is rendered in, so the Close module and a few
    * scenario CTAs can reference the right primary call-to-action. */
-  crm: "leadgen" | "cleaning";
+  crm: "leadgen" | "growth";
 };
 
 const PRIMARY_CTA: Record<Props["crm"], string> = {
   leadgen: "booking the free 15-minute consultation",
-  cleaning: "booking a consultation appointment",
+  growth: "booking a consultation appointment",
 };
 
 type Stage = "Connect" | "Propose" | "Close";

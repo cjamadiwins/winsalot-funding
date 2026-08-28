@@ -39,7 +39,7 @@ export default async function AgentTrainingPage() {
       )}
 
       <div className="mt-10">
-        <ConnectProposeCloseCourse crm="cleaning" />
+        <ConnectProposeCloseCourse crm="growth" />
       </div>
     </div>
   );
