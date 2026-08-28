@@ -29,11 +29,11 @@ const MAX_PERIODS_PER_SYNC = 130;
 // beyond checking what's already frozen. Insert-only (ON CONFLICT DO
 // NOTHING via ignoreDuplicates): a period that's already frozen is never
 // recomputed or overwritten, so its permanently saved result survives a
-// later opportunity deletion (only non-closed opportunities can be
-// deleted at all - closed ones are protected by
-// crm_opportunities_prevent_closed_delete_trigger, migration 0081 - but
-// a non-closed opportunity can still carry credit that a live-only
-// computation would lose). Safe to call on every admin Performance page
+// later opportunity deletion - an admin can now permanently delete an
+// opportunity regardless of stage, including a closed/Won one (migration
+// 0104 dropped the old closed-delete-prevention trigger), so a live-only
+// computation would otherwise lose that credit the moment such an
+// opportunity is removed. Safe to call on every admin Performance page
 // load - once a period is frozen there is nothing left to write, so a
 // normal call is a cheap no-op read plus (usually) no insert.
 export async function syncCrmBiweeklyPerformanceHistory(
