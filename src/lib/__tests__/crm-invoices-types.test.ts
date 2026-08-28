@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canPermanentlyDeleteInvoice, computeInvoiceSubtotal, effectiveInvoiceStatus, invoiceNeedsFreeConfirmation, isInvoiceOverdue } from "../crm-invoices-types";
+import {
+  canPermanentlyDeleteInvoice,
+  canPermanentlyDeleteTestInvoice,
+  computeInvoiceSubtotal,
+  effectiveInvoiceStatus,
+  invoiceNeedsFreeConfirmation,
+  isInvoiceOverdue,
+} from "../crm-invoices-types";
 
 describe("canPermanentlyDeleteInvoice", () => {
   const base = { status: "Draft" as const, amount_paid: 0 };
@@ -25,6 +32,16 @@ describe("canPermanentlyDeleteInvoice", () => {
   it("blocks deleting a Draft or Cancelled invoice that has any payment recorded", () => {
     expect(canPermanentlyDeleteInvoice({ ...base, amount_paid: 50 })).toBe(false);
     expect(canPermanentlyDeleteInvoice({ ...base, status: "Cancelled", amount_paid: 50 })).toBe(false);
+  });
+});
+
+describe("canPermanentlyDeleteTestInvoice", () => {
+  it("allows deleting an invoice flagged as test data", () => {
+    expect(canPermanentlyDeleteTestInvoice({ is_test_data: true })).toBe(true);
+  });
+
+  it("never allows deleting a real (non-test) invoice through this path", () => {
+    expect(canPermanentlyDeleteTestInvoice({ is_test_data: false })).toBe(false);
   });
 });
 

@@ -136,7 +136,16 @@ export type CrmPaymentRow = {
   reversed_at: string | null;
   reversed_by: string | null;
   reversal_reason: string | null;
+  is_test_data: boolean;
 };
+
+// Mirrors canPermanentlyDeleteTestInvoice() in crm-invoices-types.ts: a
+// payment explicitly identified as test data may be permanently deleted
+// regardless of whether it is reversed or tied to an invoice. Never true
+// for a real payment, since is_test_data is never set for one.
+export function canPermanentlyDeleteTestPayment(payment: Pick<CrmPaymentRow, "is_test_data">): boolean {
+  return payment.is_test_data === true;
+}
 
 // Row-shape returned by crm_agent_visible_clients() - the only way an
 // agent may ever see client data. Deliberately excludes every financial

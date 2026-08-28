@@ -4,13 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { CrmInvoiceWithClient, InvoiceStatus } from "@/lib/crm-invoices-types";
-import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus } from "@/lib/crm-invoices-types";
+import {
+  INVOICE_STATUSES,
+  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_STYLES,
+  effectiveInvoiceStatus,
+  canPermanentlyDeleteInvoice,
+  canPermanentlyDeleteTestInvoice,
+} from "@/lib/crm-invoices-types";
 import type { InvoiceDashboardSummary } from "@/lib/crm-invoices-data";
-import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency } from "@/lib/crm-clients-types";
+import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency, canPermanentlyDeleteTestPayment, type CrmPaymentRow } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
+import ManageMenu from "./ManageMenu";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import PaymentDetailModal from "./PaymentDetailModal";
 
 type ActionResult = { error?: string; invoiceId?: string };
 type ClientOption = { id: string; company_name: string; email: string | null; billing_address: string | null; currency: string };
+type RecentPayment = CrmPaymentRow & { crm_clients: { company_name: string } | null };
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900";
 
@@ -24,6 +35,13 @@ export default function AdminInvoicesClient({
   summary,
   clients,
   createAction,
+  archiveAction,
+  cancelAction,
+  deleteAction,
+  deleteTestInvoiceAction,
+  updatePaymentAction,
+  reversePaymentAction,
+  deleteTestPaymentAction,
   initialFilters,
   autoOpenCreateForClientId,
   justDeleted,
@@ -32,6 +50,13 @@ export default function AdminInvoicesClient({
   summary: InvoiceDashboardSummary;
   clients: ClientOption[];
   createAction: (formData: FormData) => Promise<ActionResult>;
+  archiveAction: (invoiceId: string) => Promise<ActionResult>;
+  cancelAction: (invoiceId: string, reason: string) => Promise<ActionResult>;
+  deleteAction: (invoiceId: string) => Promise<ActionResult>;
+  deleteTestInvoiceAction: (invoiceId: string, confirmationText: string) => Promise<ActionResult>;
+  updatePaymentAction: (paymentId: string, formData: FormData) => Promise<ActionResult>;
+  reversePaymentAction: (paymentId: string, reason: string) => Promise<ActionResult>;
+  deleteTestPaymentAction: (paymentId: string, confirmationText: string) => Promise<ActionResult>;
   initialFilters: { search: string; status: string; client: string };
   autoOpenCreateForClientId?: string;
   justDeleted?: boolean;
@@ -43,8 +68,58 @@ export default function AdminInvoicesClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [showDeletedBanner, setShowDeletedBanner] = useState(!!justDeleted);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "invoice" | "test-invoice" | "payment"; id: string; label: string; clientName: string; amountLabel: string } | null>(null);
+  const [paymentModal, setPaymentModal] = useState<{ payment: RecentPayment; mode: "view" | "edit" } | null>(null);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
+
+  function runManageAction(action: () => Promise<ActionResult>) {
+    setError(null);
+    startTransition(async () => {
+      const result = await action();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleArchive(invoiceId: string) {
+    if (!window.confirm("Archive this invoice? It will remain in the system for historical record-keeping.")) return;
+    runManageAction(() => archiveAction(invoiceId));
+  }
+
+  function handleCancel(invoiceId: string) {
+    const reason = window.prompt("Reason for cancelling this invoice:");
+    if (reason === null) return;
+    runManageAction(() => cancelAction(invoiceId, reason));
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    setError(null);
+    startTransition(async () => {
+      const result =
+        deleteTarget.kind === "test-invoice"
+          ? await deleteTestInvoiceAction(deleteTarget.id, "DELETE")
+          : deleteTarget.kind === "payment"
+            ? await deleteTestPaymentAction(deleteTarget.id, "DELETE")
+            : await deleteAction(deleteTarget.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setDeleteTarget(null);
+      router.refresh();
+    });
+  }
+
+  function handleReversePayment(paymentId: string) {
+    const reason = window.prompt("Reason for reversing this payment:");
+    if (reason === null) return;
+    runManageAction(() => reversePaymentAction(paymentId, reason));
+  }
 
   function handleCreate(formData: FormData) {
     formData.set("line_items", JSON.stringify(lineItems.filter((li) => li.description.trim())));
@@ -96,14 +171,50 @@ export default function AdminInvoicesClient({
         <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Recent Payments</h3>
           <ul className="mt-2 space-y-1 text-sm">
-            {summary.recentPayments.slice(0, 5).map((p) => (
-              <li key={p.id} className="flex justify-between">
-                <span>
-                  {p.crm_clients?.company_name ?? "Unknown client"} — {formatDate(p.payment_date)}
-                </span>
-                <span className="font-medium">{formatCurrency(p.amount, p.currency)}</span>
-              </li>
-            ))}
+            {summary.recentPayments.slice(0, 5).map((p) => {
+              const clientName = p.crm_clients?.company_name ?? "Unknown client";
+              return (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <span>
+                    {clientName} — {formatDate(p.payment_date)}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <span className="font-medium">{formatCurrency(p.amount, p.currency)}</span>
+                    <ManageMenu
+                      items={[
+                        { key: "view", label: "View payment details", onSelect: () => setPaymentModal({ payment: p, mode: "view" }) },
+                        {
+                          key: "edit",
+                          label: "Edit payment details",
+                          disabled: !!p.reversed_at,
+                          onSelect: () => setPaymentModal({ payment: p, mode: "edit" }),
+                        },
+                        {
+                          key: "reverse",
+                          label: "Reverse payment",
+                          disabled: !!p.reversed_at,
+                          onSelect: () => handleReversePayment(p.id),
+                        },
+                        {
+                          key: "delete",
+                          label: "Delete test payment",
+                          hidden: !canPermanentlyDeleteTestPayment(p),
+                          danger: true,
+                          onSelect: () =>
+                            setDeleteTarget({
+                              kind: "payment",
+                              id: p.id,
+                              label: p.reference_number || `Payment on ${formatDate(p.payment_date)}`,
+                              clientName,
+                              amountLabel: formatCurrency(p.amount, p.currency),
+                            }),
+                        },
+                      ]}
+                    />
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -255,18 +366,23 @@ export default function AdminInvoicesClient({
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Balance</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {invoices.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
+                <td colSpan={8} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
                   No invoices match these filters.
                 </td>
               </tr>
             )}
             {invoices.map((inv) => {
               const effStatus: InvoiceStatus = effectiveInvoiceStatus(inv);
+              const canEdit = inv.status !== "Cancelled" && inv.status !== "Archived";
+              const isTestInvoice = canPermanentlyDeleteTestInvoice(inv);
+              const canDeleteNormally = canPermanentlyDeleteInvoice(inv);
+              const clientName = inv.crm_clients?.company_name ?? "Unknown client";
               return (
                 <tr key={inv.id}>
                   <td className="px-4 py-3 font-medium text-[var(--color-ink-strong)]">
@@ -274,22 +390,89 @@ export default function AdminInvoicesClient({
                       {inv.invoice_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">{inv.crm_clients?.company_name ?? "-"}</td>
+                  <td className="px-4 py-3">{clientName}</td>
                   <td className="px-4 py-3">{formatDate(inv.issue_date)}</td>
                   <td className="px-4 py-3">{formatDate(inv.due_date)}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${INVOICE_STATUS_STYLES[effStatus]}`}>
                       {INVOICE_STATUS_LABELS[effStatus]}
                     </span>
+                    {isTestInvoice && (
+                      <span className="ml-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10.5px] font-semibold text-amber-800">Test Data</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">{formatCurrency(inv.total, inv.currency)}</td>
                   <td className="px-4 py-3">{formatCurrency(inv.balance, inv.currency)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <ManageMenu
+                      items={[
+                        { key: "view", label: "View Invoice", onSelect: () => router.push(`/admin/crm/invoices/${inv.id}`) },
+                        { key: "edit", label: "Edit Invoice", hidden: !canEdit, onSelect: () => router.push(`/admin/crm/invoices/${inv.id}?edit=1`) },
+                        { key: "archive", label: "Archive Invoice", hidden: inv.status === "Archived", onSelect: () => handleArchive(inv.id) },
+                        {
+                          key: "cancel",
+                          label: "Cancel Invoice",
+                          hidden: inv.status === "Paid" || inv.status === "Cancelled" || inv.status === "Archived",
+                          onSelect: () => handleCancel(inv.id),
+                        },
+                        {
+                          key: "delete",
+                          label: "Delete Invoice",
+                          danger: true,
+                          onSelect: () => {
+                            if (!isTestInvoice && !canDeleteNormally) {
+                              setError("Only a Draft or Cancelled invoice with no payment history can be permanently deleted. Sent, Partially Paid, and Paid invoices are financial records.");
+                              return;
+                            }
+                            setDeleteTarget({
+                              kind: isTestInvoice ? "test-invoice" : "invoice",
+                              id: inv.id,
+                              label: inv.invoice_number,
+                              clientName,
+                              amountLabel: formatCurrency(inv.total, inv.currency),
+                            });
+                          },
+                        },
+                      ]}
+                    />
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title={deleteTarget.kind === "payment" ? "Permanently Delete Payment" : "Permanently Delete Invoice"}
+          recordLabel={deleteTarget.kind === "payment" ? "Payment" : "Invoice #"}
+          recordNumber={deleteTarget.label}
+          clientName={deleteTarget.clientName}
+          amountLabel={deleteTarget.amountLabel}
+          warning={
+            deleteTarget.kind === "test-invoice"
+              ? "This invoice is identified as test data - deleting it also permanently removes its test payments, line items, and activity records."
+              : deleteTarget.kind === "payment"
+                ? "This payment is identified as test data."
+                : undefined
+          }
+          isPending={isPending}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {paymentModal && (
+        <PaymentDetailModal
+          payment={paymentModal.payment}
+          clientName={paymentModal.payment.crm_clients?.company_name ?? "Unknown client"}
+          mode={paymentModal.mode}
+          updateAction={updatePaymentAction}
+          onClose={() => setPaymentModal(null)}
+          onSaved={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }
