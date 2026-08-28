@@ -25,6 +25,7 @@ import {
 } from "@/lib/crm-agreement-types";
 import { createAgreementToken } from "@/lib/crm-agreement-tokens";
 import { sendAgreementSignEmail } from "@/lib/crm-agreement-emails";
+import { getSiteUrl } from "@/lib/site-url";
 
 type ActionResult = { error?: string };
 
@@ -85,11 +86,12 @@ export async function startOnboardingFromOpportunityAction(
 
   const { data: opportunity, error: oppError } = await supabase
     .from("crm_opportunities")
-    .select("business_name, contact_name, email")
+    .select("business_name, contact_name, email, is_internal_test")
     .eq("id", opportunityId)
     .maybeSingle();
 
   if (oppError || !opportunity) return { error: "Opportunity not found." };
+  if (opportunity.is_internal_test) return { error: "This is an internal/test opportunity and cannot be onboarded as a client." };
   if (!opportunity.email) return { error: "This opportunity has no email address on file - add one before starting onboarding." };
 
   const clientId = await resolveOrCreateClient(supabase, admin, {
@@ -366,6 +368,10 @@ export async function sendAgreementAction(agreementId: string, reviewedConfirmat
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be sent." };
   if (!agreement.monthly_fee && agreement.monthly_fee !== 0) return { error: "Monthly fee is required before sending." };
+  if (agreement.campaign_type !== "free_pilot") {
+    if (!agreement.payment_due_terms) return { error: "Payment due terms are required before sending." };
+    if (!agreement.cancellation_terms) return { error: "Cancellation terms are required before sending." };
+  }
 
   const { error: updateError } = await supabase
     .from("crm_client_agreements")
@@ -416,6 +422,23 @@ export async function resendAgreementAction(agreementId: string): Promise<Action
 
   revalidatePath(`/admin/crm/agreements/${agreementId}`);
   return {};
+}
+
+// "Copy Signing Link" - mints a fresh single-use token (same helper Send/
+// Resend use) and hands the admin the raw URL to copy, without sending
+// any email. Useful for sharing the link a different way, or for testing.
+// Never sent to the client automatically; the admin decides what to do
+// with it.
+export async function getAgreementSignLinkAction(agreementId: string): Promise<ActionResult & { url?: string }> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("id, status").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.status !== "sent") return { error: "Only a sent (not yet signed) agreement has a signing link." };
+
+  const token = await createAgreementToken(agreementId);
+  return { url: `${getSiteUrl()}/agreement-sign/${token}` };
 }
 
 // Item 10: the lightweight invoice/payment tracker, entirely separate

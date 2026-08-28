@@ -45,9 +45,10 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-function formatCurrency(value: number | null): string {
+function formatCurrency(value: number | null, currencyCode?: string): string {
   if (value === null || value === undefined) return "-";
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const amount = `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return currencyCode ? `${amount} ${currencyCode}` : amount;
 }
 
 export type AgreementPdfProps = {
@@ -115,11 +116,11 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
           <View style={styles.sectionRow}>
             <View>
               <Text style={styles.label}>Monthly Fee</Text>
-              <Text style={styles.value}>{formatCurrency(agreement.monthly_fee)}</Text>
+              <Text style={styles.value}>{formatCurrency(agreement.monthly_fee, agreement.currency)}</Text>
             </View>
             <View>
               <Text style={styles.label}>Setup Fee</Text>
-              <Text style={styles.value}>{agreement.setup_fee ? formatCurrency(agreement.setup_fee) : "None"}</Text>
+              <Text style={styles.value}>{agreement.setup_fee ? formatCurrency(agreement.setup_fee, agreement.currency) : "None"}</Text>
             </View>
             <View>
               <Text style={styles.label}>Billing Frequency</Text>
@@ -135,9 +136,10 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
           </View>
         ))}
 
-        {(agreement.initial_term || agreement.renewal_terms || agreement.cancellation_terms) && (
+        {(agreement.payment_due_terms || agreement.initial_term || agreement.renewal_terms || agreement.cancellation_terms) && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Term</Text>
+            {agreement.payment_due_terms && <Text style={styles.sectionBody}>Payment due terms: {agreement.payment_due_terms}</Text>}
             {agreement.initial_term && <Text style={styles.sectionBody}>Initial term: {agreement.initial_term}</Text>}
             {agreement.renewal_terms && <Text style={styles.sectionBody}>Renewal: {agreement.renewal_terms}</Text>}
             {agreement.cancellation_terms && <Text style={styles.sectionBody}>Cancellation: {agreement.cancellation_terms}</Text>}

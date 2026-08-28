@@ -93,12 +93,12 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
             <>
               <div>
                 <dt className="font-semibold text-slate-500">Monthly Fee</dt>
-                <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()}</dd>
+                <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()} {agreement.currency}</dd>
               </div>
               {agreement.setup_fee ? (
                 <div>
                   <dt className="font-semibold text-slate-500">Setup Fee</dt>
-                  <dd className="text-slate-900">${Number(agreement.setup_fee).toLocaleString()}</dd>
+                  <dd className="text-slate-900">${Number(agreement.setup_fee).toLocaleString()} {agreement.currency}</dd>
                 </div>
               ) : null}
             </>
@@ -112,6 +112,18 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
               <p className="mt-1 text-sm leading-relaxed text-slate-700">{section.body}</p>
             </div>
           ))}
+
+          {!isPilot && (agreement.payment_due_terms || agreement.initial_term || agreement.renewal_terms || agreement.cancellation_terms) && (
+            <div>
+              <h3 className="text-[15px] font-bold text-slate-900">Term</h3>
+              <div className="mt-1 space-y-1 text-sm leading-relaxed text-slate-700">
+                {agreement.payment_due_terms && <p>Payment due terms: {agreement.payment_due_terms}</p>}
+                {agreement.initial_term && <p>Initial term: {agreement.initial_term}</p>}
+                {agreement.renewal_terms && <p>Renewal: {agreement.renewal_terms}</p>}
+                {agreement.cancellation_terms && <p>Cancellation: {agreement.cancellation_terms}</p>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
