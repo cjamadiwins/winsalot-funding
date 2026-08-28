@@ -6,20 +6,26 @@ import {
   activateCampaignAction,
   archiveAgreementAction,
   updateAgreementInvoiceStatusAction,
+  activatePilotAction,
+  startPilotResultsReviewAction,
 } from "../agreements/actions";
-import type { OnboardingStage } from "@/lib/crm-agreement-types";
 
 export type OnboardingRow = {
   agreementId: string;
   clientId: string;
   clientName: string;
   contactPerson: string;
+  campaignTypeLabel: string;
   serviceTypeLabel: string;
   monthlyTarget: number;
   monthlyFee: number;
-  stage: OnboardingStage;
+  // Either an OnboardingStage or a PilotStage label, depending on isPilot -
+  // widened to string since one dashboard table renders both pipelines.
+  stage: string;
   nextAction: string;
   agreementStatus: string;
+  isPilot: boolean;
+  pilotStatus: string;
   intakeConfigId: string | null;
   intakeStatus: string;
   invoiceId: string | null;
@@ -54,8 +60,9 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
             <tr>
               <th className="px-3 py-3">Client</th>
               <th className="px-3 py-3">Contact</th>
+              <th className="px-3 py-3">Campaign Type</th>
               <th className="px-3 py-3">Service Type</th>
-              <th className="px-3 py-3">Monthly Target</th>
+              <th className="px-3 py-3">Target</th>
               <th className="px-3 py-3">Monthly Fee</th>
               <th className="px-3 py-3">Stage</th>
               <th className="px-3 py-3">Intake</th>
@@ -70,9 +77,10 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
               <tr key={row.agreementId} className="border-b border-slate-100 last:border-0 align-top">
                 <td className="px-3 py-3 font-medium text-slate-900">{row.clientName}</td>
                 <td className="px-3 py-3 text-slate-600">{row.contactPerson}</td>
+                <td className="px-3 py-3 text-slate-600">{row.campaignTypeLabel}</td>
                 <td className="px-3 py-3 text-slate-600">{row.serviceTypeLabel}</td>
                 <td className="px-3 py-3 text-slate-600">{row.monthlyTarget}</td>
-                <td className="px-3 py-3 text-slate-600">${row.monthlyFee.toLocaleString()}</td>
+                <td className="px-3 py-3 text-slate-600">{row.isPilot ? "$0 (Free Pilot)" : `$${row.monthlyFee.toLocaleString()}`}</td>
                 <td className="px-3 py-3">
                   <span className="inline-flex rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-800">{row.stage}</span>
                 </td>
@@ -95,7 +103,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                         Record Invoice
                       </Link>
                     )}
-                    {row.invoiceId && row.invoiceStatusLabel === "Invoice Sent" && (
+                    {!row.isPilot && row.invoiceId && row.invoiceStatusLabel === "Invoice Sent" && (
                       <button
                         type="button"
                         disabled={isPending}
@@ -105,7 +113,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                         Mark Payment Pending
                       </button>
                     )}
-                    {row.invoiceId && !row.paymentReceived && (row.invoiceStatusLabel === "Invoice Sent" || row.invoiceStatusLabel === "Payment Pending") && (
+                    {!row.isPilot && row.invoiceId && !row.paymentReceived && (row.invoiceStatusLabel === "Invoice Sent" || row.invoiceStatusLabel === "Payment Pending") && (
                       <button
                         type="button"
                         disabled={isPending}
@@ -118,7 +126,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                         Mark Payment Received
                       </button>
                     )}
-                    {row.paymentReceived && row.campaignStatus !== "Active" && (
+                    {!row.isPilot && row.paymentReceived && row.campaignStatus !== "Active" && (
                       <button
                         type="button"
                         disabled={isPending}
@@ -131,7 +139,35 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                         Activate Campaign
                       </button>
                     )}
-                    {row.agreementStatus !== "archived" && (
+                    {row.isPilot && row.pilotStatus === "not_started" && row.intakeStatus === "Received" && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          if (!confirm(`Activate the pilot for ${row.clientName}?`)) return;
+                          runAction(() => activatePilotAction(row.agreementId));
+                        }}
+                        className={buttonClasses}
+                      >
+                        Activate Pilot
+                      </button>
+                    )}
+                    {row.isPilot && row.pilotStatus === "active" && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => runAction(() => startPilotResultsReviewAction(row.agreementId))}
+                        className={buttonClasses}
+                      >
+                        Start Results Review
+                      </button>
+                    )}
+                    {row.isPilot && row.pilotStatus === "results_review" && (
+                      <Link href={`/admin/crm/agreements/${row.agreementId}`} className={buttonClasses}>
+                        Review Results →
+                      </Link>
+                    )}
+                    {!(row.isPilot && (row.pilotStatus === "active" || row.pilotStatus === "results_review")) && row.agreementStatus !== "archived" && (
                       <button
                         type="button"
                         disabled={isPending}
@@ -151,7 +187,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
                   No clients in onboarding yet. Start from an opportunity or create an agreement from Client Agreements.
                 </td>
               </tr>

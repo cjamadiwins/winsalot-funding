@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   agreedTargetLabel,
   AGREED_TARGET_NOTICE,
+  PILOT_TARGET_NOTICE,
   AGREEMENT_SERVICE_TYPE_LABELS,
   findIntakeAgreementConflicts,
   type CrmClientAgreementRow,
@@ -95,13 +96,22 @@ export default function IntakeBuilderClient({
           <LockedField label="Contact Person" value={agreement.contact_person} />
           <LockedField label="Business Email" value={agreement.business_email} />
           <LockedField label="Service Type" value={AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type]} />
-          <LockedField label="Campaign Start Date" value={agreement.campaign_start_date ?? "-"} />
-          <LockedField label="Agreement Term" value={agreement.initial_term ?? "-"} />
+          {agreement.campaign_type === "free_pilot" ? (
+            <>
+              <LockedField label="Pilot Start Date" value={agreement.campaign_start_date ?? "-"} />
+              <LockedField label="Pilot End Date" value={agreement.pilot_end_date ?? "-"} />
+            </>
+          ) : (
+            <>
+              <LockedField label="Campaign Start Date" value={agreement.campaign_start_date ?? "-"} />
+              <LockedField label="Agreement Term" value={agreement.initial_term ?? "-"} />
+            </>
+          )}
         </dl>
         <div className="mt-3">
-          <span className="text-[12.5px] font-semibold text-slate-500">{agreedTargetLabel(agreement.service_type)}</span>
+          <span className="text-[12.5px] font-semibold text-slate-500">{agreedTargetLabel(agreement.service_type, agreement.campaign_type)}</span>
           <p className="text-lg font-bold text-slate-900">{agreement.monthly_target}</p>
-          <p className="text-[12px] text-slate-500">{AGREED_TARGET_NOTICE}</p>
+          <p className="text-[12px] text-slate-500">{agreement.campaign_type === "free_pilot" ? PILOT_TARGET_NOTICE : AGREED_TARGET_NOTICE}</p>
         </div>
       </div>
 

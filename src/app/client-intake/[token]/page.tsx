@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveIntakeToken } from "@/lib/crm-agreement-tokens";
-import { agreedTargetLabel, AGREED_TARGET_NOTICE, AGREEMENT_SERVICE_TYPE_LABELS, type CrmClientAgreementRow, type CrmIntakeQuestion } from "@/lib/crm-agreement-types";
+import {
+  agreedTargetLabel,
+  AGREED_TARGET_NOTICE,
+  PILOT_TARGET_NOTICE,
+  AGREEMENT_SERVICE_TYPE_LABELS,
+  type CrmClientAgreementRow,
+  type CrmIntakeQuestion,
+} from "@/lib/crm-agreement-types";
 import { recordIntakeOpenedAction } from "./actions";
 import ClientIntakeFormClient from "./ClientIntakeFormClient";
 
@@ -41,6 +48,7 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
 
   const typedAgreement = agreement as CrmClientAgreementRow;
   const questions = (config.questions ?? []) as CrmIntakeQuestion[];
+  const isPilot = typedAgreement.campaign_type === "free_pilot";
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
@@ -58,14 +66,23 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
           <LockedField label="Contact Person" value={typedAgreement.contact_person} />
           <LockedField label="Business Email" value={typedAgreement.business_email} />
           <LockedField label="Service Type" value={AGREEMENT_SERVICE_TYPE_LABELS[typedAgreement.service_type]} />
-          <LockedField label="Agreement Start Date" value={formatDate(typedAgreement.campaign_start_date)} />
-          <LockedField label="Agreement Term" value={typedAgreement.initial_term || "-"} />
+          {isPilot ? (
+            <>
+              <LockedField label="Pilot Start Date" value={formatDate(typedAgreement.campaign_start_date)} />
+              <LockedField label="Pilot End Date" value={formatDate(typedAgreement.pilot_end_date)} />
+            </>
+          ) : (
+            <>
+              <LockedField label="Agreement Start Date" value={formatDate(typedAgreement.campaign_start_date)} />
+              <LockedField label="Agreement Term" value={typedAgreement.initial_term || "-"} />
+            </>
+          )}
         </div>
 
         <div className="mt-4">
-          <span className="text-[13px] font-semibold text-slate-500">{agreedTargetLabel(typedAgreement.service_type)}</span>
+          <span className="text-[13px] font-semibold text-slate-500">{agreedTargetLabel(typedAgreement.service_type, typedAgreement.campaign_type)}</span>
           <p className="mt-1 text-lg font-bold text-slate-900">{typedAgreement.monthly_target}</p>
-          <p className="mt-1 text-[12.5px] text-slate-500">{AGREED_TARGET_NOTICE}</p>
+          <p className="mt-1 text-[12.5px] text-slate-500">{isPilot ? PILOT_TARGET_NOTICE : AGREED_TARGET_NOTICE}</p>
         </div>
       </div>
 

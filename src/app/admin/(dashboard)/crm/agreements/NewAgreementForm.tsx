@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startOnboardingFromOpportunityAction, createAgreementForClientAction } from "./actions";
+import { CAMPAIGN_TYPES, CAMPAIGN_TYPE_LABELS, type CampaignType } from "@/lib/crm-agreement-types";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -20,6 +21,7 @@ type Option = { id: string; label: string };
 export default function NewAgreementForm({ opportunities, clients }: { opportunities: Option[]; clients: Option[] }) {
   const router = useRouter();
   const [mode, setMode] = useState<"opportunity" | "existing" | "new">("opportunity");
+  const [campaignType, setCampaignType] = useState<CampaignType>("standard_monthly");
   const [opportunityId, setOpportunityId] = useState("");
   const [existingClientId, setExistingClientId] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -33,10 +35,10 @@ export default function NewAgreementForm({ opportunities, clients }: { opportuni
     startTransition(async () => {
       const result =
         mode === "opportunity"
-          ? await startOnboardingFromOpportunityAction(opportunityId)
+          ? await startOnboardingFromOpportunityAction(opportunityId, campaignType)
           : mode === "existing"
-            ? await createAgreementForClientAction({ existingClientId })
-            : await createAgreementForClientAction({ newClient: { companyName, contactName, email } });
+            ? await createAgreementForClientAction({ existingClientId, campaignType })
+            : await createAgreementForClientAction({ newClient: { companyName, contactName, email }, campaignType });
 
       if (result.error) {
         setError(result.error);
@@ -49,6 +51,14 @@ export default function NewAgreementForm({ opportunities, clients }: { opportuni
   return (
     <div className="mt-3">
       <div className="flex gap-4 text-sm">
+        {CAMPAIGN_TYPES.map((type) => (
+          <label key={type} className="flex items-center gap-1.5">
+            <input type="radio" checked={campaignType === type} onChange={() => setCampaignType(type)} /> {CAMPAIGN_TYPE_LABELS[type]}
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-4 text-sm">
         <label className="flex items-center gap-1.5">
           <input type="radio" checked={mode === "opportunity"} onChange={() => setMode("opportunity")} /> From Opportunity
         </label>
