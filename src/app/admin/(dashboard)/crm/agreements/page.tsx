@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { CrmClientAgreementRow } from "@/lib/crm-agreement-types";
+import { CAMPAIGN_TYPE_LABELS, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import NewAgreementForm from "./NewAgreementForm";
 
 export default async function AdminCrmAgreementsPage() {
@@ -41,6 +41,7 @@ export default async function AdminCrmAgreementsPage() {
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Business Name</th>
+              <th className="px-4 py-3">Campaign Type</th>
               <th className="px-4 py-3">Service Type</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Version</th>
@@ -51,6 +52,7 @@ export default async function AdminCrmAgreementsPage() {
             {agreementRows.map((agreement) => (
               <tr key={agreement.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-3 font-medium text-slate-900">{agreement.legal_business_name}</td>
+                <td className="px-4 py-3 text-slate-600">{CAMPAIGN_TYPE_LABELS[agreement.campaign_type]}</td>
                 <td className="px-4 py-3 text-slate-600">{agreement.service_type}</td>
                 <td className="px-4 py-3 text-slate-600 capitalize">{agreement.status}</td>
                 <td className="px-4 py-3 text-slate-600">{agreement.version}</td>
@@ -63,7 +65,7 @@ export default async function AdminCrmAgreementsPage() {
             ))}
             {agreementRows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   No agreements yet.
                 </td>
               </tr>

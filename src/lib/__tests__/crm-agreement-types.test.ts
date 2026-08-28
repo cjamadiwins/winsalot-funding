@@ -3,8 +3,10 @@ import {
   buildAgreementTargetStatement,
   renderAgreementTemplate,
   deriveCrmOnboardingStage,
+  deriveCrmPilotStage,
   findIntakeAgreementConflicts,
   agreedTargetLabel,
+  PILOT_PROGRAM_DISCLOSURE,
   type CrmAgreementTemplateRow,
 } from "../crm-agreement-types";
 
@@ -61,6 +63,27 @@ describe("agreedTargetLabel", () => {
   });
   it("labels consultation_appointments correctly", () => {
     expect(agreedTargetLabel("consultation_appointments")).toBe("Agreed Consultation Appointments Per Month");
+  });
+  it("drops 'Per Month' wording for a free pilot's target", () => {
+    expect(agreedTargetLabel("qualified_leads", "free_pilot")).toBe("Agreed Qualified Leads (Pilot Target)");
+    expect(agreedTargetLabel("consultation_appointments", "free_pilot")).toBe("Agreed Consultation Appointments (Pilot Target)");
+  });
+  it("standard_monthly explicitly behaves the same as the default", () => {
+    expect(agreedTargetLabel("qualified_leads", "standard_monthly")).toBe("Agreed Qualified Leads Per Month");
+  });
+});
+
+describe("pilot template rendering", () => {
+  it("carries the exact required disclosure paragraph through verbatim", () => {
+    const pilotTemplate: Pick<CrmAgreementTemplateRow, "content"> = {
+      content: [{ key: "pilot_disclosure", title: "Pilot Terms and No Guarantee", body: PILOT_PROGRAM_DISCLOSURE }],
+    };
+    const rendered = renderAgreementTemplate(pilotTemplate, { service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 20 });
+    expect(rendered[0].body).toBe(PILOT_PROGRAM_DISCLOSURE);
+    expect(rendered[0].body).toContain("at no charge for the agreed period and scope");
+    expect(rendered[0].body).toContain("is a target and not a guarantee");
+    expect(rendered[0].body).toContain("Winsalot Corp does not guarantee that a lead or appointment will result in a sale.");
+    expect(rendered[0].body).toContain("unless both parties agree in writing to extend it or begin a paid monthly campaign.");
   });
 });
 
@@ -152,6 +175,80 @@ describe("deriveCrmOnboardingStage", () => {
         clientStatus: "Active",
       })
     ).toBe("Campaign Active");
+  });
+});
+
+describe("deriveCrmPilotStage", () => {
+  const base: Parameters<typeof deriveCrmPilotStage>[0] = {
+    agreement: { status: "draft", pilot_status: "not_started" },
+    intakeConfig: null,
+    submission: null,
+  };
+
+  it("Pilot Agreed - draft", () => {
+    expect(deriveCrmPilotStage(base)).toBe("Pilot Agreed");
+  });
+
+  it("Pilot Agreed - sent but not yet signed (no separate 'sent' stage for pilots)", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "sent", pilot_status: "not_started" } })).toBe("Pilot Agreed");
+  });
+
+  it("Pilot Agreement Signed", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "signed", pilot_status: "not_started" } })).toBe("Pilot Agreement Signed");
+  });
+
+  it("Intake Form Sent", () => {
+    expect(
+      deriveCrmPilotStage({ ...base, agreement: { status: "signed", pilot_status: "not_started" }, intakeConfig: { status: "sent" } })
+    ).toBe("Intake Form Sent");
+  });
+
+  it("Intake Received", () => {
+    expect(
+      deriveCrmPilotStage({
+        ...base,
+        agreement: { status: "signed", pilot_status: "not_started" },
+        intakeConfig: { status: "sent" },
+        submission: { id: "sub-1" },
+      })
+    ).toBe("Intake Received");
+  });
+
+  it("Pilot Active", () => {
+    expect(
+      deriveCrmPilotStage({
+        ...base,
+        agreement: { status: "signed", pilot_status: "active" },
+        intakeConfig: { status: "sent" },
+        submission: { id: "sub-1" },
+      })
+    ).toBe("Pilot Active");
+  });
+
+  it("Results Review", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "signed", pilot_status: "results_review" } })).toBe("Results Review");
+  });
+
+  it("Converted to Paid Campaign", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "superseded", pilot_status: "converted" } })).toBe("Converted to Paid Campaign");
+  });
+
+  it("Pilot Extended", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "superseded", pilot_status: "extended" } })).toBe("Pilot Extended");
+  });
+
+  it("Pilot Closed", () => {
+    expect(deriveCrmPilotStage({ ...base, agreement: { status: "archived", pilot_status: "closed" } })).toBe("Pilot Closed");
+  });
+
+  it("pilot_status terminal states take priority even if intake/submission data would suggest an earlier stage", () => {
+    expect(
+      deriveCrmPilotStage({
+        agreement: { status: "archived", pilot_status: "closed" },
+        intakeConfig: null,
+        submission: null,
+      })
+    ).toBe("Pilot Closed");
   });
 });
 

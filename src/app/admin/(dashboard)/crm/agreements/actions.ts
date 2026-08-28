@@ -9,9 +9,12 @@ import {
   AGREEMENT_SERVICE_TYPES,
   AGREEMENT_TARGET_TYPES,
   AGREEMENT_BILLING_FREQUENCIES,
+  CAMPAIGN_TYPES,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
+  type AgreementTemplateKind,
+  type CampaignType,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "@/lib/crm-agreement-types";
@@ -43,14 +46,21 @@ async function logOnboardingActivity(
 
 // This is a lead-generation service agreement, not a lending agreement -
 // no legal-review approval step gates which template is used. Always the
-// latest version.
+// latest version of the requested kind (standard Client Service
+// Agreement vs. Free Pilot Program) - see migration 0098's header
+// comment for why pilots use a separate template lineage.
 async function getActiveAgreementTemplate(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  kind: AgreementTemplateKind
 ): Promise<CrmAgreementTemplateRow | null> {
-  const { data } = await supabase.from("crm_agreement_templates").select("*").order("version", { ascending: false });
+  const { data } = await supabase.from("crm_agreement_templates").select("*").eq("kind", kind).order("version", { ascending: false });
 
   if (!data || data.length === 0) return null;
   return data[0] as CrmAgreementTemplateRow;
+}
+
+function templateKindFor(campaignType: CampaignType): AgreementTemplateKind {
+  return campaignType === "free_pilot" ? "pilot_program_agreement" : "client_service_agreement";
 }
 
 // Item 2: "Allow the admin to start the onboarding workflow from an
@@ -60,9 +70,13 @@ async function getActiveAgreementTemplate(
 // records." crm_clients is reused as-is (see migration 0097's header
 // comment) - this never creates a new client table, and an existing
 // client match is reused rather than duplicated.
-export async function startOnboardingFromOpportunityAction(opportunityId: string): Promise<ActionResult & { clientId?: string; agreementId?: string }> {
+export async function startOnboardingFromOpportunityAction(
+  opportunityId: string,
+  campaignType: CampaignType = "standard_monthly"
+): Promise<ActionResult & { clientId?: string; agreementId?: string }> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
+  if (!CAMPAIGN_TYPES.includes(campaignType)) return { error: "Invalid campaign type." };
 
   const { data: opportunity, error: oppError } = await supabase
     .from("crm_opportunities")
@@ -80,8 +94,12 @@ export async function startOnboardingFromOpportunityAction(opportunityId: string
   });
   if (typeof clientId !== "string") return clientId; // it's an ActionResult error
 
-  const template = await getActiveAgreementTemplate(supabase);
+  const template = await getActiveAgreementTemplate(supabase, templateKindFor(campaignType));
   if (!template) return { error: "No agreement template is configured." };
+
+  // A free pilot is always $0/$0 - forced here at creation time so the
+  // fee is never even transiently non-zero, not just hidden by the UI.
+  const isPilot = campaignType === "free_pilot";
 
   const { data: agreement, error: insertError } = await supabase
     .from("crm_client_agreements")
@@ -89,12 +107,14 @@ export async function startOnboardingFromOpportunityAction(opportunityId: string
       client_id: clientId,
       opportunity_id: opportunityId,
       template_id: template.id,
+      campaign_type: campaignType,
       legal_business_name: opportunity.business_name,
       contact_person: opportunity.contact_name || "",
       business_email: opportunity.email,
       service_type: "qualified_leads",
       monthly_target: 1,
       monthly_fee: 0,
+      setup_fee: isPilot ? 0 : null,
       created_by: admin.id,
       updated_by: admin.id,
     })
@@ -159,10 +179,16 @@ async function resolveOrCreateClient(
 // client or types a brand-new one straight from the "Client Agreements"
 // section.
 export async function createAgreementForClientAction(
-  input: { existingClientId?: string; newClient?: { companyName: string; contactName: string; email: string } }
+  input: {
+    existingClientId?: string;
+    newClient?: { companyName: string; contactName: string; email: string };
+    campaignType?: CampaignType;
+  }
 ): Promise<ActionResult & { clientId?: string; agreementId?: string }> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
+  const campaignType = input.campaignType ?? "standard_monthly";
+  if (!CAMPAIGN_TYPES.includes(campaignType)) return { error: "Invalid campaign type." };
 
   let clientId: string;
   let legalBusinessName: string;
@@ -191,20 +217,24 @@ export async function createAgreementForClientAction(
     return { error: "Select an existing client or provide new client details." };
   }
 
-  const template = await getActiveAgreementTemplate(supabase);
+  const template = await getActiveAgreementTemplate(supabase, templateKindFor(campaignType));
   if (!template) return { error: "No agreement template is configured." };
+
+  const isPilot = campaignType === "free_pilot";
 
   const { data: agreement, error } = await supabase
     .from("crm_client_agreements")
     .insert({
       client_id: clientId,
       template_id: template.id,
+      campaign_type: campaignType,
       legal_business_name: legalBusinessName,
       contact_person: contactPerson,
       business_email: businessEmail,
       service_type: "qualified_leads",
       monthly_target: 1,
       monthly_fee: 0,
+      setup_fee: isPilot ? 0 : null,
       created_by: admin.id,
       updated_by: admin.id,
     })
@@ -236,6 +266,14 @@ export type AgreementDraftInput = {
   renewalTerms: string | null;
   cancellationTerms: string | null;
   additionalNotes: string | null;
+  // Free Pilot Program fields - only read/validated when the agreement's
+  // own campaign_type is 'free_pilot' (campaign_type itself is set once
+  // at creation and never accepted here).
+  pilotDuration: string | null;
+  pilotEndDate: string | null;
+  expectedCallVolume: string | null;
+  qualificationCriteria: string | null;
+  resultsReviewDate: string | null;
 };
 
 // Editing a draft (brief section 3/11 "Edit Draft"). Only ever allowed
@@ -245,17 +283,33 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { data: agreement } = await supabase.from("crm_client_agreements").select("status").eq("id", agreementId).maybeSingle();
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("status, campaign_type").eq("id", agreementId).maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be edited. Create a new version instead." };
 
   if (!AGREEMENT_SERVICE_TYPES.includes(input.serviceType)) return { error: "Invalid service type." };
   if (!AGREEMENT_TARGET_TYPES.includes(input.targetType)) return { error: "Invalid target type." };
-  if (!AGREEMENT_BILLING_FREQUENCIES.includes(input.billingFrequency)) return { error: "Invalid billing frequency." };
   if (!isValidEmail(input.businessEmail)) return { error: "A valid business email is required." };
   if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Monthly target must be a positive number." };
-  if (input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
 
+  const isPilot = agreement.campaign_type === "free_pilot";
+
+  if (isPilot) {
+    if (!input.pilotDuration?.trim()) return { error: "Pilot duration is required." };
+    if (!input.pilotEndDate) return { error: "Pilot end date is required." };
+    if (!input.resultsReviewDate) return { error: "Results-review date is required." };
+    if (!input.expectedCallVolume?.trim()) return { error: "Expected call volume or lead-list size is required." };
+    if (!input.qualificationCriteria?.trim()) return { error: "Qualification criteria is required." };
+    if (input.targetIndustries.length === 0) return { error: "At least one target industry is required." };
+    if (input.targetLocations.length === 0) return { error: "At least one target location is required." };
+  } else {
+    if (!AGREEMENT_BILLING_FREQUENCIES.includes(input.billingFrequency)) return { error: "Invalid billing frequency." };
+    if (input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
+  }
+
+  // A free pilot always shows Pilot Fee: $0 / Setup Fee: $0 - forced
+  // server-side regardless of what was submitted, even though the UI
+  // never renders fee inputs for a pilot draft.
   const { error } = await supabase
     .from("crm_client_agreements")
     .update({
@@ -265,8 +319,8 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
       service_type: input.serviceType,
       target_type: input.targetType,
       monthly_target: input.monthlyTarget,
-      monthly_fee: input.monthlyFee,
-      setup_fee: input.setupFee,
+      monthly_fee: isPilot ? 0 : input.monthlyFee,
+      setup_fee: isPilot ? 0 : input.setupFee,
       target_industries: input.targetIndustries,
       target_locations: input.targetLocations,
       campaign_start_date: input.campaignStartDate,
@@ -276,6 +330,11 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
       renewal_terms: input.renewalTerms,
       cancellation_terms: input.cancellationTerms,
       additional_notes: input.additionalNotes,
+      pilot_duration: isPilot ? input.pilotDuration : null,
+      pilot_end_date: isPilot ? input.pilotEndDate : null,
+      expected_call_volume: isPilot ? input.expectedCallVolume : null,
+      qualification_criteria: isPilot ? input.qualificationCriteria : null,
+      results_review_date: isPilot ? input.resultsReviewDate : null,
       updated_by: admin.id,
     })
     .eq("id", agreementId);
@@ -365,8 +424,13 @@ export async function recordAgreementInvoiceAction(
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { data: agreement } = await supabase.from("crm_client_agreements").select("id, status, client_id, opportunity_id").eq("id", agreementId).maybeSingle();
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, status, client_id, opportunity_id, campaign_type")
+    .eq("id", agreementId)
+    .maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type === "free_pilot") return { error: "Free pilot programs do not use invoices." };
   if (agreement.status !== "signed") return { error: "The agreement must be signed before recording an invoice." };
 
   const { data: submission } = await supabase
@@ -484,6 +548,332 @@ export async function archiveAgreementAction(agreementId: string): Promise<Actio
 
   const admin_ = getSupabaseAdmin();
   await admin_.from("crm_agreement_events").insert({ agreement_id: agreementId, event_type: "archived", actor_type: "admin" });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/agreements");
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Free Pilot Program lifecycle: Pilot Agreed -> Pilot Agreement Signed ->
+// Intake Form Sent -> Intake Received -> Admin Activates Pilot -> Pilot
+// Active -> Results Review -> Convert to Paid Monthly Campaign / Extend
+// Pilot / Close Pilot. Every action here starts with requireCrmAdmin() -
+// "Only Growth CRM admins can create, activate, extend, convert or close
+// a pilot."
+// ---------------------------------------------------------------------
+
+// "Admin Activates Pilot" - only reachable once signed and the intake
+// form has been received, mirroring the same precondition the standard
+// flow's recordAgreementInvoiceAction already applies. Sets the client to
+// the existing (previously unused) crm_clients.status = 'Pilot' value.
+export async function activatePilotAction(agreementId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, status, campaign_type, pilot_status, client_id, opportunity_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can be activated." };
+  if (agreement.status !== "signed") return { error: "The pilot agreement must be signed before it can be activated." };
+  if (agreement.pilot_status !== "not_started") return { error: "This pilot has already been activated." };
+
+  const { data: submission } = await supabase.from("crm_intake_submissions").select("id").eq("agreement_id", agreementId).maybeSingle();
+  if (!submission) return { error: "The intake form must be received before the pilot can be activated." };
+
+  const { error } = await supabase.from("crm_client_agreements").update({ pilot_status: "active", updated_by: admin.id }).eq("id", agreementId);
+  if (error) return { error: "Failed to activate the pilot." };
+
+  await supabase.from("crm_clients").update({ status: "Pilot" }).eq("id", agreement.client_id);
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "pilot_activated",
+    notes: `Pilot activated by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return {};
+}
+
+// Moves an active pilot into the results-review gate that unlocks
+// Convert / Extend / Close.
+export async function startPilotResultsReviewAction(agreementId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, pilot_status, client_id, opportunity_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can enter results review." };
+  if (agreement.pilot_status !== "active") return { error: "The pilot must be active before starting results review." };
+
+  const { error } = await supabase.from("crm_client_agreements").update({ pilot_status: "results_review", updated_by: admin.id }).eq("id", agreementId);
+  if (error) return { error: "Failed to start results review." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "pilot_results_review_started",
+    notes: `Results review started by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return {};
+}
+
+export type PilotResultsInput = {
+  callsCompleted: number | null;
+  decisionMakersReached: number | null;
+  interestedProspects: number | null;
+  informationEmailsSent: number | null;
+  qualifiedLeads: number | null;
+  appointmentsBooked: number | null;
+  commonObjections: string | null;
+  marketResponse: string | null;
+  adminRecommendation: string | null;
+};
+
+// The pilot results dashboard - admin-editable at any point once the
+// pilot exists (not gated on a particular pilot_status), since results
+// come in progressively during and after the pilot runs. Upserts so the
+// admin can keep refining the same record rather than creating
+// duplicates.
+export async function savePilotResultsAction(agreementId: string, input: PilotResultsInput): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("id, campaign_type, client_id, opportunity_id").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot") return { error: "Pilot results only apply to a Free Pilot Program agreement." };
+
+  const { error } = await supabase.from("crm_pilot_results").upsert(
+    {
+      agreement_id: agreementId,
+      calls_completed: input.callsCompleted,
+      decision_makers_reached: input.decisionMakersReached,
+      interested_prospects: input.interestedProspects,
+      information_emails_sent: input.informationEmailsSent,
+      qualified_leads: input.qualifiedLeads,
+      appointments_booked: input.appointmentsBooked,
+      common_objections: input.commonObjections,
+      market_response: input.marketResponse,
+      admin_recommendation: input.adminRecommendation,
+      updated_by: admin.id,
+    },
+    { onConflict: "agreement_id" }
+  );
+  if (error) return { error: "Failed to save the pilot results." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "pilot_results_recorded",
+    notes: `Pilot results updated by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return {};
+}
+
+export type ConvertPilotInput = {
+  monthlyFee: number;
+  setupFee: number | null;
+  monthlyTarget: number;
+  campaignStartDate: string | null;
+  billingFrequency: AgreementBillingFrequency;
+  paymentDueTerms: string | null;
+};
+
+// "Convert to Paid Monthly Campaign" (brief: "must create a new agreement
+// containing the monthly fee, target, start date and billing terms").
+// Creates a brand-new draft standard agreement (supersedes_id pointing
+// back at the pilot for traceability) that the admin then edits/reviews/
+// sends through the *exact* existing pipeline - which already
+// auto-creates its own intake config the moment the client signs it (see
+// acceptAgreementAction), so nothing else needs to change. The original
+// pilot is preserved untouched other than status/pilot_status.
+export async function convertPilotToPaidCampaignAction(pilotAgreementId: string, input: ConvertPilotInput): Promise<ActionResult & { agreementId?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  if (!AGREEMENT_BILLING_FREQUENCIES.includes(input.billingFrequency)) return { error: "Invalid billing frequency." };
+  if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Monthly target must be a positive number." };
+  if (input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
+
+  const { data: pilot } = await supabase.from("crm_client_agreements").select("*").eq("id", pilotAgreementId).maybeSingle();
+  if (!pilot) return { error: "Pilot agreement not found." };
+  if (pilot.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can be converted." };
+  if (pilot.pilot_status !== "results_review") return { error: "The pilot must be in results review before it can be converted." };
+
+  const template = await getActiveAgreementTemplate(supabase, "client_service_agreement");
+  if (!template) return { error: "No standard agreement template is configured." };
+
+  const { data: newAgreement, error: insertError } = await supabase
+    .from("crm_client_agreements")
+    .insert({
+      client_id: pilot.client_id,
+      opportunity_id: pilot.opportunity_id,
+      template_id: template.id,
+      campaign_type: "standard_monthly",
+      supersedes_id: pilotAgreementId,
+      version: pilot.version + 1,
+      legal_business_name: pilot.legal_business_name,
+      contact_person: pilot.contact_person,
+      business_email: pilot.business_email,
+      service_type: pilot.service_type,
+      monthly_target: input.monthlyTarget,
+      monthly_fee: input.monthlyFee,
+      setup_fee: input.setupFee,
+      target_industries: pilot.target_industries,
+      target_locations: pilot.target_locations,
+      campaign_start_date: input.campaignStartDate,
+      billing_frequency: input.billingFrequency,
+      payment_due_terms: input.paymentDueTerms,
+      created_by: admin.id,
+      updated_by: admin.id,
+    })
+    .select("id")
+    .single();
+  if (insertError || !newAgreement) return { error: "Failed to create the paid campaign agreement." };
+
+  const { error: updateError } = await supabase
+    .from("crm_client_agreements")
+    .update({ status: "superseded", pilot_status: "converted", updated_by: admin.id })
+    .eq("id", pilotAgreementId);
+  if (updateError) return { error: "The new agreement was created, but the pilot could not be marked converted." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: pilot.client_id,
+    opportunityId: pilot.opportunity_id,
+    admin,
+    activityType: "pilot_converted",
+    notes: `Pilot converted to a paid monthly campaign by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/agreements");
+  revalidatePath(`/admin/crm/agreements/${pilotAgreementId}`);
+  return { agreementId: newAgreement.id as string };
+}
+
+export type ExtendPilotInput = {
+  newEndDate: string;
+  newTarget: number;
+};
+
+// "Extend Pilot" (brief: "must create a new pilot agreement or amendment
+// with the new end date and target"). Same shape as conversion above, but
+// stays a Free Pilot Program agreement - copies every other pilot field
+// forward unchanged.
+export async function extendPilotAction(pilotAgreementId: string, input: ExtendPilotInput): Promise<ActionResult & { agreementId?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.newTarget || input.newTarget <= 0) return { error: "The new target must be a positive number." };
+  if (!input.newEndDate) return { error: "A new end date is required." };
+
+  const { data: pilot } = await supabase.from("crm_client_agreements").select("*").eq("id", pilotAgreementId).maybeSingle();
+  if (!pilot) return { error: "Pilot agreement not found." };
+  if (pilot.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can be extended." };
+  if (pilot.pilot_status !== "results_review") return { error: "The pilot must be in results review before it can be extended." };
+
+  const { data: newAgreement, error: insertError } = await supabase
+    .from("crm_client_agreements")
+    .insert({
+      client_id: pilot.client_id,
+      opportunity_id: pilot.opportunity_id,
+      template_id: pilot.template_id,
+      campaign_type: "free_pilot",
+      supersedes_id: pilotAgreementId,
+      version: pilot.version + 1,
+      legal_business_name: pilot.legal_business_name,
+      contact_person: pilot.contact_person,
+      business_email: pilot.business_email,
+      service_type: pilot.service_type,
+      monthly_target: input.newTarget,
+      monthly_fee: 0,
+      setup_fee: 0,
+      target_industries: pilot.target_industries,
+      target_locations: pilot.target_locations,
+      campaign_start_date: pilot.campaign_start_date,
+      pilot_duration: pilot.pilot_duration,
+      pilot_end_date: input.newEndDate,
+      expected_call_volume: pilot.expected_call_volume,
+      qualification_criteria: pilot.qualification_criteria,
+      results_review_date: pilot.results_review_date,
+      created_by: admin.id,
+      updated_by: admin.id,
+    })
+    .select("id")
+    .single();
+  if (insertError || !newAgreement) return { error: "Failed to create the extended pilot agreement." };
+
+  const { error: updateError } = await supabase
+    .from("crm_client_agreements")
+    .update({ status: "superseded", pilot_status: "extended", updated_by: admin.id })
+    .eq("id", pilotAgreementId);
+  if (updateError) return { error: "The new pilot agreement was created, but the original could not be marked extended." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: pilot.client_id,
+    opportunityId: pilot.opportunity_id,
+    admin,
+    activityType: "pilot_extended",
+    notes: `Pilot extended by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/agreements");
+  revalidatePath(`/admin/crm/agreements/${pilotAgreementId}`);
+  return { agreementId: newAgreement.id as string };
+}
+
+// "Close Pilot" - reuses the same archived-status visibility as the
+// generic Archive action (never deletes) but is logged distinctly for a
+// clearer audit trail, and requires results review first so a pilot
+// can't be closed out from under an active engagement by mistake.
+export async function closePilotAction(agreementId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, pilot_status, client_id, opportunity_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can be closed." };
+  if (agreement.pilot_status !== "results_review") return { error: "The pilot must be in results review before it can be closed." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ status: "archived", pilot_status: "closed", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: "Failed to close the pilot." };
+
+  const admin_ = getSupabaseAdmin();
+  await admin_.from("crm_agreement_events").insert({ agreement_id: agreementId, event_type: "archived", actor_type: "admin" });
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "pilot_closed",
+    notes: `Pilot closed by ${performedByName(admin)}.`,
+  });
 
   revalidatePath("/admin/crm/onboarding");
   revalidatePath("/admin/crm/agreements");

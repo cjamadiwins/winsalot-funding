@@ -1,7 +1,13 @@
 import "server-only";
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { WINSALOT_LOGO_DATA_URI } from "./winsalot-logo-base64";
-import { renderAgreementTemplate, AGREEMENT_SERVICE_TYPE_LABELS, type CrmAgreementTemplateRow, type CrmClientAgreementRow } from "./crm-agreement-types";
+import {
+  renderAgreementTemplate,
+  AGREEMENT_SERVICE_TYPE_LABELS,
+  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  type CrmAgreementTemplateRow,
+  type CrmClientAgreementRow,
+} from "./crm-agreement-types";
 
 // Signed Client Service Agreement PDF - same brand language (dark-blue
 // header, "Empowering Businesses, One Solution at a Time.", contact
@@ -51,9 +57,10 @@ export type AgreementPdfProps = {
 
 export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps) {
   const sections = renderAgreementTemplate(template, agreement);
+  const isPilot = agreement.campaign_type === "free_pilot";
 
   return (
-    <Document title={`Client Service Agreement - ${agreement.legal_business_name}`}>
+    <Document title={`${isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Client Service Agreement"} - ${agreement.legal_business_name}`}>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
           <View>
@@ -66,7 +73,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
           </View>
           <View>
-            <Text style={styles.docTitle}>CLIENT SERVICE AGREEMENT</Text>
+            <Text style={styles.docTitle}>{isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL.toUpperCase() : "CLIENT SERVICE AGREEMENT"}</Text>
             <Text style={styles.docMeta}>Version {agreement.version}</Text>
             <Text style={styles.docMeta}>Status: {agreement.status}</Text>
           </View>
@@ -83,26 +90,43 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <Text style={styles.label}>Service Type</Text>
             <Text style={styles.value}>{AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type]}</Text>
             <View style={{ marginTop: 8 }}>
-              <Text style={styles.label}>Campaign Start Date</Text>
+              <Text style={styles.label}>{isPilot ? "Start Date" : "Campaign Start Date"}</Text>
               <Text style={styles.value}>{formatDate(agreement.campaign_start_date)}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.sectionRow}>
-          <View>
-            <Text style={styles.label}>Monthly Fee</Text>
-            <Text style={styles.value}>{formatCurrency(agreement.monthly_fee)}</Text>
+        {isPilot ? (
+          <View style={styles.sectionRow}>
+            <View>
+              <Text style={styles.label}>Pilot Fee</Text>
+              <Text style={styles.value}>$0.00</Text>
+            </View>
+            <View>
+              <Text style={styles.label}>Setup Fee</Text>
+              <Text style={styles.value}>$0.00</Text>
+            </View>
+            <View>
+              <Text style={styles.label}>End Date</Text>
+              <Text style={styles.value}>{formatDate(agreement.pilot_end_date)}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.label}>Setup Fee</Text>
-            <Text style={styles.value}>{agreement.setup_fee ? formatCurrency(agreement.setup_fee) : "None"}</Text>
+        ) : (
+          <View style={styles.sectionRow}>
+            <View>
+              <Text style={styles.label}>Monthly Fee</Text>
+              <Text style={styles.value}>{formatCurrency(agreement.monthly_fee)}</Text>
+            </View>
+            <View>
+              <Text style={styles.label}>Setup Fee</Text>
+              <Text style={styles.value}>{agreement.setup_fee ? formatCurrency(agreement.setup_fee) : "None"}</Text>
+            </View>
+            <View>
+              <Text style={styles.label}>Billing Frequency</Text>
+              <Text style={styles.value}>{agreement.billing_frequency}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.label}>Billing Frequency</Text>
-            <Text style={styles.value}>{agreement.billing_frequency}</Text>
-          </View>
-        </View>
+        )}
 
         {sections.map((section) => (
           <View style={styles.section} key={section.key} wrap={false}>

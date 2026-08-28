@@ -3,8 +3,11 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   deriveCrmOnboardingStage,
   nextRequiredAction,
+  deriveCrmPilotStage,
+  nextRequiredPilotAction,
   AGREEMENT_SERVICE_TYPE_LABELS,
   INVOICE_TRACKER_STATUS_LABELS,
+  CAMPAIGN_TYPE_LABELS,
   type CrmClientAgreementRow,
   type CrmIntakeConfigRow,
   type CrmAgreementInvoiceRow,
@@ -50,33 +53,43 @@ export default async function AdminCrmOnboardingPage() {
     const hasSubmission = submittedAgreementIds.has(agreement.id);
     const invoice = invoiceByAgreement.get(agreement.id) ?? null;
     const clientStatus = client?.status ?? "Prospect";
+    const isPilot = agreement.campaign_type === "free_pilot";
 
-    const stage = deriveCrmOnboardingStage({
-      agreement: { status: agreement.status },
-      intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
-      submission: hasSubmission ? { id: "x" } : null,
-      invoice: invoice ? { status: invoice.status } : null,
-      clientStatus,
-    });
+    const stage = isPilot
+      ? deriveCrmPilotStage({
+          agreement: { status: agreement.status, pilot_status: agreement.pilot_status },
+          intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
+          submission: hasSubmission ? { id: "x" } : null,
+        })
+      : deriveCrmOnboardingStage({
+          agreement: { status: agreement.status },
+          intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
+          submission: hasSubmission ? { id: "x" } : null,
+          invoice: invoice ? { status: invoice.status } : null,
+          clientStatus,
+        });
 
     return {
       agreementId: agreement.id,
       clientId: agreement.client_id,
       clientName: client?.company_name ?? agreement.legal_business_name,
       contactPerson: agreement.contact_person,
+      campaignTypeLabel: CAMPAIGN_TYPE_LABELS[agreement.campaign_type],
       serviceTypeLabel: AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type],
       monthlyTarget: agreement.monthly_target,
       monthlyFee: agreement.monthly_fee,
       stage,
-      nextAction: nextRequiredAction(stage),
+      nextAction: isPilot ? nextRequiredPilotAction(stage as Parameters<typeof nextRequiredPilotAction>[0]) : nextRequiredAction(stage as Parameters<typeof nextRequiredAction>[0]),
       agreementStatus: agreement.status,
+      isPilot,
+      pilotStatus: agreement.pilot_status,
       intakeConfigId: intakeConfig?.id ?? null,
       intakeStatus: intakeConfig ? (hasSubmission ? "Received" : intakeConfig.status === "sent" ? "Sent" : "Draft") : "Not started",
       invoiceId: invoice?.id ?? null,
-      invoiceStatusLabel: invoice ? INVOICE_TRACKER_STATUS_LABELS[invoice.status] : "Not started",
+      invoiceStatusLabel: isPilot ? "Not Applicable (Free Pilot)" : invoice ? INVOICE_TRACKER_STATUS_LABELS[invoice.status] : "Not started",
       paymentReceived: invoice?.status === "payment_received",
       campaignStatus: clientStatus,
-      canRecordInvoice: agreement.status === "signed" && hasSubmission && !invoice,
+      canRecordInvoice: !isPilot && agreement.status === "signed" && hasSubmission && !invoice,
     };
   });
 

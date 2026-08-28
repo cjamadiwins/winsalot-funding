@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveAgreementToken } from "@/lib/crm-agreement-tokens";
-import { renderAgreementTemplate, AGREEMENT_SERVICE_TYPE_LABELS, type CrmAgreementTemplateRow, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
+import {
+  renderAgreementTemplate,
+  AGREEMENT_SERVICE_TYPE_LABELS,
+  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  type CrmAgreementTemplateRow,
+  type CrmClientAgreementRow,
+} from "@/lib/crm-agreement-types";
 import { recordAgreementOpenedAction } from "./actions";
 import AgreementSignClient from "./AgreementSignClient";
 
@@ -48,6 +54,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
   await recordAgreementOpenedAction(token);
 
   const sections = renderAgreementTemplate(template as Pick<CrmAgreementTemplateRow, "content">, agreement as CrmClientAgreementRow);
+  const isPilot = agreement.campaign_type === "free_pilot";
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -57,7 +64,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">Client Service Agreement</h2>
+        <h2 className="text-xl font-bold text-slate-900">{isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Client Service Agreement"}</h2>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="font-semibold text-slate-500">Client</dt>
@@ -67,16 +74,35 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
             <dt className="font-semibold text-slate-500">Service Type</dt>
             <dd className="text-slate-900">{AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type as keyof typeof AGREEMENT_SERVICE_TYPE_LABELS]}</dd>
           </div>
-          <div>
-            <dt className="font-semibold text-slate-500">Monthly Fee</dt>
-            <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()}</dd>
-          </div>
-          {agreement.setup_fee ? (
-            <div>
-              <dt className="font-semibold text-slate-500">Setup Fee</dt>
-              <dd className="text-slate-900">${Number(agreement.setup_fee).toLocaleString()}</dd>
-            </div>
-          ) : null}
+          {isPilot ? (
+            <>
+              <div>
+                <dt className="font-semibold text-slate-500">Pilot Fee</dt>
+                <dd className="text-slate-900">$0</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-500">Setup Fee</dt>
+                <dd className="text-slate-900">$0</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-500">End Date</dt>
+                <dd className="text-slate-900">{formatDate(agreement.pilot_end_date)}</dd>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <dt className="font-semibold text-slate-500">Monthly Fee</dt>
+                <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()}</dd>
+              </div>
+              {agreement.setup_fee ? (
+                <div>
+                  <dt className="font-semibold text-slate-500">Setup Fee</dt>
+                  <dd className="text-slate-900">${Number(agreement.setup_fee).toLocaleString()}</dd>
+                </div>
+              ) : null}
+            </>
+          )}
         </dl>
 
         <div className="mt-6 space-y-5">

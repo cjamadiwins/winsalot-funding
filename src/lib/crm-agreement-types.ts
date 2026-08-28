@@ -4,6 +4,10 @@
 // crm_clients/crm_opportunities rather than duplicating them, and keeps
 // the lightweight invoice/payment tracker here fully separate from the
 // existing crm_invoices system.
+//
+// The Free Pilot Program option (migration 0098) is a second branch
+// through this same schema, distinguished by campaign_type on
+// crm_client_agreements - see that migration's header comment.
 
 export const AGREEMENT_STATUSES = ["draft", "sent", "signed", "superseded", "archived"] as const;
 export type AgreementStatus = (typeof AGREEMENT_STATUSES)[number];
@@ -35,11 +39,26 @@ export const INVOICE_TRACKER_STATUS_LABELS: Record<InvoiceTrackerStatus, string>
 export const INTAKE_CONFIG_STATUSES = ["draft", "sent"] as const;
 export type IntakeConfigStatus = (typeof INTAKE_CONFIG_STATUSES)[number];
 
+export const AGREEMENT_TEMPLATE_KINDS = ["client_service_agreement", "pilot_program_agreement"] as const;
+export type AgreementTemplateKind = (typeof AGREEMENT_TEMPLATE_KINDS)[number];
+
+export const CAMPAIGN_TYPES = ["standard_monthly", "free_pilot"] as const;
+export type CampaignType = (typeof CAMPAIGN_TYPES)[number];
+
+export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
+  standard_monthly: "Standard Monthly Campaign",
+  free_pilot: "Free Pilot Program",
+};
+
+export const PILOT_STATUSES = ["not_started", "active", "results_review", "converted", "extended", "closed"] as const;
+export type PilotStatus = (typeof PILOT_STATUSES)[number];
+
 export type CrmAgreementTemplateRow = {
   id: string;
   created_at: string;
   updated_at: string;
   version: number;
+  kind: AgreementTemplateKind;
   content: { key: string; title: string; body: string }[];
 };
 
@@ -80,6 +99,19 @@ export type CrmClientAgreementRow = {
   renewal_terms: string | null;
   cancellation_terms: string | null;
   additional_notes: string | null;
+
+  // Free Pilot Program fields - irrelevant/unused when campaign_type is
+  // 'standard_monthly'. campaign_type is set once at creation and never
+  // edited afterward (a new agreement/amendment is required instead - see
+  // migration 0098's header comment). pilot_status tracks the pilot-only
+  // lifecycle independently of the shared `status` column above.
+  campaign_type: CampaignType;
+  pilot_status: PilotStatus;
+  pilot_duration: string | null;
+  pilot_end_date: string | null;
+  expected_call_volume: string | null;
+  qualification_criteria: string | null;
+  results_review_date: string | null;
 
   admin_reviewed_confirmation: boolean;
 
@@ -130,6 +162,26 @@ export type CrmAgreementInvoiceRow = {
   payment_due_date: string | null;
   status: InvoiceTrackerStatus;
   paid_at: string | null;
+};
+
+// Pilot results dashboard - one row per pilot agreement, admin-editable
+// at any time (not gated by the signed-agreement immutability trigger,
+// since results are recorded during/after the pilot runs).
+export type CrmPilotResultsRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+  agreement_id: string;
+  calls_completed: number | null;
+  decision_makers_reached: number | null;
+  interested_prospects: number | null;
+  information_emails_sent: number | null;
+  qualified_leads: number | null;
+  appointments_booked: number | null;
+  common_objections: string | null;
+  market_response: string | null;
+  admin_recommendation: string | null;
 };
 
 // A custom, admin-editable intake question - see item 8's list (services
@@ -254,13 +306,32 @@ export function renderAgreementTemplate(
 }
 
 // Item 7's exact conditional wording for the locked target field on the
-// public intake form.
-export function agreedTargetLabel(serviceType: AgreementServiceType): string {
+// public intake form. A pilot's target is for the whole pilot period, not
+// "per month", so it gets its own wording when campaignType is passed as
+// 'free_pilot' (the standard, brief-mandated wording is unchanged when
+// campaignType is omitted or 'standard_monthly').
+export function agreedTargetLabel(serviceType: AgreementServiceType, campaignType: CampaignType = "standard_monthly"): string {
+  if (campaignType === "free_pilot") {
+    return serviceType === "consultation_appointments" ? "Agreed Consultation Appointments (Pilot Target)" : "Agreed Qualified Leads (Pilot Target)";
+  }
   return serviceType === "consultation_appointments" ? "Agreed Consultation Appointments Per Month" : "Agreed Qualified Leads Per Month";
 }
 
 export const AGREED_TARGET_NOTICE =
   "This target is based on your signed service agreement. Please contact Winsalot Corp if a change is required.";
+
+export const PILOT_TARGET_NOTICE =
+  "This target is based on your signed pilot program agreement. Please contact Winsalot Corp if a change is required.";
+
+// The exact required Free Pilot Program disclosure paragraph (verbatim,
+// no interpolation needed - it reads generically). Also baked directly
+// into the seeded pilot template's own body (migration 0098) so the
+// agreement preview/PDF/public sign page all show identical wording;
+// exported here for reuse (e.g. the fee-summary badge) and for tests.
+export const PILOT_PROGRAM_DISCLOSURE =
+  "Winsalot Corp will provide this pilot program at no charge for the agreed period and scope. The agreed number of qualified leads or appointments is a target and not a guarantee. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp does not guarantee that a lead or appointment will result in a sale. The pilot will end on the stated end date unless both parties agree in writing to extend it or begin a paid monthly campaign.";
+
+export const COMPLIMENTARY_PILOT_PROGRAM_LABEL = "Complimentary Pilot Program";
 
 // ---------------------------------------------------------------------
 // Onboarding stage - derived, never stored (see migration 0097's header
@@ -324,6 +395,73 @@ export function nextRequiredAction(stage: OnboardingStage): string {
       return "Activate the campaign";
     case "Campaign Active":
       return "None - onboarding complete";
+  }
+}
+
+// ---------------------------------------------------------------------
+// Free Pilot Program stage - derived, never stored, same "walk the
+// required pipeline in order" style as deriveCrmOnboardingStage above
+// (migration 0098's header comment). pilot_status only ever advances
+// forward (not_started -> active -> results_review -> converted/
+// extended/closed), so those states short-circuit first; below that, the
+// stage falls back to the shared agreement/intake state exactly like the
+// standard pipeline does, since a pilot walks the very same draft/sent/
+// signed + intake-config/submission machinery before pilot_status ever
+// starts moving.
+// ---------------------------------------------------------------------
+export const PILOT_STAGES = [
+  "Pilot Agreed",
+  "Pilot Agreement Signed",
+  "Intake Form Sent",
+  "Intake Received",
+  "Pilot Active",
+  "Results Review",
+  "Converted to Paid Campaign",
+  "Pilot Extended",
+  "Pilot Closed",
+] as const;
+export type PilotStage = (typeof PILOT_STAGES)[number];
+
+export function deriveCrmPilotStage(input: {
+  agreement: Pick<CrmClientAgreementRow, "status" | "pilot_status">;
+  intakeConfig: Pick<CrmIntakeConfigRow, "status"> | null;
+  submission: Pick<CrmIntakeSubmissionRow, "id"> | null;
+}): PilotStage {
+  const { agreement, intakeConfig, submission } = input;
+
+  if (agreement.pilot_status === "converted") return "Converted to Paid Campaign";
+  if (agreement.pilot_status === "extended") return "Pilot Extended";
+  if (agreement.pilot_status === "closed") return "Pilot Closed";
+  if (agreement.pilot_status === "results_review") return "Results Review";
+  if (agreement.pilot_status === "active") return "Pilot Active";
+  if (submission) return "Intake Received";
+  if (intakeConfig?.status === "sent") return "Intake Form Sent";
+  if (agreement.status === "signed") return "Pilot Agreement Signed";
+  return "Pilot Agreed";
+}
+
+// Human-readable "what to do next" for a pilot row on the onboarding
+// dashboard, mirroring deriveCrmPilotStage's own precedence.
+export function nextRequiredPilotAction(stage: PilotStage): string {
+  switch (stage) {
+    case "Pilot Agreed":
+      return "Review and send the pilot agreement";
+    case "Pilot Agreement Signed":
+      return "Customize and send the intake form";
+    case "Intake Form Sent":
+      return "Waiting for the client to submit the intake form";
+    case "Intake Received":
+      return "Activate the pilot";
+    case "Pilot Active":
+      return "Start results review once the pilot period ends";
+    case "Results Review":
+      return "Convert to a paid campaign, extend the pilot, or close it";
+    case "Converted to Paid Campaign":
+      return "Continue onboarding on the new paid agreement";
+    case "Pilot Extended":
+      return "Continue onboarding on the new pilot agreement";
+    case "Pilot Closed":
+      return "None - pilot closed";
   }
 }
 
