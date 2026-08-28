@@ -9,12 +9,17 @@ import {
   AGREEMENT_SERVICE_TYPES,
   AGREEMENT_TARGET_TYPES,
   AGREEMENT_BILLING_FREQUENCIES,
+  AGREEMENT_CURRENCIES,
   CAMPAIGN_TYPES,
+  CLIENT_MANUAL_STATUSES,
+  isAgreementLocked,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
+  type AgreementCurrency,
   type AgreementTemplateKind,
   type CampaignType,
+  type ClientManualStatus,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "@/lib/crm-agreement-types";
@@ -874,6 +879,151 @@ export async function closePilotAction(agreementId: string): Promise<ActionResul
     activityType: "pilot_closed",
     notes: `Pilot closed by ${performedByName(admin)}.`,
   });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/agreements");
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// The Manage action (migration 0099): a direct Edit/Delete on any
+// onboarding record from the dashboard, without walking the full
+// agreement lifecycle. Contact info/phone/the manual Client Status
+// label/notes are always editable; the record's commercial/legal terms
+// (service, program type, pricing/currency, pilot dates/goal) are only
+// editable while unsigned - isAgreementLocked() (src/lib/crm-agreement-types.ts)
+// is the single source of truth for that boundary, computed here from
+// the freshly-fetched row rather than trusted from the client, exactly
+// like every other server-side re-check in this file.
+// ---------------------------------------------------------------------
+
+export type ManageOnboardingRecordInput = {
+  legalBusinessName: string;
+  contactPerson: string;
+  businessEmail: string;
+  phone: string | null;
+  manualStatus: ClientManualStatus | null;
+  additionalNotes: string | null;
+  // Only applied when the record is not locked (see isAgreementLocked).
+  serviceType: AgreementServiceType;
+  campaignType: CampaignType;
+  monthlyTarget: number;
+  monthlyFee: number;
+  setupFee: number | null;
+  currency: AgreementCurrency;
+  campaignStartDate: string | null;
+  pilotEndDate: string | null;
+};
+
+export async function updateOnboardingRecordAction(agreementId: string, input: ManageOnboardingRecordInput): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("*").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Record not found." };
+
+  if (!input.legalBusinessName.trim()) return { error: "Business name is required." };
+  if (!input.contactPerson.trim()) return { error: "Contact name is required." };
+  if (!isValidEmail(input.businessEmail)) return { error: "A valid email address is required." };
+  if (input.manualStatus !== null && !CLIENT_MANUAL_STATUSES.includes(input.manualStatus)) return { error: "Invalid client status." };
+
+  const updates: Record<string, unknown> = {
+    legal_business_name: input.legalBusinessName.trim(),
+    contact_person: input.contactPerson.trim(),
+    business_email: input.businessEmail.trim(),
+    phone: input.phone?.trim() || null,
+    manual_status: input.manualStatus,
+    additional_notes: input.additionalNotes?.trim() || null,
+    updated_by: admin.id,
+  };
+
+  const locked = isAgreementLocked(agreement as Pick<CrmClientAgreementRow, "accepted_at">);
+
+  if (!locked) {
+    if (!AGREEMENT_SERVICE_TYPES.includes(input.serviceType)) return { error: "Invalid service type." };
+    if (!CAMPAIGN_TYPES.includes(input.campaignType)) return { error: "Invalid campaign type." };
+    if (!AGREEMENT_CURRENCIES.includes(input.currency)) return { error: "Invalid currency." };
+    if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Target must be a positive number." };
+
+    const isPilot = input.campaignType === "free_pilot";
+    updates.service_type = input.serviceType;
+    updates.monthly_target = input.monthlyTarget;
+    updates.monthly_fee = isPilot ? 0 : input.monthlyFee;
+    updates.setup_fee = isPilot ? 0 : input.setupFee;
+    updates.currency = input.currency;
+    updates.campaign_start_date = input.campaignStartDate;
+    if (isPilot) updates.pilot_end_date = input.pilotEndDate;
+
+    if (input.campaignType !== agreement.campaign_type) {
+      const template = await getActiveAgreementTemplate(supabase, templateKindFor(input.campaignType));
+      if (!template) return { error: "No agreement template is configured for that program type." };
+      updates.campaign_type = input.campaignType;
+      updates.template_id = template.id;
+    }
+  }
+
+  const { error } = await supabase.from("crm_client_agreements").update(updates).eq("id", agreementId);
+  if (error) return { error: "Failed to save the record." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "onboarding_record_updated",
+    notes: `Onboarding record updated by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return {};
+}
+
+// "Delete" - hard-deletes only a record that was never signed
+// (isAgreementLocked false); a signed record carries legally meaningful
+// data (the signed PDF, timestamps, intake answers) so it is archived
+// instead, exactly like the existing archive action, and the caller is
+// told this happened via `archivedInstead` rather than losing anything
+// silently.
+export async function deleteOnboardingRecordAction(agreementId: string): Promise<ActionResult & { archivedInstead?: boolean }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, status, accepted_at, client_id, opportunity_id, legal_business_name")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Record not found." };
+
+  if (isAgreementLocked(agreement as Pick<CrmClientAgreementRow, "accepted_at">)) {
+    if (agreement.status === "archived") return { error: "This record has already been archived." };
+
+    const { error } = await supabase.from("crm_client_agreements").update({ status: "archived", updated_by: admin.id }).eq("id", agreementId);
+    if (error) return { error: "Failed to archive the record." };
+
+    await logOnboardingActivity(supabase, {
+      clientId: agreement.client_id,
+      opportunityId: agreement.opportunity_id,
+      admin,
+      activityType: "onboarding_record_deleted",
+      notes: `"${agreement.legal_business_name}" has already been signed and cannot be permanently deleted - archived instead by ${performedByName(admin)}.`,
+    });
+
+    revalidatePath("/admin/crm/onboarding");
+    revalidatePath("/admin/crm/agreements");
+    return { archivedInstead: true };
+  }
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "onboarding_record_deleted",
+    notes: `Onboarding record "${agreement.legal_business_name}" permanently deleted by ${performedByName(admin)}.`,
+  });
+
+  const { error } = await supabase.from("crm_client_agreements").delete().eq("id", agreementId);
+  if (error) return { error: `Failed to delete this record: ${error.message}` };
 
   revalidatePath("/admin/crm/onboarding");
   revalidatePath("/admin/crm/agreements");
