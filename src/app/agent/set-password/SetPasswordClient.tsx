@@ -143,7 +143,7 @@ export default function SetPasswordClient() {
       return;
     }
 
-    router.push("/agent/dashboard");
+    router.push("/agent/onboarding");
   }
 
   return (

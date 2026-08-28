@@ -32,6 +32,35 @@ export async function requireCrmUser(): Promise<CrmUserRow> {
     redirect("/agent/login?error=Your account is not set up for the CRM yet.");
   }
 
+  if (crmUser.role === "agent") {
+    const { data: onboarding } = await supabase
+      .from("crm_agent_onboarding")
+      .select("status")
+      .eq("agent_id", crmUser.id)
+      .maybeSingle();
+
+    // No row means this account existed before onboarding was introduced.
+    if (onboarding && onboarding.status !== "approved") {
+      redirect("/agent/onboarding");
+    }
+  }
+
+  return crmUser as CrmUserRow;
+}
+
+export async function requireCrmOnboardingUser(): Promise<CrmUserRow> {
+  const supabase = await createSupabaseServerClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) redirect("/agent/login");
+
+  const { data: crmUser } = await supabase
+    .from("crm_users")
+    .select("*")
+    .eq("id", authData.user.id)
+    .eq("role", "agent")
+    .eq("active", true)
+    .maybeSingle();
+  if (!crmUser) redirect("/agent/login?error=Your account is not set up for the CRM yet.");
   return crmUser as CrmUserRow;
 }
 
