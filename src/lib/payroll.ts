@@ -96,22 +96,31 @@ export function calculateBasePayEarned(payableDays: number, standardBiweeklyPay:
   return Math.round(payableDays * rate * 100) / 100;
 }
 
-// Final Pay = Base Pay Earned + Incentives + Other Additions - Deductions.
-// Mirrors total_pay's generated-column expression exactly (base_pay_earned
-// + internet_allowance + bonus_commission + other_additions - deductions -
-// internet_allowance folds into "other additions" for display purposes but
-// is kept as its own legacy column at the database level, see migration
-// 0063's header comment) so a preview computed here before saving always
-// matches what the database will actually store.
+// Final Pay = Base Pay Earned + Incentives + Other Additions + Holiday Pay
+// - Deductions. Mirrors total_pay's generated-column expression exactly
+// (base_pay_earned + internet_allowance + bonus_commission +
+// other_additions + holiday_pay - deductions - internet_allowance folds
+// into "other additions" for display purposes but is kept as its own
+// legacy column at the database level, see migration 0063's header
+// comment) so a preview computed here before saving always matches what
+// the database will actually store. holidayPay defaults to 0 so existing
+// callers that predate the Holiday Pay feature (migration 0106) keep
+// computing the exact same total.
 export function calculateFinalPay(parts: {
   basePayEarned: number;
   internetAllowance: number;
   incentiveBonus: number;
   otherAdditions: number;
   deductions: number;
+  holidayPay?: number;
 }): number {
   const total =
-    parts.basePayEarned + parts.internetAllowance + parts.incentiveBonus + parts.otherAdditions - parts.deductions;
+    parts.basePayEarned +
+    parts.internetAllowance +
+    parts.incentiveBonus +
+    parts.otherAdditions +
+    (parts.holidayPay ?? 0) -
+    parts.deductions;
   return Math.round(total * 100) / 100;
 }
 
@@ -139,6 +148,7 @@ export type PayrollRecord = {
   internet_allowance: number;
   bonus_commission: number;
   other_additions: number;
+  holiday_pay: number;
   deductions: number;
   total_pay: number;
   status: PayrollStatus;
@@ -163,6 +173,7 @@ export type PayrollAuditAction =
   | "incentive_changed"
   | "deduction_changed"
   | "addition_changed"
+  | "holiday_pay_changed"
   | "notes_updated"
   | "approved"
   | "marked_paid"
@@ -177,6 +188,7 @@ export const PAYROLL_AUDIT_ACTION_LABELS: Record<PayrollAuditAction, string> = {
   incentive_changed: "Incentive/bonus changed",
   deduction_changed: "Deduction changed",
   addition_changed: "Other addition changed",
+  holiday_pay_changed: "Holiday pay changed",
   notes_updated: "Notes updated",
   approved: "Payroll approved",
   marked_paid: "Marked as paid",
@@ -211,6 +223,7 @@ export type PayrollAdjustableFields = Pick<
   | "approved_paid_leave_hours"
   | "bonus_commission"
   | "other_additions"
+  | "holiday_pay"
   | "internet_allowance"
   | "deductions"
   | "admin_notes"
@@ -293,6 +306,10 @@ export function buildPayrollAdjustmentAuditRows(
         to: { other_additions: after.other_additions, internet_allowance: after.internet_allowance },
       },
     });
+  }
+
+  if (before.holiday_pay !== after.holiday_pay) {
+    rows.push({ action: "holiday_pay_changed", details: { from: before.holiday_pay, to: after.holiday_pay } });
   }
 
   if (before.admin_notes !== after.admin_notes) {

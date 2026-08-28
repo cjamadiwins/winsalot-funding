@@ -28,6 +28,7 @@ export type PayStatementInput = {
   basePayEarned: number;
   incentiveBonus: number;
   otherAdditions: number;
+  holidayPay: number;
   internetAllowance: number;
   deductions: number;
   totalPay: number;
@@ -67,6 +68,7 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
     ["Internet Allowance", formatNgn(input.internetAllowance)],
     ["Incentives / Bonuses", formatNgn(input.incentiveBonus)],
     ["Other Additions", formatNgn(input.otherAdditions)],
+    ["Holiday Pay", formatNgn(input.holidayPay)],
   ];
 
   return `<!doctype html>

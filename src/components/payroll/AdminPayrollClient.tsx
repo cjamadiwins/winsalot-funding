@@ -64,6 +64,10 @@ type Props = {
     agentId: string,
     payday: string
   ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary }>;
+  loadHolidayPayAction: (
+    agentId: string,
+    payday: string
+  ) => Promise<{ error?: string; total?: number; items?: { holidayName: string; effectiveAmount: number; currency: string }[] }>;
   createAction: (formData: FormData) => Promise<ActionResult>;
   updateAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   approveAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
@@ -104,6 +108,7 @@ type FormValues = {
   approvedPaidLeaveHours: string;
   bonusCommission: string;
   otherAdditions: string;
+  holidayPay: string;
   internetAllowance: string;
   deductions: string;
 };
@@ -120,6 +125,7 @@ function defaultFormValues(record?: PayrollRecord): FormValues {
     approvedPaidLeaveHours: String(record?.approved_paid_leave_hours ?? 0),
     bonusCommission: String(record?.bonus_commission ?? 0),
     otherAdditions: String(record?.other_additions ?? 0),
+    holidayPay: String(record?.holiday_pay ?? 0),
     internetAllowance: String(record?.internet_allowance ?? FIXED_INTERNET_ALLOWANCE),
     deductions: String(record?.deductions ?? 0),
   };
@@ -133,6 +139,7 @@ function PayrollFormFields({
   lockAgent,
   requireConfirmApprovedEdit,
   loadAttendanceAction,
+  loadHolidayPayAction,
 }: {
   agents: Agent[];
   defaultAgentId?: string;
@@ -141,6 +148,7 @@ function PayrollFormFields({
   lockAgent?: boolean;
   requireConfirmApprovedEdit?: boolean;
   loadAttendanceAction: Props["loadAttendanceAction"];
+  loadHolidayPayAction: Props["loadHolidayPayAction"];
 }) {
   const [agentId, setAgentId] = useState(defaultAgentId ?? "");
   const [payday, setPayday] = useState(defaultPayday);
@@ -150,6 +158,11 @@ function PayrollFormFields({
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [confirmApprovedEdit, setConfirmApprovedEdit] = useState(false);
+  const [holidayPaySummary, setHolidayPaySummary] = useState<
+    { holidayName: string; effectiveAmount: number; currency: string }[] | null
+  >(null);
+  const [holidayPayError, setHolidayPayError] = useState<string | null>(null);
+  const [loadingHolidayPay, setLoadingHolidayPay] = useState(false);
 
   const period = payday ? getPayPeriodForPayday(payday) : null;
 
@@ -187,6 +200,27 @@ function PayrollFormFields({
     }
   }
 
+  // Pulls in the sum of this agent's approved holiday-pay assignments for
+  // this exact payday (see loadHolidayPaySummaryAction) - never applied
+  // automatically, so the admin always sees and confirms the figure
+  // before it's saved onto this payroll record.
+  async function handleLoadHolidayPay() {
+    if (!agentId || !payday) return;
+    setLoadingHolidayPay(true);
+    setHolidayPayError(null);
+    try {
+      const result = await loadHolidayPayAction(agentId, payday);
+      if (result.error) {
+        setHolidayPayError(result.error);
+        return;
+      }
+      setHolidayPaySummary(result.items ?? []);
+      setField("holidayPay", String(result.total ?? 0));
+    } finally {
+      setLoadingHolidayPay(false);
+    }
+  }
+
   // Auto-load attendance as soon as an agent + payday are both picked, so
   // the admin never has to remember to click "Load Attendance" - it stays
   // around only as a manual refresh. Re-fires whenever the agent or the
@@ -213,6 +247,7 @@ function PayrollFormFields({
     internetAllowance: Number(values.internetAllowance) || 0,
     incentiveBonus: Number(values.bonusCommission) || 0,
     otherAdditions: Number(values.otherAdditions) || 0,
+    holidayPay: Number(values.holidayPay) || 0,
     deductions: Number(values.deductions) || 0,
   });
 
@@ -439,6 +474,38 @@ function PayrollFormFields({
           />
         </div>
         <div>
+          <label className={labelClasses}>Holiday Pay (₦)</label>
+          <div className="mt-1 flex gap-2">
+            <input
+              type="number"
+              name="holiday_pay"
+              min={0}
+              step="0.01"
+              value={values.holidayPay}
+              onChange={(e) => setField("holidayPay", e.target.value)}
+              className={inputClasses}
+            />
+            <button
+              type="button"
+              onClick={handleLoadHolidayPay}
+              disabled={!agentId || !payday || loadingHolidayPay}
+              className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingHolidayPay ? "Loading..." : "Load Holiday Pay"}
+            </button>
+          </div>
+          {holidayPayError && <p className="mt-1 text-xs text-rose-600">{holidayPayError}</p>}
+          {holidayPaySummary && holidayPaySummary.length > 0 && (
+            <ul className="mt-1 text-xs text-slate-500">
+              {holidayPaySummary.map((item, i) => (
+                <li key={i}>
+                  {item.holidayName}: {item.effectiveAmount} {item.currency}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
           <label className={labelClasses}>Internet Allowance (₦, fixed)</label>
           <input
             type="number"
@@ -541,6 +608,7 @@ export default function AdminPayrollClient({
   nextPayday,
   upcomingPaydays,
   loadAttendanceAction,
+  loadHolidayPayAction,
   createAction,
   updateAction,
   approveAction,
@@ -622,6 +690,7 @@ export default function AdminPayrollClient({
       basePayEarned: record.base_pay_earned,
       incentiveBonus: record.bonus_commission,
       otherAdditions: record.other_additions,
+      holidayPay: record.holiday_pay,
       internetAllowance: record.internet_allowance,
       deductions: record.deductions,
       totalPay: record.total_pay,
@@ -701,7 +770,12 @@ export default function AdminPayrollClient({
           }
           className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6"
         >
-          <PayrollFormFields agents={agents} defaultPayday={nextPayday} loadAttendanceAction={loadAttendanceAction} />
+          <PayrollFormFields
+            agents={agents}
+            defaultPayday={nextPayday}
+            loadAttendanceAction={loadAttendanceAction}
+            loadHolidayPayAction={loadHolidayPayAction}
+          />
           <button type="submit" disabled={isPending} className={buttonClasses}>
             Save as Draft
           </button>
@@ -739,6 +813,7 @@ export default function AdminPayrollClient({
                           lockAgent
                           requireConfirmApprovedEdit={record.status === "approved"}
                           loadAttendanceAction={loadAttendanceAction}
+                          loadHolidayPayAction={loadHolidayPayAction}
                         />
                         <div className="flex items-center gap-3">
                           <button type="submit" disabled={isPending} className={buttonClasses}>
@@ -817,6 +892,10 @@ export default function AdminPayrollClient({
                           <div>
                             <dt className="text-xs text-slate-500">Other Additions</dt>
                             <dd className="font-medium text-slate-800">{formatNgn(record.other_additions)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">Holiday Pay</dt>
+                            <dd className="font-medium text-slate-800">{formatNgn(record.holiday_pay)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Payment Method</dt>
