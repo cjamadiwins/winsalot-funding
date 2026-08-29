@@ -23,6 +23,8 @@ import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCa
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
+import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
+import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -92,6 +94,7 @@ export default async function LeadgenAgentDashboardPage() {
   const capReached = isMonthlyIncentiveCapReached(monthToDateApproved, settings.monthlyCap);
   const remainingToCap = Math.max(0, settings.monthlyCap - monthToDateApproved);
   const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const dialpadData = await loadDialpadAgentDashboardData(supabase, agent.email);
   // Only count/show a follow-up if it's still its lead's authoritative
   // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
   // the same source of truth the Leads page's Due Today/Overdue filters
@@ -167,6 +170,12 @@ export default async function LeadgenAgentDashboardPage() {
           icon={<UserCheck />}
         />
       </div>
+
+      <DialpadDashboardPreview
+        audience="agent"
+        report={dialpadData.report}
+        summaries={dialpadData.summary ? [dialpadData.summary] : []}
+      />
 
       {myByClient.size > 1 && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">

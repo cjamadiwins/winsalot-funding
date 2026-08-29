@@ -17,6 +17,8 @@ import AgentDashboardClient from "./AgentDashboardClient";
 import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueOpportunitiesPanel from "./OverdueOpportunitiesPanel";
 import AttendanceCard from "./AttendanceCard";
+import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
+import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -70,6 +72,7 @@ export default async function AgentDashboardPage() {
   // never even receives another agent's rows over the wire), so an agent
   // only ever sees their own rate here.
   const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
+  const dialpadData = await loadDialpadAgentDashboardData(supabase, crmUser.email);
 
   // Weekly Agent Incentive - scoped to just this agent's own appointments
   // (getCrmIncentiveAppointments(crmUser.id) never even receives another
@@ -152,6 +155,12 @@ export default async function AgentDashboardPage() {
           View full report →
         </Link>
       </section>
+
+      <DialpadDashboardPreview
+        audience="agent"
+        report={dialpadData.report}
+        summaries={dialpadData.summary ? [dialpadData.summary] : []}
+      />
 
       <ResultsByAgentConversion
         agents={[{ id: crmUser.id, full_name: crmUser.full_name, email: crmUser.email }]}

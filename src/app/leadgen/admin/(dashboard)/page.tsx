@@ -8,6 +8,8 @@ import { LEADGEN_PERFORMANCE_TIMEZONE, leadgenDateKey } from "@/lib/leadgen-perf
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
+import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
+import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -91,6 +93,7 @@ export default async function LeadgenAdminDashboardPage() {
     new Intl.DateTimeFormat("en-US", { timeZone: LEADGEN_PERFORMANCE_TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(now)
   );
   const firstName = currentAdmin.full_name.trim().split(/\s+/)[0] || currentAdmin.full_name;
+  const dialpadData = await loadDialpadDashboardData(admin);
 
   // Each card links straight into the Leads page pre-filtered to that
   // exact slice (see LeadsListClient's initialStatusFilter/
@@ -194,6 +197,13 @@ export default async function LeadgenAdminDashboardPage() {
           />
         ))}
       </div>
+
+      <DialpadDashboardPreview
+        audience="admin"
+        report={dialpadData.selectedReport}
+        summaries={dialpadData.summaries}
+        fullReportHref="/leadgen/admin/dialpad"
+      />
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>

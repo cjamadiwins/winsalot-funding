@@ -24,6 +24,7 @@ import {
   ClipboardList,
   Workflow,
   BookOpenCheck,
+  PhoneCall,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -40,6 +41,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Client Intake", href: "/admin/crm/intake", icon: <ClipboardList /> },
   { label: "Payroll", href: "/admin/crm/payroll", icon: <Wallet /> },
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },
+  { label: "Dialpad Performance", href: "/admin/crm/dialpad", icon: <PhoneCall /> },
   { label: "Incentives", href: "/admin/crm/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/admin/crm/attendance", icon: <Clock /> },
   { label: "Leave Requests", href: "/admin/crm/leave-requests", icon: <CalendarOff /> },

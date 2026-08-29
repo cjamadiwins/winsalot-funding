@@ -6,6 +6,8 @@ import AdminCrmClient from "./AdminCrmClient";
 import AdminFollowUps from "./AdminFollowUps";
 import AdminOverdueOpportunitiesPanel from "./AdminOverdueOpportunitiesPanel";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
+import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
+import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -27,6 +29,7 @@ export default async function AdminCrmPage() {
     { data: agents, error: agentsError },
     { data: followUps, error: followUpsError },
     conversionRecords,
+    dialpadData,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -45,6 +48,7 @@ export default async function AdminCrmPage() {
     // shot regardless of RLS scoping, same as the existing biweekly Agent
     // Performance Report's getCrmPerformanceRecords().
     getCrmOpportunityConversionRecords(),
+    loadDialpadDashboardData(supabase),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -62,6 +66,13 @@ export default async function AdminCrmPage() {
           Failed to load CRM data: {(opportunitiesError ?? agentsError)?.message}
         </p>
       )}
+
+      <DialpadDashboardPreview
+        audience="admin"
+        report={dialpadData.selectedReport}
+        summaries={dialpadData.summaries}
+        fullReportHref="/admin/crm/dialpad"
+      />
 
       {!opportunitiesError && !agentsError && !followUpsError && (
         <div className="mt-6">
