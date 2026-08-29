@@ -160,6 +160,7 @@ export default async function AgentDashboardPage() {
         audience="agent"
         report={dialpadData.report}
         summaries={dialpadData.summary ? [dialpadData.summary] : []}
+        fullReportHref="/agent/dialpad"
       />
 
       <ResultsByAgentConversion

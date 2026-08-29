@@ -175,6 +175,7 @@ export default async function LeadgenAgentDashboardPage() {
         audience="agent"
         report={dialpadData.report}
         summaries={dialpadData.summary ? [dialpadData.summary] : []}
+        fullReportHref="/leadgen/agent/dialpad"
       />
 
       {myByClient.size > 1 && (
