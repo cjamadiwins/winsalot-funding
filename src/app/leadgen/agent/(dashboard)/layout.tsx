@@ -18,6 +18,7 @@ import {
   TrendingUp,
   GraduationCap,
   Wallet,
+  PhoneCall,
 } from "lucide-react";
 import { signOutLeadgenAgentAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -33,6 +34,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Email Tracking", href: "/leadgen/agent/emails", icon: <Mail /> },
   { label: "My Performance", href: "/leadgen/agent/performance", icon: <BarChart3 /> },
   { label: "Monthly Performance", href: "/leadgen/agent/performance/monthly", icon: <TrendingUp /> },
+  { label: "Dialpad Performance", href: "/leadgen/agent/dialpad", icon: <PhoneCall /> },
   { label: "Training", href: "/leadgen/agent/training", icon: <GraduationCap /> },
   { label: "My Pay", href: "/leadgen/agent/pay", icon: <Wallet /> },
 ];

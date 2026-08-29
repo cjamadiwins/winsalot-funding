@@ -19,6 +19,7 @@ import {
   CalendarClock,
   Building2,
   BookOpenCheck,
+  PhoneCall,
 } from "lucide-react";
 import {
   agentSignOutAction,
@@ -39,6 +40,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Chat", href: "/agent/chat", icon: <MessageSquare /> },
   { label: "Performance", href: "/agent/performance", icon: <BarChart3 /> },
   { label: "Monthly Performance", href: "/agent/performance/monthly", icon: <TrendingUp /> },
+  { label: "Dialpad Performance", href: "/agent/dialpad", icon: <PhoneCall /> },
   { label: "My Pay", href: "/agent/pay", icon: <Wallet /> },
 ];
 

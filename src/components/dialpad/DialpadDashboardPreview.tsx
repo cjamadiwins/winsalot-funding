@@ -48,7 +48,7 @@ export default function DialpadDashboardPreview({ audience, report, summaries, f
             </p>
           </div>
         </div>
-        {isAdmin && fullReportHref && (
+        {fullReportHref && (
           <Link href={fullReportHref} className="text-[13px] font-semibold text-violet-700 hover:text-violet-800">
             Open full report →
           </Link>

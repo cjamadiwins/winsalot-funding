@@ -10,6 +10,7 @@ type ImportState = { error?: string; success?: string };
 type ImportAction = (state: ImportState, formData: FormData) => Promise<ImportState>;
 
 const EMPTY_STATE: ImportState = {};
+const NOOP_IMPORT_ACTION: ImportAction = async () => ({});
 
 function previousWeek() {
   const today = new Date();
@@ -29,14 +30,17 @@ export default function DialpadPerformanceDashboard({
   basePath,
   data,
   importAction,
+  audience = "admin",
 }: {
   workspace: DialpadWorkspace;
   basePath: string;
   data: DialpadDashboardData;
-  importAction: ImportAction;
+  importAction?: ImportAction;
+  audience?: "admin" | "agent";
 }) {
+  const isAgent = audience === "agent";
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(importAction, EMPTY_STATE);
+  const [state, formAction, pending] = useActionState(importAction ?? NOOP_IMPORT_ACTION, EMPTY_STATE);
   const dates = useMemo(() => previousWeek(), []);
   const totals = useMemo(
     () =>
@@ -52,6 +56,7 @@ export default function DialpadPerformanceDashboard({
       ),
     [data.summaries]
   );
+  const averageDurationSeconds = totals.calls > 0 ? Math.round(totals.duration / totals.calls) : 0;
   const maxCalls = Math.max(1, ...data.summaries.map((row) => row.total_calls));
 
   return (
@@ -62,7 +67,9 @@ export default function DialpadPerformanceDashboard({
             <PhoneCall size={17} /> Dialpad reporting
           </div>
           <h1 className="mt-1 text-2xl font-bold text-slate-900">Dialpad Performance</h1>
-          <p className="mt-1 text-sm text-slate-500">Weekly call performance for all active agents and administrators.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {isAgent ? "Your own weekly call performance." : "Weekly call performance for all active agents and administrators."}
+          </p>
         </div>
         {data.selectedReport && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-right shadow-sm">
@@ -74,43 +81,45 @@ export default function DialpadPerformanceDashboard({
         )}
       </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Upload size={18} className="text-sky-700" />
-          <h2 className="text-base font-bold text-slate-900">Import weekly Dialpad CSV</h2>
-        </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Upload User Statistics or Call Logs. The import is shared automatically with {workspace === "growth" ? "Lead CRM" : "Growth CRM"}.
-        </p>
-        <p className="mt-1 text-xs font-medium text-amber-700">
-          For private agent dashboards, export Call Logs with each Dialpad user&apos;s email. The email must match their CRM login.
-        </p>
-        <form action={formAction} className="mt-4 grid gap-3 lg:grid-cols-[1fr_170px_170px_auto] lg:items-end">
-          <label className="block text-xs font-semibold text-slate-600">
-            Dialpad CSV
-            <input
-              name="report_file"
-              type="file"
-              accept=".csv,text/csv"
-              required
-              className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-1.5 file:font-semibold file:text-sky-800"
-            />
-          </label>
-          <label className="block text-xs font-semibold text-slate-600">
-            Week starts
-            <input name="period_start" type="date" defaultValue={dates.start} required className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-          </label>
-          <label className="block text-xs font-semibold text-slate-600">
-            Week ends
-            <input name="period_end" type="date" defaultValue={dates.end} required className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-          </label>
-          <button disabled={pending} className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-wait disabled:opacity-60">
-            {pending ? "Importing…" : "Import Report"}
-          </button>
-        </form>
-        {state.error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{state.error}</p>}
-        {state.success && <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{state.success}</p>}
-      </section>
+      {!isAgent && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Upload size={18} className="text-sky-700" />
+            <h2 className="text-base font-bold text-slate-900">Import weekly Dialpad CSV</h2>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Upload User Statistics or Call Logs. The import is shared automatically with {workspace === "growth" ? "Lead CRM" : "Growth CRM"}.
+          </p>
+          <p className="mt-1 text-xs font-medium text-amber-700">
+            For private agent dashboards, export Call Logs with each Dialpad user&apos;s email. The email must match their CRM login.
+          </p>
+          <form action={formAction} className="mt-4 grid gap-3 lg:grid-cols-[1fr_170px_170px_auto] lg:items-end">
+            <label className="block text-xs font-semibold text-slate-600">
+              Dialpad CSV
+              <input
+                name="report_file"
+                type="file"
+                accept=".csv,text/csv"
+                required
+                className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-1.5 file:font-semibold file:text-sky-800"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600">
+              Week starts
+              <input name="period_start" type="date" defaultValue={dates.start} required className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600">
+              Week ends
+              <input name="period_end" type="date" defaultValue={dates.end} required className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+            </label>
+            <button disabled={pending} className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-wait disabled:opacity-60">
+              {pending ? "Importing…" : "Import Report"}
+            </button>
+          </form>
+          {state.error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{state.error}</p>}
+          {state.success && <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{state.success}</p>}
+        </section>
+      )}
 
       {data.reports.length > 0 && (
         <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -140,19 +149,22 @@ export default function DialpadPerformanceDashboard({
         </section>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <section className={`grid gap-3 sm:grid-cols-2 ${isAgent ? "xl:grid-cols-6" : "xl:grid-cols-5"}`}>
             <Stat label="Total Calls" value={totals.calls.toLocaleString()} tone="blue" />
             <Stat label="Placed" value={totals.placed.toLocaleString()} tone="indigo" />
             <Stat label="Answered" value={totals.answered.toLocaleString()} tone="green" />
             <Stat label="Missed" value={totals.missed.toLocaleString()} tone="red" />
             <Stat label="Total Duration" value={formatDialpadDuration(totals.duration)} tone="slate" />
+            {isAgent && <Stat label="Average Duration" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">All users comparison</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Agents and administrators are included.</p>
+                <h2 className="text-base font-bold text-slate-900">{isAgent ? "Your performance chart" : "All users comparison"}</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {isAgent ? "Your own weekly calls only." : "Agents and administrators are included."}
+                </p>
               </div>
               <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-slate-600">
                 <Legend color="bg-blue-500" label="Total" />
@@ -181,7 +193,7 @@ export default function DialpadPerformanceDashboard({
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h2 className="text-base font-bold text-slate-900">User performance</h2>
+              <h2 className="text-base font-bold text-slate-900">{isAgent ? "Your performance" : "User performance"}</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-left text-sm">
