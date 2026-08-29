@@ -35,7 +35,7 @@ export type DialpadIdentity = {
 };
 
 const DIALPAD_IDENTITIES: Record<string, { agentName: string; agentRole: "admin" | "agent" }> = {
-  "agent1@winsalotcorp.com": { agentName: "Henry Osuji", agentRole: "agent" },
+  "agent@winsalotcorp.com": { agentName: "Henry Osuji", agentRole: "agent" },
   "agent2@winsalotcorp.com": { agentName: "Goodness Ugbana", agentRole: "agent" },
   "info@winsalotcorp.com": { agentName: "C.J Amadi", agentRole: "admin" },
 };
@@ -56,10 +56,17 @@ const HEADER_ALIASES = {
   rowType: ["type"],
   totalCalls: ["calls", "total calls", "call count", "all calls"],
   placedCalls: ["placed", "placed calls", "outbound", "outbound calls"],
-  answeredCalls: ["answered", "answered calls", "connected", "connected calls"],
+  // "handled" (answered + outbound connected) is the true total of
+  // successfully connected calls; "answered" alone only counts inbound
+  // calls the agent answered, so it must come after "handled" here.
+  answeredCalls: ["handled", "answered", "answered calls", "connected", "connected calls"],
   missedCalls: ["missed", "missed calls", "unanswered", "unanswered calls"],
-  totalDuration: ["total duration", "duration total", "talk duration"],
-  averageDuration: ["avg duration", "average duration", "average call duration", "avg talk duration"],
+  totalDuration: ["total duration", "duration total"],
+  averageDuration: ["avg duration", "average duration", "average call duration"],
+  // Dialpad's own stats exports report these two in fractional minutes
+  // (e.g. talk_duration 40.52 for a 40.5-minute call block), not seconds.
+  totalTalkMinutes: ["talk duration"],
+  averageTalkMinutes: ["avg talk duration"],
   direction: ["direction", "call direction", "call type", "type"],
   status: ["status", "call status", "result", "disposition"],
   duration: ["duration", "call duration"],
@@ -79,6 +86,14 @@ function isAgentRow(row: Record<string, string>) {
   return !NON_AGENT_ROW_TYPES.test(rowType);
 }
 
+// Some exports (e.g. Dialpad's per-day User Statistics) include placeholder
+// rows for days with zero activity and no identified user at all; there is
+// no agent to attribute those rows to, so they must be dropped rather than
+// invented a name for.
+function hasIdentity(row: Record<string, string>) {
+  return valueFor(row, HEADER_ALIASES.agentName) !== "" || valueFor(row, HEADER_ALIASES.agentEmail) !== "";
+}
+
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
@@ -94,6 +109,23 @@ function valueFor(row: Record<string, string>, aliases: readonly string[]) {
 function numberValue(value: string) {
   const parsed = Number(value.replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
+function minutesToSeconds(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 60)) : 0;
+}
+
+function totalDurationSecondsFor(row: Record<string, string>) {
+  const talkMinutes = valueFor(row, HEADER_ALIASES.totalTalkMinutes);
+  if (talkMinutes !== "") return minutesToSeconds(talkMinutes);
+  return parseDurationSeconds(valueFor(row, HEADER_ALIASES.totalDuration));
+}
+
+function averageDurationSecondsFor(row: Record<string, string>) {
+  const avgTalkMinutes = valueFor(row, HEADER_ALIASES.averageTalkMinutes);
+  if (avgTalkMinutes !== "") return minutesToSeconds(avgTalkMinutes);
+  return parseDurationSeconds(valueFor(row, HEADER_ALIASES.averageDuration));
 }
 
 export function parseDurationSeconds(value: string) {
@@ -186,31 +218,65 @@ function isMissed(status: string) {
 }
 
 export function parseDialpadCsv(csv: string): ParsedDialpadReport {
-  const records = toRecords(csv).filter(isAgentRow);
+  const records = toRecords(csv).filter(isAgentRow).filter(hasIdentity);
   const hasSummaryColumns = records.some((row) => valueFor(row, HEADER_ALIASES.totalCalls) !== "");
 
   if (hasSummaryColumns) {
-    const summaries = records.map((row, index) => {
+    // Some exports have one row per agent for the whole report period;
+    // others (e.g. Dialpad's per-day User Statistics) have one row per
+    // agent per day. Group by identity and sum so either shape collapses
+    // to exactly one summary per agent.
+    type Accumulator = DialpadUserSummary & { rowCount: number; lastAverageDurationSeconds: number };
+    const grouped = new Map<string, Accumulator>();
+    records.forEach((row, index) => {
       const identity = resolveDialpadIdentity(
         normalizedAgentName(row, index),
         valueFor(row, HEADER_ALIASES.agentEmail) || null
       );
-      const totalCalls = numberValue(valueFor(row, HEADER_ALIASES.totalCalls));
-      const totalDurationSeconds = parseDurationSeconds(valueFor(row, HEADER_ALIASES.totalDuration));
-      const averageDurationSeconds =
-        parseDurationSeconds(valueFor(row, HEADER_ALIASES.averageDuration)) ||
-        (totalCalls > 0 ? Math.round(totalDurationSeconds / totalCalls) : 0);
-      return {
+      const key = (identity.agentEmail || identity.agentName).trim().toLowerCase();
+      const accumulator: Accumulator = grouped.get(key) ?? {
         agentName: identity.agentName,
         agentEmail: identity.agentEmail,
-        totalCalls,
-        placedCalls: numberValue(valueFor(row, HEADER_ALIASES.placedCalls)),
-        answeredCalls: numberValue(valueFor(row, HEADER_ALIASES.answeredCalls)),
-        missedCalls: numberValue(valueFor(row, HEADER_ALIASES.missedCalls)),
-        totalDurationSeconds,
-        averageDurationSeconds,
+        totalCalls: 0,
+        placedCalls: 0,
+        answeredCalls: 0,
+        missedCalls: 0,
+        totalDurationSeconds: 0,
+        averageDurationSeconds: 0,
+        rowCount: 0,
+        lastAverageDurationSeconds: 0,
       };
+      const totalCalls = numberValue(valueFor(row, HEADER_ALIASES.totalCalls));
+      const totalDurationSeconds = totalDurationSecondsFor(row);
+      accumulator.totalCalls += totalCalls;
+      accumulator.placedCalls += numberValue(valueFor(row, HEADER_ALIASES.placedCalls));
+      accumulator.answeredCalls += numberValue(valueFor(row, HEADER_ALIASES.answeredCalls));
+      accumulator.missedCalls += numberValue(valueFor(row, HEADER_ALIASES.missedCalls));
+      accumulator.totalDurationSeconds += totalDurationSeconds;
+      accumulator.rowCount += 1;
+      accumulator.lastAverageDurationSeconds =
+        averageDurationSecondsFor(row) || (totalCalls > 0 ? Math.round(totalDurationSeconds / totalCalls) : 0);
+      grouped.set(key, accumulator);
     });
+
+    const summaries = [...grouped.values()].map((summary) => ({
+      agentName: summary.agentName,
+      agentEmail: summary.agentEmail,
+      totalCalls: summary.totalCalls,
+      placedCalls: summary.placedCalls,
+      answeredCalls: summary.answeredCalls,
+      missedCalls: summary.missedCalls,
+      totalDurationSeconds: summary.totalDurationSeconds,
+      // A single contributing row's own average is preserved as-is; once
+      // multiple rows are merged, per-row averages can't be averaged
+      // together, so it's recomputed from the summed totals instead.
+      averageDurationSeconds:
+        summary.rowCount === 1
+          ? summary.lastAverageDurationSeconds
+          : summary.totalCalls > 0
+            ? Math.round(summary.totalDurationSeconds / summary.totalCalls)
+            : 0,
+    }));
     return { summaries: summaries.filter((summary) => summary.totalCalls > 0 || summary.agentName), calls: [] };
   }
 
