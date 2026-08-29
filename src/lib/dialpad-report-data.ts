@@ -88,11 +88,7 @@ export async function loadDialpadDashboardData(supabase: SupabaseClient, reportI
   };
 }
 
-export async function loadDialpadAgentDashboardData(
-  supabase: SupabaseClient,
-  agentEmail: string,
-  agentName: string
-): Promise<DialpadAgentDashboardData> {
+export async function loadDialpadAgentDashboardData(supabase: SupabaseClient): Promise<DialpadAgentDashboardData> {
   const { data: reports } = await supabase
     .from("dialpad_call_reports")
     .select("*")
@@ -101,11 +97,15 @@ export async function loadDialpadAgentDashboardData(
   const report = ((reports ?? [])[0] ?? null) as DialpadReportRow | null;
   if (!report) return { report: null, summary: null };
 
+  // RLS (dialpad_user_stats_agent_select_own) already restricts a signed-in
+  // agent to only their own row for this report by email-or-name, so no
+  // client-side filter is needed - and building one here previously broke
+  // on names containing spaces (an unquoted value in a PostgREST .or()
+  // filter), silently returning no row even once a real match existed.
   const { data: summary } = await supabase
     .from("dialpad_user_stats")
     .select("*")
     .eq("report_id", report.id)
-    .or(`agent_email.ilike.${agentEmail.trim()},agent_name.ilike.${agentName.trim()}`)
     .limit(1)
     .maybeSingle();
 
