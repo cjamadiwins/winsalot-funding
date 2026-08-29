@@ -53,12 +53,13 @@ export function resolveDialpadIdentity(agentName: string, agentEmail: string | n
 const HEADER_ALIASES = {
   agentName: ["user", "name", "agent", "agent name", "user name", "caller name"],
   agentEmail: ["email", "user email", "agent email"],
-  totalCalls: ["calls", "total calls", "call count"],
+  rowType: ["type"],
+  totalCalls: ["calls", "total calls", "call count", "all calls"],
   placedCalls: ["placed", "placed calls", "outbound", "outbound calls"],
   answeredCalls: ["answered", "answered calls", "connected", "connected calls"],
   missedCalls: ["missed", "missed calls", "unanswered", "unanswered calls"],
-  totalDuration: ["total duration", "duration total"],
-  averageDuration: ["avg duration", "average duration", "average call duration"],
+  totalDuration: ["total duration", "duration total", "talk duration"],
+  averageDuration: ["avg duration", "average duration", "average call duration", "avg talk duration"],
   direction: ["direction", "call direction", "call type", "type"],
   status: ["status", "call status", "result", "disposition"],
   duration: ["duration", "call duration"],
@@ -66,6 +67,17 @@ const HEADER_ALIASES = {
   phoneNumber: ["phone number", "external number", "called number", "contact", "target"],
   externalCallId: ["call id", "id", "call_id"],
 } as const;
+
+// Dialpad's Group Statistics export mixes individual agent rows with
+// ring-group/call-center/IVR aggregate rows under the same "type" column;
+// only agent rows should ever become CRM agent stats.
+const NON_AGENT_ROW_TYPES = /group|queue|call ?center|department|ivr|office|room|coaching|team/;
+
+function isAgentRow(row: Record<string, string>) {
+  const rowType = valueFor(row, HEADER_ALIASES.rowType).toLowerCase();
+  if (!rowType) return true;
+  return !NON_AGENT_ROW_TYPES.test(rowType);
+}
 
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
@@ -174,7 +186,7 @@ function isMissed(status: string) {
 }
 
 export function parseDialpadCsv(csv: string): ParsedDialpadReport {
-  const records = toRecords(csv);
+  const records = toRecords(csv).filter(isAgentRow);
   const hasSummaryColumns = records.some((row) => valueFor(row, HEADER_ALIASES.totalCalls) !== "");
 
   if (hasSummaryColumns) {

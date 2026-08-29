@@ -38,6 +38,21 @@ describe("Dialpad report parser", () => {
     expect(formatDialpadDuration(1634)).toBe("27m 14s");
   });
 
+  it("parses a Dialpad Group Statistics export and excludes non-agent rows", () => {
+    const parsed = parseDialpadCsv([
+      "name,type,all_calls,inbound_calls,outbound_calls,missed,answered,talk_duration,avg_talk_duration",
+      "Henry Osuji,user,45,20,25,3,42,5400,120",
+      "Goodness Ugbana,user,30,15,15,1,29,3000,100",
+      "Sales Call Center,callcenter,75,75,0,4,71,8400,112",
+    ].join("\n"));
+
+    expect(parsed.summaries).toEqual([
+      expect.objectContaining({ agentName: "Henry Osuji", totalCalls: 45, placedCalls: 25, answeredCalls: 42, missedCalls: 3, totalDurationSeconds: 5400, averageDurationSeconds: 120 }),
+      expect.objectContaining({ agentName: "Goodness Ugbana", totalCalls: 30, placedCalls: 15, answeredCalls: 29, missedCalls: 1, totalDurationSeconds: 3000, averageDurationSeconds: 100 }),
+    ]);
+    expect(parsed.summaries.some((summary) => summary.agentName === "Sales Call Center")).toBe(false);
+  });
+
   it("maps Dialpad account emails to CRM identities", () => {
     expect(resolveDialpadIdentity("Agent 1", "Agent1@winsalotcorp.com")).toEqual({
       agentName: "Henry Osuji",
