@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { LEAD_GEN_HOSTS, isLeadGenHost, isGrowthCrmHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
@@ -147,7 +148,7 @@ async function handleSessionGate(
     },
   });
 
-  const { data } = await supabase.auth.getUser();
+  const { data } = await getUserWithTimeout(supabase, pathname);
 
   if (!data.user && !isPublicPath) {
     if (isServerAction) return response;
@@ -172,6 +173,48 @@ async function handleSessionGate(
   }
 
   return response;
+}
+
+// Root-cause fix for the "stuck on Signing in..." reports (2026-08-27,
+// -28, -29): supabase.auth.getUser() makes a real network call to
+// Supabase Auth, and neither the Supabase client nor Node's fetch applies
+// a default timeout - on the rare occasion that call stalls instead of
+// erroring, it used to hang until Vercel's own 300-second function cap
+// killed the whole request, including a login-page POST that doesn't even
+// need this check's result. Bounding it here means a stall now fails fast
+// into "treat as not-yet-verified" (data.user = null) - on the login page
+// itself that simply falls through to the real sign-in action instead of
+// hanging, and on any other route it degrades to the same redirect-to-
+// login path as a genuinely missing session. The loud console.error (shows
+// up in Vercel's runtime logs/get_runtime_errors) is deliberate: it's the
+// one signal that tells us whether a future "stuck signing in" report is
+// this exact stall recurring, rather than something new.
+const GET_USER_TIMEOUT_MS = 8000;
+
+async function getUserWithTimeout(
+  supabase: SupabaseClient,
+  pathname: string
+): Promise<{ data: { user: User | null } }> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), GET_USER_TIMEOUT_MS);
+  });
+
+  try {
+    const result = await Promise.race([supabase.auth.getUser(), timeout]);
+    if (result === "timeout") {
+      console.error(
+        `[proxy:getUserWithTimeout] supabase.auth.getUser() did not respond within ${GET_USER_TIMEOUT_MS}ms for ${pathname} - treating as no session.`
+      );
+      return { data: { user: null } };
+    }
+    return result;
+  } catch (error) {
+    console.error(`[proxy:getUserWithTimeout] supabase.auth.getUser() threw for ${pathname} - treating as no session.`, error);
+    return { data: { user: null } };
+  } finally {
+    clearTimeout(timer!);
+  }
 }
 
 export const config = {
