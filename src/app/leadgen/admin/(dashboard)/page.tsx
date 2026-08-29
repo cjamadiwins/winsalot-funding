@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
+import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
@@ -10,6 +10,7 @@ import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/lib/opportunity-finder";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -25,24 +26,28 @@ export default async function LeadgenAdminDashboardPage() {
   const now = new Date();
   const todayKey = leadgenDateKey(now);
 
-  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: todaysAppointments }] = await Promise.all([
-    admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
-    admin.from("leadgen_appointments").select("status, client_id"),
-    admin.from("leadgen_clients").select("id, name"),
-    admin
-      .from("leadgen_users")
-      .select("id, full_name, role")
-      .eq("role", "agent")
-      .eq("active", true)
-      .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
-    // Today's Appointments dashboard widget - every non-cancelled/replaced
-    // appointment booked for today, earliest first.
-    admin
-      .from("leadgen_appointments")
-      .select("id, appointment_time, business_name, contact_name, status, assigned_specialist_id")
-      .eq("appointment_date", todayKey)
-      .order("appointment_time", { ascending: true }),
-  ]);
+  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: todaysAppointments }, { data: opportunityScores }] =
+    await Promise.all([
+      admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
+      admin.from("leadgen_appointments").select("status, client_id, lead_id"),
+      admin.from("leadgen_clients").select("id, name"),
+      admin
+        .from("leadgen_users")
+        .select("id, full_name, role")
+        .eq("role", "agent")
+        .eq("active", true)
+        .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
+      // Today's Appointments dashboard widget - every non-cancelled/replaced
+      // appointment booked for today, earliest first.
+      admin
+        .from("leadgen_appointments")
+        .select("id, appointment_time, business_name, contact_name, status, assigned_specialist_id")
+        .eq("appointment_date", todayKey)
+        .order("appointment_time", { ascending: true }),
+      // Opportunity Finder counters, below - one lightweight read of the
+      // scoring table (supabase/migrations/0113).
+      admin.from("leadgen_opportunity_scores").select("lead_id, category, priority_override, finder_state"),
+    ]);
 
   const allLeads = leads ?? [];
   const allAppointments = appointments ?? [];
@@ -65,6 +70,20 @@ export default async function LeadgenAdminDashboardPage() {
   const overdueFollowUps = allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length;
 
   const trends = computeLeadgenDashboardTrends(allLeads, now);
+
+  // Opportunity Finder counters.
+  const leadNextFollowUpById = new Map(allLeads.map((l) => [l.id, l.next_follow_up_at] as const));
+  const opportunityScoreCounts = { high: 0, medium: 0, low: 0, followUpsDue: 0 };
+  for (const raw of opportunityScores ?? []) {
+    const effective = effectiveOpportunityCategory(raw as { category: "high" | "medium" | "low" | "closed"; priority_override: "high" | "medium" | "low" | null; finder_state: "active" | "dismissed" });
+    if (effective === "high") opportunityScoreCounts.high += 1;
+    else if (effective === "medium") opportunityScoreCounts.medium += 1;
+    else if (effective === "low") opportunityScoreCounts.low += 1;
+    const nextFollowUpAt = leadNextFollowUpById.get(raw.lead_id);
+    if (nextFollowUpAt && new Date(nextFollowUpAt).getTime() <= now.getTime()) opportunityScoreCounts.followUpsDue += 1;
+  }
+  const convertedLeadIds = new Set((allAppointments as { status: string; lead_id?: string | null }[]).filter((a) => a.status === "Completed" && a.lead_id).map((a) => a.lead_id as string));
+  const convertedCount = convertedLeadIds.size;
 
   const byCampaignClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const client of allClients) byCampaignClient.set(client.id, { name: client.name, leads: 0, appointments: 0 });
@@ -196,6 +215,15 @@ export default async function LeadgenAdminDashboardPage() {
             trend={stat.trend}
           />
         ))}
+      </div>
+
+      <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard label="High Opportunities" value={opportunityScoreCounts.high} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.high} href="/leadgen/admin/opportunity-finder?category=high" />
+        <KpiCard label="Medium Opportunities" value={opportunityScoreCounts.medium} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.medium} href="/leadgen/admin/opportunity-finder?category=medium" />
+        <KpiCard label="Low Opportunities" value={opportunityScoreCounts.low} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.low} href="/leadgen/admin/opportunity-finder?category=low" />
+        <KpiCard label="Follow-Ups Due" value={opportunityScoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/leadgen/admin/opportunity-finder?followup=due" />
+        <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/leadgen/admin/opportunity-finder?category=closed" />
       </div>
 
       <DialpadDashboardPreview

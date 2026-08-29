@@ -19,6 +19,7 @@ import {
   GraduationCap,
   Wallet,
   PhoneCall,
+  Target,
 } from "lucide-react";
 import { signOutLeadgenAgentAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -26,6 +27,7 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/agent", icon: <LayoutDashboard /> },
   { label: "My Leads", href: "/leadgen/agent/leads", icon: <Users /> },
+  { label: "My Opportunities", href: "/leadgen/agent/my-opportunities", icon: <Target /> },
   { label: "Add Lead", href: "/leadgen/agent/leads/new", icon: <UserPlus /> },
   { label: "My Appointments", href: "/leadgen/agent/appointments", icon: <CalendarCheck /> },
   { label: "My Attendance", href: "/leadgen/agent/my-attendance", icon: <CalendarDays /> },

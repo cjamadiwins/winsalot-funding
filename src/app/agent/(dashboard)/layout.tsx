@@ -20,6 +20,7 @@ import {
   Building2,
   BookOpenCheck,
   PhoneCall,
+  Target,
 } from "lucide-react";
 import {
   agentSignOutAction,
@@ -30,6 +31,7 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: <LayoutDashboard /> },
+  { label: "My Opportunities", href: "/agent/my-opportunities", icon: <Target /> },
   { label: "Appointments", href: "/agent/appointments", icon: <CalendarClock /> },
   { label: "My Clients", href: "/agent/clients", icon: <Building2 /> },
   { label: "Email Tracking", href: "/agent/emails", icon: <Mail /> },
