@@ -28,6 +28,28 @@ export type ParsedDialpadReport = {
   calls: DialpadCallRow[];
 };
 
+export type DialpadIdentity = {
+  agentName: string;
+  agentEmail: string | null;
+  agentRole?: "admin" | "agent";
+};
+
+const DIALPAD_IDENTITIES: Record<string, { agentName: string; agentRole: "admin" | "agent" }> = {
+  "agent1@winsalotcorp.com": { agentName: "Henry Osuji", agentRole: "agent" },
+  "agent2@winsalotcorp.com": { agentName: "Goodness Ugbana", agentRole: "agent" },
+  "info@winsalotcorp.com": { agentName: "C.J Amadi", agentRole: "admin" },
+};
+
+export function resolveDialpadIdentity(agentName: string, agentEmail: string | null): DialpadIdentity {
+  const normalizedEmail = agentEmail?.trim().toLowerCase() || null;
+  const mapped = normalizedEmail ? DIALPAD_IDENTITIES[normalizedEmail] : undefined;
+  return {
+    agentName: mapped?.agentName ?? agentName,
+    agentEmail: normalizedEmail,
+    agentRole: mapped?.agentRole,
+  };
+}
+
 const HEADER_ALIASES = {
   agentName: ["user", "name", "agent", "agent name", "user name", "caller name"],
   agentEmail: ["email", "user email", "agent email"],
@@ -157,14 +179,18 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
 
   if (hasSummaryColumns) {
     const summaries = records.map((row, index) => {
+      const identity = resolveDialpadIdentity(
+        normalizedAgentName(row, index),
+        valueFor(row, HEADER_ALIASES.agentEmail) || null
+      );
       const totalCalls = numberValue(valueFor(row, HEADER_ALIASES.totalCalls));
       const totalDurationSeconds = parseDurationSeconds(valueFor(row, HEADER_ALIASES.totalDuration));
       const averageDurationSeconds =
         parseDurationSeconds(valueFor(row, HEADER_ALIASES.averageDuration)) ||
         (totalCalls > 0 ? Math.round(totalDurationSeconds / totalCalls) : 0);
       return {
-        agentName: normalizedAgentName(row, index),
-        agentEmail: valueFor(row, HEADER_ALIASES.agentEmail) || null,
+        agentName: identity.agentName,
+        agentEmail: identity.agentEmail,
         totalCalls,
         placedCalls: numberValue(valueFor(row, HEADER_ALIASES.placedCalls)),
         answeredCalls: numberValue(valueFor(row, HEADER_ALIASES.answeredCalls)),
@@ -177,11 +203,15 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
   }
 
   const calls: DialpadCallRow[] = records.map((row, index) => {
+    const identity = resolveDialpadIdentity(
+      normalizedAgentName(row, index),
+      valueFor(row, HEADER_ALIASES.agentEmail) || null
+    );
     const durationSeconds = parseDurationSeconds(valueFor(row, HEADER_ALIASES.duration));
     return {
       externalCallId: valueFor(row, HEADER_ALIASES.externalCallId) || null,
-      agentName: normalizedAgentName(row, index),
-      agentEmail: valueFor(row, HEADER_ALIASES.agentEmail) || null,
+      agentName: identity.agentName,
+      agentEmail: identity.agentEmail,
       direction: valueFor(row, HEADER_ALIASES.direction) || "Unknown",
       status: valueFor(row, HEADER_ALIASES.status) || "Unknown",
       startedAt: parseStartedAt(valueFor(row, HEADER_ALIASES.startedAt)),

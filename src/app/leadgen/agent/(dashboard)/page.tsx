@@ -94,7 +94,7 @@ export default async function LeadgenAgentDashboardPage() {
   const capReached = isMonthlyIncentiveCapReached(monthToDateApproved, settings.monthlyCap);
   const remainingToCap = Math.max(0, settings.monthlyCap - monthToDateApproved);
   const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const dialpadData = await loadDialpadAgentDashboardData(supabase, agent.email);
+  const dialpadData = await loadDialpadAgentDashboardData(supabase, agent.email, agent.full_name);
   // Only count/show a follow-up if it's still its lead's authoritative
   // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
   // the same source of truth the Leads page's Due Today/Overdue filters
