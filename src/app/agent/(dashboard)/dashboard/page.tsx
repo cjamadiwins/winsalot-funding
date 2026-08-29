@@ -72,7 +72,11 @@ export default async function AgentDashboardPage() {
   // never even receives another agent's rows over the wire), so an agent
   // only ever sees their own rate here.
   const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
-  const dialpadData = await loadDialpadAgentDashboardData(supabase, crmUser.email);
+  const dialpadData = await loadDialpadAgentDashboardData(
+    supabase,
+    crmUser.email,
+    crmUser.full_name
+  );
 
   // Weekly Agent Incentive - scoped to just this agent's own appointments
   // (getCrmIncentiveAppointments(crmUser.id) never even receives another
