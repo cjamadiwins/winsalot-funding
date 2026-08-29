@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseDialpadCsv, type DialpadWorkspace } from "./dialpad-report";
+import { parseDialpadCsv, resolveDialpadIdentity, type DialpadWorkspace } from "./dialpad-report";
 
 export type DialpadReportRow = {
   id: string;
@@ -61,6 +61,8 @@ function normalized(value: string | null | undefined) {
 }
 
 function resolveRole(summary: { agentName: string; agentEmail: string | null }, directory: UserDirectoryEntry[]) {
+  const mappedRole = resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentRole;
+  if (mappedRole) return mappedRole;
   const email = normalized(summary.agentEmail);
   const name = normalized(summary.agentName);
   const matches = directory.filter((user) => (email && normalized(user.email) === email) || (name && normalized(user.full_name) === name));
@@ -88,7 +90,8 @@ export async function loadDialpadDashboardData(supabase: SupabaseClient, reportI
 
 export async function loadDialpadAgentDashboardData(
   supabase: SupabaseClient,
-  agentEmail: string
+  agentEmail: string,
+  agentName: string
 ): Promise<DialpadAgentDashboardData> {
   const { data: reports } = await supabase
     .from("dialpad_call_reports")
@@ -102,7 +105,7 @@ export async function loadDialpadAgentDashboardData(
     .from("dialpad_user_stats")
     .select("*")
     .eq("report_id", report.id)
-    .ilike("agent_email", agentEmail.trim())
+    .or(`agent_email.ilike.${agentEmail.trim()},agent_name.ilike.${agentName.trim()}`)
     .limit(1)
     .maybeSingle();
 
