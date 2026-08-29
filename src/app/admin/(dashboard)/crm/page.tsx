@@ -8,6 +8,9 @@ import AdminOverdueOpportunitiesPanel from "./AdminOverdueOpportunitiesPanel";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
+import KpiCard from "@/components/crm-ui/KpiCard";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -30,6 +33,7 @@ export default async function AdminCrmPage() {
     { data: followUps, error: followUpsError },
     conversionRecords,
     dialpadData,
+    { data: opportunityScores },
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -49,9 +53,26 @@ export default async function AdminCrmPage() {
     // Performance Report's getCrmPerformanceRecords().
     getCrmOpportunityConversionRecords(),
     loadDialpadDashboardData(supabase),
+    // Opportunity Finder counters, below - one lightweight read of the
+    // scoring table (supabase/migrations/0112), joined against the
+    // opportunities already fetched above rather than re-fetching them.
+    supabase.from("crm_opportunity_scores").select("opportunity_id, category, priority_override, finder_state"),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
+
+  const nowMs = new Date().getTime();
+  const opportunityById = new Map(((opportunities ?? []) as CrmOpportunityRow[]).map((o) => [o.id, o]));
+  const scoreCounts = { high: 0, medium: 0, low: 0, followUpsDue: 0 };
+  for (const raw of (opportunityScores ?? []) as Pick<CrmOpportunityScoreRow, "opportunity_id" | "category" | "priority_override" | "finder_state">[]) {
+    const effective = effectiveOpportunityCategory(raw);
+    if (effective === "high") scoreCounts.high += 1;
+    else if (effective === "medium") scoreCounts.medium += 1;
+    else if (effective === "low") scoreCounts.low += 1;
+    const nextFollowUpAt = opportunityById.get(raw.opportunity_id)?.next_follow_up_at;
+    if (nextFollowUpAt && new Date(nextFollowUpAt).getTime() <= nowMs) scoreCounts.followUpsDue += 1;
+  }
+  const convertedCount = ((opportunities ?? []) as CrmOpportunityRow[]).filter((o) => o.stage === "Client Won").length;
 
   return (
     <div>
@@ -66,6 +87,15 @@ export default async function AdminCrmPage() {
           Failed to load CRM data: {(opportunitiesError ?? agentsError)?.message}
         </p>
       )}
+
+      <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard label="High Opportunities" value={scoreCounts.high} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.high} href="/admin/crm/opportunity-finder?category=high" />
+        <KpiCard label="Medium Opportunities" value={scoreCounts.medium} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.medium} href="/admin/crm/opportunity-finder?category=medium" />
+        <KpiCard label="Low Opportunities" value={scoreCounts.low} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.low} href="/admin/crm/opportunity-finder?category=low" />
+        <KpiCard label="Follow-Ups Due" value={scoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/admin/crm/opportunity-finder?followup=due" />
+        <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/admin/crm/opportunity-finder?category=closed" />
+      </div>
 
       <DialpadDashboardPreview
         audience="admin"
