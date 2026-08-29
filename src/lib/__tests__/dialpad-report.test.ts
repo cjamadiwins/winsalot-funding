@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatDialpadDuration, parseDialpadCsv, parseDurationSeconds } from "../dialpad-report";
+import {
+  formatDialpadDuration,
+  parseDialpadCsv,
+  parseDurationSeconds,
+  resolveDialpadIdentity,
+} from "../dialpad-report";
 
 describe("Dialpad report parser", () => {
   it("parses user statistics exports", () => {
@@ -31,5 +36,23 @@ describe("Dialpad report parser", () => {
     expect(parseDurationSeconds("1:02:03")).toBe(3723);
     expect(parseDurationSeconds("27m 14s")).toBe(1634);
     expect(formatDialpadDuration(1634)).toBe("27m 14s");
+  });
+
+  it("maps Dialpad account emails to CRM identities", () => {
+    expect(resolveDialpadIdentity("Agent 1", "Agent1@winsalotcorp.com")).toEqual({
+      agentName: "Henry Osuji",
+      agentEmail: "agent1@winsalotcorp.com",
+      agentRole: "agent",
+    });
+    expect(resolveDialpadIdentity("Agent 2", "Agent2@winsalotcorp.com")).toEqual({
+      agentName: "Goodness Ugbana",
+      agentEmail: "agent2@winsalotcorp.com",
+      agentRole: "agent",
+    });
+    expect(resolveDialpadIdentity("Winsalot Corp.", "info@winsalotcorp.com")).toEqual({
+      agentName: "C.J Amadi",
+      agentEmail: "info@winsalotcorp.com",
+      agentRole: "admin",
+    });
   });
 });
