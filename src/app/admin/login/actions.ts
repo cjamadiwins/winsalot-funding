@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { logLoginTiming, newLoginAttemptId } from "@/lib/login-timing";
 
 export type AdminLoginState = {
   error: string | null;
@@ -29,31 +30,42 @@ export async function loginAction(
   const requestedRedirect = String(formData.get("redirectTo") ?? "/admin");
   const redirectTo = requestedRedirect.startsWith("/admin") ? requestedRedirect : "/admin";
 
+  const attemptId = newLoginAttemptId();
+  const t0 = Date.now();
+  logLoginTiming(attemptId, "loginAction start", t0);
+
   if (!email || !password) {
     return { error: "Email and password are required." };
   }
 
   try {
     const supabase = await createSupabaseServerClient();
+    logLoginTiming(attemptId, "signInWithPassword start", t0);
     const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+    logLoginTiming(attemptId, "signInWithPassword end", t0);
 
     if (error || !data.user) {
+      logLoginTiming(attemptId, "returning: invalid credentials", t0);
       return { error: "Invalid email or password." };
     }
 
+    logLoginTiming(attemptId, "crm_users lookup start", t0);
     const { data: crmUser, error: crmUserError } = await supabase
       .from("crm_users")
       .select("role, active")
       .eq("id", data.user.id)
       .maybeSingle();
+    logLoginTiming(attemptId, "crm_users lookup end", t0);
 
     if (crmUserError) {
       await supabase.auth.signOut();
+      logLoginTiming(attemptId, "returning: crm_users lookup error", t0);
       return { error: "We could not verify your Growth CRM access. Please try again." };
     }
 
     if (!crmUser || !crmUser.active || crmUser.role !== "admin") {
       await supabase.auth.signOut();
+      logLoginTiming(attemptId, "returning: not an active admin account", t0);
       return {
         error:
           crmUser?.role === "agent"
@@ -61,9 +73,11 @@ export async function loginAction(
             : "This account is not set up for Growth CRM admin access.",
       };
     }
-  } catch {
+  } catch (caughtError) {
+    logLoginTiming(attemptId, `caught exception: ${caughtError instanceof Error ? caughtError.message : String(caughtError)}`, t0);
     return { error: "The sign-in service is temporarily unavailable. Please try again." };
   }
 
+  logLoginTiming(attemptId, "redirect start", t0);
   redirect(redirectTo);
 }

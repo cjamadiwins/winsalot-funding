@@ -32,6 +32,20 @@ export async function createSupabaseServerClient() {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
+        // Diagnostic-only (2026-08-29 "stuck on Signing in..." incident) -
+        // this is the actual session/cookie-creation step in the login
+        // flow: the Supabase client calls this synchronously while
+        // processing a signInWithPassword/refresh response, before that
+        // call's own promise resolves. An absolute timestamp here (rather
+        // than an elapsed delta, since this file has no attempt id) can be
+        // cross-referenced against src/lib/login-timing.ts's own absolute
+        // timestamps and Supabase's edge/auth logs. Remove alongside that
+        // instrumentation once the login stall is root-caused and fixed.
+        if (cookiesToSet.length > 0) {
+          console.log(
+            `[login-timing] session cookies written at=${new Date().toISOString()} count=${cookiesToSet.length}`
+          );
+        }
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
