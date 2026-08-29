@@ -226,9 +226,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "blu
   return <div className={`rounded-2xl border border-white/70 p-4 shadow-sm ${tones[tone]}`}><div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</div><div className="mt-1 text-2xl font-bold">{value}</div></div>;
 }
 
-function Legend({ color, label }: { color: string; label: string }) { return <span className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${color}`} />{label}</span>; }
+export function Legend({ color, label }: { color: string; label: string }) { return <span className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${color}`} />{label}</span>; }
 
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+export function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   const height = value === 0 ? 3 : Math.max(8, Math.round((value / max) * 100));
   return <div className={`relative w-5 rounded-t-md ${color}`} style={{ height: `${height}%` }} title={String(value)}><span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-500">{value}</span></div>;
 }
