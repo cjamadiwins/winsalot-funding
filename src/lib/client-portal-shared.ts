@@ -67,11 +67,23 @@ export type CrmClientPortalActivityRow = {
 };
 
 // The one canonical place the Client Portal actually lives (brief: "MAIN
-// CLIENT PORTAL LOCATION"). Used verbatim for the Growth CRM's "Open
-// Client Portal" link - deliberately not built from getSiteUrl()/host
-// detection, since that resolves to the Growth CRM's own domain, not the
-// separate Lead Gen CRM deployment this points at.
-export const CLIENT_PORTAL_URL = "https://leads.winsalotcorp.com/client";
+// CLIENT PORTAL LOCATION"). The Lead Gen CRM's own production origin -
+// deliberately not built from getSiteUrl()/getAuthRedirectBaseUrl()/host
+// detection anywhere it's used, since both of those resolve to whichever
+// Vercel deployment is currently *executing* the code, not the deployment
+// the resulting link needs to be *opened* on. That distinction matters a
+// lot here: every Client Portal Access control (Create/Activate/Disable/
+// Reactivate/Send Invite/Reset) is a Growth CRM Server Action, so it
+// always executes inside the winsalot-funding project - using an
+// environment-relative helper there would bake in growth.winsalotcorp.com,
+// producing a link that lands the client in the Growth CRM instead of the
+// Client Portal (this exact bug shipped once: see the sendPortalEmail's
+// own redirectTo, now fixed to use this constant instead of
+// getAuthRedirectBaseUrl()).
+export const LEADGEN_PRODUCTION_ORIGIN = "https://leads.winsalotcorp.com";
+
+// Used verbatim for the Growth CRM's "Open Client Portal" link.
+export const CLIENT_PORTAL_URL = `${LEADGEN_PRODUCTION_ORIGIN}/client`;
 
 // A minimal, portal-user-shaped view used by derivePortalStatus() and the
 // Growth CRM's Client Portal Access panel - narrower than the full
