@@ -92,8 +92,7 @@ export type ConsultationEmailParams = {
 // looks for.
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const serviceLabel = winsalotServiceTypeLabel(params.serviceType);
-  const subject = "Your consultation with Winsalot Corp is confirmed";
+  const subject = "Your appointment with Winsalot Corp is confirmed";
 
   const textLines = [
     `Hi ${params.contactName},`,
@@ -101,7 +100,6 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
     "Your free 15-minute business consultation with Winsalot Corp has been confirmed.",
     "",
     `Business: ${params.businessName}`,
-    `Service: ${serviceLabel}`,
     `Date: ${date}`,
     `Time: ${time}`,
     `Timezone: ${timezoneLabel}`,
@@ -110,20 +108,11 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
   ];
   if (params.rescheduleUrl) textLines.push("", `Need to reschedule? ${params.rescheduleUrl}`);
   if (params.cancelUrl) textLines.push(`Need to cancel? ${params.cancelUrl}`);
-  textLines.push(
-    "",
-    "Best regards,",
-    "Winsalot Corp",
-    "Empowering Businesses, One Solution at a Time.",
-    "647-300-1270",
-    "info@winsalotcorp.com",
-    "winsalotcorp.com"
-  );
+  textLines.push("", "Best regards,", "Winsalot Corp", "647-300-1270", "info@winsalotcorp.com", "winsalotcorp.com");
 
   const detailsHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 20px; font-size:14px; color:#111827;">
       <tr><td style="padding:4px 0; font-weight:bold; width:110px;">Business:</td><td style="padding:4px 0;">${escapeHtml(params.businessName)}</td></tr>
-      <tr><td style="padding:4px 0; font-weight:bold;">Service:</td><td style="padding:4px 0;">${escapeHtml(serviceLabel)}</td></tr>
       <tr><td style="padding:4px 0; font-weight:bold;">Date:</td><td style="padding:4px 0;">${escapeHtml(date)}</td></tr>
       <tr><td style="padding:4px 0; font-weight:bold;">Time:</td><td style="padding:4px 0;">${escapeHtml(time)}</td></tr>
       <tr><td style="padding:4px 0; font-weight:bold;">Timezone:</td><td style="padding:4px 0;">${escapeHtml(timezoneLabel)}</td></tr>
@@ -173,7 +162,7 @@ export function buildWinsalotInternalBookingNotification(
 
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your consultation with Winsalot Corp has been rescheduled";
+  const subject = "Your appointment with Winsalot Corp has been rescheduled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -186,7 +175,7 @@ export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): W
   ];
   if (params.rescheduleUrl) lines.push("", `Need to reschedule again? ${params.rescheduleUrl}`);
   if (params.cancelUrl) lines.push(`Need to cancel? ${params.cancelUrl}`);
-  lines.push("", "Best regards,", "Winsalot Corp", "Empowering Businesses, One Solution at a Time.");
+  lines.push("", "Best regards,", "Winsalot Corp");
 
   let linksHtml = "";
   if (params.rescheduleUrl) linksHtml += ctaButtonHtml(params.rescheduleUrl, "Reschedule Again");
@@ -215,7 +204,7 @@ export function buildWinsalotCancellationEmail(params: {
   timezone: string;
 }): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your consultation with Winsalot Corp has been cancelled";
+  const subject = "Your appointment with Winsalot Corp has been cancelled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -225,7 +214,6 @@ export function buildWinsalotCancellationEmail(params: {
     "",
     "Best regards,",
     "Winsalot Corp",
-    "Empowering Businesses, One Solution at a Time.",
   ];
   const bodyHtml = paragraphsHtml(lines);
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
@@ -238,8 +226,8 @@ export function buildWinsalotReminderEmail(
   const when = params.reminderType === "24_hour_reminder" ? "tomorrow" : "in about 1 hour";
   const subject =
     params.reminderType === "24_hour_reminder"
-      ? "Reminder: your consultation with Winsalot Corp is tomorrow"
-      : "Reminder: your consultation with Winsalot Corp is in 1 hour";
+      ? "Reminder: your appointment with Winsalot Corp is tomorrow"
+      : "Reminder: your appointment with Winsalot Corp is in 1 hour";
 
   const lines = [
     `Hi ${params.contactName},`,
