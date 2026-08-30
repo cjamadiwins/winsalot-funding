@@ -92,7 +92,7 @@ export type ConsultationEmailParams = {
 // looks for.
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your appointment with Winsalot Corp is confirmed";
+  const subject = "Your appointment with Winsalot Corp.";
 
   const textLines = [
     `Hi ${params.contactName},`,
