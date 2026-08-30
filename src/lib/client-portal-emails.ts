@@ -83,7 +83,20 @@ export async function sendPortalEmail(input: SendPortalEmailInput): Promise<Send
   const result = await sendLeadgenEmail(admin, {
     clientId: input.leadgenClientId,
     campaignId: null,
-    templateKey: input.kind === "invite" ? "portal_invite" : "portal_access_reset",
+    // leadgen_emails.template_key is a foreign key into
+    // leadgen_email_templates(key), not a free-text label - it must be
+    // null unless a matching admin-editable template row actually exists
+    // (see the consultation_information/consultation_invitation/
+    // consultation_follow_up/mantra_collab_intro sends in the leadgen
+    // lead-detail actions). The portal invite/reset email has no such
+    // template - passing a made-up key here violated that FK constraint
+    // on every insert, which is exactly what "Failed to save the email
+    // record." was reporting. null matches how every other system-
+    // generated, non-template email in this CRM already sends (see
+    // leadgen-appointment-notifications.ts, leadgen-appointment-emails.ts,
+    // leadgen-appointment-reminders.ts, leadgen-business-appointment-
+    // reminders.ts).
+    templateKey: null,
     toEmail: input.toEmail,
     toName: input.toName,
     subject,
