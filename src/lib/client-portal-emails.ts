@@ -1,46 +1,68 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { sendLeadgenEmail } from "./leadgen-email";
+import { sendLeadgenEmail, leadgenButtonHtml, textToSimpleHtml } from "./leadgen-email";
 import { CLIENT_PORTAL_URL, LEADGEN_PRODUCTION_ORIGIN } from "./client-portal-shared";
 
 export type PortalEmailKind = "invite" | "reset";
 
-function buildPortalEmailCopy(kind: PortalEmailKind, clientName: string, actionUrl: string): { subject: string; body: string } {
+const PORTAL_SETUP_PATH = "/client/setup";
+const PORTAL_RESET_PATH = "/client/reset-password";
+
+function buildBrandedCallbackUrl(hashedToken: string, nextPath: string): string {
+  const url = new URL("/client/auth/callback", LEADGEN_PRODUCTION_ORIGIN);
+  url.searchParams.set("token_hash", hashedToken);
+  url.searchParams.set("type", "recovery");
+  url.searchParams.set("next", nextPath);
+  return url.toString();
+}
+
+function buildPortalEmailCopy(
+  kind: PortalEmailKind,
+  clientName: string,
+  actionUrl: string
+): { subject: string; body: string; html: string } {
   if (kind === "invite") {
-    return {
-      subject: "Your Winsalot Client Portal is ready",
-      body: [
-        `Hi ${clientName} team,`,
-        "",
-        "Your Winsalot Client Portal is ready. You can now securely view your campaign leads, appointments, and progress online.",
-        "",
-        "Use the secure link below to set up your account and choose a password:",
-        actionUrl,
-        "",
-        `Once your account is set up, you can sign in any time at ${CLIENT_PORTAL_URL}.`,
-        "",
-        "If you have any questions, just reply to this email.",
-        "",
-        "Best,",
-        "Winsalot Corp",
-      ].join("\n"),
-    };
-  }
-  return {
-    subject: "Reset your Winsalot Client Portal access",
-    body: [
+    const intro = [
       `Hi ${clientName} team,`,
       "",
-      "Use the secure link below to set a new password for your Winsalot Client Portal account:",
-      actionUrl,
+      "Your Winsalot Client Portal is ready. You can securely view your campaign leads, appointments, reports, progress, client-visible notes, and feedback.",
       "",
-      `You can sign in afterward at ${CLIENT_PORTAL_URL}.`,
+      "Use the link below to choose your password and finish setting up your portal.",
+    ].join("\n");
+    const closing = [
+      `After setup, sign in any time at ${CLIENT_PORTAL_URL}.`,
       "",
-      "If you did not request this, please contact Winsalot Corp.",
+      "If you have any questions, reply to this email.",
       "",
       "Best,",
       "Winsalot Corp",
-    ].join("\n"),
+    ].join("\n");
+    return {
+      subject: "Your Winsalot Client Portal is ready",
+      body: `${intro}\n\nSET UP MY CLIENT PORTAL\n${actionUrl}\n\n${closing}`,
+      html: `${textToSimpleHtml(intro)}${leadgenButtonHtml(actionUrl, "SET UP MY CLIENT PORTAL")}${textToSimpleHtml(closing)}`,
+    };
+  }
+
+  const intro = [
+    `Hi ${clientName} team,`,
+    "",
+    "A password reset was requested for your Winsalot Client Portal.",
+    "",
+    "Use the secure link below to choose a new password.",
+  ].join("\n");
+  const closing = [
+    `After resetting your password, sign in at ${CLIENT_PORTAL_URL}.`,
+    "",
+    "If you did not request this, please contact Winsalot Corp.",
+    "",
+    "Best,",
+    "Winsalot Corp",
+  ].join("\n");
+  return {
+    subject: "Reset your Winsalot Client Portal access",
+    body: `${intro}\n\nRESET MY CLIENT PORTAL PASSWORD\n${actionUrl}\n\n${closing}`,
+    html: `${textToSimpleHtml(intro)}${leadgenButtonHtml(actionUrl, "RESET MY CLIENT PORTAL PASSWORD")}${textToSimpleHtml(closing)}`,
   };
 }
 
@@ -54,61 +76,40 @@ export type SendPortalEmailInput = {
 
 export type SendPortalEmailResult = { error?: string };
 
-// Generates a fresh, single-use Supabase Auth "recovery" link (works
-// identically for an already-created-but-unconfirmed user, unlike
-// admin.auth.admin.inviteUserByEmail, which errors if the auth user
-// already exists - this Growth CRM flow always creates the auth user up
-// front, silently, in createPortalAccessAction) and sends it through the
-// Lead Gen CRM's own tracked email pipeline (leadgen_emails, client-
-// visible) rather than Supabase's own default-branded template, so the
-// client also sees this message in their Communications view and it gets
-// the same Resend delivery-status tracking as every other client email.
-//
-// redirectTo is deliberately built from LEADGEN_PRODUCTION_ORIGIN, not
-// getAuthRedirectBaseUrl() - this function is called from a Growth CRM
-// Server Action (src/app/admin/.../portal-actions.ts), which always
-// executes inside the winsalot-funding Vercel project. getAuthRedirectBaseUrl()
-// would resolve to that project's own site URL (growth.winsalotcorp.com),
-// producing a link that sends the client into the Growth CRM instead of
-// the Client Portal - the redirect must always point at the Lead Gen CRM
-// deployment regardless of which CRM's server generated the link.
+// Supabase remains an implementation detail. generateLink() is used only
+// to mint a one-time recovery token. The raw Supabase action_link is never
+// placed in an email. Instead, the token hash is wrapped in our own
+// leads.winsalotcorp.com callback URL, where the session is verified and
+// established server-side before continuing to /client/setup or
+// /client/reset-password.
 export async function sendPortalEmail(input: SendPortalEmailInput): Promise<SendPortalEmailResult> {
   const admin = getSupabaseAdmin();
+  const nextPath = input.kind === "invite" ? PORTAL_SETUP_PATH : PORTAL_RESET_PATH;
 
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "recovery",
     email: input.toEmail,
-    options: { redirectTo: `${LEADGEN_PRODUCTION_ORIGIN}/leadgen/set-password` },
+    options: { redirectTo: `${LEADGEN_PRODUCTION_ORIGIN}/client/auth/callback` },
   });
 
-  const actionLink = linkData?.properties?.action_link;
-  if (linkError || !actionLink) {
+  const hashedToken = linkData?.properties?.hashed_token;
+  if (linkError || !hashedToken) {
     return { error: linkError?.message ?? "Failed to generate a secure portal access link." };
   }
 
-  const { subject, body } = buildPortalEmailCopy(input.kind, input.clientName, actionLink);
+  const actionUrl = buildBrandedCallbackUrl(hashedToken, nextPath);
+  const { subject, body, html } = buildPortalEmailCopy(input.kind, input.clientName, actionUrl);
 
   const result = await sendLeadgenEmail(admin, {
     clientId: input.leadgenClientId,
     campaignId: null,
-    // leadgen_emails.template_key is a foreign key into
-    // leadgen_email_templates(key), not a free-text label - it must be
-    // null unless a matching admin-editable template row actually exists
-    // (see the consultation_information/consultation_invitation/
-    // consultation_follow_up/mantra_collab_intro sends in the leadgen
-    // lead-detail actions). The portal invite/reset email has no such
-    // template - passing a made-up key here violated that FK constraint
-    // on every insert, which is exactly what "Failed to save the email
-    // record." was reporting. null matches how every other system-
-    // generated, non-template email in this CRM already sends (see
-    // leadgen-appointment-notifications.ts, leadgen-appointment-emails.ts,
-    // leadgen-appointment-reminders.ts, leadgen-business-appointment-
-    // reminders.ts).
     templateKey: null,
     toEmail: input.toEmail,
     toName: input.toName,
     subject,
     body,
+    text: body,
+    html,
     sentBy: null,
     clientVisible: true,
   });
