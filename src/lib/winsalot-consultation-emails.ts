@@ -84,11 +84,16 @@ export type ConsultationEmailParams = {
 };
 
 // Confirmation copy is fixed exactly to the brief's required subject and
-// body template - do not reword without checking the brief first.
+// body template - do not reword without checking the brief first. Subject
+// names the company (deliverability brief: subjects should read like
+// "Your appointment with Winsalot Corp" rather than a generic line) so the
+// recipient recognizes the sender at a glance, which is also what keeps a
+// transactional message out of the pattern Gmail's Promotions classifier
+// looks for.
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const serviceLabel = winsalotServiceTypeLabel(params.serviceType);
-  const subject = "Your consultation is confirmed";
+  const subject = "Your consultation with Winsalot Corp is confirmed";
 
   const textLines = [
     `Hi ${params.contactName},`,
@@ -168,7 +173,7 @@ export function buildWinsalotInternalBookingNotification(
 
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your consultation has been rescheduled";
+  const subject = "Your consultation with Winsalot Corp has been rescheduled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -210,7 +215,7 @@ export function buildWinsalotCancellationEmail(params: {
   timezone: string;
 }): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your consultation has been cancelled";
+  const subject = "Your consultation with Winsalot Corp has been cancelled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -231,7 +236,10 @@ export function buildWinsalotReminderEmail(
 ): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const when = params.reminderType === "24_hour_reminder" ? "tomorrow" : "in about 1 hour";
-  const subject = params.reminderType === "24_hour_reminder" ? "Reminder: consultation tomorrow" : "Reminder: consultation in 1 hour";
+  const subject =
+    params.reminderType === "24_hour_reminder"
+      ? "Reminder: your consultation with Winsalot Corp is tomorrow"
+      : "Reminder: your consultation with Winsalot Corp is in 1 hour";
 
   const lines = [
     `Hi ${params.contactName},`,
