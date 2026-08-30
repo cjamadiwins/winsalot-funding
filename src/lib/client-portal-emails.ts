@@ -1,8 +1,7 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { getAuthRedirectBaseUrl } from "./site-url";
 import { sendLeadgenEmail } from "./leadgen-email";
-import { CLIENT_PORTAL_URL } from "./client-portal-shared";
+import { CLIENT_PORTAL_URL, LEADGEN_PRODUCTION_ORIGIN } from "./client-portal-shared";
 
 export type PortalEmailKind = "invite" | "reset";
 
@@ -64,13 +63,22 @@ export type SendPortalEmailResult = { error?: string };
 // visible) rather than Supabase's own default-branded template, so the
 // client also sees this message in their Communications view and it gets
 // the same Resend delivery-status tracking as every other client email.
+//
+// redirectTo is deliberately built from LEADGEN_PRODUCTION_ORIGIN, not
+// getAuthRedirectBaseUrl() - this function is called from a Growth CRM
+// Server Action (src/app/admin/.../portal-actions.ts), which always
+// executes inside the winsalot-funding Vercel project. getAuthRedirectBaseUrl()
+// would resolve to that project's own site URL (growth.winsalotcorp.com),
+// producing a link that sends the client into the Growth CRM instead of
+// the Client Portal - the redirect must always point at the Lead Gen CRM
+// deployment regardless of which CRM's server generated the link.
 export async function sendPortalEmail(input: SendPortalEmailInput): Promise<SendPortalEmailResult> {
   const admin = getSupabaseAdmin();
 
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "recovery",
     email: input.toEmail,
-    options: { redirectTo: `${getAuthRedirectBaseUrl()}/leadgen/set-password` },
+    options: { redirectTo: `${LEADGEN_PRODUCTION_ORIGIN}/leadgen/set-password` },
   });
 
   const actionLink = linkData?.properties?.action_link;
