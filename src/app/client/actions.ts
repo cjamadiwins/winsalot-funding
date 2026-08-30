@@ -3,15 +3,8 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendPortalEmail } from "@/lib/client-portal-emails";
 
-// Client Portal sign-in - deliberately its own action, not a reuse of
-// /leadgen/login's leadgenLoginAction, since that shared action treats
-// every role identically (redirect("/leadgen") and let the role router
-// dispatch). This one is Client Portal-specific: it verifies the account
-// is actually a *client* role (never lets an admin/agent login "work" at
-// /client and land somewhere they shouldn't) and gives the exact
-// disabled-access wording the brief specifies at the moment of sign-in,
-// not just on a later request.
 export async function clientLoginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -47,15 +40,51 @@ export async function clientLoginAction(formData: FormData) {
     );
   }
 
-  // Service-role update, not the session client - leadgen_users has no
-  // RLS policy letting a client row update itself (only admin_all and
-  // select_self exist), and this must never be something a client's own
-  // authenticated request could otherwise write arbitrary columns
-  // through. Scoped to exactly this just-verified id.
   await getSupabaseAdmin()
     .from("leadgen_users")
     .update({ last_login_at: new Date().toISOString() })
     .eq("id", data.user.id);
 
   redirect("/client/dashboard");
+}
+
+// Public forgot-password action. It intentionally returns the same success
+// message whether or not the email is a valid, active client portal login,
+// preventing account enumeration. Supabase's service-role key and raw Auth
+// URLs stay server-side; sendPortalEmail emits only a Winsalot URL.
+export async function requestClientPasswordResetAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const genericMessage = "If that email belongs to an active Winsalot Client Portal, a password reset link has been sent.";
+
+  if (!email) {
+    redirect(`/client/reset-password?message=${encodeURIComponent(genericMessage)}`);
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: portalUser } = await admin
+    .from("leadgen_users")
+    .select("id, full_name, email, active, client_id")
+    .eq("email", email)
+    .eq("role", "client")
+    .maybeSingle();
+
+  if (portalUser?.active && portalUser.client_id) {
+    const { data: client } = await admin
+      .from("leadgen_clients")
+      .select("id, name")
+      .eq("id", portalUser.client_id)
+      .maybeSingle();
+
+    if (client) {
+      await sendPortalEmail({
+        kind: "reset",
+        leadgenClientId: client.id,
+        clientName: client.name,
+        toEmail: portalUser.email,
+        toName: portalUser.full_name,
+      });
+    }
+  }
+
+  redirect(`/client/reset-password?message=${encodeURIComponent(genericMessage)}`);
 }
