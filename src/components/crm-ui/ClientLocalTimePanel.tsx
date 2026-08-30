@@ -210,16 +210,23 @@ function LocationCard({
   location,
   now,
   photoHero,
+  hideNigeriaComparison,
 }: {
   location: SavedLocation;
   now: Date | null;
   photoHero?: boolean;
+  // Client Portal only (brief: "The Client Portal should not reference
+  // Lagos or agent locations") - the Nigeria time-difference line only
+  // makes sense from a Winsalot calling agent's own point of view, never
+  // to a Winsalot client viewing their own campaign portal. Every other
+  // dashboard (Growth CRM, Lead Gen CRM admin/agent) keeps it unchanged.
+  hideNigeriaComparison?: boolean;
 }) {
   const formatted = now ? formatClock(now, location.timeZone) : null;
   const region = findRegion(location.country, location.regionCode);
   const city = findCity(location.country, location.regionCode, location.city);
   const callingStatus = now ? getCallingStatus(now, location.timeZone) : null;
-  const nigeriaDiff = now ? getNigeriaTimeDiffLabel(now, location.timeZone) : null;
+  const nigeriaDiff = now && !hideNigeriaComparison ? getNigeriaTimeDiffLabel(now, location.timeZone) : null;
   // Always called (rules of hooks) - falls back to 0,0 when the location
   // hasn't resolved to a known city yet; the `city &&` guards below just
   // skip rendering the result in that edge case, same as before.
@@ -318,10 +325,12 @@ function LocationCard({
 
         {/* Market Snapshot */}
         <div className="mt-3 space-y-1.5 border-t border-[var(--crm-border,#dce4ec)] pt-2.5" suppressHydrationWarning>
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
-            <Globe2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
-            {nigeriaDiff ?? "—"}
-          </div>
+          {!hideNigeriaComparison && (
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
+              <Globe2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+              {nigeriaDiff ?? "—"}
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--crm-text-soft,#4b5c71)] sm:text-xs">
             <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
             {BUSINESS_HOURS_LABEL}
@@ -351,6 +360,7 @@ export default function ClientLocalTimePanel({
   saveLocationsAction,
   resetLocationsAction,
   cardVariant = "default",
+  hideNigeriaComparison = false,
 }: {
   initialPreferences: TimeZonePreferences;
   saveLocationsAction: (
@@ -359,6 +369,9 @@ export default function ClientLocalTimePanel({
   ) => Promise<{ error?: string }>;
   resetLocationsAction: () => Promise<{ error?: string }>;
   cardVariant?: "default" | "photoHero";
+  // Client Portal only - see LocationCard's own comment for why. Defaults
+  // to false (unchanged) everywhere else.
+  hideNigeriaComparison?: boolean;
 }) {
   const now = useTickingClock();
 
@@ -426,8 +439,8 @@ export default function ClientLocalTimePanel({
         </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-        <LocationCard location={preferences.location1} now={now} photoHero={cardVariant === "photoHero"} />
-        <LocationCard location={preferences.location2} now={now} photoHero={cardVariant === "photoHero"} />
+        <LocationCard location={preferences.location1} now={now} photoHero={cardVariant === "photoHero"} hideNigeriaComparison={hideNigeriaComparison} />
+        <LocationCard location={preferences.location2} now={now} photoHero={cardVariant === "photoHero"} hideNigeriaComparison={hideNigeriaComparison} />
       </div>
 
       {editing && (

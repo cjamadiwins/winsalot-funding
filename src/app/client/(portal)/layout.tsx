@@ -37,6 +37,10 @@ export default async function ClientPortalLayout({ children }: { children: React
           initialPreferences: timeZonePreferences,
           saveLocationsAction: saveUserTimeZonePreferences,
           resetLocationsAction: resetUserTimeZonePreferences,
+          // Brief: "The Client Portal should not reference Lagos or agent
+          // locations." Every other dashboard (Growth CRM, Lead Gen CRM
+          // admin/agent) omits this flag and keeps the comparison.
+          hideNigeriaComparison: true,
         }}
       >
         {children}

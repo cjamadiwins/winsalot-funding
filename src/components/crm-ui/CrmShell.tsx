@@ -171,6 +171,10 @@ export default function CrmShell({
     // directly on it (Lead Gen admin's redesign); omit for the original
     // small-strip-plus-white-body card every other portal keeps.
     cardVariant?: "default" | "photoHero";
+    // Client Portal only (brief: "should not reference Lagos or agent
+    // locations") - omit everywhere else to keep the Growth CRM and Lead
+    // Gen CRM staff dashboards unchanged.
+    hideNigeriaComparison?: boolean;
   };
   children: ReactNode;
 }) {
@@ -266,6 +270,7 @@ export default function CrmShell({
           saveLocationsAction={clientLocalTime.saveLocationsAction}
           resetLocationsAction={clientLocalTime.resetLocationsAction}
           cardVariant={clientLocalTime.cardVariant}
+          hideNigeriaComparison={clientLocalTime.hideNigeriaComparison}
         />
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
