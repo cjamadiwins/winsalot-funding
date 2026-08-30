@@ -85,11 +85,12 @@ export type ConsultationEmailParams = {
 
 // Confirmation copy is fixed exactly to the brief's required subject and
 // body template - do not reword without checking the brief first. Subject
-// names the company (deliverability brief: subjects should read like
-// "Your appointment with Winsalot Corp" rather than a generic line) so the
-// recipient recognizes the sender at a glance, which is also what keeps a
-// transactional message out of the pattern Gmail's Promotions classifier
-// looks for.
+// is the literal, exact line the brief requires - "Your appointment with
+// Winsalot Corp." - with no "is confirmed" or other promotional wording
+// appended, so it reads as plainly as possible and keeps a transactional
+// message out of the pattern Gmail's Promotions classifier looks for. The
+// "[TEST] " prefix a test send shows in front of this comes from
+// testSubject() in send-test-email.ts, not from this string.
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const subject = "Your appointment with Winsalot Corp.";
