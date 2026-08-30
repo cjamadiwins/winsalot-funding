@@ -24,6 +24,18 @@ export type LeadgenUserRow = {
   // them (see src/lib/attendance-pay.ts). Admin-set from the Attendance
   // page, migration 0075.
   scheduled_start_time: string | null;
+  // Client Portal Access audit trail (migration 0114) - null for every
+  // agent/admin row and for a client row that hasn't reached that stage
+  // yet. See src/lib/client-portal-shared.ts's derivePortalStatus() for
+  // how these combine with `active` into the Growth CRM's tri-state
+  // Not Created/Active/Disabled Portal Status.
+  invited_at: string | null;
+  invited_by: string | null;
+  activated_at: string | null;
+  activated_by: string | null;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+  last_login_at: string | null;
 };
 
 export type LeadgenAgentAttendanceRow = {
@@ -94,6 +106,43 @@ export type LeadgenCampaignRow = {
   // migration 0077.
   pilot_label: string | null;
   appointment_goal: number | null;
+};
+
+// Client Portal Access management (migration 0114) - a Growth CRM
+// concept, but this type describes the leadgen_client_id-scoped
+// crm_client_portal_activity row itself, so it lives alongside the other
+// leadgen-domain types it references. See src/lib/client-portal-shared.ts
+// for the derived tri-state Portal Status and the growth-CRM-side row
+// shape (CrmClientPortalActivityRow).
+export const LEADGEN_LEAD_CLIENT_FEEDBACK_OPTIONS = [
+  "Good Lead",
+  "Follow Up",
+  "Not Qualified",
+  "Appointment Completed",
+  "Converted / Won",
+  "Not Interested",
+] as const;
+
+export type LeadgenLeadClientFeedbackOption = (typeof LEADGEN_LEAD_CLIENT_FEEDBACK_OPTIONS)[number];
+
+export const LEADGEN_LEAD_CLIENT_FEEDBACK_STYLES: Record<LeadgenLeadClientFeedbackOption, string> = {
+  "Good Lead": "bg-emerald-100 text-emerald-800",
+  "Follow Up": "bg-amber-100 text-amber-800",
+  "Not Qualified": "bg-rose-100 text-rose-800",
+  "Appointment Completed": "bg-sky-100 text-sky-800",
+  "Converted / Won": "bg-indigo-100 text-indigo-800",
+  "Not Interested": "bg-slate-200 text-slate-600",
+};
+
+export type LeadgenLeadClientFeedbackRow = {
+  id: string;
+  created_at: string;
+  lead_id: string;
+  client_id: string;
+  submitted_by: string;
+  submitted_by_name: string;
+  feedback: LeadgenLeadClientFeedbackOption;
+  note: string | null;
 };
 
 // A single agent-restricted-to-campaign assignment (leadgen_campaign_agents,
@@ -194,6 +243,11 @@ export type LeadgenLeadRow = {
   next_follow_up_at: string | null;
   notes: string | null;
   created_by: string | null;
+  // Optional admin/agent-written note that IS meant to be shown to the
+  // client login on their lead detail page (migration 0114) - entirely
+  // separate from `notes` above, which stays internal-only (never covered
+  // by any client RLS policy), exactly like leadgen_lead_activities.
+  client_notes: string | null;
 };
 
 export const LEADGEN_ACTIVITY_TYPES = [

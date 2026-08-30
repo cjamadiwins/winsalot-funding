@@ -40,6 +40,18 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
 
   if (!leadgenUser.active) {
     await supabase.auth.signOut();
+    // A disabled *client* login gets the Client Portal's own wording and
+    // is bounced back to /client (not /leadgen/login) - both the exact
+    // message and destination the brief specifies for "Disable Portal
+    // Access" ("The client should see a professional message..."). Admin/
+    // agent deactivation is unchanged.
+    if (leadgenUser.role === "client") {
+      redirect(
+        `/client?error=${encodeURIComponent(
+          "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp if you believe this is an error."
+        )}`
+      );
+    }
     redirect(`/leadgen/login?error=${encodeURIComponent("Your account has been deactivated. Please contact the administrator.")}`);
   }
 
@@ -84,6 +96,30 @@ export async function requireLeadgenClient(slug: string): Promise<{ user: Leadge
 
   if (!client || client.id !== user.client_id) {
     notFound();
+  }
+
+  return { user, client: client as LeadgenClientRow };
+}
+
+// Gates the canonical, slug-free Client Portal at /client/... (the
+// brief's "MAIN CLIENT PORTAL LOCATION"). Identity comes entirely from
+// the signed-in session's own client_id - there is no slug or id in the
+// URL at all for a client login to tamper with, closing off the IDOR
+// surface a URL-embedded identifier would otherwise create. The old
+// /leadgen/client/[slug]/... routes still exist as thin redirects into
+// this one (see that directory) so a stale bookmark/email link keeps
+// working.
+export async function requireLeadgenPortalClient(): Promise<{ user: LeadgenUserRow; client: LeadgenClientRow }> {
+  const user = await requireLeadgenUser();
+  if (user.role !== "client" || !user.client_id) {
+    redirect("/client?error=This account is not a client account.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: client } = await supabase.from("leadgen_clients").select("*").eq("id", user.client_id).maybeSingle();
+
+  if (!client) {
+    redirect("/client?error=Your client account could not be found. Please contact Winsalot Corp.");
   }
 
   return { user, client: client as LeadgenClientRow };

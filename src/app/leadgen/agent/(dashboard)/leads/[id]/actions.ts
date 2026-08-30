@@ -70,6 +70,7 @@ export async function updateLeadAction(leadId: string, formData: FormData): Prom
       province,
       lead_source: textOrNull(formData, "lead_source"),
       notes: textOrNull(formData, "notes"),
+      client_notes: textOrNull(formData, "client_notes"),
       updated_at: new Date().toISOString(),
     })
     .eq("id", leadId);

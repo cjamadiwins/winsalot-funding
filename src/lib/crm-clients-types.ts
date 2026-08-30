@@ -92,6 +92,13 @@ export type CrmClientRow = {
 
   archived_at: string | null;
   archived_by: string | null;
+
+  // Client Portal Access (migration 0114) - optional link to the Lead
+  // Generation CRM client/campaign this Growth CRM client corresponds to.
+  // Null until an admin explicitly links (or creates-and-links) one from
+  // the client profile's "Client Portal Access" section - see
+  // src/lib/client-portal-shared.ts/-data.ts.
+  leadgen_client_id: string | null;
 };
 
 export type CrmClientAgentRow = {

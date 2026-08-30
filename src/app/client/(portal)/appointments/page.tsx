@@ -1,10 +1,9 @@
-import { requireLeadgenClient } from "@/lib/leadgen-auth";
+import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow } from "@/lib/leadgen-types";
 
-export default async function LeadgenClientAppointmentsPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const { client } = await requireLeadgenClient(slug);
+export default async function ClientPortalAppointmentsPage() {
+  const { client } = await requireLeadgenPortalClient();
   const supabase = await createSupabaseServerClient();
 
   const { data: appointments } = await supabase

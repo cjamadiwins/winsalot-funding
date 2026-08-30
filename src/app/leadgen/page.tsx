@@ -1,6 +1,5 @@
-import { redirect, notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { requireLeadgenUser } from "@/lib/leadgen-auth";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 // Role router: the single post-login landing spot for every Lead
 // Generation CRM account. requireLeadgenUser() bounces a signed-out
@@ -12,14 +11,7 @@ export default async function LeadgenRootPage() {
   if (user.role === "admin") redirect("/leadgen/admin");
   if (user.role === "agent") redirect("/leadgen/agent");
 
-  // role === "client"
-  const supabase = await createSupabaseServerClient();
-  const { data: client } = await supabase
-    .from("leadgen_clients")
-    .select("slug")
-    .eq("id", user.client_id as string)
-    .maybeSingle();
-
-  if (!client) notFound();
-  redirect(`/leadgen/client/${client.slug}`);
+  // role === "client" - the canonical, slug-free Client Portal (see
+  // requireLeadgenPortalClient in src/lib/leadgen-auth.ts).
+  redirect("/client/dashboard");
 }

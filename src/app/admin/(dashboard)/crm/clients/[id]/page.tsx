@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchClientDetail, fetchClientRelatedCounts } from "@/lib/crm-clients-data";
+import { fetchPortalActivity, fetchPortalUserForLeadgenClient, fetchUnlinkedLeadgenClients } from "@/lib/client-portal-data";
 import type { CrmUserRow } from "@/lib/crm-types";
 import ClientProfileClient from "@/components/crm-clients/ClientProfileClient";
+import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccessPanel";
 import {
   updateClientAction,
   archiveClientAction,
@@ -15,6 +17,16 @@ import {
   deleteClientAppointmentAction,
   recordStandaloneClientPaymentAction,
 } from "../actions";
+import {
+  linkLeadgenClientAction,
+  createAndLinkLeadgenClientAction,
+  createPortalAccessAction,
+  activatePortalAccessAction,
+  disablePortalAccessAction,
+  reactivatePortalAccessAction,
+  sendPortalInviteAction,
+  resetClientAccessAction,
+} from "./portal-actions";
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   await requireCrmAdmin();
@@ -28,7 +40,14 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 
   if (error || !detail) notFound();
 
-  const relatedCounts = await fetchClientRelatedCounts(supabase, id);
+  const [relatedCounts, unlinkedLeadgenClients, portalActivity] = await Promise.all([
+    fetchClientRelatedCounts(supabase, id),
+    fetchUnlinkedLeadgenClients(detail.client.leadgen_client_id ?? null),
+    fetchPortalActivity(supabase, id),
+  ]);
+
+  const linkedLeadgenClient = unlinkedLeadgenClients.find((c) => c.id === detail.client.leadgen_client_id) ?? null;
+  const portalUser = detail.client.leadgen_client_id ? await fetchPortalUserForLeadgenClient(detail.client.leadgen_client_id) : null;
 
   return (
     <div>
@@ -45,6 +64,24 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         recordAppointmentAction={recordClientAppointmentAction}
         deleteAppointmentAction={deleteClientAppointmentAction}
         recordPaymentAction={recordStandaloneClientPaymentAction}
+      />
+
+      <ClientPortalAccessPanel
+        crmClientId={id}
+        leadgenClientId={detail.client.leadgen_client_id ?? null}
+        leadgenClientName={linkedLeadgenClient?.name ?? null}
+        leadgenClientSlug={linkedLeadgenClient?.slug ?? null}
+        unlinkedLeadgenClients={unlinkedLeadgenClients}
+        portalUser={portalUser}
+        activity={portalActivity}
+        linkAction={linkLeadgenClientAction}
+        createAndLinkAction={createAndLinkLeadgenClientAction}
+        createAccessAction={createPortalAccessAction}
+        activateAction={activatePortalAccessAction}
+        disableAction={disablePortalAccessAction}
+        reactivateAction={reactivatePortalAccessAction}
+        sendInviteAction={sendPortalInviteAction}
+        resetAccessAction={resetClientAccessAction}
       />
     </div>
   );
