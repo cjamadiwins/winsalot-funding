@@ -112,6 +112,13 @@ export async function sendPortalEmail(input: SendPortalEmailInput): Promise<Send
     html,
     sentBy: null,
     clientVisible: true,
+    // Client-facing portal emails only - shows as "Winsalot Corp" in the
+    // client's inbox, not the "C.J. at Winsalot Corp" personal-name
+    // sender every other leadgen email (consultation, Mantra Collab
+    // intro, appointment reminders, etc.) still uses by default. Swaps
+    // only the display name; the underlying verified sending address is
+    // unchanged (buildLeadgenSenderWithDisplayName in leadgen-email.ts).
+    senderDisplayNameOverride: "Winsalot Corp",
   });
 
   if (result.error) return { error: result.error };
