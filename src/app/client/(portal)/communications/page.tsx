@@ -1,10 +1,9 @@
-import { requireLeadgenClient } from "@/lib/leadgen-auth";
+import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailRow } from "@/lib/leadgen-types";
 
-export default async function LeadgenClientCommunicationsPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const { client } = await requireLeadgenClient(slug);
+export default async function ClientPortalCommunicationsPage() {
+  const { client } = await requireLeadgenPortalClient();
   const supabase = await createSupabaseServerClient();
 
   // RLS (leadgen_emails_client_select_own) already excludes drafts and

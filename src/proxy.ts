@@ -26,7 +26,11 @@ export async function proxy(request: NextRequest) {
   if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
-  if (isGrowthCrmHost(host) && pathname.startsWith("/leadgen")) {
+  // /client is the Client Portal (brief: "MAIN CLIENT PORTAL LOCATION" -
+  // https://leads.winsalotcorp.com/client) - it belongs exclusively to the
+  // Lead Gen CRM, same as /leadgen itself, so it gets the same Growth CRM
+  // host guard below.
+  if (isGrowthCrmHost(host) && (pathname.startsWith("/leadgen") || pathname.startsWith("/client"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -66,6 +70,17 @@ export async function proxy(request: NextRequest) {
       "/leadgen/set-password",
       "/leadgen/forgot-password",
     ]);
+  }
+
+  if (pathname.startsWith("/client")) {
+    // The Client Portal itself - /client is both the login page and the
+    // gate's loginPath (unlike every other section, which logs in at a
+    // nested /login path), landing at /client/dashboard. Same Supabase
+    // Auth session/cookie as /leadgen/* (authCookieName only varies by
+    // host, not path) - role-specific authorization (must be an active
+    // leadgen_users role='client' row) happens server-side in
+    // requireLeadgenPortalClient() (src/lib/leadgen-auth.ts).
+    return handleSessionGate(request, host, "/client", "/client/dashboard");
   }
 
   return NextResponse.next();
@@ -218,5 +233,5 @@ async function getUserWithTimeout(
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*"],
+  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*", "/client/:path*"],
 };

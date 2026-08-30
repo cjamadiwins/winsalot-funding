@@ -493,6 +493,11 @@ export default function LeadDetailClient({
                 <span className="text-[13px] font-semibold text-slate-600">Notes</span>
                 <textarea name="notes" defaultValue={lead.notes ?? ""} className={`${inputClass} min-h-[70px] resize-y`} />
               </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Client-Visible Notes</span>
+                <span className="text-[11.5px] text-slate-500">Shown to the client on their own Client Portal lead detail page - never internal agent/admin notes.</span>
+                <textarea name="client_notes" defaultValue={lead.client_notes ?? ""} className={`${inputClass} min-h-[70px] resize-y`} />
+              </label>
               <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
                 Save
               </button>
@@ -535,6 +540,12 @@ export default function LeadDetailClient({
                 <div className="border-t border-slate-100 pt-2.5">
                   <dt className="text-slate-500">Notes</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-slate-900">{lead.notes}</dd>
+                </div>
+              )}
+              {lead.client_notes && (
+                <div className="border-t border-slate-100 pt-2.5">
+                  <dt className="text-slate-500">Client-Visible Notes</dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-slate-900">{lead.client_notes}</dd>
                 </div>
               )}
             </dl>
