@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { CrmFollowUpWithOpportunity, CrmOpportunityRow, CrmUserRow } from "@/lib/crm-types";
+import { isDueToday, isOverdue, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
+import { CRM_PERFORMANCE_TIMEZONE } from "@/lib/crm-performance";
 import AdminCrmClient from "./AdminCrmClient";
 import AdminFollowUps from "./AdminFollowUps";
 import AdminOverdueOpportunitiesPanel from "./AdminOverdueOpportunitiesPanel";
@@ -10,7 +12,13 @@ import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPrevie
 import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
-import { Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
+import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, CalendarCheck, Clock, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
+
+function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -21,9 +29,13 @@ import { Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  await requireCrmAdmin();
+  const currentAdmin = await requireCrmAdmin();
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
+  const currentHour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: CRM_PERFORMANCE_TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(new Date())
+  );
+  const firstName = currentAdmin.full_name.trim().split(/\s+/)[0] || currentAdmin.full_name;
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
   // crm_followups_admin_all) permits a full read here because this page
@@ -73,15 +85,63 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     const nextFollowUpAt = opportunityById.get(raw.opportunity_id)?.next_follow_up_at;
     if (nextFollowUpAt && new Date(nextFollowUpAt).getTime() <= nowMs) scoreCounts.followUpsDue += 1;
   }
-  const convertedCount = ((opportunities ?? []) as CrmOpportunityRow[]).filter((o) => o.stage === "Client Won").length;
+  // Main KPI row below - the same crm_opportunities rows already fetched
+  // above, just five of the most-used counts surfaced at the top of the
+  // page (matching the Lead Generation CRM dashboard's layout) instead of
+  // only inside AdminCrmClient's fuller 8-card filter grid further down.
+  // Each predicate mirrors AdminCrmClient's own card logic exactly (same
+  // source array, same rules) rather than a second calculation method.
+  const allOpportunities = (opportunities ?? []) as CrmOpportunityRow[];
+  const totalOpportunities = allOpportunities.length;
+  const interestedOpportunities = allOpportunities.filter((o) => o.stage === "Interested").length;
+  const consultationsBooked = allOpportunities.filter((o) => o.stage === "Consultation Booked").length;
+  const followUpsDue = allOpportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
+  const convertedCount = allOpportunities.filter((o) => o.stage === "Client Won").length;
+
+  const mainStats = [
+    { label: "Total Opportunities", value: totalOpportunities, icon: Users, tone: "blue" as const },
+    { label: "Interested Opportunities", value: interestedOpportunities, icon: UserCheck, tone: "indigo" as const },
+    { label: "Consultations Booked", value: consultationsBooked, icon: CalendarCheck, tone: "green" as const },
+    { label: "Follow-Ups Due", value: followUpsDue, icon: Clock, tone: "amber" as const },
+    { label: "Clients Won", value: convertedCount, icon: Trophy, tone: "purple" as const },
+  ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">CRM</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
-        from initial prospect through to a client won or lost.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {greetingForHour(currentHour)}, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
+            from initial prospect through to a client won or lost.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <Link
+            href="/admin/crm/opportunities/new"
+            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2.3} />
+            Add Opportunity
+          </Link>
+          <Link
+            href="/admin/crm/appointments?openAdd=1"
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+          >
+            <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
+            Book Call / Appointment
+          </Link>
+          <Link
+            href="/admin/crm/clients"
+            className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-teal-700"
+          >
+            <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
+            View Reports
+          </Link>
+        </div>
+      </div>
 
       {deleted === "opportunity" && (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -95,7 +155,13 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         </p>
       )}
 
-      <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {mainStats.map((stat) => (
+          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
+        ))}
+      </div>
+
+      <h2 className="mt-8 text-lg font-bold text-slate-900">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard label="High Opportunities" value={scoreCounts.high} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.high} href="/admin/crm/opportunity-finder?category=high" />
         <KpiCard label="Medium Opportunities" value={scoreCounts.medium} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.medium} href="/admin/crm/opportunity-finder?category=medium" />

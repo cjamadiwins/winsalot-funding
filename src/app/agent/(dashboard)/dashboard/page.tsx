@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
@@ -130,12 +131,29 @@ export default async function AgentDashboardPage() {
             Welcome back, {crmUser.full_name || crmUser.email}.
           </p>
         </div>
-        <Link
-          href="/agent/opportunities/new"
-          className="whitespace-nowrap rounded-full bg-[var(--color-accent)] px-5 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          + New Opportunity
-        </Link>
+        <div className="flex flex-wrap gap-2.5">
+          <Link
+            href="/agent/opportunities/new"
+            className="flex items-center gap-2 whitespace-nowrap rounded-full bg-[var(--color-accent)] px-5 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2.3} />
+            Add Opportunity
+          </Link>
+          <Link
+            href="/agent/appointments?openAdd=1"
+            className="flex items-center gap-2 whitespace-nowrap rounded-full border-[1.5px] border-[var(--color-accent)]/30 bg-[var(--color-input-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--color-accent)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+          >
+            <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
+            Book Call / Appointment
+          </Link>
+          <Link
+            href="/agent/performance"
+            className="flex items-center gap-2 whitespace-nowrap rounded-full bg-teal-600 px-5 py-3 text-[15px] font-semibold text-white transition hover:bg-teal-700"
+          >
+            <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
+            View Reports
+          </Link>
+        </div>
       </div>
 
       <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
