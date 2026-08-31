@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { unstable_rethrow } from "next/navigation";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
@@ -73,6 +74,15 @@ export default function AdminOpportunityDetailClient({
       try {
         await fn();
       } catch (err) {
+        // deleteOpportunityAction redirects internally, which Next.js
+        // implements by throwing a special NEXT_REDIRECT-digest error -
+        // without this, that error looked just like any other failure
+        // here and briefly rendered as a red "Something went wrong."
+        // banner in the instant before the redirect actually took over.
+        // unstable_rethrow lets that (and notFound()'s NEXT_HTTP_ERROR_
+        // FALLBACK) pass through to Next.js untouched; only a real
+        // application error reaches setError below.
+        unstable_rethrow(err);
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     });
