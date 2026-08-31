@@ -49,6 +49,7 @@ const NAV_ITEMS: CrmNavItem[] = [
 export default async function AgentLayout({ children }: { children: ReactNode }) {
   const crmUser = await requireCrmUser();
 
+  const agentDisplayName = crmUser.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const [{ data: notifications }, chatUnreadCount] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
@@ -75,7 +76,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/agent/dashboard"
         navItems={navItems}
-        userLabel={crmUser.full_name || crmUser.email}
+        userLabel={agentDisplayName}
         signOutAction={agentSignOutAction}
         clientLocalTime={{
           initialPreferences: timeZonePreferences,

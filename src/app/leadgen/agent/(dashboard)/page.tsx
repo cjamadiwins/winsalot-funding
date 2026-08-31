@@ -28,6 +28,7 @@ import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
+  const agentDisplayName = agent.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
 
@@ -137,7 +138,7 @@ export default async function LeadgenAgentDashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Welcome, {agent.full_name}</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Welcome, {agentDisplayName}</h1>
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

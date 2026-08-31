@@ -43,6 +43,7 @@ const NAV_ITEMS: CrmNavItem[] = [
 
 export default async function LeadgenAgentLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAgent();
+  const agentDisplayName = user.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const [{ data: notifications }, chatUnreadCount] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
@@ -67,7 +68,7 @@ export default async function LeadgenAgentLayout({ children }: { children: React
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/leadgen/agent"
         navItems={navItems}
-        userLabel={user.full_name}
+        userLabel={agentDisplayName}
         signOutAction={signOutLeadgenAgentAction}
         clientLocalTime={{
           initialPreferences: timeZonePreferences,

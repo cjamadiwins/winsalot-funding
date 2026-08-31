@@ -23,6 +23,7 @@ import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
+  const agentDisplayName = crmUser.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
 
@@ -128,7 +129,7 @@ export default async function AgentDashboardPage() {
             Dashboard
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Welcome back, {crmUser.full_name || crmUser.email}.
+            Welcome back, {agentDisplayName}.
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">

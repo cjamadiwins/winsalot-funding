@@ -3,7 +3,6 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { isDueToday, isOverdue, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
-import { CRM_PERFORMANCE_TIMEZONE } from "@/lib/crm-performance";
 import AdminCrmClient from "./AdminCrmClient";
 import AdminFollowUps from "./AdminFollowUps";
 import AdminOverdueOpportunitiesPanel from "./AdminOverdueOpportunitiesPanel";
@@ -14,12 +13,6 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, CalendarCheck, Clock, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 
-function greetingForHour(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
 // and follow-ups across every agent. Replaces the old bid-scraper
@@ -29,13 +22,9 @@ function greetingForHour(hour: number): string {
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  const currentAdmin = await requireCrmAdmin();
+  await requireCrmAdmin();
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const currentHour = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: CRM_PERFORMANCE_TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(new Date())
-  );
-  const firstName = currentAdmin.full_name.trim().split(/\s+/)[0] || currentAdmin.full_name;
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
   // crm_followups_admin_all) permits a full read here because this page
@@ -111,7 +100,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {greetingForHour(currentHour)}, {firstName}
+            Good afternoon, Winsalot Corp.
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
