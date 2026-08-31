@@ -34,17 +34,20 @@ export async function fetchLeadgenClientById(id: string): Promise<{ id: string; 
 // Access panel does throughout) exactly one portal login per client -
 // the newest is used as a defensive tie-breaker if more than one somehow
 // exists, rather than erroring.
-export async function fetchPortalUserForLeadgenClient(leadgenClientId: string): Promise<PortalLeadgenUserSummary | null> {
+export async function fetchPortalUsersForLeadgenClient(leadgenClientId: string): Promise<PortalLeadgenUserSummary[]> {
   const admin = getSupabaseAdmin();
   const { data } = await admin
     .from("leadgen_users")
     .select("id, full_name, email, active, created_at, invited_at, activated_at, deactivated_at, last_login_at")
     .eq("client_id", leadgenClientId)
     .eq("role", "client")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data as PortalLeadgenUserSummary | null) ?? null;
+    .order("created_at", { ascending: true });
+  return (data as PortalLeadgenUserSummary[] | null) ?? [];
+}
+
+export async function fetchPortalUserForLeadgenClient(leadgenClientId: string): Promise<PortalLeadgenUserSummary | null> {
+  const users = await fetchPortalUsersForLeadgenClient(leadgenClientId);
+  return users[0] ?? null;
 }
 
 export async function fetchPortalActivity(
