@@ -123,7 +123,7 @@ export default function ProspectEmailModal({
 
           <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-[13px] sm:grid-cols-2">
             <div>
-              <span className="font-semibold text-slate-600">CTA button text</span>
+              <span className="font-semibold text-slate-600">Booking link text</span>
               <p className="mt-0.5 text-slate-700">{defaults.ctaText}</p>
             </div>
             <div>
