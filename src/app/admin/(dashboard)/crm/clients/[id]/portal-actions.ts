@@ -5,7 +5,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isValidEmail, slugifyClientName } from "@/lib/leadgen-types";
-import { fetchLeadgenClientById, fetchPortalUserForLeadgenClient } from "@/lib/client-portal-data";
+import { fetchLeadgenClientById, fetchPortalUsersForLeadgenClient } from "@/lib/client-portal-data";
 import { sendPortalEmail } from "@/lib/client-portal-emails";
 import type { CrmClientPortalActivityAction } from "@/lib/client-portal-shared";
 import type { CrmUserRow } from "@/lib/crm-types";
@@ -112,8 +112,8 @@ export async function createPortalAccessAction(crmClientId: string, formData: Fo
   if (!crmClient) return { error: "Client not found." };
   if (!crmClient.leadgen_client_id) return { error: "Link this client to a Lead Generation CRM client first." };
 
-  const existingPortalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
-  if (existingPortalUser) return { error: "Portal access already exists for this client." };
+  const existingPortalUsers = await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id);
+  if (existingPortalUsers.length >= 2) return { error: "This client already has the maximum of two portal login accounts." };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim() || crmClient.company_name;
@@ -162,14 +162,14 @@ export async function createPortalAccessAction(crmClientId: string, formData: Fo
 // login uses reactivatePortalAccessAction instead, so the two show up as
 // distinct, correctly-labeled history entries even though the underlying
 // column update is identical.
-export async function activatePortalAccessAction(crmClientId: string): Promise<ActionResult> {
+export async function activatePortalAccessAction(crmClientId: string, portalUserId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const crmClient = await loadCrmClientLink(supabase, crmClientId);
   if (!crmClient?.leadgen_client_id) return { error: "Client not found or not linked to a Lead Generation client." };
 
-  const portalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
+  const portalUser = (await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id)).find((user) => user.id === portalUserId);
   if (!portalUser) return { error: "Create portal access first." };
   if (portalUser.active) return { error: "Portal access is already active." };
   if (portalUser.activated_at) return { error: "This portal was previously active - use Reactivate Portal Access instead." };
@@ -191,14 +191,14 @@ export async function activatePortalAccessAction(crmClientId: string): Promise<A
 // re-checks the `active` flag on every request and signs the client out
 // the moment it's false, even mid-session) without touching any lead,
 // appointment, campaign, or client record.
-export async function disablePortalAccessAction(crmClientId: string): Promise<ActionResult> {
+export async function disablePortalAccessAction(crmClientId: string, portalUserId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const crmClient = await loadCrmClientLink(supabase, crmClientId);
   if (!crmClient?.leadgen_client_id) return { error: "Client not found or not linked to a Lead Generation client." };
 
-  const portalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
+  const portalUser = (await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id)).find((user) => user.id === portalUserId);
   if (!portalUser) return { error: "Portal access has not been created for this client." };
   if (!portalUser.active) return { error: "Portal access is already disabled." };
 
@@ -218,14 +218,14 @@ export async function disablePortalAccessAction(crmClientId: string): Promise<Ac
 // "REACTIVATE PORTAL ACCESS" - restores access without creating a new
 // account or losing any portal history (same leadgen_users row, same id,
 // same email - only `active` and the activated_at/by bookkeeping change).
-export async function reactivatePortalAccessAction(crmClientId: string): Promise<ActionResult> {
+export async function reactivatePortalAccessAction(crmClientId: string, portalUserId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const crmClient = await loadCrmClientLink(supabase, crmClientId);
   if (!crmClient?.leadgen_client_id) return { error: "Client not found or not linked to a Lead Generation client." };
 
-  const portalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
+  const portalUser = (await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id)).find((user) => user.id === portalUserId);
   if (!portalUser) return { error: "Create portal access first." };
   if (portalUser.active) return { error: "Portal access is already active." };
   if (!portalUser.activated_at) return { error: "This portal has never been activated - use Activate Portal Access instead." };
@@ -247,14 +247,14 @@ export async function reactivatePortalAccessAction(crmClientId: string): Promise
 // only difference is the activity log wording and the invited_at
 // bookkeeping; the email itself is safe to send any number of times (a
 // fresh single-use link is generated on every call).
-export async function sendPortalInviteAction(crmClientId: string): Promise<ActionResult> {
+export async function sendPortalInviteAction(crmClientId: string, portalUserId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const crmClient = await loadCrmClientLink(supabase, crmClientId);
   if (!crmClient?.leadgen_client_id) return { error: "Client not found or not linked to a Lead Generation client." };
 
-  const portalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
+  const portalUser = (await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id)).find((user) => user.id === portalUserId);
   if (!portalUser) return { error: "Create portal access first." };
 
   const isResend = Boolean(portalUser.invited_at);
@@ -279,14 +279,14 @@ export async function sendPortalInviteAction(crmClientId: string): Promise<Actio
 // "RESET CLIENT ACCESS" - a secure Supabase recovery link, emailed the
 // same way as the invite. No plain-text password is ever generated or
 // shown in the CRM.
-export async function resetClientAccessAction(crmClientId: string): Promise<ActionResult> {
+export async function resetClientAccessAction(crmClientId: string, portalUserId: string): Promise<ActionResult> {
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
   const crmClient = await loadCrmClientLink(supabase, crmClientId);
   if (!crmClient?.leadgen_client_id) return { error: "Client not found or not linked to a Lead Generation client." };
 
-  const portalUser = await fetchPortalUserForLeadgenClient(crmClient.leadgen_client_id);
+  const portalUser = (await fetchPortalUsersForLeadgenClient(crmClient.leadgen_client_id)).find((user) => user.id === portalUserId);
   if (!portalUser) return { error: "Create portal access first." };
 
   const sendResult = await sendPortalEmail({

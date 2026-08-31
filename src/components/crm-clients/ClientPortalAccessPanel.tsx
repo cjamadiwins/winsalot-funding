@@ -30,7 +30,7 @@ export default function ClientPortalAccessPanel({
   leadgenClientName,
   leadgenClientSlug,
   unlinkedLeadgenClients,
-  portalUser,
+  portalUsers,
   activity,
   linkAction,
   createAndLinkAction,
@@ -46,16 +46,16 @@ export default function ClientPortalAccessPanel({
   leadgenClientName: string | null;
   leadgenClientSlug: string | null;
   unlinkedLeadgenClients: LeadgenClientOption[];
-  portalUser: PortalLeadgenUserSummary | null;
+  portalUsers: PortalLeadgenUserSummary[];
   activity: CrmClientPortalActivityRow[];
   linkAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
   createAndLinkAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
   createAccessAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
-  activateAction: (clientId: string) => Promise<ActionResult>;
-  disableAction: (clientId: string) => Promise<ActionResult>;
-  reactivateAction: (clientId: string) => Promise<ActionResult>;
-  sendInviteAction: (clientId: string) => Promise<ActionResult>;
-  resetAccessAction: (clientId: string) => Promise<ActionResult>;
+  activateAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
+  disableAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
+  reactivateAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
+  sendInviteAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
+  resetAccessAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,9 @@ export default function ClientPortalAccessPanel({
   const [showCreateNew, setShowCreateNew] = useState(false);
   const [showCreateAccess, setShowCreateAccess] = useState(false);
 
-  const portalStatus = derivePortalStatus(portalUser);
+  const portalStatus = portalUsers.some((user) => user.active)
+    ? "active"
+    : derivePortalStatus(portalUsers[0] ?? null);
 
   function runAction(action: () => Promise<ActionResult>, confirmMessage?: string) {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
@@ -135,32 +137,51 @@ export default function ClientPortalAccessPanel({
         </div>
       ) : (
         <>
-          <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
-            <div>
-              <dt className="text-slate-500">Linked Lead Generation Client</dt>
-              <dd className="font-semibold text-slate-900">{leadgenClientName}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Client Login Email</dt>
-              <dd className="font-semibold text-slate-900">{portalUser?.email ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Last Login</dt>
-              <dd className="text-slate-700">{formatDateTime(portalUser?.last_login_at ?? null)}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Portal Account Created</dt>
-              <dd className="text-slate-700">{portalUser ? formatDateTime(portalUser.created_at) : "—"}</dd>
-            </div>
-          </dl>
+          <div className="mt-4 text-[13px]">
+            <span className="text-slate-500">Linked Lead Generation Client: </span>
+            <span className="font-semibold text-slate-900">{leadgenClientName}</span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {portalUsers.map((portalUser, index) => {
+              const accountStatus = derivePortalStatus(portalUser);
+              return (
+                <div key={portalUser.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">Client login {index + 1}: {portalUser.email}</p>
+                      <p className="mt-1 text-[12.5px] text-slate-500">{portalUser.full_name} · Last login: {formatDateTime(portalUser.last_login_at)}</p>
+                      <p className="text-[12.5px] text-slate-500">Created: {formatDateTime(portalUser.created_at)}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${PORTAL_STATUS_STYLES[accountStatus]}`}>
+                      {PORTAL_STATUS_LABELS[accountStatus]}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {accountStatus === "disabled" && !portalUser.activated_at && (
+                      <button type="button" disabled={isPending} onClick={() => runAction(() => activateAction(crmClientId, portalUser.id))} className={primaryButtonClass}>Activate Portal Access</button>
+                    )}
+                    {accountStatus === "disabled" && portalUser.activated_at && (
+                      <button type="button" disabled={isPending} onClick={() => runAction(() => reactivateAction(crmClientId, portalUser.id))} className={primaryButtonClass}>Reactivate Portal Access</button>
+                    )}
+                    {accountStatus === "active" && (
+                      <button type="button" disabled={isPending} onClick={() => runAction(() => disableAction(crmClientId, portalUser.id), `Disable portal access for ${portalUser.email}? Their data and history will be preserved.`)} className="rounded-full border border-rose-300 px-3.5 py-1.5 text-[12.5px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Disable Portal Access</button>
+                    )}
+                    <button type="button" disabled={isPending} onClick={() => runAction(() => sendInviteAction(crmClientId, portalUser.id))} className={buttonClass}>{portalUser.invited_at ? "Resend Portal Invite" : "Send Portal Invite"}</button>
+                    <button type="button" disabled={isPending} onClick={() => runAction(() => resetAccessAction(crmClientId, portalUser.id))} className={buttonClass}>Reset Client Access</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {portalStatus === "not_created" && !showCreateAccess && (
+            {portalUsers.length < 2 && !showCreateAccess && (
               <button type="button" onClick={() => setShowCreateAccess(true)} className={primaryButtonClass}>
-                Create Portal Access
+                {portalUsers.length === 0 ? "Create Portal Access" : "Add Second Client Login"}
               </button>
             )}
-            {portalStatus === "not_created" && showCreateAccess && (
+            {portalUsers.length < 2 && showCreateAccess && (
               <form
                 action={(formData) => runAction(() => createAccessAction(crmClientId, formData))}
                 className="flex flex-wrap items-center gap-2"
@@ -174,43 +195,6 @@ export default function ClientPortalAccessPanel({
                   Cancel
                 </button>
               </form>
-            )}
-
-            {portalStatus === "disabled" && !portalUser?.activated_at && (
-              <button type="button" disabled={isPending} onClick={() => runAction(() => activateAction(crmClientId))} className={primaryButtonClass}>
-                Activate Portal Access
-              </button>
-            )}
-            {portalStatus === "disabled" && portalUser?.activated_at && (
-              <button type="button" disabled={isPending} onClick={() => runAction(() => reactivateAction(crmClientId))} className={primaryButtonClass}>
-                Reactivate Portal Access
-              </button>
-            )}
-            {portalStatus === "active" && (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() =>
-                  runAction(
-                    () => disableAction(crmClientId),
-                    "Disable this client's portal access? They will be immediately signed out and blocked from logging in. Their leads, appointments, and campaign history are all preserved."
-                  )
-                }
-                className="rounded-full border border-rose-300 px-3.5 py-1.5 text-[12.5px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-              >
-                Disable Portal Access
-              </button>
-            )}
-
-            {portalUser && (
-              <button type="button" disabled={isPending} onClick={() => runAction(() => sendInviteAction(crmClientId))} className={buttonClass}>
-                {portalUser.invited_at ? "Resend Portal Invite" : "Send Portal Invite"}
-              </button>
-            )}
-            {portalUser && (
-              <button type="button" disabled={isPending} onClick={() => runAction(() => resetAccessAction(crmClientId))} className={buttonClass}>
-                Reset Client Access
-              </button>
             )}
 
             <a href={CLIENT_PORTAL_URL} target="_blank" rel="noopener noreferrer" className={buttonClass}>

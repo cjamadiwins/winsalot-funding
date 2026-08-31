@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_PRODUCTION_ORIGIN } from "@/lib/client-portal-shared";
+import { isDedicatedClientAuthIdentity } from "@/lib/client-auth-identity";
 
 const ALLOWED_NEXT = new Set(["/client/setup", "/client/reset-password"]);
 
@@ -39,6 +40,14 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut();
     return NextResponse.redirect(
       `${LEADGEN_PRODUCTION_ORIGIN}/client?error=${encodeURIComponent("This link is not associated with a Winsalot client portal account.")}`
+    );
+  }
+
+
+  if (!(await isDedicatedClientAuthIdentity(data.user.id))) {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(
+      `${LEADGEN_PRODUCTION_ORIGIN}/client?error=${encodeURIComponent("Staff accounts cannot be changed through the Client Portal. Use a separate client-only email address.")}`
     );
   }
 

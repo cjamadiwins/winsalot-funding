@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isDedicatedClientAuthIdentity } from "@/lib/client-auth-identity";
 
 export async function completeClientPortalSetupAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
@@ -29,6 +30,11 @@ export async function completeClientPortalSetupAction(formData: FormData) {
   if (!portalUser || portalUser.role !== "client" || !portalUser.client_id) {
     await supabase.auth.signOut();
     redirect(`/client?error=${encodeURIComponent("This account is not a Winsalot client portal account.")}`);
+  }
+
+  if (!(await isDedicatedClientAuthIdentity(authData.user.id))) {
+    await supabase.auth.signOut();
+    redirect(`/client?error=${encodeURIComponent("Staff accounts cannot be changed through the Client Portal. Use a separate client-only email address.")}`);
   }
 
   const { error } = await supabase.auth.updateUser({ password });
