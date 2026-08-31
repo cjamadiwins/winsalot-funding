@@ -459,7 +459,7 @@ export default function LeadsListClient({
           <table className="w-full min-w-[1180px] text-left text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                <th className="p-3">
+                <th className="sticky left-0 z-30 w-11 min-w-11 bg-[var(--crm-surface)] p-3">
                   <input
                     type="checkbox"
                     checked={filtered.length > 0 && filtered.every((l) => selected.has(l.id))}
@@ -468,7 +468,9 @@ export default function LeadsListClient({
                     }
                   />
                 </th>
-                <th className="p-3">Business</th>
+                <th className="sticky left-11 z-30 min-w-48 bg-[var(--crm-surface)] p-3 shadow-[6px_0_8px_-8px_rgba(15,23,42,0.45)]">
+                  Business
+                </th>
                 <th className="p-3">Client</th>
                 <th className="p-3">Campaign</th>
                 <th className="p-3">Agent</th>
@@ -476,16 +478,18 @@ export default function LeadsListClient({
                 <th className="p-3">Appointment Status</th>
                 <th className="p-3">Next Follow-up</th>
                 <th className="p-3">Last Activity</th>
-                <th className="p-3">Actions</th>
+                <th className="sticky right-0 z-30 min-w-28 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.45)]">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((lead) => (
                 <tr key={lead.id} className="border-b border-slate-100">
-                  <td className="p-3">
+                  <td className="sticky left-0 z-20 w-11 min-w-11 bg-[var(--crm-surface)] p-3">
                     <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                   </td>
-                  <td className="p-3">
+                  <td className="sticky left-11 z-20 min-w-48 bg-[var(--crm-surface)] p-3 shadow-[6px_0_8px_-8px_rgba(15,23,42,0.45)]">
                     <Link href={`/leadgen/admin/leads/${lead.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
                       {lead.business_name}
                     </Link>
@@ -533,7 +537,7 @@ export default function LeadsListClient({
                   <td className="p-3 text-slate-600">
                     {lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : "—"}
                   </td>
-                  <td className="p-3">
+                  <td className="sticky right-0 z-20 min-w-28 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.45)]">
                     <div className="flex flex-wrap gap-2">
                       {appointmentIdByLeadId?.[lead.id] && (
                         <Link
