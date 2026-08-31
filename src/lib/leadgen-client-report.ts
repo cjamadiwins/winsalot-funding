@@ -8,12 +8,8 @@ export type LeadgenClientReport = {
   period: LeadgenReportPeriod;
   campaign: LeadgenCampaignRow | null;
   leadsAdded: number;
-  leadsWorked: number;
   interestedLeads: number;
-  followUps: number;
   appointmentsBooked: number;
-  appointmentsCompleted: number;
-  conversionRate: number;
   appointments: LeadgenAppointmentRow[];
   summary: string;
   nextStep: string;
@@ -31,6 +27,19 @@ export function resolveLeadgenReportPeriod(from?: string | null, to?: string | n
   const safeFrom = from && DATE_KEY.test(from) ? from : defaultFrom;
   const safeTo = to && DATE_KEY.test(to) ? to : defaultTo;
   return safeFrom <= safeTo ? { from: safeFrom, to: safeTo } : { from: safeTo, to: safeFrom };
+}
+
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+export function resolveLeadgenReportMonth(month?: string | null): { month: string; period: LeadgenReportPeriod } {
+  const fallback = new Date().toISOString().slice(0, 7);
+  const safeMonth = month && MONTH_KEY.test(month) ? month : fallback;
+  const [year, monthNumber] = safeMonth.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return {
+    month: safeMonth,
+    period: { from: `${safeMonth}-01`, to: `${safeMonth}-${String(lastDay).padStart(2, "0")}` },
+  };
 }
 
 function isoDateKey(value: string | null): string | null {
@@ -54,32 +63,24 @@ export function buildLeadgenClientReport(input: {
     .filter((appointment) => appointment.appointment_date >= period.from && appointment.appointment_date <= period.to)
     .sort((a, b) => `${b.appointment_date}T${b.appointment_time}`.localeCompare(`${a.appointment_date}T${a.appointment_time}`));
   const leadsAdded = leads.filter((lead) => inPeriod(lead.created_at, period)).length;
-  const leadsWorked = leads.filter((lead) => inPeriod(lead.last_contacted_at, period)).length;
   const interestedLeads = leads.filter((lead) => lead.status === "Interested" && inPeriod(lead.last_contacted_at, period)).length;
-  const followUps = leads.filter((lead) => inPeriod(lead.next_follow_up_at, period)).length;
   const appointmentsBooked = appointments.filter((appointment) => isLeadgenAppointmentCountable(appointment.status)).length;
-  const appointmentsCompleted = appointments.filter((appointment) => appointment.status === "Completed").length;
-  const conversionRate = leadsWorked > 0 ? Math.round((appointmentsBooked / leadsWorked) * 1000) / 10 : 0;
   const campaign = campaigns.find((item) => item.status === "active") ?? campaigns[0] ?? null;
 
-  const summary = `${leadsWorked} lead${leadsWorked === 1 ? " was" : "s were"} worked, ${interestedLeads} showed interest, and ${appointmentsBooked} appointment${appointmentsBooked === 1 ? " was" : "s were"} booked during this reporting period.`;
+  const summary = `${leadsAdded} lead${leadsAdded === 1 ? " was" : "s were"} generated, ${interestedLeads} ${interestedLeads === 1 ? "was" : "were"} interested or qualified, and ${appointmentsBooked} appointment${appointmentsBooked === 1 ? " was" : "s were"} booked during this reporting period.`;
   const nextStep = appointmentsBooked > 0
-    ? "Continue following up with interested leads and review the outcomes of booked appointments."
+    ? "Review the outcomes of booked appointments and continue progressing qualified opportunities."
     : interestedLeads > 0
-      ? "Prioritize the interested leads and convert their follow-ups into booked appointments."
-      : "Continue outreach and refine targeting based on the responses received during this period.";
+      ? "Prioritize interested leads and progress them toward booked appointments."
+      : "Refine targeting based on the results received during this period.";
 
   return {
     client,
     period,
     campaign,
     leadsAdded,
-    leadsWorked,
     interestedLeads,
-    followUps,
     appointmentsBooked,
-    appointmentsCompleted,
-    conversionRate,
     appointments,
     summary,
     nextStep,
@@ -97,13 +98,9 @@ export function leadgenClientReportCsv(report: LeadgenClientReport): string {
     ["Period", `${report.period.from} to ${report.period.to}`],
     [],
     ["Metric", "Value"],
-    ["Leads Added", report.leadsAdded],
-    ["Leads Worked", report.leadsWorked],
-    ["Interested Leads", report.interestedLeads],
-    ["Follow-Ups", report.followUps],
+    ["Leads Generated", report.leadsAdded],
+    ["Interested / Qualified Leads", report.interestedLeads],
     ["Appointments Booked", report.appointmentsBooked],
-    ["Completed Appointments", report.appointmentsCompleted],
-    ["Lead-to-Appointment Rate", `${report.conversionRate}%`],
     [],
     ["Appointment Date", "Time", "Business", "Contact", "Meeting Type", "Status"],
     ...report.appointments.map((appointment) => [
