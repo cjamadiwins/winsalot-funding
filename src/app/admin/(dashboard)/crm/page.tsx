@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { requireCrmAdmin } from "@/lib/crm-auth";
 import { isDueToday, isOverdue, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import AdminCrmClient from "./AdminCrmClient";
@@ -21,6 +22,7 @@ import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, Calen
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  await requireCrmAdmin();
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
