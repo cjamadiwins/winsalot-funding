@@ -6,7 +6,7 @@ type Props = {
 
 export default function BrentsEssentialsTrainingContent({ dashboardHref }: Props) {
   return (
-    <div className="space-y-6">
+    <div id="brents-essentials" className="scroll-mt-6 space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
         <h1 className="text-2xl font-bold text-slate-900">Brent&apos;s Essentials - Agent Call Script</h1>
         <p className="mt-2 text-sm text-slate-600">Read-only training material for live calls. Keep this page open while calling prospects.</p>
