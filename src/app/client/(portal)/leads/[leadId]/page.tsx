@@ -36,7 +36,7 @@ export default async function ClientPortalLeadDetailPage({ params }: { params: P
   const { data: lead } = await supabase.from("leadgen_leads").select("*").eq("id", leadId).eq("client_id", client.id).maybeSingle();
   if (!lead) notFound();
 
-  const [{ data: appointments }, { data: feedbackHistory }] = await Promise.all([
+  const [{ data: appointments }, { data: feedbackHistory }, { data: clientActivity }] = await Promise.all([
     supabase.from("leadgen_appointments").select("*").eq("lead_id", leadId).eq("client_id", client.id).order("appointment_date", { ascending: false }),
     supabase
       .from("leadgen_lead_client_feedback")
@@ -44,11 +44,24 @@ export default async function ClientPortalLeadDetailPage({ params }: { params: P
       .eq("lead_id", leadId)
       .eq("client_id", client.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("leadgen_client_activities")
+      .select("id, lead_id, activity_type, summary, occurred_at")
+      .eq("lead_id", leadId)
+      .eq("client_id", client.id)
+      .order("occurred_at", { ascending: false }),
   ]);
 
   const leadRow = lead as LeadgenLeadRow;
   const appointmentRows = (appointments ?? []) as LeadgenAppointmentRow[];
   const feedbackRows = (feedbackHistory ?? []) as LeadgenLeadClientFeedbackRow[];
+  const clientActivityRows = (clientActivity ?? []) as Array<{
+    id: string;
+    lead_id: string;
+    activity_type: string;
+    summary: string;
+    occurred_at: string;
+  }>;
 
   return (
     <div>
@@ -113,6 +126,24 @@ export default async function ClientPortalLeadDetailPage({ params }: { params: P
           <p className="mt-2 whitespace-pre-wrap text-[13.5px] text-slate-700">{leadRow.client_notes}</p>
         </section>
       )}
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Progress Updates</h2>
+        {clientActivityRows.length === 0 ? (
+          <p className="mt-3 text-[13.5px] text-slate-500">No progress updates yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {clientActivityRows.map((activity) => (
+              <li key={activity.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="font-medium text-slate-900">{activity.summary}</span>
+                  <span className="shrink-0 text-[12px] text-slate-500">{formatDateTime(activity.occurred_at)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Appointment Information</h2>
