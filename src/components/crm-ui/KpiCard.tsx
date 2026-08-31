@@ -103,6 +103,7 @@ export default function KpiCard({
   onClick,
   active,
   icon,
+  hideIcon = false,
   tone = "blue",
   trend,
 }: {
@@ -112,6 +113,7 @@ export default function KpiCard({
   onClick?: () => void;
   active?: boolean;
   icon: ReactNode;
+  hideIcon?: boolean;
   tone?: KpiTone;
   trend?: KpiTrend;
 }) {
@@ -126,12 +128,14 @@ export default function KpiCard({
 
   const inner = (
     <>
-      <span
-        className="flex h-9 w-9 items-center justify-center rounded-full shadow-sm ring-1 ring-white/10"
-        style={{ backgroundColor: iconColor }}
-      >
-        {iconEl}
-      </span>
+      {!hideIcon && (
+        <span
+          className="flex h-9 w-9 items-center justify-center rounded-full shadow-sm ring-1 ring-white/10"
+          style={{ backgroundColor: iconColor }}
+        >
+          {iconEl}
+        </span>
+      )}
       <div className="mt-3 text-[26px] font-extrabold leading-none tracking-tight text-[var(--crm-text,#17283b)]">{value}</div>
       <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--crm-text-soft,#4b5c71)]">
         {label}
