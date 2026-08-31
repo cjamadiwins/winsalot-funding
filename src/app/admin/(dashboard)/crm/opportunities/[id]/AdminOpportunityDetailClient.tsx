@@ -354,7 +354,7 @@ export default function AdminOpportunityDetailClient({
             </select>
             <textarea
               name="notes"
-              placeholder="What happened?"
+              placeholder="Internal details — never shown to clients"
               className={`${inputClasses} min-h-[70px] resize-y`}
             />
             <Labeled label="Next Follow-up (optional)">
@@ -366,7 +366,7 @@ export default function AdminOpportunityDetailClient({
           </form>
 
           <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Activity History
+            Internal Activity History
           </h2>
           {activities.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">No activity logged yet.</p>

@@ -343,6 +343,8 @@ export type CrmActivityRow = {
   agent_id: string | null;
   activity_type: ActivityType;
   notes: string | null;
+  client_visible: boolean;
+  client_summary: string | null;
   occurred_at: string;
   next_follow_up_at: string | null;
 };

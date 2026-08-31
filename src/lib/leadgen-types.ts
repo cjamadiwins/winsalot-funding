@@ -300,6 +300,8 @@ export type LeadgenLeadActivityRow = {
   activity_type: LeadgenActivityType;
   call_outcome: LeadgenLeadStatus | null;
   notes: string | null;
+  client_visible: boolean;
+  client_summary: string | null;
   occurred_at: string;
 };
 

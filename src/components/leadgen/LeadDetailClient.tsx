@@ -538,7 +538,7 @@ export default function LeadDetailClient({
               <Row label="Next Follow-up" value={lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : null} />
               {lead.notes && (
                 <div className="border-t border-slate-100 pt-2.5">
-                  <dt className="text-slate-500">Notes</dt>
+                  <dt className="text-slate-500">Internal Notes (staff only)</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-slate-900">{lead.notes}</dd>
                 </div>
               )}
@@ -565,7 +565,7 @@ export default function LeadDetailClient({
                 </option>
               ))}
             </select>
-            <textarea name="notes" placeholder="What happened on the call?" className={`${inputClass} min-h-[60px] resize-y`} />
+            <textarea name="notes" placeholder="Internal call notes — never shown to clients" className={`${inputClass} min-h-[60px] resize-y`} />
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
@@ -575,7 +575,7 @@ export default function LeadDetailClient({
             </button>
           </form>
 
-          <h3 className="mt-6 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Activity Timeline</h3>
+          <h3 className="mt-6 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Internal Activity Timeline</h3>
           {activities.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No activity logged yet.</p>
           ) : (

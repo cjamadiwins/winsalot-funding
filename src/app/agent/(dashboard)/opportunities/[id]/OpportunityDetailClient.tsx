@@ -248,7 +248,7 @@ export default function OpportunityDetailClient({
 
           <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-5">
             <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-              Activity Timeline
+              Internal Activity Timeline
             </h2>
             <form
               action={(formData) => runAction(() => addOpportunityActivityAction(opportunity.id, formData))}
@@ -269,7 +269,7 @@ export default function OpportunityDetailClient({
                   title="Optional: schedule a follow-up callback"
                 />
               </div>
-              <textarea name="notes" placeholder="What happened?" rows={2} className={inputClass} />
+              <textarea name="notes" placeholder="Internal details — never shown to clients" rows={2} className={inputClass} />
               <button
                 type="submit"
                 disabled={isPending}
