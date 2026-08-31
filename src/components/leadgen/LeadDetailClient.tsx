@@ -45,13 +45,13 @@ const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text
 // template with a different reason for the call.
 const MANTRA_COLLAB_EMAIL_SUBJECT = "Website consultation for {{business_name}}";
 const MANTRA_COLLAB_EMAIL_BODY =
-  "Hi {{first_name}},\\n\\n" +
-  "Thank you for taking the time to speak with us.\\n\\n" +
-  "Mantra Collab helps businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries.\\n\\n" +
-  "You can book a free 15-minute consultation to learn how Mantra Collab can help {{business_name}}.\\n\\n" +
-  "{{booking_section}}\\n\\n" +
-  "Best regards,\\n\\n" +
-  "Winsalot Corp\\n" +
+  "Hi {{first_name}},\n\n" +
+  "Thank you for taking the time to speak with us.\n\n" +
+  "Mantra Collab helps businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries.\n\n" +
+  "You can book a free 15-minute consultation to learn how Mantra Collab can help {{business_name}}.\n\n" +
+  "{{booking_section}}\n\n" +
+  "Best regards,\n\n" +
+  "Winsalot Corp\n" +
   "on behalf of Mantra Collab";
 
 export type LeadDetailActions = {
@@ -99,7 +99,7 @@ export default function LeadDetailClient({
   consultationTemplate,
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
-    followUpTemplates,
+  followUpTemplates,
   bookingLink,
   servicesInfoLink,
   bouncedEmails,
