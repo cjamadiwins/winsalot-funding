@@ -242,6 +242,7 @@ export type SendLeadgenEmailInput = {
   // hardcoded to Brent's Essentials, so this validation (and therefore
   // the send) works correctly for any client, not just that one.
   expectedSignatureName?: string;
+  attachments?: Array<{ filename: string; content: Buffer }>;
 };
 
 export type SendLeadgenEmailResult = { emailId: string; error?: string };
@@ -348,6 +349,7 @@ export async function sendLeadgenEmail(
       subject: input.subject,
       text: finalText,
       html: finalHtml,
+      attachments: input.attachments,
     });
 
     if (sendError || !sendResult) {
