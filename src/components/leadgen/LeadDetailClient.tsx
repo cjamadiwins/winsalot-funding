@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_CATEGORY_STYLES, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import {
   LEADGEN_ACTIVITY_TYPE_LABELS,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
@@ -92,6 +93,7 @@ export default function LeadDetailClient({
   isAdmin,
   actions,
   listPath,
+  score,
 }: {
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
@@ -133,8 +135,15 @@ export default function LeadDetailClient({
   isAdmin: boolean;
   actions: LeadDetailActions;
   listPath: string;
+  // Opportunity Finder's own score for this lead, if it's been scored yet -
+  // only ever passed from the admin lead detail page (Opportunity Finder is
+  // admin-only); omitted (undefined) on the agent lead detail page, where
+  // it's simply not rendered.
+  score?: LeadgenOpportunityScoreRow | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const cameFromOpportunityFinder = searchParams.get("from") === "opportunity-finder";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -275,6 +284,11 @@ export default function LeadDetailClient({
   return (
     <div>
       <RefreshOnFocus />
+      {cameFromOpportunityFinder && (
+        <Link href="/leadgen/admin/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          ← Back to Opportunity Finder
+        </Link>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-bold text-slate-900">{lead.business_name}</h1>
@@ -282,6 +296,16 @@ export default function LeadDetailClient({
             {client.name}
             {campaign ? ` · ${campaign.name}` : ""} · {[lead.city, lead.province].filter(Boolean).join(", ")}
           </p>
+          {score && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-lg font-extrabold text-slate-900">{score.score}</span>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(score)]}`}
+              >
+                {OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(score)]}
+              </span>
+            </div>
+          )}
         </div>
         <span className={`rounded-full px-3.5 py-2 text-[13px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>{lead.status}</span>
       </div>

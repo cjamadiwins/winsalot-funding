@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import { unstable_rethrow } from "next/navigation";
+import Link from "next/link";
+import { unstable_rethrow, useSearchParams } from "next/navigation";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
@@ -16,6 +17,8 @@ import {
   type CrmUserRow,
   type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_CATEGORY_STYLES, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
@@ -51,6 +54,8 @@ export default function AdminOpportunityDetailClient({
   emailHistory,
   isEmailSuppressed,
   bookingUrl,
+  appointments,
+  score,
 }: {
   opportunity: CrmOpportunityRow;
   activities: CrmActivityRow[];
@@ -60,7 +65,11 @@ export default function AdminOpportunityDetailClient({
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
   bookingUrl: string;
+  appointments: WinsalotAppointmentRow[];
+  score: CrmOpportunityScoreRow | null;
 }) {
+  const searchParams = useSearchParams();
+  const cameFromOpportunityFinder = searchParams.get("from") === "opportunity-finder";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -118,10 +127,25 @@ export default function AdminOpportunityDetailClient({
 
   return (
     <div>
+      {cameFromOpportunityFinder && (
+        <Link href="/admin/crm/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          ← Back to Opportunity Finder
+        </Link>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{opportunity.business_name}</h1>
           <p className="mt-1 text-sm text-slate-500">{OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}</p>
+          {score && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-lg font-extrabold text-slate-900">{score.score}</span>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(score)]}`}
+              >
+                {OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(score)]}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2.5">
           <button
@@ -396,6 +420,35 @@ export default function AdminOpportunityDetailClient({
           )}
         </section>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Appointments</h2>
+        {appointments.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No consultation appointments booked for this opportunity yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {appointments.map((appt) => (
+              <li key={appt.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">{new Date(appt.appointment_start_at).toLocaleString()}</span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      appt.status === "cancelled" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {appt.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-slate-600">
+                  Booked by {appt.booked_by === "self" ? "prospect" : "agent"}
+                  {appt.incentive_status ? ` · ${appt.incentive_status}` : ""}
+                </p>
+                {appt.cancelled_reason && <p className="mt-1 text-xs text-rose-600">Cancelled: {appt.cancelled_reason}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <EmailHistoryPanel emails={emailHistory} />
 

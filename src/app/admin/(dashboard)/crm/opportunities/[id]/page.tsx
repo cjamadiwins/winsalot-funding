@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
@@ -6,15 +6,22 @@ import { isEmailSuppressed } from "@/lib/crm-email-suppression";
 import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
+import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import AdminOpportunityDetailClient from "./AdminOpportunityDetailClient";
 
 export default async function AdminOpportunityDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   await requireCrmAdmin();
   const { id } = await params;
+  const { from } = await searchParams;
+  const backHref = from === "opportunity-finder" ? "/admin/crm/opportunity-finder" : "/admin/crm/opportunities";
+  const backLabel = from === "opportunity-finder" ? "Back to Opportunity Finder" : "Back to Opportunities";
   const supabase = await createSupabaseServerClient();
   // Admin already has full access to this page (requireCrmAdmin above) -
   // service-role read for crm_lead_emails specifically, same as the old
@@ -22,39 +29,68 @@ export default async function AdminOpportunityDetailPage({
   // its own for the session client to rely on (see migration 0022).
   const admin = getSupabaseAdmin();
 
-  const [{ data: opportunity }, { data: activities }, { data: followUps }, { data: agents }, { data: latestEmail }, { data: emailHistory }] =
-    await Promise.all([
-      supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("crm_activities")
-        .select("*")
-        .eq("opportunity_id", id)
-        .order("occurred_at", { ascending: false }),
-      supabase
-        .from("crm_followups")
-        .select("*")
-        .eq("opportunity_id", id)
-        .eq("status", "pending")
-        .order("scheduled_at", { ascending: true }),
-      supabase.from("crm_users").select("*").order("full_name"),
-      admin
-        .from("crm_lead_emails")
-        .select(
-          "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
-        )
-        .eq("opportunity_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      admin
-        .from("crm_lead_emails")
-        .select("id, created_at, email_type, to_email, subject, status, status_at, agent_id")
-        .eq("opportunity_id", id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: opportunity },
+    { data: activities },
+    { data: followUps },
+    { data: agents },
+    { data: latestEmail },
+    { data: emailHistory },
+    { data: appointments },
+    { data: score },
+  ] = await Promise.all([
+    supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("crm_activities")
+      .select("*")
+      .eq("opportunity_id", id)
+      .order("occurred_at", { ascending: false }),
+    supabase
+      .from("crm_followups")
+      .select("*")
+      .eq("opportunity_id", id)
+      .eq("status", "pending")
+      .order("scheduled_at", { ascending: true }),
+    supabase.from("crm_users").select("*").order("full_name"),
+    admin
+      .from("crm_lead_emails")
+      .select(
+        "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+      )
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("crm_lead_emails")
+      .select("id, created_at, email_type, to_email, subject, status, status_at, agent_id")
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false }),
+    // Consultation bookings tied to this opportunity - same
+    // winsalot_appointments table the standalone Appointments page reads,
+    // filtered to this opportunity_id (see AdminAppointmentsClient).
+    supabase.from("winsalot_appointments").select("*").eq("opportunity_id", id).order("appointment_start_at", { ascending: false }),
+    // Opportunity Finder's own score for this opportunity, if it's been
+    // scored yet - same crm_opportunity_scores row the Opportunity Finder
+    // table already reads (see opportunity-finder/page.tsx).
+    supabase.from("crm_opportunity_scores").select("*").eq("opportunity_id", id).maybeSingle(),
+  ]);
 
   if (!opportunity) {
-    notFound();
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-8 text-center">
+        <h1 className="text-lg font-bold text-slate-900">Business record not found</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          This opportunity may have been deleted, or the link may be incorrect.
+        </p>
+        <Link
+          href={backHref}
+          className="mt-5 inline-block rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+        >
+          ← {backLabel}
+        </Link>
+      </div>
+    );
   }
 
   const agentNameById = new Map(((agents ?? []) as CrmUserRow[]).map((a) => [a.id, a.full_name || a.email]));
@@ -75,6 +111,8 @@ export default async function AdminOpportunityDetailPage({
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
       bookingUrl={getWinsalotBookingUrlBase()}
+      appointments={(appointments ?? []) as WinsalotAppointmentRow[]}
+      score={score as CrmOpportunityScoreRow | null}
     />
   );
 }
