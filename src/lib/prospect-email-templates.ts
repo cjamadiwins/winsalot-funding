@@ -35,15 +35,16 @@ function firstNameOnly(fullName: string): string {
 // Fixed, brand-only closing - matches the exact closing already used by
 // the Winsalot consultation-booking emails
 // (src/lib/winsalot-consultation-emails.ts).
-const CONSULTATION_EMAIL_CLOSING = ["Best regards,", "Winsalot Corp", "Empowering Businesses, One Solution at a Time."].join("\n");
+const CONSULTATION_EMAIL_CLOSING = ["Best regards,", "Winsalot Corp"].join("\n");
 
 // Fixed subject/CTA label for every Growth CRM prospect email, regardless
 // of opportunity_type - matches the Lead Generation CRM's own
 // "consultation_information" template subject exactly (see
 // supabase/migrations/0046_leadgen_fix_consultation_email_newlines.sql),
 // replacing the three type-specific subjects this template used to have.
-const CONSULTATION_EMAIL_SUBJECT = "Book Your Free 15-Minute Business Growth Consultation";
-const CONSULTATION_EMAIL_CTA_LABEL = "Book a Free 15-Minute Consultation";
+const CONSULTATION_EMAIL_SUBJECT = "Following up on our conversation";
+const CONSULTATION_EMAIL_CTA_LABEL = "Schedule a call";
+const BOOKING_LINK_MARKER = "As discussed, you can choose a convenient time for a short call using this link:";
 
 export function getDefaultProspectEmailTemplate(
   opportunityType: OpportunityType,
@@ -54,47 +55,10 @@ export function getDefaultProspectEmailTemplate(
   const contactName = firstNameOnly(params.contactName) || "there";
   const ctaText = CONSULTATION_EMAIL_CTA_LABEL;
 
-  if (opportunityType === "business_financing") {
-    return {
-      subject: CONSULTATION_EMAIL_SUBJECT,
-      message: [
-        `Hi ${contactName},`,
-        "",
-        "Thank you for taking the time to speak with us.",
-        "",
-        "We would love the opportunity to show you how Winsalot Corp can help you explore financing options and take the next step for your business.",
-        "",
-        "Please click the button below to schedule your free 15-minute consultation. There is no obligation, and all financing is subject to lender assessment and approval.",
-        "",
-        "You can reply to this email, or use the booking link below to choose a convenient time:",
-        "",
-        CONSULTATION_EMAIL_CLOSING,
-      ].join("\n"),
-      ctaText,
-    };
-  }
-
-  if (opportunityType === "both_services") {
-    return {
-      subject: CONSULTATION_EMAIL_SUBJECT,
-      message: [
-        `Hi ${contactName},`,
-        "",
-        "Thank you for taking the time to speak with us.",
-        "",
-        "We would love the opportunity to show you how Winsalot Corp can help generate more qualified leads for your business and explore financing options to support your growth.",
-        "",
-        "Please click the button below to schedule your free 15-minute consultation. There is no obligation, and financing options, when requested, are subject to lender assessment and approval.",
-        "",
-        "You can reply to this email, or use the booking link below to choose a convenient time:",
-        "",
-        CONSULTATION_EMAIL_CLOSING,
-      ].join("\n"),
-      ctaText,
-    };
-  }
-
-  // "lead_generation" (default)
+  // The same restrained, conversational follow-up is used for every
+  // service type. Service-specific sales claims and "free consultation"
+  // language are intentionally omitted to keep this looking like the
+  // one-to-one follow-up it is.
   return {
     subject: CONSULTATION_EMAIL_SUBJECT,
     message: [
@@ -102,11 +66,9 @@ export function getDefaultProspectEmailTemplate(
       "",
       "Thank you for taking the time to speak with us.",
       "",
-      "We would love the opportunity to show you how Winsalot Corp can help improve your operations, generate more qualified leads, streamline your workflow, and grow your business.",
+      BOOKING_LINK_MARKER,
       "",
-      "Please click the button below to schedule your free 15-minute consultation.",
-      "",
-      "You can reply to this email, or use the booking link below to choose a convenient time:",
+      "Please reply to this email if you have any questions.",
       "",
       CONSULTATION_EMAIL_CLOSING,
     ].join("\n"),
@@ -114,22 +76,14 @@ export function getDefaultProspectEmailTemplate(
   };
 }
 
-// The exact sentence the CTA button is inserted immediately after. Every
-// default template above contains this sentence verbatim (business_financing
-// and both_services continue it with a lender-disclosure clause in the same
-// paragraph), so splitting on it places the button in the same spot no
-// matter which opportunity_type generated the message. If a sender edits
-// this sentence out of the message in ProspectEmailModal before sending,
-// the button falls back to appearing after the whole message instead of
-// disappearing - there's always exactly one CTA.
-const CTA_INSERTION_MARKER = "Please click the button below to schedule your free 15-minute consultation.";
-
+// The exact sentence the single plain booking link is inserted after. If a
+// sender removes it while editing, the link safely falls back to the end.
 function splitMessageAtCtaMarker(message: string): { before: string; after: string } {
-  const index = message.indexOf(CTA_INSERTION_MARKER);
+  const index = message.indexOf(BOOKING_LINK_MARKER);
   if (index === -1) {
     return { before: message, after: "" };
   }
-  const splitAt = index + CTA_INSERTION_MARKER.length;
+  const splitAt = index + BOOKING_LINK_MARKER.length;
   return { before: message.slice(0, splitAt).trimEnd(), after: message.slice(splitAt).trimStart() };
 }
 
@@ -166,24 +120,19 @@ function paragraphsHtml(text: string): string {
     .join("\n");
 }
 
-// One centered blue CTA button, per the brief - not the plain inline text
-// link the Lead Generation CRM's own deliverability-focused templates use
-// (src/lib/leadgen-email.ts's leadgenButtonHtml). Inline styles only, since
-// this HTML is delivered as an email body (no external stylesheet, no
-// <table> document wrapper elsewhere in this template).
-function ctaButtonHtml(url: string, label: string): string {
+// One normal inline text link. Avoid button styling so the email retains a
+// simple one-to-one follow-up appearance.
+function bookingLinkHtml(url: string, label: string): string {
   const safeUrl = escapeHtml(url);
   const safeLabel = escapeHtml(label);
-  return `<div style="text-align:center; margin:24px 0;">
-  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; background-color:#1a56db; color:#ffffff; font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:bold; text-decoration:none; padding:12px 28px; border-radius:6px;">${safeLabel}</a>
-</div>`;
+  return `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8; text-decoration:underline;">${safeLabel}</a></p>`;
 }
 
 // Plain personal-email layout - a bare div, no <!DOCTYPE>/<html>/<head>/
 // <body>/<table> document wrapper, no banner, no footer - so the email
-// still reads like something a person sent from their own inbox, except
-// for the one centered blue CTA button placed immediately after
-// CTA_INSERTION_MARKER (see buildProspectEmailText above for where the
+// still reads like something a person sent from their own inbox. The one
+// booking link is placed immediately after BOOKING_LINK_MARKER (see
+// buildProspectEmailText above for where the
 // CASL-required unsubscribe mechanism lives instead of a visible footer
 // here). The button never repeats elsewhere in the email.
 export function buildProspectEmailHtml(input: { message: string; ctaText: string; bookingUrl: string }): string {
@@ -191,7 +140,7 @@ export function buildProspectEmailHtml(input: { message: string; ctaText: string
 
   return `<div style="font-family: Arial, Helvetica, sans-serif; font-size:15px; line-height:1.6; color:#111827;">
 ${paragraphsHtml(before)}
-${ctaButtonHtml(input.bookingUrl, input.ctaText)}
+${bookingLinkHtml(input.bookingUrl, input.ctaText)}
 ${paragraphsHtml(after)}
 </div>`;
 }
