@@ -280,11 +280,16 @@ export default async function LeadgenAdminDashboardPage() {
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
         <p className="mt-2 text-[13.5px] text-slate-600">
-          Open the Brent&apos;s Essentials call script for a clear, read-only guide agents can use while calling.
+          Open the correct client call script before dialing to stay consistent on every campaign.
         </p>
-        <Link href="/leadgen/admin/training" className="mt-3 inline-block text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-          Open Training
-        </Link>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+          <Link href="/leadgen/admin/training#mantra-collab" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+            Open Mantra Collab Training
+          </Link>
+          <Link href="/leadgen/admin/training#brents-essentials" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+            Open Brent&apos;s Essentials Training
+          </Link>
+        </div>
       </section>
     </div>
   );
