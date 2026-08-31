@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 import { computeLeadgenDashboardTrends } from "@/lib/leadgen-dashboard-trends";
 import { leadgenDateKey } from "@/lib/leadgen-performance";
@@ -14,6 +15,7 @@ import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/l
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
 export default async function LeadgenAdminDashboardPage() {
+  await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
   const now = new Date();
   const todayKey = leadgenDateKey(now);
