@@ -21,9 +21,10 @@ import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, Calen
 // here from /admin/crm/leads, which is being removed in a separate
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
-export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string; card?: string }> }) {
   await requireCrmAdmin();
-  const { deleted } = await searchParams;
+  const { deleted, card } = await searchParams;
+  const initialCard = card === "interested" || card === "consultations" || card === "followups" || card === "won" ? card : "total";
   const supabase = await createSupabaseServerClient();
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
@@ -88,11 +89,11 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
   const convertedCount = allOpportunities.filter((o) => o.stage === "Client Won").length;
 
   const mainStats = [
-    { label: "Total Opportunities", value: totalOpportunities, icon: Users, tone: "blue" as const },
-    { label: "Interested Opportunities", value: interestedOpportunities, icon: UserCheck, tone: "indigo" as const },
-    { label: "Consultations Booked", value: consultationsBooked, icon: CalendarCheck, tone: "green" as const },
-    { label: "Follow-Ups Due", value: followUpsDue, icon: Clock, tone: "amber" as const },
-    { label: "Clients Won", value: convertedCount, icon: Trophy, tone: "purple" as const },
+    { label: "Total Opportunities", value: totalOpportunities, icon: Users, tone: "blue" as const, href: "/admin/crm?card=total#all-opportunities" },
+    { label: "Interested Opportunities", value: interestedOpportunities, icon: UserCheck, tone: "indigo" as const, href: "/admin/crm?card=interested#all-opportunities" },
+    { label: "Consultations Booked", value: consultationsBooked, icon: CalendarCheck, tone: "green" as const, href: "/admin/crm?card=consultations#all-opportunities" },
+    { label: "Follow-Ups Due", value: followUpsDue, icon: Clock, tone: "amber" as const, href: "/admin/crm?card=followups#all-opportunities" },
+    { label: "Clients Won", value: convertedCount, icon: Trophy, tone: "purple" as const, href: "/admin/crm?card=won#all-opportunities" },
   ];
 
   return (
@@ -146,7 +147,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {mainStats.map((stat) => (
-          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
+          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} href={stat.href} />
         ))}
       </div>
 
@@ -172,6 +173,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
             opportunities={(opportunities ?? []) as CrmOpportunityRow[]}
             followUps={(followUps ?? []) as CrmFollowUpWithOpportunity[]}
             agents={(agents ?? []) as CrmUserRow[]}
+            initialCard={initialCard}
           />
         </div>
       )}
