@@ -40,6 +40,20 @@ import AppointmentEmailActions from "./AppointmentEmailActions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
+// Canonical Mantra Collab outreach copy. Keep this in application code so
+// preview, resend, and actual send cannot fall back to an older database
+// template with a different reason for the call.
+const MANTRA_COLLAB_EMAIL_SUBJECT = "Website consultation for {{business_name}}";
+const MANTRA_COLLAB_EMAIL_BODY =
+  "Hi {{first_name}},\n\n" +
+  "Thank you for taking the time to speak with us.\n\n" +
+  "Mantra Collab helps businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries.\n\n" +
+  "You can book a free 15-minute consultation to learn how Mantra Collab can help {{business_name}}.\n\n" +
+  "{{booking_section}}\n\n" +
+  "Best regards,\n\n" +
+  "Winsalot Corp\n" +
+  "on behalf of Mantra Collab";
+
 export type LeadDetailActions = {
   updateLead: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
   recordCallOutcome: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
@@ -85,7 +99,6 @@ export default function LeadDetailClient({
   consultationTemplate,
   consultationInvitationTemplate,
   consultationFollowUpTemplate,
-  mantraCollabTemplate,
   followUpTemplates,
   bookingLink,
   servicesInfoLink,
@@ -267,8 +280,8 @@ export default function LeadDetailClient({
   const isMantra = isMantraCollabClient(client);
   const mantraBookingSection = `[${LEADGEN_CONSULTATION_CTA_LABEL}]\n\n${branding.bookingUrl ?? ""}`;
   const mantraVars = { first_name: firstName, business_name: lead.business_name, booking_section: mantraBookingSection };
-  const mantraSubject = renderLeadgenTemplate(mantraCollabTemplate?.subject ?? "Quick question about {{business_name}}", mantraVars);
-  const mantraBody = mantraCollabTemplate ? renderLeadgenTemplate(mantraCollabTemplate.body, mantraVars) : "";
+  const mantraSubject = renderLeadgenTemplate(MANTRA_COLLAB_EMAIL_SUBJECT, mantraVars);
+  const mantraBody = renderLeadgenTemplate(MANTRA_COLLAB_EMAIL_BODY, mantraVars);
 
   // The one primary "campaign email" button, now shown at the top beside
   // Schedule Follow-up/Book Appointment/Edit Lead instead of buried at
