@@ -124,7 +124,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
             Book Call / Appointment
           </Link>
           <Link
-            href="/admin/crm/clients"
+            href="/admin/crm/performance"
             className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-teal-700"
           >
             <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
