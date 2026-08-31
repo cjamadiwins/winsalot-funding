@@ -41,7 +41,7 @@ export default async function LeadgenAdminDashboardPage() {
       // appointment booked for today, earliest first.
       admin
         .from("leadgen_appointments")
-        .select("id, appointment_time, business_name, contact_name, status, assigned_specialist_id")
+        .select("id, appointment_time, business_name, contact_name, status, assigned_specialist_id, lead_id")
         .eq("appointment_date", todayKey)
         .order("appointment_time", { ascending: true }),
       // Opportunity Finder counters, below - one lightweight read of the
@@ -106,6 +106,7 @@ export default async function LeadgenAdminDashboardPage() {
       contact_name: appt.contact_name,
       status: appt.status,
       agentName: appt.assigned_specialist_id ? (agentNameById.get(appt.assigned_specialist_id) ?? null) : null,
+      lead_id: appt.lead_id,
     }));
 
   const currentHour = Number(

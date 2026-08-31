@@ -491,7 +491,15 @@ export default function AppointmentsListClient({
                     ref={appt.id === highlightId ? highlightRef : undefined}
                     className={`border-b border-slate-100 ${appt.id === highlightId ? "bg-amber-50" : ""}`}
                   >
-                    <td className="p-3 font-semibold text-slate-900">{appt.business_name}</td>
+                    <td className="p-3 font-semibold text-slate-900">
+                      {appt.lead_id ? (
+                        <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
+                          {appt.business_name}
+                        </Link>
+                      ) : (
+                        appt.business_name
+                      )}
+                    </td>
                     <td className="p-3 text-slate-600">{clientById.get(appt.client_id)?.name ?? "—"}</td>
                     <td className="p-3 text-slate-600">
                       {appt.appointment_date} {appt.appointment_time} ({appt.timezone})

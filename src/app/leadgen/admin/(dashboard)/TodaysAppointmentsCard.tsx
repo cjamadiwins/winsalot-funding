@@ -8,6 +8,11 @@ export type TodaysAppointmentRow = {
   contact_name: string | null;
   status: LeadgenAppointmentStatus;
   agentName: string | null;
+  // The lead this appointment was booked from, if any (some historic
+  // appointments predate the lead_id link, or were booked as walk-ins
+  // not tied to a lead) - drives whether the business name below links
+  // through to that lead's detail page.
+  lead_id: string | null;
 };
 
 // "14:05" -> "2:05 PM" - appointment_time is stored as a plain 24h
@@ -42,23 +47,29 @@ export default function TodaysAppointmentsCard({ appointments }: { appointments:
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {appointments.map((appt, i) => (
-            <Link
-              key={appt.id}
-              href={`/leadgen/admin/appointments?highlight=${appt.id}`}
-              className={`block ${i < appointments.length - 1 ? "border-b border-slate-100 pb-3" : ""}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] font-bold text-slate-900">{formatAppointmentTime(appt.appointment_time)}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
-                  {appt.status}
-                </span>
+            <div key={appt.id} className={i < appointments.length - 1 ? "border-b border-slate-100 pb-3" : ""}>
+              <Link href={`/leadgen/admin/appointments?highlight=${appt.id}`} className="block">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-bold text-slate-900">{formatAppointmentTime(appt.appointment_time)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                    {appt.status}
+                  </span>
+                </div>
+              </Link>
+              <div className="mt-1 text-[13px] font-semibold text-slate-900">
+                {appt.lead_id ? (
+                  <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
+                    {appt.business_name}
+                  </Link>
+                ) : (
+                  appt.business_name
+                )}
               </div>
-              <div className="mt-1 text-[13px] font-semibold text-slate-900">{appt.business_name}</div>
-              <div className="text-[11.5px] text-slate-500">
+              <Link href={`/leadgen/admin/appointments?highlight=${appt.id}`} className="block text-[11.5px] text-slate-500">
                 {appt.contact_name ?? "No contact on file"}
                 {appt.agentName ? ` · ${appt.agentName}` : ""}
-              </div>
-            </Link>
+              </Link>
+            </div>
           ))}
         </div>
       )}
