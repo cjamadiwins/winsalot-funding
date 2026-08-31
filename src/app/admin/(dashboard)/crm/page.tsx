@@ -20,8 +20,9 @@ import { Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 // here from /admin/crm/leads, which is being removed in a separate
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
-export default async function AdminCrmPage() {
+export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   await requireCrmAdmin();
+  const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
@@ -81,6 +82,12 @@ export default async function AdminCrmPage() {
         Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
         from initial prospect through to a client won or lost.
       </p>
+
+      {deleted === "opportunity" && (
+        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          Opportunity deleted successfully.
+        </p>
+      )}
 
       {(opportunitiesError || agentsError) && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

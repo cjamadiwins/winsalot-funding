@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
@@ -155,6 +156,16 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
 // requireCrmAdmin() plus crm_opportunities having no agent delete RLS
 // policy at all (only crm_opportunities_admin_all covers delete) keeps
 // this admin-only regardless of what calls it.
+// Deliberately redirects from inside the action itself, right after
+// revalidating, rather than leaving the caller mounted on this now-deleted
+// opportunity's own detail page. Calling a Server Action from a still-
+// mounted client component without a redirect() makes Next.js
+// automatically re-render that same route as part of the action's
+// response - which reran this page's loader against an id that no longer
+// exists, surfacing a transient error page for an instant before the
+// client's own navigation caught up. redirect() throws internally, so it
+// must be the last call and nothing after it can run - revalidatePath is
+// called first for that reason.
 export async function deleteOpportunityAction(opportunityId: string) {
   await requireCrmAdmin();
 
@@ -165,6 +176,7 @@ export async function deleteOpportunityAction(opportunityId: string) {
   if (error) throw new Error("Failed to delete the opportunity.");
 
   revalidatePath("/admin/crm");
+  redirect("/admin/crm?deleted=opportunity");
 }
 
 export async function addActivityAction(opportunityId: string, formData: FormData) {

@@ -66,7 +66,6 @@ export default function AdminOpportunityDetailClient({
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
-  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -87,16 +86,23 @@ export default function AdminOpportunityDetailClient({
   // (migration 0104 dropped that trigger). Only an admin can ever reach
   // this page/action (requireCrmAdmin, plus crm_opportunities has no
   // agent delete policy at all), so this stays admin-only regardless.
+  //
+  // deleteOpportunityAction redirects itself once the delete/revalidate
+  // are done - nothing runs here after the await resolves, since a
+  // redirect() from a Server Action navigates the browser directly rather
+  // than returning normally. No client-side navigation, timeout, or
+  // success flag belongs here: staying mounted on this page long enough
+  // to show one would mean staying on a detail page whose opportunity no
+  // longer exists, which is exactly what used to surface a transient
+  // error before the old window.location.href handoff caught up. The
+  // "Opportunity deleted" message is shown on the CRM page it redirects
+  // to instead (see /admin/crm's ?deleted=opportunity handling).
   function handleDelete() {
     if (!confirm("Are you sure you want to permanently delete this opportunity? This action cannot be undone.")) {
       return;
     }
     runAction(async () => {
       await deleteOpportunityAction(opportunity.id);
-      setDeleteSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/admin/crm";
-      }, 1200);
     });
   }
 
@@ -133,7 +139,7 @@ export default function AdminOpportunityDetailClient({
           </button>
           <button
             type="button"
-            disabled={isPending || deleteSuccess}
+            disabled={isPending}
             onClick={handleDelete}
             className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -141,12 +147,6 @@ export default function AdminOpportunityDetailClient({
           </button>
         </div>
       </div>
-
-      {deleteSuccess && (
-        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-          Opportunity deleted successfully.
-        </p>
-      )}
 
       {isEmailSuppressed && (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

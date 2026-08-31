@@ -20,6 +20,16 @@ vi.mock("next/cache", () => ({
   refresh: vi.fn(),
 }));
 
+// deleteOpportunityAction redirects after deleting (see its own comment
+// for why: without it, Next.js re-renders the caller's now-deleted detail
+// page as part of the action's response). redirect() throws in real Next.js
+// - mocked as a no-op here, matching how the real one behaves from this
+// function's own point of view (nothing after the call ever runs).
+const redirectMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  redirect: (...args: unknown[]) => redirectMock(...args),
+}));
+
 // deleteOpportunityAction never touches these, but they're imported
 // elsewhere in the same actions module - mocked so importing the module
 // under test never pulls in their real (env/Resend-dependent) code.
@@ -65,6 +75,8 @@ describe("deleteOpportunityAction", () => {
       expect(mockSupabase.from).toHaveBeenCalledWith("crm_opportunities");
       expect(mockSupabase.deleteEq).toHaveBeenCalledWith("id", "opp-open-id");
       expect(revalidatePathMock).toHaveBeenCalledWith("/admin/crm");
+      expect(redirectMock).toHaveBeenCalledWith("/admin/crm?deleted=opportunity");
+      expect(revalidatePathMock.mock.invocationCallOrder[0]).toBeLessThan(redirectMock.mock.invocationCallOrder[0]);
     }
   );
 
@@ -79,6 +91,7 @@ describe("deleteOpportunityAction", () => {
     expect(mockSupabase.from).toHaveBeenCalledWith("crm_opportunities");
     expect(mockSupabase.deleteEq).toHaveBeenCalledWith("id", "opp-closed-id");
     expect(revalidatePathMock).toHaveBeenCalledWith("/admin/crm");
+    expect(redirectMock).toHaveBeenCalledWith("/admin/crm?deleted=opportunity");
   });
 
   it("requires admin authorization before deleting (permission stays admin-only)", async () => {
