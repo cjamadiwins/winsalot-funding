@@ -959,7 +959,12 @@ export function slugifyClientName(name: string): string {
 // lib/leadgen-email.ts) since the consultation email modal needs it to
 // render a live preview in the browser before sending.
 export function renderLeadgenTemplate(body: string, vars: Record<string, string>): string {
-  return body.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => vars[key] ?? "");
+  // Some historic database templates contain serialized line endings
+  // (the visible characters "\\r\\n") rather than real newlines. Normalize
+  // both forms before rendering so recipients never see escape codes.
+  return body
+    .replace(/\\r\\n|\\n|\\r/g, "\n")
+    .replace(/\{\{(\w+)\}\}/g, (_match, key: string) => vars[key] ?? "");
 }
 
 // Campaign-level booking link overrides the client's default; falls back
