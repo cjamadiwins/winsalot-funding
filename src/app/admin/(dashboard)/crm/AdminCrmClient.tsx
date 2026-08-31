@@ -57,12 +57,14 @@ type FollowUpStatusFilter = "all" | "due_today" | "overdue" | "none";
 export default function AdminCrmClient({
   opportunities,
   agents,
+  initialCard = "total",
 }: {
   opportunities: CrmOpportunityRow[];
   agents: CrmUserRow[];
+  initialCard?: CardKey;
 }) {
   const [search, setSearch] = useState("");
-  const [activeCard, setActiveCard] = useState<CardKey>("total");
+  const [activeCard, setActiveCard] = useState<CardKey>(initialCard);
   const [typeFilter, setTypeFilter] = useState<OpportunityType | "all">("all");
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "all">("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
@@ -172,7 +174,7 @@ export default function AdminCrmClient({
   ]);
 
   return (
-    <div>
+    <div id="all-opportunities" className="scroll-mt-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cards.map((card) => (
           <KpiCard
