@@ -12,12 +12,10 @@ import { LEADGEN_CONSULTATION_CTA_LABEL } from "./leadgen-types";
 // switched on by setting LEADGEN_EMAIL_FROM once that address is
 // confirmed verified in the Resend dashboard - never hardcoded here,
 // since sending from an unverified address would silently fail or land
-// in spam. The display name is a recognizable person ("C.J. at Winsalot
-// Corp") rather than a generic company name - matching the Growth CRM's
-// own default (src/lib/email-senders.ts) - since Gmail is more likely to
-// route mail from an apparent company/department name into Promotions.
+// in spam. Lead Generation CRM emails use the company identity rather
+// than an individual administrator's name.
 export function getLeadgenSenderEmail(): string {
-  return process.env.LEADGEN_EMAIL_FROM || "C.J. at Winsalot Corp <info@winsalotcorp.com>";
+  return process.env.LEADGEN_EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
 }
 
 export function getLeadgenReplyToEmail(): string {
