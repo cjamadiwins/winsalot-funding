@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus } from "lucide-react";
+import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import {
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_EMAIL_STATUS_LABELS,
@@ -90,6 +90,13 @@ export default function ClientDetailClient({
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
+          <Link
+            href={`/leadgen/admin/clients/${client.id}/reports`}
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13.5px] font-bold text-indigo-700 transition hover:bg-indigo-100"
+          >
+            <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
+            Client Report
+          </Link>
           <Link
             href={`/leadgen/admin/leads?client=${client.id}&openAdd=1`}
             className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
