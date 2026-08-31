@@ -6,6 +6,11 @@ import { fetchPortalActivity, fetchPortalUsersForLeadgenClient, fetchUnlinkedLea
 import type { CrmUserRow } from "@/lib/crm-types";
 import ClientProfileClient from "@/components/crm-clients/ClientProfileClient";
 import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccessPanel";
+import ClientReportsPanel from "@/components/crm-clients/ClientReportsPanel";
+import { loadLeadgenClientReport } from "@/lib/leadgen-client-report-data";
+import { resolveLeadgenReportMonth } from "@/lib/leadgen-client-report";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import {
   updateClientAction,
   archiveClientAction,
@@ -27,10 +32,11 @@ import {
   sendPortalInviteAction,
   resetClientAccessAction,
 } from "./portal-actions";
+import { sendClientReportAction } from "./report-actions";
 
-export default async function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ report_month?: string }> }) {
   await requireCrmAdmin();
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const supabase = await createSupabaseServerClient();
 
   const [{ data: detail, error }, { data: agents }] = await Promise.all([
@@ -48,6 +54,22 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 
   const linkedLeadgenClient = unlinkedLeadgenClients.find((c) => c.id === detail.client.leadgen_client_id) ?? null;
   const portalUsers = detail.client.leadgen_client_id ? await fetchPortalUsersForLeadgenClient(detail.client.leadgen_client_id) : [];
+  const { month: reportMonth, period: reportPeriod } = resolveLeadgenReportMonth(query.report_month);
+  let clientReport = null;
+  if (detail.client.leadgen_client_id) {
+    const reportAdmin = getSupabaseAdmin();
+    const { data: reportClient } = await reportAdmin.from("leadgen_clients").select("*").eq("id", detail.client.leadgen_client_id).maybeSingle();
+    if (reportClient) {
+      const fullReport = await loadLeadgenClientReport(reportAdmin, reportClient as LeadgenClientRow, reportPeriod);
+      clientReport = {
+        period: fullReport.period,
+        leadsAdded: fullReport.leadsAdded,
+        interestedLeads: fullReport.interestedLeads,
+        appointmentsBooked: fullReport.appointmentsBooked,
+        summary: fullReport.summary,
+      };
+    }
+  }
 
   return (
     <div>
@@ -64,6 +86,14 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         recordAppointmentAction={recordClientAppointmentAction}
         deleteAppointmentAction={deleteClientAppointmentAction}
         recordPaymentAction={recordStandaloneClientPaymentAction}
+      />
+
+      <ClientReportsPanel
+        crmClientId={id}
+        month={reportMonth}
+        report={clientReport}
+        canSend={portalUsers.some((user) => user.active)}
+        sendAction={sendClientReportAction}
       />
 
       <ClientPortalAccessPanel
