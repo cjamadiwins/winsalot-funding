@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { resolveSiteRelativeUrl } from "@/lib/site-url";
@@ -54,7 +54,20 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
   // doesn't exist) simply returns null here, same layered-defense
   // pattern as the cleaning CRM's agent provider pages.
   const { data: lead } = await supabase.from("leadgen_leads").select("*").eq("id", id).maybeSingle();
-  if (!lead) notFound();
+  if (!lead) {
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-8 text-center">
+        <h1 className="text-lg font-bold text-slate-900">Business record not found</h1>
+        <p className="mt-2 text-sm text-slate-500">This lead may have been deleted, reassigned, or the link may be incorrect.</p>
+        <Link
+          href="/leadgen/agent/leads"
+          className="mt-5 inline-block rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+        >
+          ← Back to Leads
+        </Link>
+      </div>
+    );
+  }
 
   const [
     { data: client },

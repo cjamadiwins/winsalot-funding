@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
@@ -42,7 +42,20 @@ export default async function AgentOpportunityDetailPage({
   ]);
 
   if (!opportunity) {
-    notFound();
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 text-center">
+        <h1 className="font-heading text-lg font-bold text-[var(--color-ink-strong)]">Business record not found</h1>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          This opportunity may have been deleted, reassigned, or the link may be incorrect.
+        </p>
+        <Link
+          href="/agent/my-opportunities"
+          className="mt-5 inline-block rounded-full bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          ← Back to My Opportunities
+        </Link>
+      </div>
+    );
   }
 
   const senderIds = [...new Set((emailHistory ?? []).map((row) => row.agent_id).filter((v): v is string => !!v))];

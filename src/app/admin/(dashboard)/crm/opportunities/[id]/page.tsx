@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
@@ -12,11 +12,16 @@ import AdminOpportunityDetailClient from "./AdminOpportunityDetailClient";
 
 export default async function AdminOpportunityDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   await requireCrmAdmin();
   const { id } = await params;
+  const { from } = await searchParams;
+  const backHref = from === "opportunity-finder" ? "/admin/crm/opportunity-finder" : "/admin/crm/opportunities";
+  const backLabel = from === "opportunity-finder" ? "Back to Opportunity Finder" : "Back to Opportunities";
   const supabase = await createSupabaseServerClient();
   // Admin already has full access to this page (requireCrmAdmin above) -
   // service-role read for crm_lead_emails specifically, same as the old
@@ -72,7 +77,20 @@ export default async function AdminOpportunityDetailPage({
   ]);
 
   if (!opportunity) {
-    notFound();
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-8 text-center">
+        <h1 className="text-lg font-bold text-slate-900">Business record not found</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          This opportunity may have been deleted, or the link may be incorrect.
+        </p>
+        <Link
+          href={backHref}
+          className="mt-5 inline-block rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+        >
+          ← {backLabel}
+        </Link>
+      </div>
+    );
   }
 
   const agentNameById = new Map(((agents ?? []) as CrmUserRow[]).map((a) => [a.id, a.full_name || a.email]));

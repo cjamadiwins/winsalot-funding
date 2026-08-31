@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveSiteRelativeUrl } from "@/lib/site-url";
@@ -52,13 +52,35 @@ const actions: LeadDetailActions = {
   sendAppointmentReminder: sendAppointmentReminderAction,
 };
 
-export default async function LeadgenAdminLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeadgenAdminLeadDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const adminUser = await requireLeadgenAdmin();
   const { id } = await params;
+  const { from } = await searchParams;
   const admin = getSupabaseAdmin();
 
   const { data: lead } = await admin.from("leadgen_leads").select("*").eq("id", id).maybeSingle();
-  if (!lead) notFound();
+  if (!lead) {
+    const backHref = from === "opportunity-finder" ? "/leadgen/admin/opportunity-finder" : "/leadgen/admin/leads";
+    const backLabel = from === "opportunity-finder" ? "Back to Opportunity Finder" : "Back to Leads";
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-8 text-center">
+        <h1 className="text-lg font-bold text-slate-900">Business record not found</h1>
+        <p className="mt-2 text-sm text-slate-500">This lead may have been deleted, or the link may be incorrect.</p>
+        <Link
+          href={backHref}
+          className="mt-5 inline-block rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+        >
+          ← {backLabel}
+        </Link>
+      </div>
+    );
+  }
 
   const [
     { data: client },
