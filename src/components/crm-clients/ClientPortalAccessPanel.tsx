@@ -13,7 +13,6 @@ import {
 } from "@/lib/client-portal-shared";
 
 type ActionResult = { error?: string };
-type LeadgenClientOption = { id: string; name: string; slug: string };
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900";
 const buttonClass = "rounded-full border border-slate-300 px-3.5 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50";
@@ -29,11 +28,8 @@ export default function ClientPortalAccessPanel({
   leadgenClientId,
   leadgenClientName,
   leadgenClientSlug,
-  unlinkedLeadgenClients,
   portalUsers,
   activity,
-  linkAction,
-  createAndLinkAction,
   createAccessAction,
   activateAction,
   disableAction,
@@ -45,11 +41,8 @@ export default function ClientPortalAccessPanel({
   leadgenClientId: string | null;
   leadgenClientName: string | null;
   leadgenClientSlug: string | null;
-  unlinkedLeadgenClients: LeadgenClientOption[];
   portalUsers: PortalLeadgenUserSummary[];
   activity: CrmClientPortalActivityRow[];
-  linkAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
-  createAndLinkAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
   createAccessAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
   activateAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
   disableAction: (clientId: string, portalUserId: string) => Promise<ActionResult>;
@@ -60,7 +53,6 @@ export default function ClientPortalAccessPanel({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [showCreateNew, setShowCreateNew] = useState(false);
   const [showCreateAccess, setShowCreateAccess] = useState(false);
 
   const portalStatus = portalUsers.some((user) => user.active)
@@ -76,7 +68,6 @@ export default function ClientPortalAccessPanel({
         setError(result.error);
         return;
       }
-      setShowCreateNew(false);
       setShowCreateAccess(false);
       router.refresh();
     });
@@ -97,43 +88,10 @@ export default function ClientPortalAccessPanel({
       {error && <p className="mt-3 text-[13px] text-red-600">{error}</p>}
 
       {!leadgenClientId ? (
-        <div className="mt-4 space-y-3 rounded-xl border border-dashed border-slate-300 p-4">
+        <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4">
           <p className="text-[13px] text-slate-600">
-            Not linked to a Lead Generation CRM client yet. Link this Growth CRM client to the correct Lead Generation client/campaign before creating portal access.
+            Not linked to a Lead Generation CRM client yet. Use the Lead Generation Client control above to link this Growth CRM client before creating portal access.
           </p>
-          {!showCreateNew ? (
-            <form
-              action={(formData) => runAction(() => linkAction(crmClientId, formData))}
-              className="flex flex-wrap items-center gap-2"
-            >
-              <select name="leadgen_client_id" required className={`${inputClass} max-w-xs`} defaultValue="">
-                <option value="" disabled>
-                  Select a Lead Generation client…
-                </option>
-                {unlinkedLeadgenClients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" disabled={isPending} className={primaryButtonClass}>
-                Link
-              </button>
-              <button type="button" onClick={() => setShowCreateNew(true)} className={buttonClass}>
-                + Create new Lead Gen client
-              </button>
-            </form>
-          ) : (
-            <form action={(formData) => runAction(() => createAndLinkAction(crmClientId, formData))} className="flex flex-wrap items-center gap-2">
-              <input name="name" required placeholder="Lead Generation client name" className={`${inputClass} max-w-xs`} />
-              <button type="submit" disabled={isPending} className={primaryButtonClass}>
-                Create &amp; link
-              </button>
-              <button type="button" onClick={() => setShowCreateNew(false)} className={buttonClass}>
-                Cancel
-              </button>
-            </form>
-          )}
         </div>
       ) : (
         <>
