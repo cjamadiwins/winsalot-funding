@@ -29,7 +29,7 @@ export default function MantraCollabTrainingContent() {
           </p>
 
           <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 2 - Give the Reason for Calling</h3>
-          <p className="mt-1">&ldquo;We help businesses promote their services and reach more customers.&rdquo;</p>
+          <p className="mt-1">&ldquo;We help businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries.&rdquo;</p>
 
           <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 3 - Request the Appointment</h3>
           <p className="mt-1">
@@ -46,7 +46,7 @@ export default function MantraCollabTrainingContent() {
           </summary>
           <div className="mt-3 rounded-lg border border-sky-200 bg-[var(--crm-surface)] p-4 text-slate-700">
             <p>
-              &ldquo;Hello, is this <strong>[Business Name]</strong>? Great. My name is <strong>[Agent Name]</strong>, calling on behalf of <strong>Mantra Collab</strong>. We help businesses promote their services and reach more customers. I would like to schedule a short appointment for you to learn how we can help your business. Would <strong>[Day and Time]</strong> work for you?&rdquo;
+              &ldquo;Hello, is this <strong>[Business Name]</strong>? Great. My name is <strong>[Agent Name]</strong>, calling on behalf of <strong>Mantra Collab</strong>. We help businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries. I would like to schedule a short appointment for you to learn how we can help your business. Would <strong>[Day and Time]</strong> work for you?&rdquo;
             </p>
           </div>
         </details>
@@ -62,7 +62,7 @@ export default function MantraCollabTrainingContent() {
             <div>
               <p className="font-semibold text-slate-900">&ldquo;What does Mantra Collab do?&rdquo;</p>
               <p className="mt-1.5 rounded-lg border border-sky-200 bg-[var(--crm-surface)] p-3.5">
-                &ldquo;Mantra Collab helps businesses improve their online presence, promote their services and reach more customers. The consultation will explain the available options.&rdquo;
+                &ldquo;Mantra Collab helps businesses improve or redesign their website so it better showcases their work, builds credibility, and helps turn visitors into customer inquiries. The consultation will explain the available options.&rdquo;
               </p>
               <p className="mt-1.5 italic text-slate-600">Then ask: &ldquo;Would [Day and Time] work for a short appointment?&rdquo;</p>
             </div>
