@@ -173,7 +173,6 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
             opportunities={(opportunities ?? []) as CrmOpportunityRow[]}
             followUps={(followUps ?? []) as CrmFollowUpWithOpportunity[]}
             agents={(agents ?? []) as CrmUserRow[]}
-            initialCard={initialCard}
           />
         </div>
       )}
@@ -183,6 +182,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
           <AdminCrmClient
             opportunities={(opportunities ?? []) as CrmOpportunityRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
+            initialCard={initialCard}
           />
         </div>
       )}
