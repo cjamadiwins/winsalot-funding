@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchClientDetail, fetchClientRelatedCounts } from "@/lib/crm-clients-data";
-import { fetchPortalActivity, fetchPortalUserForLeadgenClient, fetchUnlinkedLeadgenClients } from "@/lib/client-portal-data";
+import { fetchPortalActivity, fetchPortalUsersForLeadgenClient, fetchUnlinkedLeadgenClients } from "@/lib/client-portal-data";
 import type { CrmUserRow } from "@/lib/crm-types";
 import ClientProfileClient from "@/components/crm-clients/ClientProfileClient";
 import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccessPanel";
@@ -47,7 +47,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
   ]);
 
   const linkedLeadgenClient = unlinkedLeadgenClients.find((c) => c.id === detail.client.leadgen_client_id) ?? null;
-  const portalUser = detail.client.leadgen_client_id ? await fetchPortalUserForLeadgenClient(detail.client.leadgen_client_id) : null;
+  const portalUsers = detail.client.leadgen_client_id ? await fetchPortalUsersForLeadgenClient(detail.client.leadgen_client_id) : [];
 
   return (
     <div>
@@ -72,7 +72,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         leadgenClientName={linkedLeadgenClient?.name ?? null}
         leadgenClientSlug={linkedLeadgenClient?.slug ?? null}
         unlinkedLeadgenClients={unlinkedLeadgenClients}
-        portalUser={portalUser}
+        portalUsers={portalUsers}
         activity={portalActivity}
         linkAction={linkLeadgenClientAction}
         createAndLinkAction={createAndLinkLeadgenClientAction}
