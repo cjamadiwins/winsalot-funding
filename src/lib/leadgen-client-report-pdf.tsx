@@ -36,12 +36,9 @@ const styles = StyleSheet.create({
 
 export function LeadgenClientReportPdf({ report }: { report: LeadgenClientReport }) {
   const metrics = [
-    ["Leads Added", report.leadsAdded],
-    ["Leads Worked", report.leadsWorked],
-    ["Interested Leads", report.interestedLeads],
-    ["Follow-Ups", report.followUps],
+    ["Leads Generated", report.leadsAdded],
+    ["Interested / Qualified Leads", report.interestedLeads],
     ["Appointments Booked", report.appointmentsBooked],
-    ["Lead-to-Appointment Rate", `${report.conversionRate}%`],
   ];
 
   return (
