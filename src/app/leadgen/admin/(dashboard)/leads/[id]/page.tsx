@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveSiteRelativeUrl } from "@/lib/site-url";
+import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import {
   getEffectiveBookingLink,
   isHiddenLeadgenCampaignName,
@@ -72,6 +73,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     { data: consultationFollowUpTemplate },
     { data: mantraCollabTemplate },
     { data: followUpTemplates },
+    { data: score },
   ] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id
@@ -87,6 +89,10 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
     admin.from("leadgen_email_templates").select("*").eq("key", "consultation_follow_up").maybeSingle(),
     admin.from("leadgen_email_templates").select("*").eq("key", "mantra_collab_intro").maybeSingle(),
     admin.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
+    // Opportunity Finder's own score for this lead, if it's been scored
+    // yet - same leadgen_opportunity_scores row the Opportunity Finder
+    // table already reads (see opportunity-finder/page.tsx).
+    admin.from("leadgen_opportunity_scores").select("*").eq("lead_id", id).maybeSingle(),
   ]);
 
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
@@ -121,6 +127,7 @@ export default async function LeadgenAdminLeadDetailPage({ params }: { params: P
       isAdmin
       actions={actions}
       listPath="/leadgen/admin/leads"
+      score={score as LeadgenOpportunityScoreRow | null}
     />
   );
 }

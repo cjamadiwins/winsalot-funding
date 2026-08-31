@@ -147,7 +147,12 @@ export default function OpportunityFinderClient({
               return (
                 <tr key={row.score.id} className="align-top">
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-900">{row.businessName}</div>
+                    <Link
+                      href={`${row.detailHref}?from=opportunity-finder`}
+                      className="font-semibold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
+                    >
+                      {row.businessName}
+                    </Link>
                     <div className="text-slate-500">{row.contactName || "—"}</div>
                     <div className="mt-1 text-[11px] text-slate-400">{row.stageOrStatus}</div>
                   </td>
@@ -216,7 +221,10 @@ export default function OpportunityFinderClient({
                       <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
                         Add Follow-Up
                       </Link>
-                      <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
+                      <Link
+                        href={`${row.detailHref}?from=opportunity-finder`}
+                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                      >
                         View Lead
                       </Link>
                       {dismissed ? (

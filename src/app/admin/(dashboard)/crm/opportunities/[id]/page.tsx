@@ -6,6 +6,8 @@ import { isEmailSuppressed } from "@/lib/crm-email-suppression";
 import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
+import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import AdminOpportunityDetailClient from "./AdminOpportunityDetailClient";
 
 export default async function AdminOpportunityDetailPage({
@@ -22,36 +24,52 @@ export default async function AdminOpportunityDetailPage({
   // its own for the session client to rely on (see migration 0022).
   const admin = getSupabaseAdmin();
 
-  const [{ data: opportunity }, { data: activities }, { data: followUps }, { data: agents }, { data: latestEmail }, { data: emailHistory }] =
-    await Promise.all([
-      supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("crm_activities")
-        .select("*")
-        .eq("opportunity_id", id)
-        .order("occurred_at", { ascending: false }),
-      supabase
-        .from("crm_followups")
-        .select("*")
-        .eq("opportunity_id", id)
-        .eq("status", "pending")
-        .order("scheduled_at", { ascending: true }),
-      supabase.from("crm_users").select("*").order("full_name"),
-      admin
-        .from("crm_lead_emails")
-        .select(
-          "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
-        )
-        .eq("opportunity_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      admin
-        .from("crm_lead_emails")
-        .select("id, created_at, email_type, to_email, subject, status, status_at, agent_id")
-        .eq("opportunity_id", id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: opportunity },
+    { data: activities },
+    { data: followUps },
+    { data: agents },
+    { data: latestEmail },
+    { data: emailHistory },
+    { data: appointments },
+    { data: score },
+  ] = await Promise.all([
+    supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("crm_activities")
+      .select("*")
+      .eq("opportunity_id", id)
+      .order("occurred_at", { ascending: false }),
+    supabase
+      .from("crm_followups")
+      .select("*")
+      .eq("opportunity_id", id)
+      .eq("status", "pending")
+      .order("scheduled_at", { ascending: true }),
+    supabase.from("crm_users").select("*").order("full_name"),
+    admin
+      .from("crm_lead_emails")
+      .select(
+        "email_type, to_email, subject, status, status_at, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at"
+      )
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("crm_lead_emails")
+      .select("id, created_at, email_type, to_email, subject, status, status_at, agent_id")
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false }),
+    // Consultation bookings tied to this opportunity - same
+    // winsalot_appointments table the standalone Appointments page reads,
+    // filtered to this opportunity_id (see AdminAppointmentsClient).
+    supabase.from("winsalot_appointments").select("*").eq("opportunity_id", id).order("appointment_start_at", { ascending: false }),
+    // Opportunity Finder's own score for this opportunity, if it's been
+    // scored yet - same crm_opportunity_scores row the Opportunity Finder
+    // table already reads (see opportunity-finder/page.tsx).
+    supabase.from("crm_opportunity_scores").select("*").eq("opportunity_id", id).maybeSingle(),
+  ]);
 
   if (!opportunity) {
     notFound();
@@ -75,6 +93,8 @@ export default async function AdminOpportunityDetailPage({
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
       bookingUrl={getWinsalotBookingUrlBase()}
+      appointments={(appointments ?? []) as WinsalotAppointmentRow[]}
+      score={score as CrmOpportunityScoreRow | null}
     />
   );
 }
