@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 import { computeLeadgenDashboardTrends } from "@/lib/leadgen-dashboard-trends";
-import { LEADGEN_PERFORMANCE_TIMEZONE, leadgenDateKey } from "@/lib/leadgen-performance";
+import { leadgenDateKey } from "@/lib/leadgen-performance";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
@@ -14,14 +13,7 @@ import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/l
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
-function greetingForHour(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 export default async function LeadgenAdminDashboardPage() {
-  const currentAdmin = await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
   const now = new Date();
   const todayKey = leadgenDateKey(now);
@@ -109,10 +101,6 @@ export default async function LeadgenAdminDashboardPage() {
       lead_id: appt.lead_id,
     }));
 
-  const currentHour = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: LEADGEN_PERFORMANCE_TIMEZONE, hour: "2-digit", hourCycle: "h23" }).format(now)
-  );
-  const firstName = currentAdmin.full_name.trim().split(/\s+/)[0] || currentAdmin.full_name;
   const dialpadData = await loadDialpadDashboardData(admin);
 
   // Each card links straight into the Leads page pre-filtered to that
@@ -175,7 +163,7 @@ export default async function LeadgenAdminDashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {greetingForHour(currentHour)}, {firstName}
+            Good afternoon, Winsalot Corp.
           </h1>
           <p className="mt-1 text-sm text-slate-500">Here&apos;s what&apos;s happening across every client and campaign today.</p>
         </div>
