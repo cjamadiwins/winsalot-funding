@@ -7,6 +7,7 @@ import type { CrmUserRow } from "@/lib/crm-types";
 import ClientProfileClient from "@/components/crm-clients/ClientProfileClient";
 import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccessPanel";
 import ClientReportsPanel from "@/components/crm-clients/ClientReportsPanel";
+import LeadgenClientLinkPanel from "@/components/crm-clients/LeadgenClientLinkPanel";
 import { loadLeadgenClientReport } from "@/lib/leadgen-client-report-data";
 import { resolveLeadgenReportMonth } from "@/lib/leadgen-client-report";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -88,6 +89,15 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         recordPaymentAction={recordStandaloneClientPaymentAction}
       />
 
+      <LeadgenClientLinkPanel
+        crmClientId={id}
+        leadgenClientId={detail.client.leadgen_client_id ?? null}
+        leadgenClientName={linkedLeadgenClient?.name ?? null}
+        options={unlinkedLeadgenClients}
+        linkAction={linkLeadgenClientAction}
+        createAndLinkAction={createAndLinkLeadgenClientAction}
+      />
+
       <ClientReportsPanel
         crmClientId={id}
         month={reportMonth}
@@ -101,11 +111,8 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         leadgenClientId={detail.client.leadgen_client_id ?? null}
         leadgenClientName={linkedLeadgenClient?.name ?? null}
         leadgenClientSlug={linkedLeadgenClient?.slug ?? null}
-        unlinkedLeadgenClients={unlinkedLeadgenClients}
         portalUsers={portalUsers}
         activity={portalActivity}
-        linkAction={linkLeadgenClientAction}
-        createAndLinkAction={createAndLinkLeadgenClientAction}
         createAccessAction={createPortalAccessAction}
         activateAction={activatePortalAccessAction}
         disableAction={disablePortalAccessAction}
