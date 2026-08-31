@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarCheck, Download, Target, UserCheck, Users } from "lucide-react";
+import { CalendarCheck, Download, UserCheck, Users } from "lucide-react";
 import type { LeadgenClientReport } from "@/lib/leadgen-client-report";
 
 function formatDate(value: string): string {
@@ -17,9 +17,8 @@ export default function ClientPerformanceReport({
 }) {
   const query = new URLSearchParams(report.period).toString();
   const cards = [
-    { label: "Leads Added", value: report.leadsAdded, icon: <Users className="h-5 w-5" /> },
-    { label: "Leads Worked", value: report.leadsWorked, icon: <Target className="h-5 w-5" /> },
-    { label: "Interested Leads", value: report.interestedLeads, icon: <UserCheck className="h-5 w-5" /> },
+    { label: "Leads Generated", value: report.leadsAdded, icon: <Users className="h-5 w-5" /> },
+    { label: "Interested / Qualified Leads", value: report.interestedLeads, icon: <UserCheck className="h-5 w-5" /> },
     { label: "Appointments Booked", value: report.appointmentsBooked, icon: <CalendarCheck className="h-5 w-5" /> },
   ];
 
@@ -49,7 +48,7 @@ export default function ClientPerformanceReport({
         </div>
       </section>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
         {cards.map((card) => (
           <section key={card.label} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4">
             <div className="text-sky-600">{card.icon}</div>
@@ -63,11 +62,6 @@ export default function ClientPerformanceReport({
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="font-bold text-slate-900">Performance Summary</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">{report.summary}</p>
-          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-200 pt-4">
-            <div><p className="text-[11px] uppercase text-slate-500">Follow-Ups</p><p className="mt-1 font-bold">{report.followUps}</p></div>
-            <div><p className="text-[11px] uppercase text-slate-500">Completed</p><p className="mt-1 font-bold">{report.appointmentsCompleted}</p></div>
-            <div><p className="text-[11px] uppercase text-slate-500">Conversion</p><p className="mt-1 font-bold">{report.conversionRate}%</p></div>
-          </div>
         </section>
         <section className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
           <h2 className="font-bold text-sky-900">Recommended Next Step</h2>
