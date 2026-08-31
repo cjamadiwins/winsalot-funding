@@ -183,8 +183,7 @@ export default function AdminCrmClient({
             value={cardCounts[card.key]}
             tone={card.tone}
             icon={<card.icon />}
-            hideIcon={card.key === "total"}
-            active={activeCard === card.key}
+            active={card.key !== "total" && activeCard === card.key}
             onClick={() => setActiveCard((current) => (current === card.key ? "total" : card.key))}
           />
         ))}
