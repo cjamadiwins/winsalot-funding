@@ -38,7 +38,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Consultation Availability", href: "/admin/crm/consultation-availability", icon: <CalendarCog /> },
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
   { label: "Clients", href: "/admin/crm/clients", icon: <Building2 /> },
-  { label: "Marketing", href: "/admin/crm/marketing", icon: <Megaphone /> },
+  { label: "Email Marketing", href: "/admin/crm/marketing", icon: <Megaphone /> },
   { label: "Invoices", href: "/admin/crm/invoices", icon: <Receipt /> },
   { label: "Client Onboarding", href: "/admin/crm/onboarding", icon: <Workflow /> },
   { label: "Client Agreements", href: "/admin/crm/agreements", icon: <FileSignature /> },
