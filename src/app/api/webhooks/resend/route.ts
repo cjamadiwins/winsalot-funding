@@ -7,11 +7,10 @@ export const runtime = "nodejs";
 
 // Receives Resend's delivery-event webhooks (configured in the Resend
 // dashboard → Webhooks, see docs/crm.md for the exact setup) and updates
-// whichever crm_lead_emails row that email belongs to. Only emails sent
-// through sendTrackedCrmEmail (the CRM's "Send Quote Request Email"/"Send
-// Follow-Up Email" actions) are tracked there — every other Resend email
-// this app sends (opportunity alerts, backup notifications, agent
-// invites) has no matching row and is silently ignored below.
+// whichever tracked email row that email belongs to. Growth marketing
+// emails use crm_marketing_deliveries; one-to-one Growth CRM emails use
+// crm_lead_emails; invoices and Lead Generation CRM sends retain their
+// own independent tracking tables below.
 //
 // This route is intentionally outside src/proxy.ts's matcher
 // (["/", "/admin/:path*", "/agent/:path*"]) — Resend calls it directly
@@ -226,6 +225,80 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true, tracked: true });
+  }
+
+  // Automatic weekly Growth CRM campaign delivery tracking. This branch
+  // runs before crm_lead_emails because marketing sends intentionally use
+  // their own occurrence-keyed table to make cron retries idempotent.
+  const { data: marketingDelivery } = await admin
+    .from("crm_marketing_deliveries")
+    .select("id, enrollment_id, opportunity_id, status_at, to_email")
+    .eq("resend_email_id", emailId)
+    .maybeSingle();
+
+  if (marketingDelivery) {
+    const isNewer = new Date(eventAt) >= new Date(marketingDelivery.status_at);
+    const marketingUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+    if (isNewer) {
+      marketingUpdates.status = status;
+      marketingUpdates.status_at = eventAt;
+    }
+    if (event.type === "email.bounced") marketingUpdates.error_detail = event.data.bounce.message;
+    if (event.type === "email.failed") marketingUpdates.error_detail = event.data.failed.reason;
+
+    const { error: marketingUpdateError } = await admin
+      .from("crm_marketing_deliveries")
+      .update(marketingUpdates)
+      .eq("id", marketingDelivery.id);
+    if (marketingUpdateError) {
+      console.error(`[resend-webhook] failed to update crm_marketing_deliveries ${marketingDelivery.id}:`, marketingUpdateError);
+    }
+
+    // A complaint is an explicit do-not-contact signal; a hard bounce is
+    // also suppressed so the daily worker cannot keep retrying a bad
+    // address. Both stop this enrollment immediately.
+    if (event.type === "email.complained" || event.type === "email.bounced") {
+      const suppressionReason = event.type === "email.complained" ? "spam_complaint" : "hard_bounce";
+      await admin.from("crm_email_suppressions").upsert(
+        {
+          email: marketingDelivery.to_email.trim().toLowerCase(),
+          opportunity_id: marketingDelivery.opportunity_id,
+          reason: suppressionReason,
+          suppressed_at: eventAt,
+        },
+        { onConflict: "email" }
+      );
+      await admin
+        .from("crm_marketing_enrollments")
+        .update({
+          status: "unsubscribed",
+          stopped_at: eventAt,
+          claim_token: null,
+          claimed_at: null,
+          last_error: event.type === "email.complained" ? "Recipient reported the email as spam." : "Recipient email address hard-bounced.",
+          updated_at: eventAt,
+        })
+        .eq("id", marketingDelivery.enrollment_id);
+    }
+
+    if (!isDuplicateDelivery && marketingDelivery.opportunity_id) {
+      const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+      let notes = `Automatic marketing email ${EMAIL_STATUS_LABELS[status].toLowerCase()} (to ${toEmail}) — "${event.data.subject}".`;
+      if (event.type === "email.bounced") notes = `Automatic marketing email bounced (to ${toEmail}) — ${event.data.bounce.message}. The campaign was stopped.`;
+      else if (event.type === "email.complained") notes = `Recipient marked the automatic marketing email as spam (to ${toEmail}). The campaign was stopped.`;
+      else if (event.type === "email.opened") notes = `Recipient opened the automatic marketing email (to ${toEmail}).`;
+      else if (event.type === "email.clicked") notes = `Recipient clicked a link in the automatic marketing email (to ${toEmail}).`;
+      else if (event.type === "email.failed") notes = `Automatic marketing email failed (to ${toEmail}) — ${event.data.failed.reason}.`;
+      await admin.from("crm_activities").insert({
+        opportunity_id: marketingDelivery.opportunity_id,
+        agent_id: null,
+        activity_type: "email",
+        notes,
+        occurred_at: eventAt,
+      });
+    }
+
+    return NextResponse.json({ received: true, tracked: true, category: "crm_marketing" });
   }
 
   const { data: tracked } = await admin
