@@ -10,6 +10,7 @@ import {
 } from "@/lib/crm-types";
 import {
   MARKETING_CAMPAIGN_LABELS,
+  MARKETING_CAMPAIGN_TYPES,
   MARKETING_ENROLLMENT_STATUS_LABELS,
   type CrmMarketingDeliveryRow,
   type CrmMarketingEnrollmentRow,
@@ -57,6 +58,15 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
     (opportunity) => eligibleStages.has(opportunity.stage) && !!opportunity.email && !enrolledIds.has(opportunity.id)
   );
   const selectedOpportunity = opportunityById.get(selectedOpportunityId);
+  const orderedTemplates = useMemo(
+    () =>
+      [...templates].sort(
+        (a, b) =>
+          MARKETING_CAMPAIGN_TYPES.indexOf(a.campaign_type) - MARKETING_CAMPAIGN_TYPES.indexOf(b.campaign_type) ||
+          a.sequence_number - b.sequence_number
+      ),
+    [templates]
+  );
   const latestDeliveryByEnrollment = useMemo(() => {
     const map = new Map<string, CrmMarketingDeliveryRow>();
     for (const delivery of deliveries) if (!map.has(delivery.enrollment_id)) map.set(delivery.enrollment_id, delivery);
@@ -163,7 +173,7 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
         <h2 className="text-lg font-bold text-slate-900">Weekly Email Sequence</h2>
         <p className="mt-1 text-sm text-slate-500">Four messages rotate for each service. You may edit the wording; service matching and unsubscribe information remain automatic.</p>
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          {templates.map((template) => (
+          {orderedTemplates.map((template) => (
             <form key={template.id} action={(formData) => runAction(() => actions.updateTemplate(template.id, formData))} className="rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-900">{MARKETING_CAMPAIGN_LABELS[template.campaign_type]} — Week {template.sequence_number}</h3><span className="text-xs text-slate-500">{template.active ? "Active" : "Inactive"}</span></div>
               <label className="text-xs font-semibold uppercase text-slate-500">Subject<input name="subject" defaultValue={template.subject} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label>
