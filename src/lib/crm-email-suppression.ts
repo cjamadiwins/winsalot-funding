@@ -70,5 +70,22 @@ export async function unsubscribeByToken(token: string): Promise<UnsubscribeResu
     return { error: "Failed to process the unsubscribe request. Please try again." };
   }
 
+  // A marketing enrollment is the scheduler's source of truth. Updating it
+  // immediately means an unsubscribe click stops the weekly campaign even
+  // before the next cron run performs its own suppression-list check.
+  if (tokenRow.opportunity_id) {
+    await admin
+      .from("crm_marketing_enrollments")
+      .update({
+        status: "unsubscribed",
+        stopped_at: new Date().toISOString(),
+        claim_token: null,
+        claimed_at: null,
+        last_error: "Recipient unsubscribed from Winsalot marketing emails.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("opportunity_id", tokenRow.opportunity_id);
+  }
+
   return { email: tokenRow.email as string };
 }
