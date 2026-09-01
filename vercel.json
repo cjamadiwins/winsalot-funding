@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/crm-weekly-marketing",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/agent-monthly-reports",
+      "schedule": "0 14 1-3 * *"
     }
   ]
 }
