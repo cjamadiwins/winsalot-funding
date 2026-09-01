@@ -140,7 +140,13 @@ export default function KpiCard({
     </>
   );
 
-  const activeClass = active ? "border-[var(--crm-accent,#3e7ef7)] ring-2 ring-[var(--crm-accent,#3e7ef7)]/40" : "";
+  const activeClass = active ? "ring-2 ring-[var(--crm-accent,#3e7ef7)]/40" : "";
+  const activeStyle = active
+    ? {
+        borderColor: "var(--crm-accent, #3e7ef7)",
+        boxShadow: "0 0 0 3px rgba(62, 126, 247, 0.32), 0 1px 2px rgba(0, 0, 0, 0.06)",
+      }
+    : undefined;
   const baseClass = `flex flex-col rounded-2xl border border-[var(--crm-border,#dce4ec)] bg-[var(--crm-surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition ${activeClass}`;
   const interactiveClass =
     "cursor-pointer hover:-translate-y-0.5 hover:border-[var(--crm-accent,#3e7ef7)]/30 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crm-accent,#3e7ef7)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--crm-bg,#f4f7fa)]";
@@ -156,6 +162,7 @@ export default function KpiCard({
           }
         }}
         className={`${baseClass} ${interactiveClass}`}
+        style={activeStyle}
       >
         {inner}
       </Link>
@@ -164,11 +171,11 @@ export default function KpiCard({
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={`${baseClass} ${interactiveClass} text-left`}>
+      <button type="button" onClick={onClick} className={`${baseClass} ${interactiveClass} text-left`} style={activeStyle}>
         {inner}
       </button>
     );
   }
 
-  return <div className={baseClass}>{inner}</div>;
+  return <div className={baseClass} style={activeStyle}>{inner}</div>;
 }
