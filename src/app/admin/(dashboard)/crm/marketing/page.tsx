@@ -32,14 +32,14 @@ export default async function AdminMarketingPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Marketing</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Email Marketing</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Send one service-matched email every seven days to eligible contacted businesses. Consent, suppression, delivery, and engagement are tracked automatically.
+        Manage automated weekly follow-up emails for contacted businesses. Consent, suppression, delivery, and engagement are tracked automatically.
       </p>
 
       {error ? (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          The Marketing section could not load: {error}
+          The Email Marketing section could not load: {error}
         </p>
       ) : (
         <div className="mt-6">
@@ -61,4 +61,3 @@ export default async function AdminMarketingPage() {
     </div>
   );
 }
-
