@@ -5,9 +5,44 @@ import { isGrowthCrmHost } from "@/lib/hosts";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Hardens against accidental env formatting issues (leading/trailing
+// whitespace/newlines or quoted value pasted from a UI/CLI export) - same
+// normalization already applied to the Resend webhook secrets in
+// src/app/api/webhooks/resend/route.ts.
+function normalizeCronSecret(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim().replace(/^['"]|['"]$/g, "");
+  return trimmed ? trimmed : undefined;
+}
+
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  return !!secret && request.headers.get("authorization") === `Bearer ${secret}`;
+  const secret = normalizeCronSecret(process.env.CRON_SECRET);
+  if (!secret) {
+    // Vercel automatically sends CRON_SECRET as this route's Bearer token
+    // on every scheduled invocation (see vercel.json's `crons` entry for
+    // this path and .env.example's CRON_SECRET documentation) - but only
+    // once the var is actually set as a Vercel project env var for the
+    // environment handling the request (Production), and only on
+    // deployments built *after* it was set. Logging this distinctly from
+    // "header didn't match" below means a 401 here is diagnosable from
+    // Vercel's runtime logs alone, without ever printing the secret
+    // itself.
+    console.error(
+      "[cron:crm-weekly-marketing] CRON_SECRET is not set on this deployment - due contacts cannot be processed. " +
+        "Set it in Vercel Project Settings -> Environment Variables (Production) on the winsalot-funding project specifically " +
+        "(the Lead Gen CRM project's CRON_SECRET is a separate value on a separate project), then redeploy - " +
+        "the fix does not take effect until a new deployment is built. Rejecting request."
+    );
+    return false;
+  }
+  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+    console.error(
+      "[cron:crm-weekly-marketing] Authorization header did not match the configured CRON_SECRET - rejecting request. " +
+        "A genuine Vercel Cron invocation always sends the correct header automatically once CRON_SECRET is set on this " +
+        "project; a manual test call needs its own `Authorization: Bearer <value>` header set explicitly."
+    );
+    return false;
+  }
+  return true;
 }
 
 function isEnabledOnThisProject(request: NextRequest): boolean {

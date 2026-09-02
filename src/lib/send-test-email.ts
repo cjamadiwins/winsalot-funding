@@ -1,11 +1,13 @@
 import "server-only";
 import { getResendClient } from "./resend";
-import { getEmailSender, getEmailReplyTo } from "./email-senders";
+import { getEmailSender, getEmailReplyTo, senderForOpportunityType } from "./email-senders";
 import { getLeadgenSenderEmail, getLeadgenReplyToEmail, buildLeadgenBookingEmailHtml } from "./leadgen-email";
 import { buildAppointmentEmailBody } from "./leadgen-appointment-emails";
 import { buildWinsalotConfirmationEmail, buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
 import { buildInvoiceSentEmail, buildInvoiceReminderEmail, buildInvoiceReceiptEmail } from "./crm-invoice-emails";
 import { getDefaultProspectEmailTemplate, buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email-templates";
+import { buildMarketingEmail } from "./crm-marketing-email";
+import type { CrmMarketingTemplateRow } from "./crm-marketing-types";
 import { renderLeadgenTemplate, LEADGEN_BOOKING_BUTTON_LABEL, LEADGEN_CONSULTATION_CTA_LABEL, type LeadgenAppointmentRow, type LeadgenEmailTemplateRow } from "./leadgen-types";
 
 // Admin-only "Send Test Email" function (brief item 8): lets an admin see
@@ -121,6 +123,50 @@ export async function sendCrmTestEmail(type: CrmTestEmailType, toEmail: string):
   const resend = getResendClient();
   const { error } = await resend.emails.send({
     from,
+    to: toEmail,
+    replyTo: getEmailReplyTo(),
+    subject: testSubject(email.subject),
+    text: email.text,
+    html: email.html,
+  });
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+// Admin-only "Send Test Email" for the weekly automatic marketing
+// sequence (Growth CRM brief item 12: "Add a safe admin-only 'Send Test
+// Email' action" for /admin/crm/marketing). Takes an already-fetched
+// crm_marketing_templates row (the caller already holds an admin session
+// and re-reads it fresh from the database rather than trusting whatever
+// the browser posted, so a test send always reflects what's actually
+// saved) and renders it with the exact same buildMarketingEmail() used by
+// the real weekly sender (src/lib/crm-marketing-job.ts), but with
+// obviously fake sample data and placeholder booking/unsubscribe links -
+// never a real opportunity's prefill token or unsubscribe token. This
+// never writes to crm_marketing_enrollments, crm_marketing_deliveries, or
+// crm_activities - a test send has nothing real to track or advance.
+const SAMPLE_MARKETING_BUSINESS_NAME = "Acme Test Co.";
+const SAMPLE_MARKETING_FIRST_NAME = "Jordan";
+const SAMPLE_UNSUBSCRIBE_URL = "https://example.com/test-unsubscribe-link";
+
+export async function sendCrmMarketingTestEmail(
+  template: Pick<CrmMarketingTemplateRow, "campaign_type" | "subject" | "body" | "cta_label">,
+  toEmail: string
+): Promise<{ error?: string }> {
+  const email = buildMarketingEmail({
+    bodyTemplate: template.body,
+    subjectTemplate: template.subject,
+    firstName: SAMPLE_MARKETING_FIRST_NAME,
+    businessName: SAMPLE_MARKETING_BUSINESS_NAME,
+    ctaLabel: template.cta_label,
+    bookingUrl: SAMPLE_BOOKING_URL,
+    unsubscribeUrl: SAMPLE_UNSUBSCRIBE_URL,
+  });
+
+  const resend = getResendClient();
+  const { error } = await resend.emails.send({
+    from: senderForOpportunityType(template.campaign_type),
     to: toEmail,
     replyTo: getEmailReplyTo(),
     subject: testSubject(email.subject),
