@@ -233,7 +233,6 @@ export async function runCrmMarketingJob(options?: { dryRun?: boolean; limit?: n
         ctaLabel: template.cta_label,
         bookingUrl,
         unsubscribeUrl,
-        mailingAddress: process.env.WINSALOT_MAILING_ADDRESS,
       });
     } catch (error) {
       const errorDetail = error instanceof Error ? error.message : "Failed to prepare the marketing email.";
