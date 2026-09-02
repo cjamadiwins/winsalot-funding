@@ -48,7 +48,10 @@ export default async function LeadgenAdminDashboardPage() {
   const allAppointments = appointments ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
-  const clientNameById = new Map(allClients.map((client) => [client.id, client.name] as const));\n  const clientNameByCampaignId = new Map(\n    (campaigns ?? []).map((campaign) => [campaign.id, clientNameById.get(campaign.client_id) ?? campaign.name] as const)\n  );
+  const clientNameById = new Map(allClients.map((client) => [client.id, client.name] as const));
+  const clientNameByCampaignId = new Map(
+    (campaigns ?? []).map((campaign) => [campaign.id, clientNameById.get(campaign.client_id) ?? campaign.name] as const)
+  );
 
   const totalLeads = allLeads.length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
