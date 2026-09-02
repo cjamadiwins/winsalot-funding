@@ -14,6 +14,7 @@ import {
   stopMarketingEnrollmentAction,
   updateMarketingTemplateAction,
   sendMarketingTemplateTestEmailAction,
+  runMarketingJobNowAction,
 } from "./actions";
 
 export default async function AdminMarketingPage() {
@@ -56,6 +57,7 @@ export default async function AdminMarketingPage() {
               stop: stopMarketingEnrollmentAction,
               updateTemplate: updateMarketingTemplateAction,
               sendTestEmail: sendMarketingTemplateTestEmailAction,
+              runJobNow: runMarketingJobNowAction,
             }}
           />
         </div>

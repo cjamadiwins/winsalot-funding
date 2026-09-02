@@ -6,8 +6,10 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
 import { isMarketingCampaignType, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
 import { sendCrmMarketingTestEmail } from "@/lib/send-test-email";
+import { runCrmMarketingJob, type MarketingJobSummary } from "@/lib/crm-marketing-job";
 
 type MarketingActionResult = { error?: string; success?: string };
+type RunJobActionResult = MarketingActionResult & { summary?: MarketingJobSummary };
 
 // Deliberately not shared with the other "Send Test Email" action
 // (src/app/admin/(dashboard)/crm/emails/test/actions.ts) - same
@@ -196,4 +198,39 @@ export async function sendMarketingTemplateTestEmailAction(templateId: string, t
   const result = await sendCrmMarketingTestEmail(template, email);
   if (result.error) return { error: `Failed to send the test email: ${result.error}` };
   return { success: `Test email sent to ${email}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
+}
+
+// Admin-authenticated manual trigger for the exact same weekly-marketing
+// job GET /api/cron/crm-weekly-marketing runs on its daily schedule
+// (runCrmMarketingJob, src/lib/crm-marketing-job.ts) - lets an admin
+// process due contacts (e.g. to verify a newly-enrolled test contact)
+// from the dashboard without ever touching CRON_SECRET, by relying on
+// requireCrmAdmin()'s session check instead of a bearer token. This is
+// NOT a sample-data test send like sendMarketingTemplateTestEmailAction
+// above: with dryRun=false it sends real email to whichever real
+// contacts are actually due (next_send_at <= now()) and really advances
+// their enrollment, identically to a real cron invocation - it only
+// exists as a second, admin-session-authenticated way to reach the same
+// job. Duplicate-safety is unaffected by having two triggers: every claim
+// still goes through claim_due_crm_marketing_enrollments's atomic
+// `FOR UPDATE SKIP LOCKED`, so this can never double-send even if the
+// real cron fires at the same moment. dryRun=true (the "Preview" button)
+// reports exactly who would be emailed without sending anything or
+// writing anything.
+export async function runMarketingJobNowAction(dryRun: boolean): Promise<RunJobActionResult> {
+  await requireCrmAdmin();
+
+  let summary: MarketingJobSummary;
+  try {
+    summary = await runCrmMarketingJob({ dryRun });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Failed to run the weekly marketing job." };
+  }
+
+  if (!dryRun) revalidatePath("/admin/crm/marketing");
+  const verb = dryRun ? "Preview" : "Run";
+  return {
+    success: `${verb} complete — ${summary.candidates} due, ${summary.sent} sent, ${summary.failed} failed, ${summary.skipped} skipped.`,
+    summary,
+  };
 }

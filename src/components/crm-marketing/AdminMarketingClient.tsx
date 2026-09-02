@@ -17,8 +17,10 @@ import {
   type CrmMarketingTemplateRow,
   type MarketingOpportunitySummary,
 } from "@/lib/crm-marketing-types";
+import type { MarketingJobSummary } from "@/lib/crm-marketing-job";
 
 type ActionResult = { error?: string; success?: string };
+type RunJobResult = ActionResult & { summary?: MarketingJobSummary };
 
 type Props = {
   opportunities: MarketingOpportunitySummary[];
@@ -32,6 +34,7 @@ type Props = {
     stop: (id: string) => Promise<ActionResult>;
     updateTemplate: (id: string, formData: FormData) => Promise<ActionResult>;
     sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult>;
+    runJobNow: (dryRun: boolean) => Promise<RunJobResult>;
   };
 };
 
@@ -108,6 +111,8 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
         <SummaryCard label="Due for Next Run" value={dueCount} detail="Processed by the daily scheduler" />
         <SummaryCard label="Emails Recorded" value={sentCount} detail="Sent and engagement tracked" />
       </div>
+
+      <RunMarketingJobNow runJobNow={actions.runJobNow} />
 
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-lg font-bold text-slate-900">Add a Contacted Business</h2>
@@ -191,6 +196,95 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
 function SummaryCard({ label, value, detail }: { label: string; value: number; detail: string }) {
   return <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
+}
+
+// Manually runs the exact same job the daily crm-weekly-marketing cron
+// runs (src/lib/crm-marketing-job.ts, via runMarketingJobNowAction),
+// authenticated by this admin's own session instead of the Vercel Cron
+// CRON_SECRET - the safe way to process due contacts (e.g. verify a
+// newly-enrolled test contact) right now without ever touching that
+// secret. "Preview" runs with dryRun=true: reports exactly who is due and
+// what would be sent, without sending anything or writing anything.
+// "Run Now" is a real send to whichever real contacts are actually due -
+// not a sample/test send - so it's a deliberately separate, clearly
+// labeled control from each template's own "Send Test Email" above.
+function RunMarketingJobNow({ runJobNow }: { runJobNow: (dryRun: boolean) => Promise<RunJobResult> }) {
+  const router = useRouter();
+  const [running, setRunning] = useState<"preview" | "run" | null>(null);
+  const [result, setResult] = useState<RunJobResult | null>(null);
+
+  async function handleRun(dryRun: boolean) {
+    if (running) return;
+    setRunning(dryRun ? "preview" : "run");
+    setResult(null);
+    const outcome = await runJobNow(dryRun);
+    setRunning(null);
+    setResult(outcome);
+    // A real (non-dry) run can advance enrollments and record deliveries -
+    // refresh so the "Campaign Contacts" table below reflects the new
+    // Last Email/Sent/Next Email immediately, same as every other action
+    // in this page (see runAction() above).
+    if (!dryRun && !outcome.error) router.refresh();
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+      <h2 className="text-lg font-bold text-slate-900">Run Weekly Marketing Now</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Manually runs the same job the daily scheduler runs, authenticated as you instead of the Vercel Cron secret. Only contacts
+        already due (Next Email in the past) are processed. Preview first to see who would be emailed without sending anything.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          disabled={running !== null}
+          onClick={() => handleRun(true)}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {running === "preview" ? "Previewing…" : "Preview (Dry Run)"}
+        </button>
+        <button
+          type="button"
+          disabled={running !== null}
+          onClick={() => handleRun(false)}
+          className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {running === "run" ? "Running…" : "Run Now"}
+        </button>
+      </div>
+      {result && (
+        <div className="mt-4">
+          <p className={`text-sm font-medium ${result.error ? "text-rose-600" : "text-emerald-700"}`}>{result.error ?? result.success}</p>
+          {result.summary && result.summary.results.length > 0 && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                    <th className="py-2 pr-3">Business</th>
+                    <th className="py-2 pr-3">Recipient</th>
+                    <th className="py-2 pr-3">Campaign</th>
+                    <th className="py-2 pr-3">Outcome</th>
+                    <th className="py-2">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.summary.results.map((row, index) => (
+                    <tr key={`${row.enrollmentId}-${index}`} className="border-b border-slate-100">
+                      <td className="py-2 pr-3 font-medium text-slate-800">{row.businessName}</td>
+                      <td className="py-2 pr-3 text-slate-600">{row.recipientEmail ?? "—"}</td>
+                      <td className="py-2 pr-3 text-slate-600">{MARKETING_CAMPAIGN_LABELS[row.campaignType as keyof typeof MARKETING_CAMPAIGN_LABELS] ?? row.campaignType}</td>
+                      <td className="py-2 pr-3 capitalize text-slate-700">{row.outcome.replace("_", " ")}</td>
+                      <td className="py-2 text-slate-500">{row.error ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 // Sends this exact saved template, with sample data, to an address the
