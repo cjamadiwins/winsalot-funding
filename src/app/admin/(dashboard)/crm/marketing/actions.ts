@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
-import { isMarketingCampaignType, MARKETING_CAMPAIGN_LABELS, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
+import { isMarketingCampaignType, isMarketingTestEmailRecipient, MARKETING_CAMPAIGN_LABELS, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
 import { sendCrmMarketingTestEmail } from "@/lib/send-test-email";
 import { runCrmMarketingJob, type MarketingJobSummary } from "@/lib/crm-marketing-job";
 
@@ -164,22 +164,25 @@ export async function updateMarketingTemplateAction(templateId: string, formData
 }
 
 // Admin-only "Send Test Email" for the weekly marketing sequence (brief
-// item 12). Always sends to this fixed preview inbox rather than an
-// address the admin types in - a single click immediately sends the
+// item 12). Sends to an admin-chosen recipient, but only one of the three
+// hard-coded addresses in MARKETING_TEST_EMAIL_RECIPIENTS
+// (crm-marketing-types.ts) - a single click immediately sends the
 // currently selected/saved template exactly as production would build it
 // (buildMarketingEmail, same as runCrmMarketingJob), just with a
 // "[TEST] " subject prefix (see send-test-email.ts) and sample
-// business/contact data. Never advances or touches any real contact's
-// enrollment - it does not read or write
+// business/contact data. The <select> on the client only ever offers
+// those three options, but the browser is not trusted: isMarketingTestEmailRecipient()
+// re-validates here against the exact same allowlist, so a tampered
+// request can never reach an arbitrary address. Never advances or touches
+// any real contact's enrollment - it does not read or write
 // crm_marketing_enrollments/crm_marketing_deliveries at all, only the
 // template itself (re-read fresh here rather than trusting whatever the
 // browser posted, so the test always reflects what's actually saved).
 // Admin-only via requireCrmAdmin(), same as every other action in this
 // file - never reachable from an agent's own session.
-const MARKETING_TEST_EMAIL_RECIPIENT = "cjamadiwins@gmail.com";
-
-export async function sendMarketingTemplateTestEmailAction(templateId: string): Promise<MarketingActionResult> {
+export async function sendMarketingTemplateTestEmailAction(templateId: string, toEmail: string): Promise<MarketingActionResult> {
   await requireCrmAdmin();
+  if (!isMarketingTestEmailRecipient(toEmail)) return { error: "Select an approved test recipient." };
   const supabase = await createSupabaseServerClient();
 
   const { data: template, error: templateError } = await supabase
@@ -189,9 +192,9 @@ export async function sendMarketingTemplateTestEmailAction(templateId: string): 
     .maybeSingle();
   if (templateError || !template) return { error: "This template could not be found." };
 
-  const result = await sendCrmMarketingTestEmail(template, MARKETING_TEST_EMAIL_RECIPIENT);
+  const result = await sendCrmMarketingTestEmail(template, toEmail);
   if (result.error) return { error: `Failed to send the test email: ${result.error}` };
-  return { success: `Test email sent to ${MARKETING_TEST_EMAIL_RECIPIENT}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
+  return { success: `Test email sent to ${toEmail}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
 }
 
 // Admin-authenticated manual trigger for the exact same weekly-marketing

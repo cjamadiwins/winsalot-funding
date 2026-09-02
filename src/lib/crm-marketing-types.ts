@@ -95,3 +95,19 @@ export function isMarketingCampaignType(value: string): value is MarketingCampai
   return MARKETING_CAMPAIGN_TYPES.includes(value as MarketingCampaignType);
 }
 
+// Fixed allowlist for "Send Test Email" on /admin/crm/marketing - the only
+// addresses a test send may ever reach. Never extend this from data an
+// admin's browser supplies; both the recipient <select> and the server
+// action that actually sends validate against this same list.
+export const MARKETING_TEST_EMAIL_RECIPIENTS = [
+  { email: "info@winsalotcorp.com", label: "info@winsalotcorp.com (Outlook)" },
+  { email: "winsalotcorp@gmail.com", label: "winsalotcorp@gmail.com (Gmail)" },
+  { email: "cjamadiwins@gmail.com", label: "cjamadiwins@gmail.com (Gmail)" },
+] as const;
+export type MarketingTestEmailRecipient = (typeof MARKETING_TEST_EMAIL_RECIPIENTS)[number]["email"];
+export const DEFAULT_MARKETING_TEST_EMAIL_RECIPIENT: MarketingTestEmailRecipient = "cjamadiwins@gmail.com";
+
+export function isMarketingTestEmailRecipient(value: string): value is MarketingTestEmailRecipient {
+  return MARKETING_TEST_EMAIL_RECIPIENTS.some((recipient) => recipient.email === value);
+}
+
