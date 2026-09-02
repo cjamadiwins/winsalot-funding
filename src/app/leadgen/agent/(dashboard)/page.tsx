@@ -26,6 +26,8 @@ import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
+import CampaignCallScriptSection from "@/components/leadgen/CampaignCallScriptSection";
+import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -73,7 +75,7 @@ export default async function LeadgenAgentDashboardPage() {
     // already read every client's name (see leads/new/page.tsx), only
     // their own leads/appointments are actually RLS-scoped.
     supabase.from("leadgen_clients").select("id, name"),
-    supabase.from("leadgen_campaigns").select("id, name").eq("status", "active").order("name"),
+    supabase.from("leadgen_campaigns").select("id, name, client_id").eq("status", "active").order("name"),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
     // Service-role, narrowly filtered to this signed-in agent's own
@@ -139,12 +141,26 @@ export default async function LeadgenAgentDashboardPage() {
     myByClient.set(appt.client_id, entry);
   }
 
+  // The agent dashboard's "Current Campaign" selector shows exactly the
+  // campaigns registered in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS
+  // (keyed by campaign id, not name text) - this is what keeps
+  // "Q3 Growth Campaign" out of this dropdown even though it shares
+  // Brent's Essentials' client_id. Each option's label is the campaign's
+  // related client name, never the longer campaign name.
+  const agentCampaignOptions = (campaigns ?? [])
+    .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS)
+    .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
+  const currentCampaignScriptKey = agent.current_campaign_id
+    ? (LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS[agent.current_campaign_id] ?? null)
+    : null;
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {agentDisplayName}</h1>
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
-      <AgentCampaignSelector campaigns={campaigns ?? []} currentCampaignId={agent.current_campaign_id} />
+      <AgentCampaignSelector campaigns={agentCampaignOptions} currentCampaignId={agent.current_campaign_id} />
+      <CampaignCallScriptSection scriptKey={currentCampaignScriptKey} agentFullName={agentDisplayName} />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
