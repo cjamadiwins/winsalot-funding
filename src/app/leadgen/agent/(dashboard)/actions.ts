@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 
 export async function signOutLeadgenAgentAction() {
@@ -12,13 +13,32 @@ export async function signOutLeadgenAgentAction() {
 }
 
 export async function updateCurrentCampaignAction(formData: FormData) {
-  await requireLeadgenAgent();
+  const agent = await requireLeadgenAgent();
   const rawCampaignId = formData.get("campaignId");
   const campaignId = typeof rawCampaignId === "string" && rawCampaignId.trim() ? rawCampaignId.trim() : null;
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("set_my_leadgen_current_campaign", { campaign_id: campaignId });
+  const admin = getSupabaseAdmin();
 
-  if (error) throw new Error(error.message || "Unable to save the current campaign.");
+  if (campaignId) {
+    const { data: campaign, error: campaignError } = await admin
+      .from("leadgen_campaigns")
+      .select("id")
+      .eq("id", campaignId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (campaignError || !campaign) return;
+  }
+
+  // The target user always comes from the authenticated session, never
+  // from form input, so an agent can only change their own selection.
+  const { error } = await admin
+    .from("leadgen_users")
+    .update({ current_campaign_id: campaignId })
+    .eq("id", agent.id)
+    .eq("role", "agent")
+    .eq("active", true);
+
+  if (error) return;
 
   revalidatePath("/leadgen/agent");
   revalidatePath("/leadgen/admin");
