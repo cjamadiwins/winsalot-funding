@@ -448,12 +448,17 @@ sending happens outside any page load, on a schedule:
   it updates `crm_lead_emails` (see above) — a hard bounce or spam complaint also auto-unsubscribes
   that enrollment via `crm_email_suppressions`, stopping further sends to that address everywhere
   in the Growth CRM, not just this campaign.
-- **Send Test Email**: each template card on `/admin/crm/marketing` has its own "Send Test Email"
-  button — one click immediately sends that exact saved template (production's `buildMarketingEmail`,
-  including the current Winsalot Corp. branding and head-office address), with sample data and a
-  `[TEST] ` subject prefix, to a fixed preview inbox (`cjamadiwins@gmail.com`). It never touches
-  `crm_marketing_enrollments`/`crm_marketing_deliveries` or any real contact, and ignores due dates
-  entirely (`sendCrmMarketingTestEmail`, `src/lib/send-test-email.ts`).
+- **Send Test Email**: each template card on `/admin/crm/marketing` has its own "Test recipient"
+  dropdown (defaulting to `cjamadiwins@gmail.com`) and "Send Test Email" button — one click
+  immediately sends that exact saved template (production's `buildMarketingEmail`, including the
+  current Winsalot Corp. branding and head-office address), with sample data and a `[TEST] ` subject
+  prefix, to the chosen address. The dropdown only ever offers the three hard-coded addresses in
+  `MARKETING_TEST_EMAIL_RECIPIENTS` (`src/lib/crm-marketing-types.ts`) — `info@winsalotcorp.com`,
+  `winsalotcorp@gmail.com`, `cjamadiwins@gmail.com` — and `sendMarketingTemplateTestEmailAction`
+  re-validates against that same allowlist server-side
+  (`isMarketingTestEmailRecipient`), so a tampered request can never reach an arbitrary address. It
+  never touches `crm_marketing_enrollments`/`crm_marketing_deliveries` or any real contact, and
+  ignores due dates entirely (`sendCrmMarketingTestEmail`, `src/lib/send-test-email.ts`).
 - **Remove from Campaign**: every card in "Campaign Contacts" has a "Remove from Campaign" button
   (confirmation required). It cancels that contact's future emails the same way "Stop" does
   (`status = 'stopped'`), then stamps `removed_at` so the page's query excludes it from the visible

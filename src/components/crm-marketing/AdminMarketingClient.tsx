@@ -9,9 +9,11 @@ import {
   OPPORTUNITY_TYPE_LABELS,
 } from "@/lib/crm-types";
 import {
+  DEFAULT_MARKETING_TEST_EMAIL_RECIPIENT,
   MARKETING_CAMPAIGN_LABELS,
   MARKETING_CAMPAIGN_TYPES,
   MARKETING_ENROLLMENT_STATUS_LABELS,
+  MARKETING_TEST_EMAIL_RECIPIENTS,
   type CrmMarketingDeliveryRow,
   type CrmMarketingEnrollmentRow,
   type CrmMarketingTemplateRow,
@@ -35,7 +37,7 @@ type Props = {
     remove: (id: string) => Promise<ActionResult>;
     deleteCampaign: (campaignType: string) => Promise<ActionResult>;
     updateTemplate: (id: string, formData: FormData) => Promise<ActionResult>;
-    sendTestEmail: (templateId: string) => Promise<ActionResult>;
+    sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult>;
     runJobNow: (dryRun: boolean) => Promise<RunJobResult>;
   };
 };
@@ -463,15 +465,20 @@ function RunMarketingJobNow({ runJobNow }: { runJobNow: (dryRun: boolean) => Pro
 }
 
 // Immediately sends this exact saved template - with sample data and a
-// fixed preview inbox, never a real contact, never advancing a real
-// enrollment (src/lib/send-test-email.ts's sendCrmMarketingTestEmail) - so
-// one click previews exactly what this template would send in production.
-// Deliberately its own <div>, not a nested <form> (the template card above
-// is already a <form> that saves the template on submit) - the control
-// below is type="button" so it can never trigger that outer submit, and
-// this row keeps its own isolated pending/message state so testing one
-// template never disturbs another template's Save button.
-function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; sendTestEmail: (templateId: string) => Promise<ActionResult> }) {
+// recipient chosen from a fixed, hard-coded allowlist (never free text) -
+// never a real contact, never advancing a real enrollment
+// (src/lib/send-test-email.ts's sendCrmMarketingTestEmail) - so one click
+// previews exactly what this template would send in production. The
+// <select> only ever offers MARKETING_TEST_EMAIL_RECIPIENTS; the server
+// action re-validates the same allowlist regardless of what this client
+// sends. Deliberately its own <div>, not a nested <form> (the template
+// card above is already a <form> that saves the template on submit) - the
+// controls below are type="button"/a plain <select> so nothing here can
+// ever trigger that outer submit, and this row keeps its own isolated
+// pending/message state so testing one template never disturbs another
+// template's Save button.
+function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult> }) {
+  const [toEmail, setToEmail] = useState<string>(DEFAULT_MARKETING_TEST_EMAIL_RECIPIENT);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
 
@@ -479,13 +486,26 @@ function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; s
     if (sending) return;
     setSending(true);
     setResult(null);
-    const outcome = await sendTestEmail(templateId);
+    const outcome = await sendTestEmail(templateId, toEmail);
     setSending(false);
     setResult(outcome);
   }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+      <label className="text-xs font-medium text-slate-600">
+        Test recipient
+        <select
+          value={toEmail}
+          onChange={(event) => setToEmail(event.target.value)}
+          disabled={sending}
+          className="ml-2 rounded-md border border-slate-300 px-2 py-1.5 text-xs normal-case text-slate-800 disabled:opacity-50"
+        >
+          {MARKETING_TEST_EMAIL_RECIPIENTS.map((recipient) => (
+            <option key={recipient.email} value={recipient.email}>{recipient.label}</option>
+          ))}
+        </select>
+      </label>
       <button
         type="button"
         disabled={sending}
