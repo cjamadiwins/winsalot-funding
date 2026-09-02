@@ -31,7 +31,7 @@ export default async function LeadgenAdminDashboardPage() {
         .eq("role", "agent")
         .eq("active", true)
         .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
-      admin.from("leadgen_campaigns").select("id, name"),
+      admin.from("leadgen_campaigns").select("id, name, client_id"),
       // Today's Appointments dashboard widget - every non-cancelled/replaced
       // appointment booked for today, earliest first.
       admin
@@ -48,7 +48,10 @@ export default async function LeadgenAdminDashboardPage() {
   const allAppointments = appointments ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
-  const campaignNameById = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.name] as const));
+  const clientNameById = new Map(allClients.map((client) => [client.id, client.name] as const));
+  const clientNameByCampaignId = new Map(
+    (campaigns ?? []).map((campaign) => [campaign.id, clientNameById.get(campaign.client_id) ?? campaign.name] as const)
+  );
 
   const totalLeads = allLeads.length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
@@ -211,19 +214,19 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Agent Campaign Status</h2>
-        <p className="mt-1 text-[13px] text-slate-500">Each active agent&apos;s currently selected campaign.</p>
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Agent Client Status</h2>
+        <p className="mt-1 text-[13px] text-slate-500">Each active agent&apos;s currently selected client.</p>
         {agents.length === 0 ? (
           <p className="mt-3 text-[13.5px] text-slate-500">No active agents.</p>
         ) : (
           <div className="mt-3 divide-y divide-slate-100">
             {agents.map((agent) => {
-              const campaignName = agent.current_campaign_id ? campaignNameById.get(agent.current_campaign_id) : null;
+              const clientName = agent.current_campaign_id ? clientNameByCampaignId.get(agent.current_campaign_id) : null;
               return (
                 <div key={agent.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                   <span className="text-[13.5px] font-semibold text-slate-800">{agent.full_name}</span>
-                  <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${campaignName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
-                    {campaignName ?? "Not selected"}
+                  <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${clientName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
+                    {clientName ?? "Not selected"}
                   </span>
                 </div>
               );
