@@ -8,7 +8,7 @@
 //
 // Adding a client/campaign to this map is a deliberate, reviewed step -
 // it also has to have a call script wired up in leadgen-call-scripts.tsx
-// and CampaignCallScriptSection, so a new campaign never appears
+// and rendered by AgentCampaignSelector, so a new campaign never appears
 // selectable without one.
 export type LeadgenAgentCampaignScriptKey = "brents-essentials" | "mantra-collab";
 
