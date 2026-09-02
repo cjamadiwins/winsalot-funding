@@ -449,9 +449,25 @@ sending happens outside any page load, on a schedule:
   that enrollment via `crm_email_suppressions`, stopping further sends to that address everywhere
   in the Growth CRM, not just this campaign.
 - **Send Test Email**: each template card on `/admin/crm/marketing` has its own "Send Test Email"
-  row — sends that exact saved template, with sample data and a `[TEST] ` subject prefix, to an
-  address the admin enters, and never touches `crm_marketing_enrollments`/`crm_marketing_deliveries`
-  or any real contact (`sendCrmMarketingTestEmail`, `src/lib/send-test-email.ts`).
+  button — one click immediately sends that exact saved template (production's `buildMarketingEmail`,
+  including the current Winsalot Corp. branding and head-office address), with sample data and a
+  `[TEST] ` subject prefix, to a fixed preview inbox (`cjamadiwins@gmail.com`). It never touches
+  `crm_marketing_enrollments`/`crm_marketing_deliveries` or any real contact, and ignores due dates
+  entirely (`sendCrmMarketingTestEmail`, `src/lib/send-test-email.ts`).
+- **Remove from Campaign**: every card in "Campaign Contacts" has a "Remove from Campaign" button
+  (confirmation required). It cancels that contact's future emails the same way "Stop" does
+  (`status = 'stopped'`), then stamps `removed_at` so the page's query excludes it from the visible
+  list going forward. The `crm_marketing_enrollments` row, its consent fields, the underlying
+  `crm_opportunities` business/opportunity, and every `crm_marketing_deliveries` row are untouched —
+  deleting the enrollment row outright is not an option, since `crm_marketing_deliveries.enrollment_id`
+  is `on delete cascade` and would destroy that contact's sent-email history.
+- **Delete Campaign**: each campaign group ("Lead Generation"/"Business Financing"/"Both Services")
+  in "Weekly Email Sequence" has a "Delete Campaign" button (confirmation required, and it reports how
+  many currently-enrolled contacts will stop receiving emails). It sets `active = false` on every
+  template in that `campaign_type` (the weekly job already treats "no active template" as a normal
+  skip) and removes every active/paused enrollment of that `campaign_type` only, exactly like "Remove
+  from Campaign" above. Other campaign types, businesses, opportunities, consent records, and delivery
+  history are unaffected.
 
 ### Troubleshooting: due contacts aren't being emailed
 

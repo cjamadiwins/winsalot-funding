@@ -32,8 +32,10 @@ type Props = {
     pause: (id: string) => Promise<ActionResult>;
     resume: (id: string) => Promise<ActionResult>;
     stop: (id: string) => Promise<ActionResult>;
+    remove: (id: string) => Promise<ActionResult>;
+    deleteCampaign: (campaignType: string) => Promise<ActionResult>;
     updateTemplate: (id: string, formData: FormData) => Promise<ActionResult>;
-    sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult>;
+    sendTestEmail: (templateId: string) => Promise<ActionResult>;
     runJobNow: (dryRun: boolean) => Promise<RunJobResult>;
   };
 };
@@ -81,6 +83,19 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
           a.sequence_number - b.sequence_number
       ),
     [templates]
+  );
+  // One group per MarketingCampaignType (Lead Generation/Business
+  // Financing/Both Services) - "Delete Campaign" acts on the whole group.
+  // A group with every template deactivated (deleteMarketingCampaignAction
+  // sets active=false on all of them) is a deleted campaign, so it's
+  // dropped from the editable list entirely rather than shown "Inactive".
+  const campaignGroups = useMemo(
+    () =>
+      MARKETING_CAMPAIGN_TYPES.map((campaignType) => ({
+        campaignType,
+        templates: orderedTemplates.filter((template) => template.campaign_type === campaignType),
+      })).filter((group) => group.templates.some((template) => template.active)),
+    [orderedTemplates]
   );
   const latestDeliveryByEnrollment = useMemo(() => {
     const map = new Map<string, CrmMarketingDeliveryRow>();
@@ -224,7 +239,13 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                 {enrollment.last_error && <p className="mt-2.5 break-words text-xs text-rose-600">{enrollment.last_error}</p>}
 
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                  <EnrollmentControls enrollment={enrollment} isPending={isPending} actions={actions} runAction={runAction} />
+                  <EnrollmentControls
+                    enrollment={enrollment}
+                    businessName={opportunity?.business_name ?? "this contact"}
+                    isPending={isPending}
+                    actions={actions}
+                    runAction={runAction}
+                  />
                 </div>
               </div>
             );
@@ -237,16 +258,52 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-lg font-bold text-slate-900">Weekly Email Sequence</h2>
         <p className="mt-1 text-sm text-slate-500">Four messages rotate for each service. You may edit the wording; service matching and unsubscribe information remain automatic.</p>
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          {orderedTemplates.map((template) => (
-            <form key={template.id} action={(formData) => runAction(() => actions.updateTemplate(template.id, formData))} className="rounded-xl border border-slate-200 p-4">
-              <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-900">{MARKETING_CAMPAIGN_LABELS[template.campaign_type]} — Week {template.sequence_number}</h3><span className="text-xs text-slate-500">{template.active ? "Active" : "Inactive"}</span></div>
-              <label className="text-xs font-semibold uppercase text-slate-500">Subject<input name="subject" defaultValue={template.subject} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label>
-              <label className="mt-3 block text-xs font-semibold uppercase text-slate-500">Message<textarea name="body" rows={7} defaultValue={template.body} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case text-slate-800" /></label>
-              <div className="mt-3 flex gap-3"><label className="flex-1 text-xs font-semibold uppercase text-slate-500">Link label<input name="cta_label" defaultValue={template.cta_label} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label><div className="flex items-end"><button disabled={isPending} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save Template</button></div></div>
-              <TemplateTestSend templateId={template.id} sendTestEmail={actions.sendTestEmail} />
-            </form>
-          ))}
+        <div className="mt-4 space-y-6">
+          {campaignGroups.map((group) => {
+            const activeContactCount = enrollments.filter(
+              (enrollment) => enrollment.campaign_type === group.campaignType && (enrollment.status === "active" || enrollment.status === "paused")
+            ).length;
+            return (
+              <div key={group.campaignType}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-slate-900">{MARKETING_CAMPAIGN_LABELS[group.campaignType]}</h3>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      const warning =
+                        activeContactCount > 0
+                          ? ` ${activeContactCount} contact${activeContactCount === 1 ? "" : "s"} currently scheduled in it will stop receiving further emails.`
+                          : "";
+                      if (
+                        !window.confirm(
+                          `Delete the ${MARKETING_CAMPAIGN_LABELS[group.campaignType]} campaign?${warning} Businesses, opportunities, consent records, and email history are kept, and other campaigns are not affected.`
+                        )
+                      ) {
+                        return;
+                      }
+                      runAction(() => actions.deleteCampaign(group.campaignType));
+                    }}
+                    className="rounded-md border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                  >
+                    Delete Campaign
+                  </button>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {group.templates.map((template) => (
+                    <form key={template.id} action={(formData) => runAction(() => actions.updateTemplate(template.id, formData))} className="rounded-xl border border-slate-200 p-4">
+                      <div className="mb-3 flex items-center justify-between"><h4 className="font-bold text-slate-900">Week {template.sequence_number}</h4><span className="text-xs text-slate-500">{template.active ? "Active" : "Inactive"}</span></div>
+                      <label className="text-xs font-semibold uppercase text-slate-500">Subject<input name="subject" defaultValue={template.subject} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label>
+                      <label className="mt-3 block text-xs font-semibold uppercase text-slate-500">Message<textarea name="body" rows={7} defaultValue={template.body} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case text-slate-800" /></label>
+                      <div className="mt-3 flex gap-3"><label className="flex-1 text-xs font-semibold uppercase text-slate-500">Link label<input name="cta_label" defaultValue={template.cta_label} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label><div className="flex items-end"><button disabled={isPending} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save Template</button></div></div>
+                      <TemplateTestSend templateId={template.id} sendTestEmail={actions.sendTestEmail} />
+                    </form>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {campaignGroups.length === 0 && <p className="text-sm text-slate-500">Every campaign has been deleted.</p>}
         </div>
       </section>
     </div>
@@ -259,13 +316,15 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 // markup differs.
 function EnrollmentControls({
   enrollment,
+  businessName,
   isPending,
   actions,
   runAction,
 }: {
   enrollment: CrmMarketingEnrollmentRow;
+  businessName: string;
   isPending: boolean;
-  actions: Pick<Props["actions"], "pause" | "resume" | "stop">;
+  actions: Pick<Props["actions"], "pause" | "resume" | "stop" | "remove">;
   runAction: (action: () => Promise<ActionResult>) => void;
 }) {
   return (
@@ -297,6 +356,22 @@ function EnrollmentControls({
           Stop
         </button>
       )}
+      <button
+        disabled={isPending}
+        onClick={() => {
+          if (
+            !window.confirm(
+              `Remove ${businessName} from this campaign? Future emails are cancelled, but the business, opportunity, consent record, and email history are all kept.`
+            )
+          ) {
+            return;
+          }
+          runAction(() => actions.remove(enrollment.id));
+        }}
+        className="rounded-md border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
+      >
+        Remove from Campaign
+      </button>
     </>
   );
 }
@@ -387,40 +462,33 @@ function RunMarketingJobNow({ runJobNow }: { runJobNow: (dryRun: boolean) => Pro
   );
 }
 
-// Sends this exact saved template, with sample data, to an address the
-// admin enters here - never a real contact, never advances a real
-// enrollment (src/lib/send-test-email.ts's sendCrmMarketingTestEmail).
-// Deliberately its own <div>, not a nested <form> (the template card
-// above is already a <form> that saves the template on submit) - every
-// control below is type="button" so it can never trigger that outer
-// submit, and this row keeps its own isolated pending/message state so
-// testing one template never disturbs another template's Save button.
-function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult> }) {
-  const [toEmail, setToEmail] = useState("");
+// Immediately sends this exact saved template - with sample data and a
+// fixed preview inbox, never a real contact, never advancing a real
+// enrollment (src/lib/send-test-email.ts's sendCrmMarketingTestEmail) - so
+// one click previews exactly what this template would send in production.
+// Deliberately its own <div>, not a nested <form> (the template card above
+// is already a <form> that saves the template on submit) - the control
+// below is type="button" so it can never trigger that outer submit, and
+// this row keeps its own isolated pending/message state so testing one
+// template never disturbs another template's Save button.
+function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; sendTestEmail: (templateId: string) => Promise<ActionResult> }) {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
 
   async function handleSend() {
-    if (sending || !toEmail.trim()) return;
+    if (sending) return;
     setSending(true);
     setResult(null);
-    const outcome = await sendTestEmail(templateId, toEmail);
+    const outcome = await sendTestEmail(templateId);
     setSending(false);
     setResult(outcome);
   }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-      <input
-        type="email"
-        value={toEmail}
-        onChange={(event) => setToEmail(event.target.value)}
-        placeholder="you@winsalotcorp.com"
-        className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-xs normal-case text-slate-800"
-      />
       <button
         type="button"
-        disabled={sending || !toEmail.trim()}
+        disabled={sending}
         onClick={handleSend}
         className="rounded-md border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
       >

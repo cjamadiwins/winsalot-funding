@@ -4,20 +4,12 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
-import { isMarketingCampaignType, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
+import { isMarketingCampaignType, MARKETING_CAMPAIGN_LABELS, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
 import { sendCrmMarketingTestEmail } from "@/lib/send-test-email";
 import { runCrmMarketingJob, type MarketingJobSummary } from "@/lib/crm-marketing-job";
 
 type MarketingActionResult = { error?: string; success?: string };
 type RunJobActionResult = MarketingActionResult & { summary?: MarketingJobSummary };
-
-// Deliberately not shared with the other "Send Test Email" action
-// (src/app/admin/(dashboard)/crm/emails/test/actions.ts) - same
-// duplication that file's own isValidEmail already accepts, keeping
-// every admin action file free of a cross-file dependency for one regex.
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
 
 const ELIGIBLE_STAGES = new Set([
   "Contacted",
@@ -172,21 +164,23 @@ export async function updateMarketingTemplateAction(templateId: string, formData
 }
 
 // Admin-only "Send Test Email" for the weekly marketing sequence (brief
-// item 12). Sends only to an address the admin enters here, is clearly
-// marked as a test ("[TEST] " subject prefix, see send-test-email.ts),
-// and never advances or touches any real contact's enrollment - it does
-// not read or write crm_marketing_enrollments/crm_marketing_deliveries at
-// all, only the template itself (re-read fresh here rather than trusting
-// whatever the browser posted, so the test always reflects what's
-// actually saved). Admin-only via requireCrmAdmin(), same as every other
-// action in this file - never reachable from an agent's own session.
-export async function sendMarketingTemplateTestEmailAction(templateId: string, toEmail: string): Promise<MarketingActionResult> {
+// item 12). Always sends to this fixed preview inbox rather than an
+// address the admin types in - a single click immediately sends the
+// currently selected/saved template exactly as production would build it
+// (buildMarketingEmail, same as runCrmMarketingJob), just with a
+// "[TEST] " subject prefix (see send-test-email.ts) and sample
+// business/contact data. Never advances or touches any real contact's
+// enrollment - it does not read or write
+// crm_marketing_enrollments/crm_marketing_deliveries at all, only the
+// template itself (re-read fresh here rather than trusting whatever the
+// browser posted, so the test always reflects what's actually saved).
+// Admin-only via requireCrmAdmin(), same as every other action in this
+// file - never reachable from an agent's own session.
+const MARKETING_TEST_EMAIL_RECIPIENT = "cjamadiwins@gmail.com";
+
+export async function sendMarketingTemplateTestEmailAction(templateId: string): Promise<MarketingActionResult> {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
-
-  const email = toEmail.trim();
-  if (!email) return { error: "Enter a recipient email address." };
-  if (!isValidEmail(email)) return { error: "Enter a valid email address." };
 
   const { data: template, error: templateError } = await supabase
     .from("crm_marketing_templates")
@@ -195,9 +189,9 @@ export async function sendMarketingTemplateTestEmailAction(templateId: string, t
     .maybeSingle();
   if (templateError || !template) return { error: "This template could not be found." };
 
-  const result = await sendCrmMarketingTestEmail(template, email);
+  const result = await sendCrmMarketingTestEmail(template, MARKETING_TEST_EMAIL_RECIPIENT);
   if (result.error) return { error: `Failed to send the test email: ${result.error}` };
-  return { success: `Test email sent to ${email}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
+  return { success: `Test email sent to ${MARKETING_TEST_EMAIL_RECIPIENT}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
 }
 
 // Admin-authenticated manual trigger for the exact same weekly-marketing
@@ -232,5 +226,72 @@ export async function runMarketingJobNowAction(dryRun: boolean): Promise<RunJobA
   return {
     success: `${verb} complete — ${summary.candidates} due, ${summary.sent} sent, ${summary.failed} failed, ${summary.skipped} skipped.`,
     summary,
+  };
+}
+
+// "Remove from Campaign" for one Campaign Contact. Never deletes the
+// crm_marketing_enrollments row (crm_marketing_deliveries.enrollment_id is
+// `on delete cascade`, so a hard delete would destroy that contact's
+// previously-sent-email history) - instead it cancels future sends the
+// same way "Stop" already does (status='stopped', so the weekly job's
+// `status = 'active'` claim never picks it up again) and additionally
+// stamps removed_at, which the marketing page's query filters out of the
+// visible "Campaign Contacts" list. The underlying crm_opportunities
+// business/opportunity, the enrollment's own consent fields, and every
+// crm_marketing_deliveries row are all left exactly as they were.
+export async function removeMarketingEnrollmentAction(enrollmentId: string): Promise<MarketingActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("crm_marketing_enrollments")
+    .select("id")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (!existing) return { error: "Campaign contact not found." };
+
+  const { error } = await supabase
+    .from("crm_marketing_enrollments")
+    .update({ status: "stopped", stopped_at: now, removed_at: now, claim_token: null, claimed_at: null, updated_at: now })
+    .eq("id", enrollmentId);
+  if (error) return { error: `Could not remove this contact from the campaign: ${error.message}` };
+
+  revalidatePath("/admin/crm/marketing");
+  return { success: "Removed from the campaign. Future emails are cancelled — the business, opportunity, consent record, and email history are unchanged." };
+}
+
+// "Delete Campaign" for one entire weekly email sequence (a
+// MarketingCampaignType - Lead Generation, Business Financing, or Both
+// Services). Deactivates every template in that campaign_type
+// (active=false - already a state the weekly job handles gracefully by
+// skipping with "no active template for this campaign") and removes (as
+// removeMarketingEnrollmentAction above) every currently active/paused
+// enrollment of that campaign_type only. Nothing is deleted: no template
+// row, no enrollment row, no opportunity, no consent field, no delivery
+// history. Every write here is scoped with `.eq("campaign_type", ...)`,
+// so the other two campaigns are never touched.
+export async function deleteMarketingCampaignAction(campaignType: string): Promise<MarketingActionResult> {
+  await requireCrmAdmin();
+  if (!isMarketingCampaignType(campaignType)) return { error: "Select a valid campaign." };
+  const supabase = await createSupabaseServerClient();
+  const now = new Date().toISOString();
+
+  const { error: templateError } = await supabase
+    .from("crm_marketing_templates")
+    .update({ active: false, updated_at: now })
+    .eq("campaign_type", campaignType);
+  if (templateError) return { error: `Could not delete this campaign: ${templateError.message}` };
+
+  const { error: enrollmentError } = await supabase
+    .from("crm_marketing_enrollments")
+    .update({ status: "stopped", stopped_at: now, removed_at: now, claim_token: null, claimed_at: null, updated_at: now })
+    .eq("campaign_type", campaignType)
+    .in("status", ["active", "paused"]);
+  if (enrollmentError) return { error: `Could not cancel this campaign's scheduled emails: ${enrollmentError.message}` };
+
+  revalidatePath("/admin/crm/marketing");
+  return {
+    success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign deleted. Future emails are cancelled for its contacts — businesses, opportunities, consent records, and email history are unchanged. Other campaigns are unaffected.`,
   };
 }
