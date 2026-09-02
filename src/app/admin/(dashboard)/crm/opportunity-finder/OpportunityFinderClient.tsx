@@ -42,6 +42,13 @@ export type OpportunityFinderRow = {
 };
 
 const inputClass = "rounded-lg border border-slate-300 px-3 py-2 text-[13px] text-slate-900";
+// Compact variant for controls embedded inside the (narrower, fixed-width)
+// table cells - the filter bar above keeps the roomier `inputClass`.
+const cellInputClass = "w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900";
+// Sticky-column edge shadows so the pinned Business/Contact and Actions
+// columns stay visually separated from whatever is mid-scroll behind them.
+const stickyLeftShadow = "shadow-[4px_0_6px_-4px_rgba(15,23,42,0.15)]";
+const stickyRightShadow = "shadow-[-4px_0_6px_-4px_rgba(15,23,42,0.15)]";
 
 function fmt(iso: string | null): string {
   if (!iso) return "—";
@@ -164,19 +171,31 @@ export default function OpportunityFinderClient({
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1300px] text-left text-[13px]">
+        <table className="table-fixed border-collapse text-left text-[12.5px]" style={{ width: 1280 }}>
+          <colgroup>
+            <col style={{ width: 165 }} />
+            <col style={{ width: 95 }} />
+            <col style={{ width: 105 }} />
+            <col style={{ width: 135 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 145 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 170 }} />
+            <col style={{ width: 165 }} />
+          </colgroup>
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3">Business / Contact</th>
-              <th className="px-4 py-3">Client / Campaign</th>
-              <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3">Score</th>
-              <th className="px-4 py-3">Last Call</th>
-              <th className="px-4 py-3">Last Email</th>
-              <th className="px-4 py-3">Last Note</th>
-              <th className="px-4 py-3">Follow-Up</th>
-              <th className="px-4 py-3">Why / Next Action</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className={`sticky left-0 z-20 bg-slate-50 px-3 py-2 ${stickyLeftShadow}`}>Business / Contact</th>
+              <th className="px-3 py-2">Client / Campaign</th>
+              <th className="px-3 py-2">Agent</th>
+              <th className="px-3 py-2">Score</th>
+              <th className="px-3 py-2">Last Call</th>
+              <th className="px-3 py-2">Last Email</th>
+              <th className="px-3 py-2">Last Note</th>
+              <th className="px-3 py-2">Follow-Up</th>
+              <th className="px-3 py-2">Why / Next Action</th>
+              <th className={`sticky right-0 z-20 bg-slate-50 px-3 py-2 ${stickyRightShadow}`}>Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -185,26 +204,26 @@ export default function OpportunityFinderClient({
               const dismissed = row.score.finder_state === "dismissed";
               return (
                 <tr key={row.score.id} className="align-top">
-                  <td className="px-4 py-3">
+                  <td className={`sticky left-0 z-10 bg-white px-3 py-2 ${stickyLeftShadow}`}>
                     <Link
                       href={`${row.detailHref}?from=opportunity-finder`}
-                      className="font-semibold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
+                      className="break-words font-semibold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
                     >
                       {row.businessName}
                     </Link>
-                    <div className="text-slate-500">{row.contactName || "—"}</div>
-                    <div className="mt-1 text-[11px] text-slate-400">{row.stageOrStatus}</div>
+                    <div className="break-words text-slate-500">{row.contactName || "—"}</div>
+                    <div className="mt-1 break-words text-[11px] text-slate-400">{row.stageOrStatus}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    <div>{row.clientName || "—"}</div>
-                    <div className="text-[11px] text-slate-400">{row.campaignName}</div>
+                  <td className="break-words px-3 py-2 text-slate-600">
+                    <div className="break-words">{row.clientName || "—"}</div>
+                    <div className="break-words text-[11px] text-slate-400">{row.campaignName}</div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <select
                       value={row.assignedAgentId ?? ""}
                       onChange={(e) => runAction(() => assignOpportunityAgentAction(row.score.opportunity_id, e.target.value || null))}
                       disabled={isPending}
-                      className={inputClass}
+                      className={cellInputClass}
                     >
                       <option value="">Unassigned</option>
                       {agents.map((a) => (
@@ -214,10 +233,10 @@ export default function OpportunityFinderClient({
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-extrabold text-slate-900">{row.score.score}</span>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-base font-extrabold text-slate-900">{row.score.score}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
                         {OPPORTUNITY_CATEGORY_LABELS[effective]}
                       </span>
                     </div>
@@ -227,7 +246,7 @@ export default function OpportunityFinderClient({
                         runAction(() => setOpportunityPriorityOverrideAction(row.score.id, (e.target.value || null) as "high" | "medium" | "low" | null))
                       }
                       disabled={isPending}
-                      className={`${inputClass} mt-2`}
+                      className={`${cellInputClass} mt-1.5`}
                     >
                       <option value="">No manual override</option>
                       <option value="high">Override: High</option>
@@ -235,38 +254,38 @@ export default function OpportunityFinderClient({
                       <option value="low">Override: Low</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{fmt(row.lastCallAt)}</td>
-                  <td className="px-4 py-3 text-slate-600">{fmt(row.lastEmailAt)}</td>
-                  <td className="px-4 py-3 max-w-[220px] text-slate-600">
-                    {row.lastNote ? <span title={row.lastNote}>{row.lastNote.length > 80 ? `${row.lastNote.slice(0, 80)}…` : row.lastNote}</span> : "—"}
-                  </td>
-                  <td className={`px-4 py-3 ${isOverdue(row.nextFollowUpAt) ? "font-semibold text-rose-600" : "text-slate-600"}`}>
+                  <td className="break-words px-3 py-2 text-slate-600">{fmt(row.lastCallAt)}</td>
+                  <td className="break-words px-3 py-2 text-slate-600">{fmt(row.lastEmailAt)}</td>
+                  <td className="break-words whitespace-normal px-3 py-2 text-slate-600">{row.lastNote || "—"}</td>
+                  <td className={`break-words px-3 py-2 ${isOverdue(row.nextFollowUpAt) ? "font-semibold text-rose-600" : "text-slate-600"}`}>
                     {fmt(row.nextFollowUpAt)}
                   </td>
-                  <td className="px-4 py-3 max-w-[280px]">
-                    <ul className="list-disc pl-4 text-slate-600">
+                  <td className="px-3 py-2">
+                    <ul className="list-disc space-y-0.5 pl-4 text-slate-600">
                       {row.score.reasons.slice(0, 3).map((reason, i) => (
-                        <li key={i}>{reason}</li>
+                        <li key={i} className="break-words">
+                          {reason}
+                        </li>
                       ))}
                     </ul>
-                    <div className="mt-1.5 font-semibold text-slate-800">{row.score.recommended_action}</div>
+                    <div className="mt-1.5 break-words font-semibold text-slate-800">{row.score.recommended_action}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                  <td className={`sticky right-0 z-10 bg-white px-3 py-2 ${stickyRightShadow}`}>
+                    <div className="flex flex-wrap gap-1">
+                      <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400">
                         Call
                       </a>
                       {row.email && (
-                        <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                        <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400">
                           Email
                         </a>
                       )}
-                      <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                      <Link href={row.detailHref} className="rounded-full border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400">
                         Add Follow-Up
                       </Link>
                       <Link
                         href={`${row.detailHref}?from=opportunity-finder`}
-                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                        className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:border-indigo-400"
                       >
                         View Lead
                       </Link>
@@ -275,17 +294,17 @@ export default function OpportunityFinderClient({
                           type="button"
                           disabled={isPending}
                           onClick={() => runAction(() => reopenOpportunityAction(row.score.id))}
-                          className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400"
+                          className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:border-emerald-400"
                         >
                           Reopen
                         </button>
                       ) : dismissingId === row.score.id ? (
-                        <span className="flex items-center gap-1">
+                        <span className="flex flex-wrap items-center gap-1">
                           <input
                             value={dismissReason}
                             onChange={(e) => setDismissReason(e.target.value)}
                             placeholder="Reason"
-                            className="rounded-lg border border-slate-300 px-2 py-1 text-[11.5px]"
+                            className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-[11px]"
                           />
                           <button
                             type="button"
@@ -295,7 +314,7 @@ export default function OpportunityFinderClient({
                               setDismissingId(null);
                               setDismissReason("");
                             }}
-                            className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
+                            className="rounded-full border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:border-rose-400"
                           >
                             Confirm
                           </button>
@@ -304,7 +323,7 @@ export default function OpportunityFinderClient({
                         <button
                           type="button"
                           onClick={() => setDismissingId(row.score.id)}
-                          className="rounded-full border border-rose-300 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
+                          className="rounded-full border border-rose-300 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:border-rose-400"
                         >
                           Dismiss
                         </button>
