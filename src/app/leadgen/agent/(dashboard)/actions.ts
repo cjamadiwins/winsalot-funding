@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
+import { isLeadgenAgentDashboardCampaignId } from "@/lib/leadgen-agent-campaigns";
 
 export async function signOutLeadgenAgentAction() {
   const supabase = await createSupabaseServerClient();
@@ -12,10 +13,33 @@ export async function signOutLeadgenAgentAction() {
   redirect("/leadgen/login");
 }
 
-export async function updateCurrentCampaignAction(formData: FormData) {
+export type UpdateCurrentCampaignState = {
+  status: "idle" | "success" | "error";
+  message: string | null;
+};
+
+// The signed-in agent's own current_campaign_id is the only thing this
+// action can ever change. The target row always comes from
+// requireLeadgenAgent()'s authenticated session (never from form input),
+// so an agent can only update their own selection - and every failure
+// path returns a visible error instead of swallowing it, so "Saved"
+// (below, in AgentCampaignSelector) only ever appears once the database
+// update has actually succeeded.
+export async function updateCurrentCampaignAction(
+  _prevState: UpdateCurrentCampaignState,
+  formData: FormData
+): Promise<UpdateCurrentCampaignState> {
   const agent = await requireLeadgenAgent();
   const rawCampaignId = formData.get("campaignId");
   const campaignId = typeof rawCampaignId === "string" && rawCampaignId.trim() ? rawCampaignId.trim() : null;
+
+  // Defense in depth: the dropdown only ever renders the campaigns in
+  // LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS, but this rejects any other
+  // campaign id (e.g. "Q3 Growth Campaign") even if posted directly.
+  if (campaignId && !isLeadgenAgentDashboardCampaignId(campaignId)) {
+    return { status: "error", message: "That campaign is not available for selection." };
+  }
+
   const admin = getSupabaseAdmin();
 
   if (campaignId) {
@@ -26,22 +50,33 @@ export async function updateCurrentCampaignAction(formData: FormData) {
       .eq("status", "active")
       .maybeSingle();
 
-    if (campaignError || !campaign) return;
+    if (campaignError) {
+      return { status: "error", message: "Could not verify the selected campaign. Please try again." };
+    }
+    if (!campaign) {
+      return { status: "error", message: "The selected campaign is no longer active." };
+    }
   }
 
-  // The target user always comes from the authenticated session, never
-  // from form input, so an agent can only change their own selection.
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("leadgen_users")
     .update({ current_campaign_id: campaignId })
     .eq("id", agent.id)
     .eq("role", "agent")
-    .eq("active", true);
+    .eq("active", true)
+    .select("id");
 
-  if (error) return;
+  if (error) {
+    return { status: "error", message: "Could not save your campaign selection. Please try again." };
+  }
+  if (!updated || updated.length === 0) {
+    return { status: "error", message: "Could not save your campaign selection: your agent account could not be found." };
+  }
 
   revalidatePath("/leadgen/agent");
   revalidatePath("/leadgen/admin");
+
+  return { status: "success", message: null };
 }
 
 // Marks one of the signed-in agent's own leadgen_notifications rows read
