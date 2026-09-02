@@ -1,0 +1,16 @@
+# Copy this file to google-ads.yaml (same folder) and fill in the real values.
+# google-ads.yaml is gitignored — never commit the filled-in version.
+#
+# developer_token: from your Google Ads manager account API Center.
+# client_id / client_secret: from the OAuth Desktop App credentials JSON
+#   downloaded from Google Cloud Console (see credentials/README.md).
+# refresh_token: generated locally by generate_refresh_token.py.
+# login_customer_id: the MANAGER account you authenticate through
+#   (digits only, no dashes) — Winsalot Corp manager account 6624026282.
+
+developer_token: "INSERT_DEVELOPER_TOKEN"
+client_id: "INSERT_OAUTH_CLIENT_ID"
+client_secret: "INSERT_OAUTH_CLIENT_SECRET"
+refresh_token: "INSERT_REFRESH_TOKEN"
+login_customer_id: "6624026282"
+use_proto_plus: true
