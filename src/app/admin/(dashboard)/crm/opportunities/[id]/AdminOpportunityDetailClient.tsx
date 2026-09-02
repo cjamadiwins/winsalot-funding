@@ -18,6 +18,7 @@ import {
   type LatestCrmLeadEmail,
 } from "@/lib/crm-types";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_CATEGORY_STYLES, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -31,6 +32,7 @@ import {
   closeOpportunityAction,
   deleteOpportunityAction,
   getConsultationOfferedSlotsAction,
+  resubscribeEmailAction,
   sendProspectEmailAction,
   updateOpportunityAction,
 } from "./actions";
@@ -53,6 +55,7 @@ export default function AdminOpportunityDetailClient({
   latestEmail,
   emailHistory,
   isEmailSuppressed,
+  suppression,
   bookingUrl,
   appointments,
   score,
@@ -64,6 +67,7 @@ export default function AdminOpportunityDetailClient({
   latestEmail: LatestCrmLeadEmail | null;
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
+  suppression: CrmEmailSuppressionRow | null;
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
   score: CrmOpportunityScoreRow | null;
@@ -182,10 +186,8 @@ export default function AdminOpportunityDetailClient({
         </div>
       </div>
 
-      {isEmailSuppressed && (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          This prospect has unsubscribed from promotional emails and cannot be sent another consultation invite.
-        </p>
+      {isEmailSuppressed && suppression && (
+        <ResubscribePanel opportunity={opportunity} suppression={suppression} />
       )}
 
       {isOverdue(opportunity) && opportunity.next_follow_up_at && (
@@ -477,6 +479,143 @@ export default function AdminOpportunityDetailClient({
           onClose={() => setShowBookModal(false)}
           onBooked={() => window.location.reload()}
         />
+      )}
+    </div>
+  );
+}
+
+// Admin-only "Resubscribe" for a prospect currently blocked by
+// crm_email_suppressions. Requires an explicit confirmation checkbox
+// (re-enforced server-side in resubscribeEmailAction) plus a required
+// description of how the recipient asked to receive emails again -
+// stored as the consent method/date on both crm_email_suppressions
+// (which is never deleted, only marked inactive - see migration 0120)
+// and the append-only crm_email_resubscribe_audit log. "Restore
+// individual email permission only" always clears the block; "re-enroll
+// in Email Marketing" additionally resets crm_marketing_enrollments back
+// to Email 1 with its own fresh consent record - only offered when this
+// business is still open and has an email on file, mirroring the same
+// two checks resubscribeEmailAction/resubscribeEmail re-run server-side.
+function ResubscribePanel({ opportunity, suppression }: { opportunity: CrmOpportunityRow; suppression: CrmEmailSuppressionRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [scope, setScope] = useState<"permission_only" | "reenroll_marketing">("permission_only");
+  const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
+
+  const canReenrollMarketing = !!opportunity.email?.trim() && !["Client Won", "Not Interested"].includes(opportunity.stage);
+
+  async function handleSubmit(formData: FormData) {
+    setPending(true);
+    setResult(null);
+    const outcome = await resubscribeEmailAction(opportunity.id, formData);
+    setPending(false);
+    setResult(outcome);
+    if (!outcome.error) {
+      setExpanded(false);
+      setConfirmed(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-sm font-semibold text-amber-800">
+        This prospect has unsubscribed from promotional emails and cannot be sent another consultation invite.
+      </p>
+      <p className="mt-1 text-xs text-amber-700">
+        Unsubscribed {new Date(suppression.suppressed_at).toLocaleString()}
+        {suppression.reason && suppression.reason !== "unsubscribed" ? ` — ${suppression.reason}` : ""}.
+      </p>
+
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-3 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          Resubscribe
+        </button>
+      ) : (
+        <form action={handleSubmit} className="mt-3 space-y-3 border-t border-amber-200 pt-3">
+          <label className="block text-xs font-semibold uppercase text-amber-800">
+            How did the recipient ask to receive emails again?
+            <textarea
+              name="consent_method"
+              required
+              rows={2}
+              placeholder="Example: Called on September 2, 2026 and asked to be added back to our email list."
+              className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase text-amber-800">
+            Date requested
+            <input
+              type="date"
+              name="consent_date"
+              required
+              defaultValue={new Date().toISOString().slice(0, 10)}
+              className="mt-1 w-48 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm normal-case text-slate-800"
+            />
+          </label>
+
+          <div className="space-y-1.5 text-sm text-slate-800">
+            <label className="flex items-start gap-2">
+              <input type="radio" name="scope" value="permission_only" checked={scope === "permission_only"} onChange={() => setScope("permission_only")} className="mt-0.5" />
+              <span>Restore individual email permission only (weekly Email Marketing is not changed).</span>
+            </label>
+            <label className={`flex items-start gap-2 ${canReenrollMarketing ? "" : "opacity-50"}`}>
+              <input
+                type="radio"
+                name="scope"
+                value="reenroll_marketing"
+                checked={scope === "reenroll_marketing"}
+                onChange={() => setScope("reenroll_marketing")}
+                disabled={!canReenrollMarketing}
+                className="mt-0.5"
+              />
+              <span>
+                Re-enroll in weekly Email Marketing, starting from Email 1.
+                {!canReenrollMarketing && " (Requires an email address on file and an open opportunity.)"}
+              </span>
+            </label>
+          </div>
+
+          <label className="flex items-start gap-2 text-sm font-medium text-amber-900">
+            <input
+              type="checkbox"
+              name="confirmed"
+              checked={confirmed}
+              onChange={(event) => setConfirmed(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>I confirm the recipient explicitly requested to receive emails again.</span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={pending || !confirmed}
+              className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? "Resubscribing…" : "Confirm Resubscribe"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setExpanded(false);
+                setResult(null);
+              }}
+              className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {result && (
+        <p className={`mt-3 text-xs font-medium ${result.error ? "text-rose-700" : "text-emerald-700"}`}>{result.error ?? result.success}</p>
       )}
     </div>
   );
