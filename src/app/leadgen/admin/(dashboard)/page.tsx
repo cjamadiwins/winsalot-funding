@@ -20,17 +20,18 @@ export default async function LeadgenAdminDashboardPage() {
   const now = new Date();
   const todayKey = leadgenDateKey(now);
 
-  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: todaysAppointments }, { data: opportunityScores }] =
+  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }] =
     await Promise.all([
       admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
       admin.from("leadgen_appointments").select("status, client_id, lead_id"),
       admin.from("leadgen_clients").select("id, name"),
       admin
         .from("leadgen_users")
-        .select("id, full_name, role")
+        .select("id, full_name, role, current_campaign_id")
         .eq("role", "agent")
         .eq("active", true)
         .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
+      admin.from("leadgen_campaigns").select("id, name"),
       // Today's Appointments dashboard widget - every non-cancelled/replaced
       // appointment booked for today, earliest first.
       admin
@@ -47,6 +48,7 @@ export default async function LeadgenAdminDashboardPage() {
   const allAppointments = appointments ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
+  const campaignNameById = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.name] as const));
 
   const totalLeads = allLeads.length;
   const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
@@ -207,6 +209,28 @@ export default async function LeadgenAdminDashboardPage() {
           />
         ))}
       </div>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Agent Campaign Status</h2>
+        <p className="mt-1 text-[13px] text-slate-500">Each active agent&apos;s currently selected campaign.</p>
+        {agents.length === 0 ? (
+          <p className="mt-3 text-[13.5px] text-slate-500">No active agents.</p>
+        ) : (
+          <div className="mt-3 divide-y divide-slate-100">
+            {agents.map((agent) => {
+              const campaignName = agent.current_campaign_id ? campaignNameById.get(agent.current_campaign_id) : null;
+              return (
+                <div key={agent.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <span className="text-[13.5px] font-semibold text-slate-800">{agent.full_name}</span>
+                  <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${campaignName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
+                    {campaignName ?? "Not selected"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

@@ -19,6 +19,9 @@ export type LeadgenUserRow = {
   role: LeadgenRole;
   client_id: string | null;
   active: boolean;
+  // Agent-controlled work context only (migration 0118). It does not assign
+  // leads or change campaign ownership; null means "Not selected".
+  current_campaign_id: string | null;
   // "HH:MM:SS" or null - null means no schedule is configured yet for
   // this agent, so late-arrival/early-departure is never flagged for
   // them (see src/lib/attendance-pay.ts). Admin-set from the Attendance

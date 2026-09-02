@@ -25,6 +25,7 @@ import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
+import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -41,6 +42,7 @@ export default async function LeadgenAgentDashboardPage() {
     { data: attendanceData, error: attendanceError },
     { data: appointments },
     { data: clients },
+    { data: campaigns },
     settings,
     ledgerRow,
     monthToDateApproved,
@@ -71,6 +73,7 @@ export default async function LeadgenAgentDashboardPage() {
     // already read every client's name (see leads/new/page.tsx), only
     // their own leads/appointments are actually RLS-scoped.
     supabase.from("leadgen_clients").select("id, name"),
+    supabase.from("leadgen_campaigns").select("id, name").eq("status", "active").order("name"),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
     // Service-role, narrowly filtered to this signed-in agent's own
@@ -140,6 +143,8 @@ export default async function LeadgenAgentDashboardPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {agentDisplayName}</h1>
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
+
+      <AgentCampaignSelector campaigns={campaigns ?? []} currentCampaignId={agent.current_campaign_id} />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
