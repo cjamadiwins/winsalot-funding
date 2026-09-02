@@ -13,6 +13,7 @@ import {
   resumeMarketingEnrollmentAction,
   stopMarketingEnrollmentAction,
   updateMarketingTemplateAction,
+  sendMarketingTemplateTestEmailAction,
 } from "./actions";
 
 export default async function AdminMarketingPage() {
@@ -54,6 +55,7 @@ export default async function AdminMarketingPage() {
               resume: resumeMarketingEnrollmentAction,
               stop: stopMarketingEnrollmentAction,
               updateTemplate: updateMarketingTemplateAction,
+              sendTestEmail: sendMarketingTemplateTestEmailAction,
             }}
           />
         </div>

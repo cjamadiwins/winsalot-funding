@@ -5,8 +5,17 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
 import { isMarketingCampaignType, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
+import { sendCrmMarketingTestEmail } from "@/lib/send-test-email";
 
 type MarketingActionResult = { error?: string; success?: string };
+
+// Deliberately not shared with the other "Send Test Email" action
+// (src/app/admin/(dashboard)/crm/emails/test/actions.ts) - same
+// duplication that file's own isValidEmail already accepts, keeping
+// every admin action file free of a cross-file dependency for one regex.
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
 
 const ELIGIBLE_STAGES = new Set([
   "Contacted",
@@ -158,4 +167,33 @@ export async function updateMarketingTemplateAction(templateId: string, formData
   if (error) return { error: `Could not save the template: ${error.message}` };
   revalidatePath("/admin/crm/marketing");
   return { success: "Marketing email template saved." };
+}
+
+// Admin-only "Send Test Email" for the weekly marketing sequence (brief
+// item 12). Sends only to an address the admin enters here, is clearly
+// marked as a test ("[TEST] " subject prefix, see send-test-email.ts),
+// and never advances or touches any real contact's enrollment - it does
+// not read or write crm_marketing_enrollments/crm_marketing_deliveries at
+// all, only the template itself (re-read fresh here rather than trusting
+// whatever the browser posted, so the test always reflects what's
+// actually saved). Admin-only via requireCrmAdmin(), same as every other
+// action in this file - never reachable from an agent's own session.
+export async function sendMarketingTemplateTestEmailAction(templateId: string, toEmail: string): Promise<MarketingActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const email = toEmail.trim();
+  if (!email) return { error: "Enter a recipient email address." };
+  if (!isValidEmail(email)) return { error: "Enter a valid email address." };
+
+  const { data: template, error: templateError } = await supabase
+    .from("crm_marketing_templates")
+    .select("campaign_type, subject, body, cta_label")
+    .eq("id", templateId)
+    .maybeSingle();
+  if (templateError || !template) return { error: "This template could not be found." };
+
+  const result = await sendCrmMarketingTestEmail(template, email);
+  if (result.error) return { error: `Failed to send the test email: ${result.error}` };
+  return { success: `Test email sent to ${email}. Subject is prefixed with "[TEST]" — no contact's sequence was affected.` };
 }

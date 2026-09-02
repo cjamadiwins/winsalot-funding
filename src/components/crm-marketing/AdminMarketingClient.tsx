@@ -31,6 +31,7 @@ type Props = {
     resume: (id: string) => Promise<ActionResult>;
     stop: (id: string) => Promise<ActionResult>;
     updateTemplate: (id: string, formData: FormData) => Promise<ActionResult>;
+    sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult>;
   };
 };
 
@@ -179,6 +180,7 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
               <label className="text-xs font-semibold uppercase text-slate-500">Subject<input name="subject" defaultValue={template.subject} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label>
               <label className="mt-3 block text-xs font-semibold uppercase text-slate-500">Message<textarea name="body" rows={7} defaultValue={template.body} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case text-slate-800" /></label>
               <div className="mt-3 flex gap-3"><label className="flex-1 text-xs font-semibold uppercase text-slate-500">Link label<input name="cta_label" defaultValue={template.cta_label} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm normal-case text-slate-800" /></label><div className="flex items-end"><button disabled={isPending} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save Template</button></div></div>
+              <TemplateTestSend templateId={template.id} sendTestEmail={actions.sendTestEmail} />
             </form>
           ))}
         </div>
@@ -189,4 +191,50 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
 function SummaryCard({ label, value, detail }: { label: string; value: number; detail: string }) {
   return <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
+}
+
+// Sends this exact saved template, with sample data, to an address the
+// admin enters here - never a real contact, never advances a real
+// enrollment (src/lib/send-test-email.ts's sendCrmMarketingTestEmail).
+// Deliberately its own <div>, not a nested <form> (the template card
+// above is already a <form> that saves the template on submit) - every
+// control below is type="button" so it can never trigger that outer
+// submit, and this row keeps its own isolated pending/message state so
+// testing one template never disturbs another template's Save button.
+function TemplateTestSend({ templateId, sendTestEmail }: { templateId: string; sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult> }) {
+  const [toEmail, setToEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function handleSend() {
+    if (sending || !toEmail.trim()) return;
+    setSending(true);
+    setResult(null);
+    const outcome = await sendTestEmail(templateId, toEmail);
+    setSending(false);
+    setResult(outcome);
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+      <input
+        type="email"
+        value={toEmail}
+        onChange={(event) => setToEmail(event.target.value)}
+        placeholder="you@winsalotcorp.com"
+        className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-xs normal-case text-slate-800"
+      />
+      <button
+        type="button"
+        disabled={sending || !toEmail.trim()}
+        onClick={handleSend}
+        className="rounded-md border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {sending ? "Sending…" : "Send Test Email"}
+      </button>
+      {result && (
+        <span className={`text-xs font-medium ${result.error ? "text-rose-600" : "text-emerald-700"}`}>{result.error ?? result.success}</span>
+      )}
+    </div>
+  );
 }

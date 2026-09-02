@@ -418,6 +418,55 @@ Work through these in order — each one rules out a specific layer:
 5. If none of the above show a problem, query `crm_lead_emails`/`crm_activities` for the lead
    directly to see exactly which events landed and when.
 
+## Weekly prospect marketing
+
+`/admin/crm/marketing` lets an admin enroll a contacted `crm_opportunities` row (with a recorded
+consent basis) into an automatic weekly email sequence matching its `opportunity_type`. The actual
+sending happens outside any page load, on a schedule:
+
+- **Trigger**: `GET /api/cron/crm-weekly-marketing` (`src/app/api/cron/crm-weekly-marketing/route.ts`),
+  registered in `vercel.json`'s `crons` array, daily. Vercel Cron calls this URL itself; it only
+  ever does real work on the `winsalot-funding` (Growth CRM) project — `isGrowthCrmHost()` no-ops
+  it everywhere else, including the `winsalot-leadgen-crm` project this same repo also deploys to.
+- **Authorization**: same `CRON_SECRET` var documented above for the Lead Gen reminder cron, sent
+  automatically by Vercel Cron as `Authorization: Bearer <value>` — **not** a separate secret for
+  this route. It must be set as its own Vercel project env var on `winsalot-funding`'s Production
+  environment specifically (Project Settings → Environment Variables), then redeployed. A 401 here
+  means either that var is unset on this project, or (for a manual test call) the header wasn't
+  sent — `src/app/api/cron/crm-weekly-marketing/route.ts` logs which one to Vercel's runtime logs,
+  without ever printing the secret itself.
+- **What it does** (`runCrmMarketingJob`, `src/lib/crm-marketing-job.ts`): atomically claims every
+  `active` enrollment whose `next_send_at` is due (`claim_due_crm_marketing_enrollments`, a
+  `FOR UPDATE SKIP LOCKED` function — safe against overlapping/duplicate cron runs), re-checks the
+  opportunity's stage/email/suppression status, sends that week's template via Resend (idempotency
+  keyed to `crm-marketing-<enrollment>-<next_send_at>`), records the send in
+  `crm_marketing_deliveries` (unique per `enrollment_id` + occurrence), and only then advances
+  `last_sent_at`/`next_send_at`/`send_count`. A failed send records the failure and leaves
+  `next_send_at` unchanged, so the same due contact is retried on the next run rather than skipped
+  or silently dropped.
+- **Delivery status**: `POST /api/webhooks/resend` updates `crm_marketing_deliveries` exactly like
+  it updates `crm_lead_emails` (see above) — a hard bounce or spam complaint also auto-unsubscribes
+  that enrollment via `crm_email_suppressions`, stopping further sends to that address everywhere
+  in the Growth CRM, not just this campaign.
+- **Send Test Email**: each template card on `/admin/crm/marketing` has its own "Send Test Email"
+  row — sends that exact saved template, with sample data and a `[TEST] ` subject prefix, to an
+  address the admin enters, and never touches `crm_marketing_enrollments`/`crm_marketing_deliveries`
+  or any real contact (`sendCrmMarketingTestEmail`, `src/lib/send-test-email.ts`).
+
+### Troubleshooting: due contacts aren't being emailed
+
+1. **Is the cron actually running?** Vercel → your project → Logs, filtered to
+   `crm-weekly-marketing`. Repeated `401` responses with no `sent`/`failed`/`skipped` JSON body
+   means the request never got past authorization — see the `CRON_SECRET` bullet above. A `200`
+   response's JSON body (`{ candidates, sent, failed, skipped, results }`) tells you exactly what
+   happened to every due contact on that run.
+2. **Is the enrollment actually due?** Check `crm_marketing_enrollments.status = 'active'` and
+   `next_send_at <= now()` for that opportunity — `/admin/crm/marketing`'s "Campaign Contacts" table
+   shows both directly.
+3. **Was it skipped for a business reason?** The job's JSON `results`/`enrollments.last_error`
+   explain a skip: stage is `Client Won`/`Not Interested`, no email address, the recipient is
+   suppressed/unsubscribed, or no active template exists for that `campaign_type`.
+
 ## Quote email control (retired)
 
 The commercial-cleaning quote-request pipeline this section originally described
