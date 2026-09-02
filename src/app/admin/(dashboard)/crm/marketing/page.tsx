@@ -12,6 +12,8 @@ import {
   pauseMarketingEnrollmentAction,
   resumeMarketingEnrollmentAction,
   stopMarketingEnrollmentAction,
+  removeMarketingEnrollmentAction,
+  deleteMarketingCampaignAction,
   updateMarketingTemplateAction,
   sendMarketingTemplateTestEmailAction,
   runMarketingJobNowAction,
@@ -25,7 +27,7 @@ export default async function AdminMarketingPage() {
       .from("crm_opportunities")
       .select("id, business_name, contact_name, email, stage, opportunity_type")
       .order("business_name"),
-    supabase.from("crm_marketing_enrollments").select("*").order("created_at", { ascending: false }),
+    supabase.from("crm_marketing_enrollments").select("*").is("removed_at", null).order("created_at", { ascending: false }),
     supabase.from("crm_marketing_templates").select("*").order("campaign_type").order("sequence_number"),
     supabase.from("crm_marketing_deliveries").select("*").order("created_at", { ascending: false }).limit(500),
   ]);
@@ -55,6 +57,8 @@ export default async function AdminMarketingPage() {
               pause: pauseMarketingEnrollmentAction,
               resume: resumeMarketingEnrollmentAction,
               stop: stopMarketingEnrollmentAction,
+              remove: removeMarketingEnrollmentAction,
+              deleteCampaign: deleteMarketingCampaignAction,
               updateTemplate: updateMarketingTemplateAction,
               sendTestEmail: sendMarketingTemplateTestEmailAction,
               runJobNow: runMarketingJobNowAction,

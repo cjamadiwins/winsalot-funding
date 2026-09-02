@@ -53,6 +53,7 @@ export type CrmMarketingEnrollmentRow = {
   claim_token: string | null;
   paused_at: string | null;
   stopped_at: string | null;
+  removed_at: string | null;
   created_by: string | null;
 };
 
