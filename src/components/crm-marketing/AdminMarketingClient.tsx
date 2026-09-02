@@ -46,8 +46,18 @@ const statusStyle: Record<string, string> = {
   unsubscribed: "bg-rose-100 text-rose-800",
 };
 
-function formatDate(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : "—";
+// Compact date format for the Campaign Contacts list (e.g. "Sep 2, 2026,
+// 1:23 AM") - short enough to fit a narrow table column or card without
+// wrapping onto three lines, while still showing the exact send time.
+function formatDateCompact(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default function AdminMarketingClient({ opportunities, enrollments, templates, deliveries, actions }: Props) {
@@ -149,29 +159,149 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-lg font-bold text-slate-900">Campaign Contacts</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-[13px]">
-            <thead><tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500"><th className="py-2 pr-3">Business</th><th className="py-2 pr-3">Campaign</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Consent</th><th className="py-2 pr-3">Last Email</th><th className="py-2 pr-3">Next Email</th><th className="py-2 pr-3">Sent</th><th className="py-2">Controls</th></tr></thead>
+
+        {/* Below xl (the sidebar-shell's own breakpoint - CrmShell only
+            reserves its 256px sidebar at lg/1024px+, so a fixed-width
+            table can't reliably fit until a wider point than that): one
+            card per contact, so nothing ever needs a horizontal
+            scrollbar to reach Sent/Pause/Stop on a laptop, tablet, or
+            phone. */}
+        <div className="mt-4 space-y-3 xl:hidden">
+          {enrollments.map((enrollment) => {
+            const opportunity = opportunityById.get(enrollment.opportunity_id);
+            const delivery = latestDeliveryByEnrollment.get(enrollment.id);
+            return (
+              <div key={enrollment.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/admin/crm/opportunities/${enrollment.opportunity_id}`}
+                      className="block truncate font-semibold text-sky-700 hover:underline"
+                    >
+                      {opportunity?.business_name ?? "Removed opportunity"}
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{opportunity?.email ?? "No email"}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyle[enrollment.status]}`}>
+                    {MARKETING_ENROLLMENT_STATUS_LABELS[enrollment.status]}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Campaign</p>
+                    <p className="mt-0.5 text-slate-700">{MARKETING_CAMPAIGN_LABELS[enrollment.campaign_type]}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Consent</p>
+                    <p className="mt-0.5 capitalize text-slate-700" title={enrollment.consent_notes}>
+                      {enrollment.consent_basis}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Next Email</p>
+                    <p className="mt-0.5 text-slate-700">{enrollment.status === "active" ? formatDateCompact(enrollment.next_send_at) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Sent</p>
+                    <p className="mt-0.5 font-semibold text-slate-800">{enrollment.send_count}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Last Email</p>
+                    <p className="mt-0.5 text-slate-700">
+                      {formatDateCompact(enrollment.last_sent_at)}
+                      {delivery && delivery.status !== "sending" && (
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_STATUS_STYLES[delivery.status]}`}>
+                          {EMAIL_STATUS_LABELS[delivery.status]}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {enrollment.last_error && <p className="mt-2.5 text-xs text-rose-600">{enrollment.last_error}</p>}
+
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                  <EnrollmentControls enrollment={enrollment} isPending={isPending} actions={actions} runAction={runAction} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* xl (1280px) and up: a narrower, fixed-layout table (no
+            min-width, cells wrap instead of forcing the table wider than
+            its container) so it fits without its own horizontal
+            scrollbar even alongside the 256px sidebar. Last Email and its
+            delivery status move under Next Email, and Consent moves
+            under Status, to keep this to six columns. */}
+        <div className="mt-4 hidden overflow-x-auto xl:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[25%]" />
+              <col className="w-[13%]" />
+              <col className="w-[19%]" />
+              <col className="w-[19%]" />
+              <col className="w-[8%]" />
+              <col className="w-[16%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                <th className="py-2 pr-3">Business</th>
+                <th className="py-2 pr-3">Campaign</th>
+                <th className="py-2 pr-3">Status</th>
+                <th className="py-2 pr-3">Next Email</th>
+                <th className="py-2 pr-3">Sent</th>
+                <th className="py-2">Controls</th>
+              </tr>
+            </thead>
             <tbody>
               {enrollments.map((enrollment) => {
                 const opportunity = opportunityById.get(enrollment.opportunity_id);
                 const delivery = latestDeliveryByEnrollment.get(enrollment.id);
                 return (
                   <tr key={enrollment.id} className="border-b border-slate-100 align-top">
-                    <td className="py-3 pr-3"><Link href={`/admin/crm/opportunities/${enrollment.opportunity_id}`} className="font-semibold text-sky-700 hover:underline">{opportunity?.business_name ?? "Removed opportunity"}</Link><div className="text-xs text-slate-500">{opportunity?.email ?? "No email"}</div></td>
-                    <td className="py-3 pr-3">{MARKETING_CAMPAIGN_LABELS[enrollment.campaign_type]}</td>
-                    <td className="py-3 pr-3"><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyle[enrollment.status]}`}>{MARKETING_ENROLLMENT_STATUS_LABELS[enrollment.status]}</span>{enrollment.last_error && <div className="mt-2 max-w-56 text-xs text-rose-600">{enrollment.last_error}</div>}</td>
-                    <td className="py-3 pr-3 capitalize">{enrollment.consent_basis}<div className="mt-1 max-w-64 text-xs text-slate-500">{enrollment.consent_notes}</div></td>
-                    <td className="py-3 pr-3">{formatDate(enrollment.last_sent_at)}{delivery && delivery.status !== "sending" && <div className="mt-1"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_STATUS_STYLES[delivery.status]}`}>{EMAIL_STATUS_LABELS[delivery.status]}</span></div>}</td>
-                    <td className="py-3 pr-3">{enrollment.status === "active" ? formatDate(enrollment.next_send_at) : "—"}</td>
-                    <td className="py-3 pr-3 font-semibold">{enrollment.send_count}</td>
-                    <td className="py-3"><div className="flex flex-wrap gap-2">{enrollment.status === "active" && <button disabled={isPending} onClick={() => runAction(() => actions.pause(enrollment.id))} className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-700">Pause</button>}{(enrollment.status === "paused" || enrollment.status === "stopped") && <button disabled={isPending} onClick={() => runAction(() => actions.resume(enrollment.id))} className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-700">Resume</button>}{!(["stopped", "unsubscribed"].includes(enrollment.status)) && <button disabled={isPending} onClick={() => runAction(() => actions.stop(enrollment.id))} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Stop</button>}</div></td>
+                    <td className="py-3 pr-3">
+                      <Link
+                        href={`/admin/crm/opportunities/${enrollment.opportunity_id}`}
+                        className="break-words font-semibold text-sky-700 hover:underline"
+                      >
+                        {opportunity?.business_name ?? "Removed opportunity"}
+                      </Link>
+                      <div className="mt-0.5 break-all text-xs text-slate-500">{opportunity?.email ?? "No email"}</div>
+                    </td>
+                    <td className="py-3 pr-3 break-words text-slate-700">{MARKETING_CAMPAIGN_LABELS[enrollment.campaign_type]}</td>
+                    <td className="py-3 pr-3">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyle[enrollment.status]}`}>
+                        {MARKETING_ENROLLMENT_STATUS_LABELS[enrollment.status]}
+                      </span>
+                      <div className="mt-1.5 capitalize text-[11px] text-slate-500" title={enrollment.consent_notes}>
+                        {enrollment.consent_basis} consent
+                      </div>
+                      {enrollment.last_error && <div className="mt-1 break-words text-[11px] text-rose-600">{enrollment.last_error}</div>}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <div className="text-slate-700">{enrollment.status === "active" ? formatDateCompact(enrollment.next_send_at) : "—"}</div>
+                      <div className="mt-1.5 text-[11px] text-slate-400">Last: {formatDateCompact(enrollment.last_sent_at)}</div>
+                      {delivery && delivery.status !== "sending" && (
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_STATUS_STYLES[delivery.status]}`}>
+                          {EMAIL_STATUS_LABELS[delivery.status]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 font-semibold text-slate-800">{enrollment.send_count}</td>
+                    <td className="py-3">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <EnrollmentControls enrollment={enrollment} isPending={isPending} actions={actions} runAction={runAction} />
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+
         {enrollments.length === 0 && <p className="mt-4 text-sm text-slate-500">No businesses are enrolled yet.</p>}
       </section>
 
@@ -191,6 +321,54 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
         </div>
       </section>
     </div>
+  );
+}
+
+// Pause/Resume/Stop for one enrollment - shared by both the card layout
+// (below xl) and the table layout (xl+) so the exact same controls,
+// permissions, and behavior render either way; only the surrounding
+// markup differs.
+function EnrollmentControls({
+  enrollment,
+  isPending,
+  actions,
+  runAction,
+}: {
+  enrollment: CrmMarketingEnrollmentRow;
+  isPending: boolean;
+  actions: Pick<Props["actions"], "pause" | "resume" | "stop">;
+  runAction: (action: () => Promise<ActionResult>) => void;
+}) {
+  return (
+    <>
+      {enrollment.status === "active" && (
+        <button
+          disabled={isPending}
+          onClick={() => runAction(() => actions.pause(enrollment.id))}
+          className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-700 disabled:opacity-50"
+        >
+          Pause
+        </button>
+      )}
+      {(enrollment.status === "paused" || enrollment.status === "stopped") && (
+        <button
+          disabled={isPending}
+          onClick={() => runAction(() => actions.resume(enrollment.id))}
+          className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+        >
+          Resume
+        </button>
+      )}
+      {!["stopped", "unsubscribed"].includes(enrollment.status) && (
+        <button
+          disabled={isPending}
+          onClick={() => runAction(() => actions.stop(enrollment.id))}
+          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
+        >
+          Stop
+        </button>
+      )}
+    </>
   );
 }
 
