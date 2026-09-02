@@ -1,7 +1,7 @@
 import type { LeadgenAgentCampaignScriptKey } from "@/lib/leadgen-agent-campaigns";
 import { BrentsEssentialsCallScript, MantraCollabCallScript } from "./leadgen-call-scripts";
 
-// Renders directly below the "Current Campaign" selector on the agent
+// Renders directly below the "Current Client" selector on the agent
 // dashboard. Driven entirely by the saved campaign's script key (resolved
 // server-side from the campaign's client relationship / campaign id in
 // src/lib/leadgen-agent-campaigns.ts) - never by matching campaign or
@@ -18,10 +18,10 @@ export default function CampaignCallScriptSection({
 }) {
   return (
     <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4 sm:p-5">
-      <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Campaign Call Script</h2>
+      <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Client Call Script</h2>
 
       {scriptKey === null && (
-        <p className="mt-2 text-[13.5px] text-slate-600">Select a campaign to view its call script.</p>
+        <p className="mt-2 text-[13.5px] text-slate-600">Select a client to view its call script.</p>
       )}
 
       {scriptKey === "brents-essentials" && (
