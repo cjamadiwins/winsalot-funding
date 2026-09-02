@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { isEmailSuppressed } from "@/lib/crm-email-suppression";
+import { getEmailSuppression, type CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -99,7 +99,8 @@ export default async function AdminOpportunityDetailPage({
     senderName: row.agent_id ? (agentNameById.get(row.agent_id) ?? null) : null,
   }));
 
-  const isSuppressed = opportunity.email ? await isEmailSuppressed(opportunity.email) : false;
+  const suppression = opportunity.email ? await getEmailSuppression(opportunity.email) : null;
+  const isSuppressed = !!suppression?.active;
 
   return (
     <AdminOpportunityDetailClient
@@ -110,6 +111,7 @@ export default async function AdminOpportunityDetailPage({
       latestEmail={latestEmail as LatestCrmLeadEmail | null}
       emailHistory={emailHistoryEntries}
       isEmailSuppressed={isSuppressed}
+      suppression={suppression as CrmEmailSuppressionRow | null}
       bookingUrl={getWinsalotBookingUrlBase()}
       appointments={(appointments ?? []) as WinsalotAppointmentRow[]}
       score={score as CrmOpportunityScoreRow | null}

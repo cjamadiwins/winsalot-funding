@@ -302,6 +302,7 @@ export const ACTIVITY_TYPES = [
   "consultation_booked",
   "consultation_rescheduled",
   "consultation_cancelled",
+  "email_resubscribed",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -316,6 +317,7 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   consultation_booked: "Consultation booked",
   consultation_rescheduled: "Consultation rescheduled",
   consultation_cancelled: "Consultation cancelled",
+  email_resubscribed: "Resubscribed to email",
 };
 
 // Stages a newly-booked consultation must never downgrade - "Change the

@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import { resubscribeEmail, type ResubscribeResult, type ResubscribeScope } from "@/lib/crm-email-suppression";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
@@ -259,6 +260,53 @@ export async function sendProspectEmailAction(
 
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   revalidatePath("/admin/crm");
+  return result;
+}
+
+// Admin-only "Resubscribe" - clears an unsubscribed prospect's
+// crm_email_suppressions block after they explicitly ask to receive
+// emails again. Gated by requireCrmAdmin() here (agents never reach this
+// page's actions.ts at all) and, independently, by
+// crm_marketing_enrollments/crm_email_resubscribe_audit's own
+// admin-only RLS policies - two separate reasons an agent session could
+// never make this write even if it tried. The confirmation checkbox is
+// enforced here, not just in the UI, so a hand-crafted request can't
+// skip it either.
+export async function resubscribeEmailAction(opportunityId: string, formData: FormData): Promise<ResubscribeResult> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const confirmed = formData.get("confirmed") === "on";
+  if (!confirmed) {
+    return { error: "Confirm that the recipient explicitly requested to receive emails again." };
+  }
+
+  const consentMethod = String(formData.get("consent_method") ?? "").trim();
+  const consentDate = String(formData.get("consent_date") ?? "").trim();
+  const scope = String(formData.get("scope") ?? "permission_only") as ResubscribeScope;
+  if (scope !== "permission_only" && scope !== "reenroll_marketing") {
+    return { error: "Select a valid resubscribe option." };
+  }
+
+  const { data: opportunity } = await supabase.from("crm_opportunities").select("email").eq("id", opportunityId).maybeSingle();
+  if (!opportunity?.email?.trim()) {
+    return { error: "This business has no email address on file." };
+  }
+
+  const result = await resubscribeEmail(supabase, {
+    email: opportunity.email,
+    opportunityId,
+    adminId: crmUser.id,
+    adminName: crmUser.full_name || crmUser.email,
+    consentMethod,
+    consentDate,
+    scope,
+  });
+
+  if (!result.error) {
+    revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+    revalidatePath("/admin/crm/marketing");
+  }
   return result;
 }
 

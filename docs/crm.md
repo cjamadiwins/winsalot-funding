@@ -488,6 +488,36 @@ sending happens outside any page load, on a schedule:
    explain a skip: stage is `Client Won`/`Not Interested`, no email address, the recipient is
    suppressed/unsubscribed, or no active template exists for that `campaign_type`.
 
+## Prospect email suppression & Resubscribe
+
+`crm_email_suppressions` (migration 0087) is the one list `isEmailSuppressed()` checks before every
+prospect email — consultation invites (`sendProspectEmail`) and the weekly marketing job alike. A row
+is added either by a real click on the one-time `/unsubscribe/[token]` link embedded in every prospect
+email, or by the Resend webhook auto-unsubscribing on a hard bounce/spam complaint.
+
+- **Resubscribe** (`/admin/crm/opportunities/[id]`, admin-only): when a suppressed prospect's page is
+  open, the amber "unsubscribed" banner has a "Resubscribe" control. It requires a checked confirmation
+  ("I confirm the recipient explicitly requested to receive emails again"), a required description of
+  how/when they asked, and a choice of scope:
+  - **Restore individual email permission only** — clears the suppression so this address can be
+    emailed again (consultation invites, etc.); `crm_marketing_enrollments` is left exactly as is.
+  - **Re-enroll in weekly Email Marketing, starting from Email 1** — does the above and also resets (or
+    creates) that opportunity's `crm_marketing_enrollments` row to `send_count = 0` with its own fresh
+    `consent_basis = 'express'` record, so the weekly sequence starts over from the first template.
+    Only offered (and re-validated server-side regardless) when the opportunity has an email address
+    and isn't `Client Won`/`Not Interested`.
+  - The `crm_email_suppressions` row is never deleted — a `active` flag (migration 0120) is what
+    Resubscribe clears, so the original `reason`/`suppressed_at`/`opportunity_id` stay in place
+    alongside who/when/how it was later resubscribed. A genuine second unsubscribe click re-suppresses
+    the same row (`unsubscribeByToken` sets `active` back to `true`).
+  - Every Resubscribe writes an append-only row to `crm_email_resubscribe_audit` (email, opportunity,
+    admin, consent date/method, and whether it re-enrolled Email Marketing) plus a `crm_activities`
+    entry (`email_resubscribed`) on the opportunity's own timeline.
+  - Admin-only end to end: gated by `requireCrmAdmin()` (`resubscribeEmailAction`,
+    `src/app/admin/(dashboard)/crm/opportunities/[id]/actions.ts`), and independently by
+    `crm_marketing_enrollments`/`crm_email_resubscribe_audit`'s own RLS policies, which both require
+    `crm_user_role(auth.uid()) = 'admin'` — an agent session can't reach this from any angle.
+
 ## Quote email control (retired)
 
 The commercial-cleaning quote-request pipeline this section originally described
