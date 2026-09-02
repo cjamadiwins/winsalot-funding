@@ -9,6 +9,31 @@ export const MARKETING_CAMPAIGN_LABELS: Record<MarketingCampaignType, string> = 
   both_services: "Both Services",
 };
 
+// A campaign's own Active/Paused/Archived status (crm_marketing_campaigns,
+// migration 0121) - independent of any one contact's enrollment status
+// below. Pausing/reactivating a campaign only ever touches this row;
+// it never reads, writes, or otherwise depends on
+// crm_marketing_enrollments, so a contact's subscribe/unsubscribe state
+// can never be affected by a campaign-level action.
+export const MARKETING_CAMPAIGN_STATUSES = ["active", "paused", "archived"] as const;
+export type MarketingCampaignStatus = (typeof MARKETING_CAMPAIGN_STATUSES)[number];
+
+export const MARKETING_CAMPAIGN_STATUS_LABELS: Record<MarketingCampaignStatus, string> = {
+  active: "Active",
+  paused: "Paused",
+  archived: "Deleted",
+};
+
+export type CrmMarketingCampaignRow = {
+  campaign_type: MarketingCampaignType;
+  status: MarketingCampaignStatus;
+  paused_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
 export const MARKETING_ENROLLMENT_STATUSES = ["active", "paused", "stopped", "unsubscribed"] as const;
 export type MarketingEnrollmentStatus = (typeof MARKETING_ENROLLMENT_STATUSES)[number];
 
