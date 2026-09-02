@@ -9,9 +9,11 @@ import { createWinsalotPrefillToken } from "./winsalot-consultation-tokens";
 import { getWinsalotBookingUrlBase } from "./send-prospect-email";
 import { buildMarketingEmail, firstNameForMarketing } from "./crm-marketing-email";
 import type {
+  CrmMarketingCampaignRow,
   CrmMarketingDeliveryRow,
   CrmMarketingEnrollmentRow,
   CrmMarketingTemplateRow,
+  MarketingCampaignStatus,
   MarketingOpportunitySummary,
 } from "./crm-marketing-types";
 
@@ -70,8 +72,15 @@ async function loadDueEnrollments(admin: SupabaseClient, dryRun: boolean, limit:
   return (data ?? []) as CrmMarketingEnrollmentRow[];
 }
 
-function templateForEnrollment(
-  enrollment: CrmMarketingEnrollmentRow,
+// Exported (and unit-tested - see __tests__/crm-marketing-job.test.ts)
+// because it's exactly the "resume from the correct next unsent email"
+// logic: send_count only ever advances by one per successfully-recorded
+// delivery (prepareDelivery below), so this always names the one
+// template due next in sequence - reactivating a paused campaign changes
+// nothing about this calculation, it just lets the job reach this
+// enrollment again.
+export function templateForEnrollment(
+  enrollment: Pick<CrmMarketingEnrollmentRow, "campaign_type" | "send_count">,
   templates: CrmMarketingTemplateRow[]
 ): CrmMarketingTemplateRow | null {
   const sequence = templates
@@ -79,6 +88,16 @@ function templateForEnrollment(
     .sort((a, b) => a.sequence_number - b.sequence_number);
   if (sequence.length === 0) return null;
   return sequence[enrollment.send_count % sequence.length] ?? null;
+}
+
+// Exported (and unit-tested) predicate for the campaign-level Active/
+// Paused/Archived gate applied in runCrmMarketingJob below - a campaign
+// only ever sends while 'active'; 'paused' and 'archived' are both
+// non-sending states (the two behave identically for send purposes, the
+// UI just never offers "archived" as anything other than a one-way,
+// permanent outcome of Delete Campaign).
+export function isCampaignSendable(status: MarketingCampaignStatus): boolean {
+  return status === "active";
 }
 
 async function prepareDelivery(
@@ -158,6 +177,18 @@ export async function runCrmMarketingJob(options?: { dryRun?: boolean; limit?: n
   if (templatesError) throw new Error(`Failed to load marketing templates: ${templatesError.message}`);
   const templates = (templateRows ?? []) as CrmMarketingTemplateRow[];
 
+  // Campaign-level Active/Paused/Archived gate (crm_marketing_campaigns,
+  // migration 0121), on top of - never instead of - every existing
+  // per-contact check below (enrollment status, opportunity stage,
+  // suppression). A campaign missing its row (shouldn't happen once
+  // seeded, but the job must never crash over it) defaults to 'active'
+  // so a bootstrap gap never silently stops sending.
+  const { data: campaignRows, error: campaignsError } = await admin.from("crm_marketing_campaigns").select("campaign_type, status");
+  if (campaignsError) throw new Error(`Failed to load campaign status: ${campaignsError.message}`);
+  const campaignStatusByType = new Map<string, MarketingCampaignStatus>(
+    ((campaignRows ?? []) as Pick<CrmMarketingCampaignRow, "campaign_type" | "status">[]).map((row) => [row.campaign_type, row.status])
+  );
+
   const summary: MarketingJobSummary = {
     dryRun,
     candidates: enrollments.length,
@@ -184,6 +215,29 @@ export async function runCrmMarketingJob(options?: { dryRun?: boolean; limit?: n
       if (!dryRun) await clearClaim(admin, enrollment.id, enrollment.claim_token, { status: "stopped", stopped_at: new Date().toISOString(), last_error: "Opportunity no longer exists." });
       summary.skipped++;
       summary.results.push({ ...resultBase, businessName: "Removed opportunity", recipientEmail: null, outcome: "skipped", error: "Opportunity no longer exists." });
+      continue;
+    }
+
+    // Campaign paused/archived: skip silently, releasing the claim with
+    // NO other field changes (status, next_send_at, send_count, and
+    // every consent/history field on this enrollment stay exactly as
+    // they were - see clearClaim()'s `updates` param being omitted
+    // here). That is what makes "Reactivate Campaign" resume every
+    // contact at its own correct next step on its normal schedule
+    // instead of resetting or catching up, and what keeps a campaign
+    // action from ever touching a contact's subscribe/unsubscribe
+    // status.
+    const campaignStatus = campaignStatusByType.get(enrollment.campaign_type) ?? "active";
+    if (!isCampaignSendable(campaignStatus)) {
+      if (!dryRun) await clearClaim(admin, enrollment.id, enrollment.claim_token);
+      summary.skipped++;
+      summary.results.push({
+        ...resultBase,
+        businessName: opportunity.business_name,
+        recipientEmail: opportunity.email,
+        outcome: "skipped",
+        error: `This campaign is currently ${campaignStatus}.`,
+      });
       continue;
     }
 

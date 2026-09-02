@@ -466,13 +466,34 @@ sending happens outside any page load, on a schedule:
   `crm_opportunities` business/opportunity, and every `crm_marketing_deliveries` row are untouched —
   deleting the enrollment row outright is not an option, since `crm_marketing_deliveries.enrollment_id`
   is `on delete cascade` and would destroy that contact's sent-email history.
-- **Delete Campaign**: each campaign group ("Lead Generation"/"Business Financing"/"Both Services")
-  in "Weekly Email Sequence" has a "Delete Campaign" button (confirmation required, and it reports how
-  many currently-enrolled contacts will stop receiving emails). It sets `active = false` on every
-  template in that `campaign_type` (the weekly job already treats "no active template" as a normal
-  skip) and removes every active/paused enrollment of that `campaign_type` only, exactly like "Remove
-  from Campaign" above. Other campaign types, businesses, opportunities, consent records, and delivery
-  history are unaffected.
+- **Campaign status (Pause/Reactivate/Delete)**: each campaign group ("Lead Generation"/"Business
+  Financing"/"Both Services") in "Weekly Email Sequence" has its own Active/Paused/Deleted status,
+  stored in `crm_marketing_campaigns` (migration 0121) — one row per `campaign_type`, entirely separate
+  from any individual contact's `crm_marketing_enrollments.status`.
+  - **Pause Campaign** (confirmation required) sets that row's `status = 'paused'`. It never reads or
+    writes a single `crm_marketing_enrollments` row — `runCrmMarketingJob` checks
+    `crm_marketing_campaigns` for every enrollment it considers and, for a paused/archived campaign,
+    releases the claim with no other field changes at all (`isCampaignSendable`,
+    `src/lib/crm-marketing-job.ts`), so status, `next_send_at`, and `send_count` are exactly what they
+    were. That's also why a contact's own subscribe/unsubscribe status can never be touched by pausing
+    or reactivating a campaign.
+  - **Reactivate Campaign** (confirmation required) sets `status = 'active'` again. Since nothing was
+    changed while paused, the next scheduled or manual run resumes every contact from its own
+    `send_count`-th template — `templateForEnrollment` (exported and unit-tested,
+    `src/lib/__tests__/crm-marketing-job.test.ts`) — never re-sending a step already recorded in
+    `crm_marketing_deliveries` and never sending more than one email per contact per run, so pausing
+    for any length of time can't produce a burst of "catch-up" sends.
+  - **Delete Campaign** moved behind a "⋮ More actions" menu (it's no longer the prominent control):
+    confirming requires typing `DELETE`, and it sets `status = 'archived'` — a one-way status this page
+    never offers to undo. It still additionally sets `active = false` on every template in that
+    `campaign_type` (the weekly job already treats "no active template" as a normal skip) and removes
+    every active/paused enrollment of that `campaign_type` only, exactly like "Remove from Campaign"
+    above. Other campaign types, businesses, opportunities, consent records, unsubscribe/suppression
+    records, and delivery history are unaffected — nothing is ever actually `DELETE`d from any table.
+  - **Add Campaign**: a button that scrolls to the existing "Add a Contacted Business" enroll form
+    (`#add-campaign`) — enrolling another business/client into one of the three campaigns is the same
+    action it always was, just given a more discoverable entry point next to the other campaign-level
+    controls.
 
 ### Troubleshooting: due contacts aren't being emailed
 
@@ -481,10 +502,13 @@ sending happens outside any page load, on a schedule:
    means the request never got past authorization — see the `CRON_SECRET` bullet above. A `200`
    response's JSON body (`{ candidates, sent, failed, skipped, results }`) tells you exactly what
    happened to every due contact on that run.
-2. **Is the enrollment actually due?** Check `crm_marketing_enrollments.status = 'active'` and
+2. **Is the campaign itself active?** Check `crm_marketing_campaigns.status` for that `campaign_type` —
+   a paused or deleted campaign skips every enrollment in it (`This campaign is currently paused.` in
+   the job's JSON `results`), independent of any individual contact's own status.
+3. **Is the enrollment actually due?** Check `crm_marketing_enrollments.status = 'active'` and
    `next_send_at <= now()` for that opportunity — `/admin/crm/marketing`'s "Campaign Contacts" table
    shows both directly.
-3. **Was it skipped for a business reason?** The job's JSON `results`/`enrollments.last_error`
+4. **Was it skipped for a business reason?** The job's JSON `results`/`enrollments.last_error`
    explain a skip: stage is `Client Won`/`Not Interested`, no email address, the recipient is
    suppressed/unsubscribed, or no active template exists for that `campaign_type`.
 

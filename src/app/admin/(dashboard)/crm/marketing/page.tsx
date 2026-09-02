@@ -2,6 +2,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import AdminMarketingClient from "@/components/crm-marketing/AdminMarketingClient";
 import type {
+  CrmMarketingCampaignRow,
   CrmMarketingDeliveryRow,
   CrmMarketingEnrollmentRow,
   CrmMarketingTemplateRow,
@@ -13,6 +14,8 @@ import {
   resumeMarketingEnrollmentAction,
   stopMarketingEnrollmentAction,
   removeMarketingEnrollmentAction,
+  pauseMarketingCampaignAction,
+  reactivateMarketingCampaignAction,
   deleteMarketingCampaignAction,
   updateMarketingTemplateAction,
   sendMarketingTemplateTestEmailAction,
@@ -22,7 +25,13 @@ import {
 export default async function AdminMarketingPage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
-  const [{ data: opportunities, error: opportunityError }, { data: enrollments, error: enrollmentError }, { data: templates, error: templateError }, { data: deliveries }] = await Promise.all([
+  const [
+    { data: opportunities, error: opportunityError },
+    { data: enrollments, error: enrollmentError },
+    { data: templates, error: templateError },
+    { data: deliveries },
+    { data: campaigns, error: campaignError },
+  ] = await Promise.all([
     supabase
       .from("crm_opportunities")
       .select("id, business_name, contact_name, email, stage, opportunity_type")
@@ -30,9 +39,10 @@ export default async function AdminMarketingPage() {
     supabase.from("crm_marketing_enrollments").select("*").is("removed_at", null).order("created_at", { ascending: false }),
     supabase.from("crm_marketing_templates").select("*").order("campaign_type").order("sequence_number"),
     supabase.from("crm_marketing_deliveries").select("*").order("created_at", { ascending: false }).limit(500),
+    supabase.from("crm_marketing_campaigns").select("*"),
   ]);
 
-  const error = opportunityError?.message || enrollmentError?.message || templateError?.message;
+  const error = opportunityError?.message || enrollmentError?.message || templateError?.message || campaignError?.message;
 
   return (
     <div>
@@ -52,12 +62,15 @@ export default async function AdminMarketingPage() {
             enrollments={(enrollments ?? []) as CrmMarketingEnrollmentRow[]}
             templates={(templates ?? []) as CrmMarketingTemplateRow[]}
             deliveries={(deliveries ?? []) as CrmMarketingDeliveryRow[]}
+            campaigns={(campaigns ?? []) as CrmMarketingCampaignRow[]}
             actions={{
               enroll: enrollMarketingContactAction,
               pause: pauseMarketingEnrollmentAction,
               resume: resumeMarketingEnrollmentAction,
               stop: stopMarketingEnrollmentAction,
               remove: removeMarketingEnrollmentAction,
+              pauseCampaign: pauseMarketingCampaignAction,
+              reactivateCampaign: reactivateMarketingCampaignAction,
               deleteCampaign: deleteMarketingCampaignAction,
               updateTemplate: updateMarketingTemplateAction,
               sendTestEmail: sendMarketingTemplateTestEmailAction,

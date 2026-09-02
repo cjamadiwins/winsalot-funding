@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
-import { isMarketingCampaignType, isMarketingTestEmailRecipient, MARKETING_CAMPAIGN_LABELS, type MarketingConsentBasis } from "@/lib/crm-marketing-types";
+import {
+  isMarketingCampaignType,
+  isMarketingTestEmailRecipient,
+  MARKETING_CAMPAIGN_LABELS,
+  type MarketingCampaignStatus,
+  type MarketingConsentBasis,
+} from "@/lib/crm-marketing-types";
 import { sendCrmMarketingTestEmail } from "@/lib/send-test-email";
 import { runCrmMarketingJob, type MarketingJobSummary } from "@/lib/crm-marketing-job";
 
@@ -264,21 +270,111 @@ export async function removeMarketingEnrollmentAction(enrollmentId: string): Pro
   return { success: "Removed from the campaign. Future emails are cancelled — the business, opportunity, consent record, and email history are unchanged." };
 }
 
-// "Delete Campaign" for one entire weekly email sequence (a
+// Shared guard for the three campaign-status actions below: loads the
+// campaign's current row (seeded by migration 0121; defaults to
+// 'active' if somehow missing) and blocks any further action once a
+// campaign is archived - "Delete Campaign" is a one-way door from this
+// page, matching the brief's "deletion is permanent."
+async function loadCampaignStatus(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  campaignType: string
+): Promise<MarketingCampaignStatus> {
+  const { data } = await supabase.from("crm_marketing_campaigns").select("status").eq("campaign_type", campaignType).maybeSingle();
+  return (data?.status as MarketingCampaignStatus | undefined) ?? "active";
+}
+
+// "Pause Campaign" - the campaign-level counterpart to an individual
+// contact's "Pause" (EnrollmentControls), but scoped to
+// crm_marketing_campaigns instead of crm_marketing_enrollments. This is
+// the ONLY thing this action ever writes: it never reads or writes a
+// single crm_marketing_enrollments row, so no contact's subscribe/
+// unsubscribe status, next_send_at, or send_count can ever be touched by
+// pausing a campaign. runCrmMarketingJob checks this same row and skips
+// every enrollment in a paused campaign without altering it at all (see
+// crm-marketing-job.ts), which is what lets "Reactivate Campaign" below
+// resume each contact from its own correct next step.
+export async function pauseMarketingCampaignAction(campaignType: string): Promise<MarketingActionResult> {
+  const adminUser = await requireCrmAdmin();
+  if (!isMarketingCampaignType(campaignType)) return { error: "Select a valid campaign." };
+  const supabase = await createSupabaseServerClient();
+
+  const status = await loadCampaignStatus(supabase, campaignType);
+  if (status === "archived") return { error: "This campaign has been deleted and cannot be paused." };
+  if (status === "paused") return { success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign is already paused.` };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("crm_marketing_campaigns")
+    .upsert({ campaign_type: campaignType, status: "paused", paused_at: now, updated_at: now, updated_by: adminUser.id }, { onConflict: "campaign_type" });
+  if (error) return { error: `Could not pause this campaign: ${error.message}` };
+
+  revalidatePath("/admin/crm/marketing");
+  return {
+    success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign paused. Future emails stop until you reactivate it — contacts, consent records, and email history are unchanged.`,
+  };
+}
+
+// "Reactivate Campaign" - flips the campaign back to 'active'. Deliberately
+// never touches crm_marketing_enrollments: each contact's own
+// next_send_at/send_count was left untouched while paused (see
+// crm-marketing-job.ts), so the very next scheduled/manual run resumes
+// every contact exactly where its sequence left off, on the normal
+// cadence - never resending a step already recorded in
+// crm_marketing_deliveries, and never re-subscribing a contact whose own
+// status is 'unsubscribed'/'stopped'/'removed' (those are excluded by
+// the job's existing per-enrollment checks regardless of campaign
+// status).
+export async function reactivateMarketingCampaignAction(campaignType: string): Promise<MarketingActionResult> {
+  const adminUser = await requireCrmAdmin();
+  if (!isMarketingCampaignType(campaignType)) return { error: "Select a valid campaign." };
+  const supabase = await createSupabaseServerClient();
+
+  const status = await loadCampaignStatus(supabase, campaignType);
+  if (status === "archived") return { error: "This campaign has been deleted and cannot be reactivated." };
+  if (status === "active") return { success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign is already active.` };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("crm_marketing_campaigns")
+    .upsert({ campaign_type: campaignType, status: "active", paused_at: null, updated_at: now, updated_by: adminUser.id }, { onConflict: "campaign_type" });
+  if (error) return { error: `Could not reactivate this campaign: ${error.message}` };
+
+  revalidatePath("/admin/crm/marketing");
+  return {
+    success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign reactivated. It resumes from each contact's next unsent email on its normal schedule — no contact's subscription status was changed.`,
+  };
+}
+
+// "Delete Campaign" (kept behind the "More actions" overflow menu on the
+// client, with its own typed-DELETE confirmation - see
+// AdminMarketingClient.tsx) for one entire weekly email sequence (a
 // MarketingCampaignType - Lead Generation, Business Financing, or Both
-// Services). Deactivates every template in that campaign_type
-// (active=false - already a state the weekly job handles gracefully by
-// skipping with "no active template for this campaign") and removes (as
-// removeMarketingEnrollmentAction above) every currently active/paused
-// enrollment of that campaign_type only. Nothing is deleted: no template
-// row, no enrollment row, no opportunity, no consent field, no delivery
-// history. Every write here is scoped with `.eq("campaign_type", ...)`,
-// so the other two campaigns are never touched.
+// Services). Marks crm_marketing_campaigns 'archived' (a one-way status -
+// see loadCampaignStatus above), deactivates every template in that
+// campaign_type (active=false - already a state the weekly job handles
+// gracefully by skipping with "no active template for this campaign"),
+// and removes (as removeMarketingEnrollmentAction above) every currently
+// active/paused enrollment of that campaign_type only. Nothing is ever
+// actually deleted: no template row, no enrollment row, no opportunity,
+// no consent field, no unsubscribe/suppression record, no delivery
+// history - safe deletion isn't possible here anyway, since
+// crm_marketing_deliveries.enrollment_id is `on delete cascade` (0117),
+// so a real DELETE would destroy sent-email history. Every write here is
+// scoped with `.eq("campaign_type", ...)`, so the other two campaigns
+// are never touched.
 export async function deleteMarketingCampaignAction(campaignType: string): Promise<MarketingActionResult> {
-  await requireCrmAdmin();
+  const adminUser = await requireCrmAdmin();
   if (!isMarketingCampaignType(campaignType)) return { error: "Select a valid campaign." };
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
+
+  const status = await loadCampaignStatus(supabase, campaignType);
+  if (status === "archived") return { success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign is already deleted.` };
+
+  const { error: campaignError } = await supabase
+    .from("crm_marketing_campaigns")
+    .upsert({ campaign_type: campaignType, status: "archived", archived_at: now, updated_at: now, updated_by: adminUser.id }, { onConflict: "campaign_type" });
+  if (campaignError) return { error: `Could not delete this campaign: ${campaignError.message}` };
 
   const { error: templateError } = await supabase
     .from("crm_marketing_templates")
@@ -295,6 +391,6 @@ export async function deleteMarketingCampaignAction(campaignType: string): Promi
 
   revalidatePath("/admin/crm/marketing");
   return {
-    success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign deleted. Future emails are cancelled for its contacts — businesses, opportunities, consent records, and email history are unchanged. Other campaigns are unaffected.`,
+    success: `${MARKETING_CAMPAIGN_LABELS[campaignType]} campaign deleted. Future emails are cancelled for its contacts — businesses, opportunities, consent records, unsubscribe records, and email history are unchanged. Other campaigns are unaffected.`,
   };
 }

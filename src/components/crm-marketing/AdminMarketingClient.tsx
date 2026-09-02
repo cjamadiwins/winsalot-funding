@@ -11,12 +11,16 @@ import {
 import {
   DEFAULT_MARKETING_TEST_EMAIL_RECIPIENT,
   MARKETING_CAMPAIGN_LABELS,
+  MARKETING_CAMPAIGN_STATUS_LABELS,
   MARKETING_CAMPAIGN_TYPES,
   MARKETING_ENROLLMENT_STATUS_LABELS,
   MARKETING_TEST_EMAIL_RECIPIENTS,
+  type CrmMarketingCampaignRow,
   type CrmMarketingDeliveryRow,
   type CrmMarketingEnrollmentRow,
   type CrmMarketingTemplateRow,
+  type MarketingCampaignStatus,
+  type MarketingCampaignType,
   type MarketingOpportunitySummary,
 } from "@/lib/crm-marketing-types";
 import type { MarketingJobSummary } from "@/lib/crm-marketing-job";
@@ -29,12 +33,15 @@ type Props = {
   enrollments: CrmMarketingEnrollmentRow[];
   templates: CrmMarketingTemplateRow[];
   deliveries: CrmMarketingDeliveryRow[];
+  campaigns: CrmMarketingCampaignRow[];
   actions: {
     enroll: (formData: FormData) => Promise<ActionResult>;
     pause: (id: string) => Promise<ActionResult>;
     resume: (id: string) => Promise<ActionResult>;
     stop: (id: string) => Promise<ActionResult>;
     remove: (id: string) => Promise<ActionResult>;
+    pauseCampaign: (campaignType: string) => Promise<ActionResult>;
+    reactivateCampaign: (campaignType: string) => Promise<ActionResult>;
     deleteCampaign: (campaignType: string) => Promise<ActionResult>;
     updateTemplate: (id: string, formData: FormData) => Promise<ActionResult>;
     sendTestEmail: (templateId: string, toEmail: string) => Promise<ActionResult>;
@@ -48,6 +55,11 @@ const statusStyle: Record<string, string> = {
   paused: "bg-amber-100 text-amber-800",
   stopped: "bg-slate-100 text-slate-700",
   unsubscribed: "bg-rose-100 text-rose-800",
+};
+const campaignStatusStyle: Record<MarketingCampaignStatus, string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  paused: "bg-amber-100 text-amber-800",
+  archived: "bg-slate-100 text-slate-700",
 };
 
 // Compact date format for the Campaign Contacts list (e.g. "Sep 2, 2:34
@@ -65,7 +77,7 @@ function formatDateCompact(value: string | null): string {
   });
 }
 
-export default function AdminMarketingClient({ opportunities, enrollments, templates, deliveries, actions }: Props) {
+export default function AdminMarketingClient({ opportunities, enrollments, templates, deliveries, campaigns, actions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<ActionResult | null>(null);
@@ -77,6 +89,14 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
     (opportunity) => eligibleStages.has(opportunity.stage) && !!opportunity.email && !enrolledIds.has(opportunity.id)
   );
   const selectedOpportunity = opportunityById.get(selectedOpportunityId);
+  // Each campaign_type's own Active/Paused/Archived status
+  // (crm_marketing_campaigns, migration 0121) - defaults to "active" if a
+  // row is somehow missing, matching runCrmMarketingJob's own default.
+  const campaignStatusByType = useMemo(() => {
+    const map = new Map<MarketingCampaignType, MarketingCampaignStatus>();
+    for (const campaign of campaigns) map.set(campaign.campaign_type, campaign.status);
+    return map;
+  }, [campaigns]);
   const orderedTemplates = useMemo(
     () =>
       [...templates].sort(
@@ -87,17 +107,19 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
     [templates]
   );
   // One group per MarketingCampaignType (Lead Generation/Business
-  // Financing/Both Services) - "Delete Campaign" acts on the whole group.
-  // A group with every template deactivated (deleteMarketingCampaignAction
-  // sets active=false on all of them) is a deleted campaign, so it's
-  // dropped from the editable list entirely rather than shown "Inactive".
+  // Financing/Both Services) - the Pause/Reactivate/"More actions" ▸
+  // Delete controls act on the whole group. Only an archived (deleted)
+  // campaign is dropped from the editable list entirely; a paused one
+  // still shows here (with a "Reactivate Campaign" control) since pausing
+  // must preserve the campaign's configuration and history untouched.
   const campaignGroups = useMemo(
     () =>
       MARKETING_CAMPAIGN_TYPES.map((campaignType) => ({
         campaignType,
+        status: campaignStatusByType.get(campaignType) ?? "active",
         templates: orderedTemplates.filter((template) => template.campaign_type === campaignType),
-      })).filter((group) => group.templates.some((template) => template.active)),
-    [orderedTemplates]
+      })).filter((group) => group.status !== "archived"),
+    [orderedTemplates, campaignStatusByType]
   );
   const latestDeliveryByEnrollment = useMemo(() => {
     const map = new Map<string, CrmMarketingDeliveryRow>();
@@ -128,6 +150,21 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div />
+        {/* Scrolls to the existing enroll-a-business form below rather than
+            duplicating it - "Add Campaign" here means adding another
+            business/client into one of the three weekly campaigns, which
+            is exactly what that form already does. */}
+        <button
+          type="button"
+          onClick={() => document.getElementById("add-campaign")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-800"
+        >
+          + Add Campaign
+        </button>
+      </div>
+
       {message && (
         <p className={`rounded-xl border px-4 py-3 text-sm ${message.error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
           {message.error ?? message.success}
@@ -135,15 +172,15 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <SummaryCard label="Active Campaigns" value={activeCount} detail="Sending every seven days" />
+        <SummaryCard label="Active Contacts" value={activeCount} detail="Sending every seven days" />
         <SummaryCard label="Due for Next Run" value={dueCount} detail="Processed by the daily scheduler" />
         <SummaryCard label="Emails Recorded" value={sentCount} detail="Sent and engagement tracked" />
       </div>
 
       <RunMarketingJobNow runJobNow={actions.runJobNow} />
 
-      <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-lg font-bold text-slate-900">Add a Contacted Business</h2>
+      <section id="add-campaign" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 scroll-mt-4">
+        <h2 className="text-lg font-bold text-slate-900">Add Campaign — Add a Contacted Business</h2>
         <p className="mt-1 text-sm text-slate-500">The campaign is locked to the service already recorded on the opportunity. A consent record is required before automatic sending begins.</p>
         <form action={submitEnrollment} className="mt-4 grid gap-4 lg:grid-cols-4">
           <label className="text-sm font-medium text-slate-700 lg:col-span-2">
@@ -216,6 +253,11 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                   >
                     {enrollment.consent_basis} consent
                   </span>
+                  {campaignStatusByType.get(enrollment.campaign_type) === "paused" && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Campaign paused
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs">
@@ -268,28 +310,20 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
             return (
               <div key={group.campaignType}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-base font-bold text-slate-900">{MARKETING_CAMPAIGN_LABELS[group.campaignType]}</h3>
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => {
-                      const warning =
-                        activeContactCount > 0
-                          ? ` ${activeContactCount} contact${activeContactCount === 1 ? "" : "s"} currently scheduled in it will stop receiving further emails.`
-                          : "";
-                      if (
-                        !window.confirm(
-                          `Delete the ${MARKETING_CAMPAIGN_LABELS[group.campaignType]} campaign?${warning} Businesses, opportunities, consent records, and email history are kept, and other campaigns are not affected.`
-                        )
-                      ) {
-                        return;
-                      }
-                      runAction(() => actions.deleteCampaign(group.campaignType));
-                    }}
-                    className="rounded-md border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
-                  >
-                    Delete Campaign
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900">{MARKETING_CAMPAIGN_LABELS[group.campaignType]}</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${campaignStatusStyle[group.status]}`}>
+                      {MARKETING_CAMPAIGN_STATUS_LABELS[group.status]}
+                    </span>
+                  </div>
+                  <CampaignControls
+                    campaignType={group.campaignType}
+                    status={group.status}
+                    activeContactCount={activeContactCount}
+                    isPending={isPending}
+                    actions={actions}
+                    runAction={runAction}
+                  />
                 </div>
                 <div className="grid gap-4 xl:grid-cols-2">
                   {group.templates.map((template) => (
@@ -305,9 +339,131 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
               </div>
             );
           })}
-          {campaignGroups.length === 0 && <p className="text-sm text-slate-500">Every campaign has been deleted.</p>}
+          {campaignGroups.length === 0 && <p className="text-sm text-slate-500">Every campaign has been deleted. Deletion is permanent from this page — contact an engineer to restore a campaign&rsquo;s templates if this was done in error.</p>}
         </div>
       </section>
+    </div>
+  );
+}
+
+// Pause/Reactivate for one whole campaign (a MarketingCampaignType), plus
+// "Delete Campaign" tucked behind a "More actions" overflow menu so it's
+// no longer the prominently-displayed control it used to be. Pause/
+// Reactivate call pauseCampaign/reactivateCampaign - which only ever
+// write crm_marketing_campaigns, never crm_marketing_enrollments (see
+// actions.ts) - so nothing here can affect any contact's subscribe/
+// unsubscribe status, no matter how many times a campaign is paused and
+// reactivated.
+function CampaignControls({
+  campaignType,
+  status,
+  activeContactCount,
+  isPending,
+  actions,
+  runAction,
+}: {
+  campaignType: MarketingCampaignType;
+  status: MarketingCampaignStatus;
+  activeContactCount: number;
+  isPending: boolean;
+  actions: Pick<Props["actions"], "pauseCampaign" | "reactivateCampaign" | "deleteCampaign">;
+  runAction: (action: () => Promise<ActionResult>) => void;
+}) {
+  const label = MARKETING_CAMPAIGN_LABELS[campaignType];
+
+  function handlePause() {
+    if (!window.confirm(`Pause the ${label} campaign? Future emails stop until you reactivate it. Contacts, consent records, and email history are unchanged.`)) return;
+    runAction(() => actions.pauseCampaign(campaignType));
+  }
+
+  function handleReactivate() {
+    if (!window.confirm(`Reactivate the ${label} campaign? It resumes sending from each contact's next unsent email, on its normal schedule — no contact's subscription status changes.`)) return;
+    runAction(() => actions.reactivateCampaign(campaignType));
+  }
+
+  function handleDelete() {
+    const warning =
+      activeContactCount > 0
+        ? ` ${activeContactCount} contact${activeContactCount === 1 ? "" : "s"} currently in it will stop receiving further emails.`
+        : "";
+    if (
+      !window.confirm(
+        `Permanently delete the ${label} campaign?${warning} This is intended only for test campaigns or campaigns created by mistake, and cannot be undone from this page. Businesses, opportunities, consent records, unsubscribe records, and email history are never deleted.`
+      )
+    ) {
+      return;
+    }
+    const typed = window.prompt(`Type DELETE (all capitals) to confirm permanently deleting the ${label} campaign.`);
+    if (typed !== "DELETE") return;
+    runAction(() => actions.deleteCampaign(campaignType));
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {status === "active" && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handlePause}
+          className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-700 disabled:opacity-50"
+        >
+          Pause Campaign
+        </button>
+      )}
+      {status === "paused" && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handleReactivate}
+          className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+        >
+          Reactivate Campaign
+        </button>
+      )}
+      <CampaignMoreActionsMenu isPending={isPending} onDelete={handleDelete} />
+    </div>
+  );
+}
+
+// "More actions" overflow menu - currently just "Delete Campaign", kept
+// out of the primary row of controls per the brief ("Keep 'Delete
+// Campaign' only inside a three-dot overflow menu"). A plain click-
+// toggled dropdown, consistent with this codebase never pulling in a UI
+// library for this kind of thing.
+function CampaignMoreActionsMenu({ isPending, onDelete }: { isPending: boolean; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => setOpen((current) => !current)}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 disabled:opacity-50"
+      >
+        ⋮ More actions
+      </button>
+      {open && (
+        <>
+          {/* Full-screen click-outside catcher, behind the menu itself. */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div role="menu" className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="block w-full px-3 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"
+            >
+              Delete Campaign
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
