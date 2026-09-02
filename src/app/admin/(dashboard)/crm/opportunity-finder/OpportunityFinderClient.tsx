@@ -11,6 +11,7 @@ import {
   type CrmOpportunityScoreRow,
   type OpportunityCategory,
 } from "@/lib/opportunity-finder";
+import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
 import { assignOpportunityAgentAction, dismissOpportunityAction, reopenOpportunityAction, setOpportunityPriorityOverrideAction } from "./actions";
 
 export type OpportunityFinderRow = {
@@ -22,6 +23,15 @@ export type OpportunityFinderRow = {
   stageOrStatus: string;
   assignedAgentId: string | null;
   assignedAgentName: string | null;
+  // Growth CRM has no per-opportunity client/campaign the way the Lead Gen
+  // CRM does - clientId/clientName only ever resolve once onboarding has
+  // actually started from this opportunity (crm_client_agreements); campaign
+  // is this opportunity's own service type, the same "campaign" concept
+  // crm_marketing_campaigns already uses.
+  clientId: string | null;
+  clientName: string | null;
+  campaignType: OpportunityType;
+  campaignName: string;
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
   lastCallAt: string | null;
@@ -45,14 +55,18 @@ function isOverdue(iso: string | null): boolean {
 export default function OpportunityFinderClient({
   rows,
   agents,
+  clients,
   initialCategory,
   initialAgentFilter,
+  initialClientFilter,
   initialFollowUpFilter,
 }: {
   rows: OpportunityFinderRow[];
   agents: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
   initialCategory?: string;
   initialAgentFilter?: string;
+  initialClientFilter?: string;
   initialFollowUpFilter?: string;
 }) {
   const router = useRouter();
@@ -62,6 +76,8 @@ export default function OpportunityFinderClient({
     initialCategory && OPPORTUNITY_CATEGORIES.includes(initialCategory as OpportunityCategory) ? (initialCategory as OpportunityCategory) : "all"
   );
   const [agentFilter, setAgentFilter] = useState(initialAgentFilter && agents.some((a) => a.id === initialAgentFilter) ? initialAgentFilter : "all");
+  const [clientFilter, setClientFilter] = useState(initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all");
+  const [campaignFilter, setCampaignFilter] = useState<OpportunityType | "all">("all");
   const [followUpFilter, setFollowUpFilter] = useState(initialFollowUpFilter === "due" ? "due" : "all");
   const [search, setSearch] = useState("");
   const [dismissingId, setDismissingId] = useState<string | null>(null);
@@ -82,11 +98,13 @@ export default function OpportunityFinderClient({
       const effective = effectiveOpportunityCategory(row.score);
       if (categoryFilter !== "all" && effective !== categoryFilter) return false;
       if (agentFilter !== "all" && row.assignedAgentId !== agentFilter) return false;
+      if (clientFilter !== "all" && row.clientId !== clientFilter) return false;
+      if (campaignFilter !== "all" && row.campaignType !== campaignFilter) return false;
       if (followUpFilter === "due" && !row.nextFollowUpAt) return false;
       if (query && !(row.businessName.toLowerCase().includes(query) || (row.contactName ?? "").toLowerCase().includes(query))) return false;
       return true;
     });
-  }, [rows, categoryFilter, agentFilter, followUpFilter, search]);
+  }, [rows, categoryFilter, agentFilter, clientFilter, campaignFilter, followUpFilter, search]);
 
   return (
     <div className="mt-6">
@@ -113,6 +131,26 @@ export default function OpportunityFinderClient({
             </option>
           ))}
         </select>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className={inputClass}
+        >
+          <option value="all">All Clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value as OpportunityType | "all")} className={inputClass}>
+          <option value="all">All Campaigns</option>
+          {OPPORTUNITY_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {OPPORTUNITY_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
         <select value={followUpFilter} onChange={(e) => setFollowUpFilter(e.target.value as "all" | "due")} className={inputClass}>
           <option value="all">Any Follow-Up</option>
           <option value="due">Has a Follow-Up Scheduled</option>
@@ -126,10 +164,11 @@ export default function OpportunityFinderClient({
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1200px] text-left text-[13px]">
+        <table className="w-full min-w-[1300px] text-left text-[13px]">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Business / Contact</th>
+              <th className="px-4 py-3">Client / Campaign</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Score</th>
               <th className="px-4 py-3">Last Call</th>
@@ -155,6 +194,10 @@ export default function OpportunityFinderClient({
                     </Link>
                     <div className="text-slate-500">{row.contactName || "—"}</div>
                     <div className="mt-1 text-[11px] text-slate-400">{row.stageOrStatus}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <div>{row.clientName || "—"}</div>
+                    <div className="text-[11px] text-slate-400">{row.campaignName}</div>
                   </td>
                   <td className="px-4 py-3">
                     <select
@@ -273,7 +316,7 @@ export default function OpportunityFinderClient({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
                   No opportunities match these filters.
                 </td>
               </tr>
