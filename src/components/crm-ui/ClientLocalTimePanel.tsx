@@ -70,13 +70,10 @@ function mapWeatherCode(code: number, isDay: boolean): { condition: string; icon
 
 type CityWeather = { condition: string; icon: WeatherIconKind; tempC: number };
 
-// Open-Meteo (https://open-meteo.com) - free, no API key, so there's
-// nothing to keep out of browser-side code and no server route needed;
-// the browser calls it directly. Fetches on mount, whenever the city
-// itself changes (this hook is keyed by lat/lon), and every 30 minutes
-// after that. Keeps the last good reading on screen while a refresh is
-// in flight rather than flashing a loading state every 30 minutes, and
-// only shows the graceful fallback when a fetch actually fails.
+// Weather is loaded through our same-origin API route. The server route
+// handles the Open-Meteo request, validation, timeout and shared caching,
+// so browser privacy/network policies cannot block the dashboard request.
+// Fetches on mount, whenever the city changes, and every 30 minutes.
 function useCityWeather(lat: number, lon: number): { data: CityWeather | null; error: boolean } {
   const [data, setData] = useState<CityWeather | null>(null);
   const [error, setError] = useState(false);
@@ -86,8 +83,14 @@ function useCityWeather(lat: number, lon: number): { data: CityWeather | null; e
 
     async function load() {
       try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&temperature_unit=celsius&timezone=auto`;
-        const response = await fetch(url);
+        const params = new URLSearchParams({
+          latitude: String(lat),
+          longitude: String(lon),
+        });
+        const response = await fetch(`/api/weather?${params.toString()}`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
         if (!response.ok) throw new Error("Open-Meteo request failed");
         const json = await response.json();
         const current = json?.current;
