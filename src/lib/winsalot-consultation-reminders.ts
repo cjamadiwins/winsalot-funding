@@ -84,18 +84,79 @@ async function markReminderFailed(admin: SupabaseClient, reminderId: string, err
   await admin.from(REMINDER_TABLE).update({ status: "failed", error_detail: errorDetail, updated_at: new Date().toISOString() }).eq("id", reminderId);
 }
 
-async function markReminderSent(admin: SupabaseClient, reminderId: string, recipientEmail: string, resendEmailId: string | null): Promise<void> {
+async function markReminderSent(
+  admin: SupabaseClient,
+  reminderId: string,
+  recipientEmail: string,
+  resendEmailId: string | null,
+  crmLeadEmailId: string | null
+): Promise<void> {
   await admin
     .from(REMINDER_TABLE)
     .update({
       status: "sent",
       recipient_email: recipientEmail,
       resend_email_id: resendEmailId,
+      crm_lead_email_id: crmLeadEmailId,
       sent_at: new Date().toISOString(),
       error_detail: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", reminderId);
+}
+
+// Records the reminder send on crm_lead_emails - the same delivery-
+// tracking table sendTrackedCrmEmail() (src/lib/send-crm-email.ts) writes
+// to for every other Growth CRM email - so it shows up on Email Tracking
+// (/admin/crm/emails) and the Resend webhook (src/app/api/webhooks/
+// resend/route.ts, which checks crm_lead_emails.resend_email_id) keeps
+// its delivered/opened/clicked/bounced/failed status current, instead of
+// the send being visible only on winsalot_appointment_reminders. Returns
+// null (and logs, never throws) on any failure here - the reminder itself
+// already sent successfully at this point and must still be marked sent,
+// so a tracking hiccup can't turn into a duplicate reminder on the next
+// cron run.
+async function recordCrmLeadEmail(
+  admin: SupabaseClient,
+  appt: WinsalotAppointmentRow,
+  reminderType: WinsalotReminderType,
+  resendEmailId: string,
+  subject: string,
+  sentAt: string
+): Promise<string | null> {
+  if (!appt.opportunity_id) return null;
+
+  const { data: tracked, error: trackingError } = await admin
+    .from("crm_lead_emails")
+    .insert({
+      opportunity_id: appt.opportunity_id,
+      agent_id: appt.assigned_agent_id,
+      resend_email_id: resendEmailId,
+      email_type: "appointment_reminder",
+      to_email: appt.email,
+      subject,
+      status: "sent",
+      status_at: sentAt,
+      sent_at: sentAt,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (trackingError || !tracked) {
+    console.error(`[winsalot-appointment-reminders] failed to record crm_lead_emails for appointment ${appt.id}:`, trackingError);
+    return null;
+  }
+
+  const hoursLabel = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
+  await admin.from("crm_activities").insert({
+    opportunity_id: appt.opportunity_id,
+    agent_id: appt.assigned_agent_id,
+    activity_type: "email",
+    notes: `Automatic ${hoursLabel} consultation reminder sent to ${appt.email}.`,
+    occurred_at: sentAt,
+  });
+
+  return tracked.id as string;
 }
 
 export type WinsalotReminderJobResultOutcome = "sent" | "failed" | "skipped_claimed_elsewhere" | "would_send";
@@ -215,7 +276,9 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
           continue;
         }
 
-        await markReminderSent(admin, reminderId, appt.email, sendResult.id);
+        const sentAt = new Date().toISOString();
+        const crmLeadEmailId = await recordCrmLeadEmail(admin, appt, reminderType, sendResult.id, email.subject, sentAt);
+        await markReminderSent(admin, reminderId, appt.email, sendResult.id, crmLeadEmailId);
         summary.sent++;
         summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "sent" });
       } catch (err) {

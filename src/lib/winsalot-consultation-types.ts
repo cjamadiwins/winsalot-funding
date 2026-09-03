@@ -135,6 +135,7 @@ export type WinsalotAppointmentReminderRow = {
   status: "sending" | "sent" | "failed";
   recipient_email: string | null;
   resend_email_id: string | null;
+  crm_lead_email_id: string | null;
   error_detail: string | null;
   attempt_count: number;
   sent_at: string | null;
