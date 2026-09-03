@@ -21,8 +21,10 @@ export default function AppointmentEmailActions({
   appointmentTime,
   timezone,
   latestEmail,
-  automaticReminderStatus,
-  automaticReminderError,
+  automaticReminderStatus24h,
+  automaticReminderError24h,
+  automaticReminderStatus1h,
+  automaticReminderError1h,
   isAdmin,
   onResend,
   onReminder,
@@ -40,17 +42,17 @@ export default function AppointmentEmailActions({
   // most recent appointment-email status to both administrators and the
   // assigned agent").
   latestEmail?: LeadgenEmailRow | null;
-  // Server-computed label for the automatic 24-hour reminder (brief
-  // "EMAIL TRACKING": "Show: Scheduled / Sent / Delivered / Bounced /
-  // Failed") - "Scheduled" means eligible and not yet claimed, "Not
-  // scheduled" means automatic reminders are off or this appointment
-  // isn't eligible (already past, too far out, or not Booked/Confirmed).
-  automaticReminderStatus?: string | null;
-  // The Resend/claim failure reason behind a "Failed"/"Bounced"
-  // automaticReminderStatus, shown as a hover tooltip on the badge -
-  // previously this text existed only in the database and server logs,
-  // never in the UI.
-  automaticReminderError?: string | null;
+  // Server-computed labels for the automatic 24-hour and 1-hour prospect
+  // reminders (brief "EMAIL TRACKING": "Show: Scheduled / Sent /
+  // Delivered / Bounced / Failed") - "Scheduled" means eligible and not
+  // yet claimed, "Not scheduled" means automatic reminders are off or
+  // this appointment isn't eligible (already past, too far out, or not
+  // Booked/Confirmed). Two independent slots, shown as two badges, since
+  // they can succeed/fail independently of each other.
+  automaticReminderStatus24h?: string | null;
+  automaticReminderError24h?: string | null;
+  automaticReminderStatus1h?: string | null;
+  automaticReminderError1h?: string | null;
   // Gates the "Count this as the 24-hour reminder" checkbox (brief
   // MANUAL CONTROLS: admin-only).
   isAdmin?: boolean;
@@ -91,12 +93,21 @@ export default function AppointmentEmailActions({
         </span>
       )}
 
-      {automaticReminderStatus && (
+      {automaticReminderStatus24h && (
         <span
           className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-          title={automaticReminderError ?? undefined}
+          title={automaticReminderError24h ?? undefined}
         >
-          Automatic reminder: {automaticReminderStatus}
+          Automatic 24h reminder: {automaticReminderStatus24h}
+        </span>
+      )}
+
+      {automaticReminderStatus1h && (
+        <span
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          title={automaticReminderError1h ?? undefined}
+        >
+          Automatic 1h reminder: {automaticReminderStatus1h}
         </span>
       )}
 

@@ -695,7 +695,7 @@ export type LeadgenBouncedEmailRow = {
 // Automatic 24-hour appointment reminders (supabase/migrations/0067_
 // leadgen_appointment_reminders.sql) - see lib/leadgen-appointment-reminders.ts
 // for the eligibility/claim/send logic that reads and writes this table.
-export const LEADGEN_APPOINTMENT_REMINDER_TYPES = ["24_hour_reminder"] as const;
+export const LEADGEN_APPOINTMENT_REMINDER_TYPES = ["24_hour_reminder", "1_hour_reminder"] as const;
 export type LeadgenAppointmentReminderType = (typeof LEADGEN_APPOINTMENT_REMINDER_TYPES)[number];
 
 export const LEADGEN_APPOINTMENT_REMINDER_STATUSES = ["sending", "sent", "failed"] as const;
@@ -787,9 +787,15 @@ export function leadgenAppointmentReminderErrorDetail(reminder: LeadgenAppointme
   return null;
 }
 
+// Two independent slots per appointment - the prospect now gets a
+// reminder both 24 hours and 1 hour before (mirroring the business
+// reminder and Growth CRM's own prospect reminder), each tracked and
+// displayed separately since they can succeed/fail independently.
 export type LeadgenAppointmentReminderStatusEntry = {
-  status: LeadgenAppointmentReminderDisplayStatus;
-  errorDetail: string | null;
+  status24h: LeadgenAppointmentReminderDisplayStatus;
+  errorDetail24h: string | null;
+  status1h: LeadgenAppointmentReminderDisplayStatus;
+  errorDetail1h: string | null;
 };
 
 // Automatic BUSINESS-facing appointment reminders (supabase/migrations/

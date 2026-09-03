@@ -641,8 +641,10 @@ export default function AppointmentsListClient({
                             appointmentTime={appt.appointment_time}
                             timezone={appt.timezone}
                             latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
-                            automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]?.status}
-                            automaticReminderError={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail}
+                            automaticReminderStatus24h={automaticReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                            automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                            automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                            automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
                             isAdmin
                             onResend={resendAppointmentNotificationAction}
                             onReminder={sendAppointmentReminderAction}

@@ -692,8 +692,10 @@ export default function LeadDetailClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={emails.find((e) => e.appointment_id === appt.id) ?? null}
-                        automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]?.status}
-                        automaticReminderError={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail}
+                        automaticReminderStatus24h={automaticReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                        automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                        automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                        automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
                         isAdmin={isAdmin}
                         onResend={actions.resendAppointmentNotification}
                         onReminder={actions.sendAppointmentReminder}
