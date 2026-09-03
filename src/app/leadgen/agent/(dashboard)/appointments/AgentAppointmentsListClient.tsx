@@ -9,7 +9,8 @@ import {
   LEADGEN_APPOINTMENT_STATUS_STYLES,
   LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES,
   type LeadgenAppointmentRow,
-  type LeadgenBusinessAppointmentReminderDisplayStatus,
+  type LeadgenAppointmentReminderStatusEntry,
+  type LeadgenBusinessAppointmentReminderStatusEntry,
   type LeadgenEmailRow,
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
@@ -39,8 +40,8 @@ export default function AgentAppointmentsListClient({
   // email address").
   leadContactByLeadId: Record<string, LeadContact>;
   latestEmailByAppointmentId: Record<string, LeadgenEmailRow>;
-  automaticReminderStatusByAppointmentId: Record<string, string>;
-  businessReminderStatusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderDisplayStatus>;
+  automaticReminderStatusByAppointmentId: Record<string, LeadgenAppointmentReminderStatusEntry>;
+  businessReminderStatusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderStatusEntry>;
   // Set by the agent dashboard's "My Results by Client" section via
   // ?client=<id> - pre-selects the Client filter below.
   initialClientFilter?: string;
@@ -142,10 +143,11 @@ export default function AgentAppointmentsListClient({
                     {businessReminderStatusByAppointmentId[appt.id] && (
                       <span
                         className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                          LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id]]
+                          LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                         }`}
+                        title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
                       >
-                        {businessReminderStatusByAppointmentId[appt.id]}
+                        {businessReminderStatusByAppointmentId[appt.id].status}
                       </span>
                     )}
                   </td>
@@ -167,7 +169,8 @@ export default function AgentAppointmentsListClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={latestEmailByAppointmentId[appt.id] ?? null}
-                        automaticReminderStatus={automaticReminderStatusByAppointmentId[appt.id]}
+                        automaticReminderStatus={automaticReminderStatusByAppointmentId[appt.id]?.status}
+                        automaticReminderError={automaticReminderStatusByAppointmentId[appt.id]?.errorDetail}
                         onResend={resendAppointmentNotificationAction}
                         onReminder={sendAppointmentReminderAction}
                       />

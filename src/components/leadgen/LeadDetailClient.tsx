@@ -21,6 +21,7 @@ import {
   resolveLeadgenEmailBranding,
   LEADGEN_CONSULTATION_CTA_LABEL,
   isMantraCollabClient,
+  type LeadgenAppointmentReminderStatusEntry,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -119,9 +120,10 @@ export default function LeadDetailClient({
   followUps: LeadgenFollowUpRow[];
   appointments: LeadgenAppointmentRow[];
   // Server-computed "Automatic reminder: Scheduled/Sent/Delivered/.../
-  // Not scheduled" label per appointment id (see
+  // Not scheduled" label (plus the failure reason behind a Failed/Bounced
+  // one, if any) per appointment id (see
   // fetchLeadgenAppointmentReminderStatusMap in lib/leadgen-appointment-reminders.ts).
-  automaticReminderStatusByAppointmentId?: Record<string, string>;
+  automaticReminderStatusByAppointmentId?: Record<string, LeadgenAppointmentReminderStatusEntry>;
   emails: LeadgenEmailRow[];
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
@@ -690,7 +692,8 @@ export default function LeadDetailClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={emails.find((e) => e.appointment_id === appt.id) ?? null}
-                        automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]}
+                        automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]?.status}
+                        automaticReminderError={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail}
                         isAdmin={isAdmin}
                         onResend={actions.resendAppointmentNotification}
                         onReminder={actions.sendAppointmentReminder}

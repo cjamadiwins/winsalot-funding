@@ -51,6 +51,8 @@ export default async function AgentAppointmentsPage({
     assignedAgentName: row.assigned_agent?.full_name || row.assigned_agent?.email || null,
     reminder24h: reminderStatusMap[row.id]?.reminder24h ?? "scheduled",
     reminder1h: reminderStatusMap[row.id]?.reminder1h ?? "scheduled",
+    reminder24hError: reminderStatusMap[row.id]?.reminder24hError ?? null,
+    reminder1hError: reminderStatusMap[row.id]?.reminder1hError ?? null,
   }));
 
   return (

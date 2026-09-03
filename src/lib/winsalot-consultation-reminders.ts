@@ -297,15 +297,32 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
 // "Sent" / "Failed" per reminder type, for the appointment's *current*
 // occurrence (a reschedule invalidates the previous occurrence's rows
 // for this purpose, same as leadgen's equivalent).
+export type WinsalotReminderStatusEntry = {
+  reminder24h: "scheduled" | "sent" | "failed";
+  reminder1h: "scheduled" | "sent" | "failed";
+  // The Resend/claim failure reason (winsalot_appointment_reminders.error_detail)
+  // for the failed reminder type, if any - null whenever that reminder
+  // isn't in a "failed" state. Lets the admin/agent appointment list show
+  // *why* a reminder failed instead of just a bare "Failed" badge.
+  reminder24hError: string | null;
+  reminder1hError: string | null;
+};
+
 export async function fetchWinsalotReminderStatusMap(
   supabase: SupabaseClient,
   appointments: Pick<WinsalotAppointmentRow, "id" | "status" | "appointment_start_at">[]
-): Promise<Record<string, { reminder24h: "scheduled" | "sent" | "failed"; reminder1h: "scheduled" | "sent" | "failed" }>> {
+): Promise<Record<string, WinsalotReminderStatusEntry>> {
   if (appointments.length === 0) return {};
 
   const appointmentIds = appointments.map((a) => a.id);
   const { data: reminderRows } = await supabase.from(REMINDER_TABLE).select("*").in("appointment_id", appointmentIds);
-  const reminders = (reminderRows ?? []) as { appointment_id: string; reminder_type: WinsalotReminderType; occurrence_key: string; status: string }[];
+  const reminders = (reminderRows ?? []) as {
+    appointment_id: string;
+    reminder_type: WinsalotReminderType;
+    occurrence_key: string;
+    status: string;
+    error_detail: string | null;
+  }[];
 
   const byAppointment = new Map<string, typeof reminders>();
   for (const r of reminders) {
@@ -314,7 +331,7 @@ export async function fetchWinsalotReminderStatusMap(
     byAppointment.set(r.appointment_id, list);
   }
 
-  const result: Record<string, { reminder24h: "scheduled" | "sent" | "failed"; reminder1h: "scheduled" | "sent" | "failed" }> = {};
+  const result: Record<string, WinsalotReminderStatusEntry> = {};
   for (const appt of appointments) {
     const occurrenceKey = winsalotAppointmentOccurrenceKey(appt.appointment_start_at);
     const current = (byAppointment.get(appt.id) ?? []).filter((r) => r.occurrence_key === occurrenceKey);
@@ -323,6 +340,8 @@ export async function fetchWinsalotReminderStatusMap(
     result[appt.id] = {
       reminder24h: (r24?.status as "sent" | "failed") ?? "scheduled",
       reminder1h: (r1?.status as "sent" | "failed") ?? "scheduled",
+      reminder24hError: r24?.status === "failed" ? (r24.error_detail ?? null) : null,
+      reminder1hError: r1?.status === "failed" ? (r1.error_detail ?? null) : null,
     };
   }
   return result;

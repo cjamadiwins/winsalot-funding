@@ -7,8 +7,10 @@ import {
   isValidEmail,
   leadgenAppointmentOccurrenceKey,
   leadgenAppointmentReminderDisplayStatus,
+  leadgenAppointmentReminderErrorDetail,
   type LeadgenAppointmentReminderRow,
   type LeadgenAppointmentReminderSettingsRow,
+  type LeadgenAppointmentReminderStatusEntry,
   type LeadgenAppointmentRow,
   type LeadgenEmailRow,
 } from "./leadgen-types";
@@ -446,7 +448,7 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
 export async function fetchLeadgenAppointmentReminderStatusMap(
   supabase: SupabaseClient,
   appointments: Pick<LeadgenAppointmentRow, "id" | "status" | "appointment_date" | "appointment_time" | "timezone">[]
-): Promise<Record<string, string>> {
+): Promise<Record<string, LeadgenAppointmentReminderStatusEntry>> {
   if (appointments.length === 0) return {};
 
   const settings = await fetchLeadgenAppointmentReminderSettings(supabase);
@@ -461,7 +463,7 @@ export async function fetchLeadgenAppointmentReminderStatusMap(
   const { data: emailRows } = emailIds.length ? await supabase.from("leadgen_emails").select("*").in("id", emailIds) : { data: [] as LeadgenEmailRow[] };
   const emailById = new Map(((emailRows ?? []) as LeadgenEmailRow[]).map((e) => [e.id, e]));
 
-  const statusByAppointmentId: Record<string, string> = {};
+  const statusByAppointmentId: Record<string, LeadgenAppointmentReminderStatusEntry> = {};
   for (const appt of appointments) {
     const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
     const reminder = reminderByAppointmentId.get(appt.id);
@@ -473,7 +475,10 @@ export async function fetchLeadgenAppointmentReminderStatusMap(
       (appt.status === "Booked" || appt.status === "Confirmed") &&
       zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone) > nowMs;
 
-    statusByAppointmentId[appt.id] = leadgenAppointmentReminderDisplayStatus(currentReminder, linkedEmail, isEligible);
+    statusByAppointmentId[appt.id] = {
+      status: leadgenAppointmentReminderDisplayStatus(currentReminder, linkedEmail, isEligible),
+      errorDetail: leadgenAppointmentReminderErrorDetail(currentReminder, linkedEmail),
+    };
   }
 
   return statusByAppointmentId;

@@ -775,6 +775,23 @@ export function leadgenAppointmentReminderDisplayStatus(
   return "Sending";
 }
 
+// The reason text behind a "Bounced"/"Failed" display status above - the
+// admin/agent UI previously only ever showed the bare status word with no
+// way to see *why* a reminder failed. Mirrors the same precedence
+// leadgenAppointmentReminderDisplayStatus uses (linked tracked-email row
+// first, then the reminder claim row's own error_detail).
+export function leadgenAppointmentReminderErrorDetail(reminder: LeadgenAppointmentReminderRow | null, linkedEmail: LeadgenEmailRow | null): string | null {
+  if (linkedEmail?.status === "bounced" || linkedEmail?.status === "complained") return linkedEmail.bounce_reason ?? null;
+  if (linkedEmail?.status === "failed") return linkedEmail.failure_reason ?? null;
+  if (reminder?.status === "failed") return reminder.error_detail ?? null;
+  return null;
+}
+
+export type LeadgenAppointmentReminderStatusEntry = {
+  status: LeadgenAppointmentReminderDisplayStatus;
+  errorDetail: string | null;
+};
+
 // Automatic BUSINESS-facing appointment reminders (supabase/migrations/
 // 0068_leadgen_business_appointment_reminders.sql) - reminds the CRM
 // client (e.g. Brent's Essentials, via leadgen_clients.contact_email)
@@ -852,6 +869,23 @@ export function leadgenBusinessAppointmentReminderDisplayStatus(
   if (reminder24h?.status === "failed") return "Failed";
   return "Scheduled";
 }
+
+// Same precedence as the display status above (1-hour slot's failure wins
+// if both somehow failed) - the actual Resend/claim error text behind a
+// "Failed" badge, previously never shown to an admin/agent at all.
+export function leadgenBusinessAppointmentReminderErrorDetail(
+  reminder24h: LeadgenBusinessAppointmentReminderRow | null,
+  reminder1h: LeadgenBusinessAppointmentReminderRow | null
+): string | null {
+  if (reminder1h?.status === "failed") return reminder1h.error_detail ?? null;
+  if (reminder24h?.status === "failed") return reminder24h.error_detail ?? null;
+  return null;
+}
+
+export type LeadgenBusinessAppointmentReminderStatusEntry = {
+  status: LeadgenBusinessAppointmentReminderDisplayStatus;
+  errorDetail: string | null;
+};
 
 // Small, self-contained province list (deliberately not shared with the
 // cleaning CRM's lib/provider-types.ts - see file header).
