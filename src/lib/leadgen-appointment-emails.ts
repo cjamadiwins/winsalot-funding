@@ -4,11 +4,11 @@ import { sendLeadgenEmail } from "./leadgen-email";
 import { isValidEmail, leadgenAppointmentOccurrenceKey, type LeadgenAppointmentRow } from "./leadgen-types";
 
 // "resend_confirmation" / "reminder" are the two manual buttons (brief
-// EMAIL FEATURES #4/#5). "auto_reminder" is the automatic 24-hour
-// reminder the cron job sends (brief "AUTOMATIC REMINDER") - same
-// underlying content shape, distinct subject/intro wording only, so both
-// paths share one builder instead of two competing ones.
-export type AppointmentEmailKind = "resend_confirmation" | "reminder" | "auto_reminder";
+// EMAIL FEATURES #4/#5). "auto_reminder" / "auto_reminder_1h" are the
+// automatic 24-hour and 1-hour reminders the cron jobs send - same
+// underlying content shape, distinct subject/intro wording only, so all
+// four share one builder instead of competing ones.
+export type AppointmentEmailKind = "resend_confirmation" | "reminder" | "auto_reminder" | "auto_reminder_1h";
 
 export type AppointmentEmailActionResult = {
   error?: string;
@@ -76,6 +76,8 @@ export function buildAppointmentEmailSubject(kind: AppointmentEmailKind, clientN
       // hardcoded to "Brent's Essentials" - clientName already resolves
       // to that for the one real client today.
       return `Reminder: Your Consultation with ${clientName} Is Tomorrow`;
+    case "auto_reminder_1h":
+      return `Reminder: Your Consultation with ${clientName} Starts in 1 Hour`;
     case "resend_confirmation":
     default:
       return `Your Consultation with ${clientName} is Confirmed`;
@@ -86,9 +88,11 @@ export function buildAppointmentEmailBody(appt: LeadgenAppointmentRow, contactNa
   const intro =
     kind === "auto_reminder"
       ? `This is a friendly reminder that your FREE 15-minute Business Growth Consultation with ${clientName} is coming up in about 24 hours.`
-      : kind === "reminder"
-        ? `This is a friendly reminder about your upcoming FREE 15-minute Business Growth Consultation with ${clientName}.`
-        : `This is a resend of your appointment confirmation for your FREE 15-minute Business Growth Consultation with ${clientName}. Your appointment has not changed.`;
+      : kind === "auto_reminder_1h"
+        ? `This is a friendly reminder that your FREE 15-minute Business Growth Consultation with ${clientName} is starting in about 1 hour.`
+        : kind === "reminder"
+          ? `This is a friendly reminder about your upcoming FREE 15-minute Business Growth Consultation with ${clientName}.`
+          : `This is a resend of your appointment confirmation for your FREE 15-minute Business Growth Consultation with ${clientName}. Your appointment has not changed.`;
 
   return [
     `Hi ${contactName || "there"},`,

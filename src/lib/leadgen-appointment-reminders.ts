@@ -11,6 +11,7 @@ import {
   type LeadgenAppointmentReminderRow,
   type LeadgenAppointmentReminderSettingsRow,
   type LeadgenAppointmentReminderStatusEntry,
+  type LeadgenAppointmentReminderType,
   type LeadgenAppointmentRow,
   type LeadgenEmailRow,
 } from "./leadgen-types";
@@ -35,6 +36,13 @@ const MAX_ATTEMPTS = 3;
 // vercel.json schedule (back to "*/15 * * * *") together - the claim
 // logic's duplicate prevention is unaffected either way.
 const WINDOW_SLACK_MINUTES = 12 * 60;
+
+// The new 1-hour prospect reminder (runLeadgenProspect1HourReminderJob,
+// below) is invoked every 15 minutes via Supabase pg_cron/pg_net (see
+// migration 0124) rather than Vercel's once-daily cron, so it uses the
+// same tight slack as the business/Growth CRM reminders instead of the
+// 24-hour reminder's 12-hour compensation for a daily cadence.
+const WINDOW_SLACK_MINUTES_1H = 20;
 
 // ---------------------------------------------------------------------
 // Time-zone-safe UTC conversion
@@ -157,23 +165,28 @@ export async function claimManualAppointmentReminderSlot(
 // Automatic reminder cron job (brief "AUTOMATIC REMINDER" / "SCHEDULING")
 // ---------------------------------------------------------------------
 
+// Shared by both the 24-hour and 1-hour prospect reminder jobs -
+// identical claim/retry logic, only the reminder_type differs, so a
+// single implementation keeps them from drifting apart. The unique
+// constraint on (appointment_id, reminder_type, occurrence_key) is what
+// actually guarantees only one caller ever wins a claim, even if a cron
+// invokes more than once or two requests race; reminder_type keeps the
+// two interval's claims fully independent of each other.
 async function claimAutomaticReminderSlot(
   admin: SupabaseClient,
   appointmentId: string,
   leadId: string | null,
+  reminderType: LeadgenAppointmentReminderType,
   occurrenceKey: string,
   scheduledAppointmentAtIso: string
 ): Promise<string | null> {
-  // First attempt: a brand-new claim for this occurrence. The unique
-  // constraint on (appointment_id, reminder_type, occurrence_key) is
-  // what actually guarantees only one caller ever wins this, even if
-  // Vercel invokes the cron more than once or two requests race.
+  // First attempt: a brand-new claim for this occurrence.
   const { data: inserted, error: insertError } = await admin
     .from(REMINDER_TABLE)
     .insert({
       appointment_id: appointmentId,
       lead_id: leadId,
-      reminder_type: "24_hour_reminder",
+      reminder_type: reminderType,
       occurrence_key: occurrenceKey,
       scheduled_appointment_at: scheduledAppointmentAtIso,
       status: "sending",
@@ -195,7 +208,7 @@ async function claimAutomaticReminderSlot(
   // attempt_count just read) is the atomic part: if two concurrent runs
   // both reach here, only one's UPDATE actually matches a row - the
   // other affects zero rows and safely returns null.
-  const { data: existing } = await admin.from(REMINDER_TABLE).select("id, status, attempt_count").eq("appointment_id", appointmentId).eq("reminder_type", "24_hour_reminder").eq("occurrence_key", occurrenceKey).maybeSingle();
+  const { data: existing } = await admin.from(REMINDER_TABLE).select("id, status, attempt_count").eq("appointment_id", appointmentId).eq("reminder_type", reminderType).eq("occurrence_key", occurrenceKey).maybeSingle();
 
   if (!existing || existing.status !== "failed" || existing.attempt_count >= MAX_ATTEMPTS) return null;
 
@@ -348,7 +361,7 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
       continue;
     }
 
-    const reminderId = await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, occurrenceKey, scheduledAppointmentAtIso);
+    const reminderId = await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "24_hour_reminder", occurrenceKey, scheduledAppointmentAtIso);
     if (!reminderId) {
       summary.skipped++;
       summary.results.push({
@@ -433,6 +446,181 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
 }
 
 // ---------------------------------------------------------------------
+// Automatic 1-HOUR prospect reminder (new: the prospect attending the
+// appointment previously only ever got a single reminder at
+// reminder_hours_before, default 24h - this adds a second, always-fixed
+// 1-hour-before reminder alongside it, matching the pattern the business
+// reminder (leadgen-business-appointment-reminders.ts) and Growth CRM's
+// own prospect reminder (winsalot-consultation-reminders.ts) already use.
+// Same table (leadgen_appointment_reminders), same claim/dedup/occurrence-
+// key machinery, same recipient resolution and settings gate as the
+// 24-hour job above - only the target hour, slack window, and email copy
+// differ, so this deliberately mirrors runLeadgenAppointmentReminderJob's
+// structure line for line rather than trying to unify the two into one
+// generic loop, keeping the working 24-hour job's code untouched and this
+// addition easy to verify in isolation.
+//
+// Invoked by Supabase pg_cron/pg_net every 15 minutes (migration 0124),
+// not the daily Vercel Cron the 24-hour job uses - a once-daily
+// invocation cannot meaningfully deliver a reminder "1 hour before".
+// ---------------------------------------------------------------------
+
+const HOURS_BEFORE_1H = 1;
+
+export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: boolean }): Promise<ReminderJobSummary> {
+  const dryRun = options?.dryRun ?? false;
+  const admin = getSupabaseAdmin();
+  const settings = await fetchLeadgenAppointmentReminderSettings(admin);
+
+  const nowMs = Date.now();
+  const slackMs = WINDOW_SLACK_MINUTES_1H * 60 * 1000;
+  const targetMs = nowMs + HOURS_BEFORE_1H * 60 * 60 * 1000;
+  const windowStartMs = targetMs - slackMs;
+  const windowEndMs = targetMs + slackMs;
+
+  const summary: ReminderJobSummary = {
+    dryRun,
+    automaticRemindersEnabled: settings.automatic_reminders_enabled,
+    windowStartUtc: new Date(windowStartMs).toISOString(),
+    windowEndUtc: new Date(windowEndMs).toISOString(),
+    candidatesScanned: 0,
+    eligible: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    results: [],
+  };
+
+  if (!settings.automatic_reminders_enabled && !dryRun) return summary;
+
+  const today = new Date(nowMs);
+  const { data: candidates, error: fetchError } = await admin
+    .from("leadgen_appointments")
+    .select("*")
+    .in("status", ["Booked", "Confirmed"])
+    .gte("appointment_date", isoDateNDaysFrom(today, -1))
+    .lte("appointment_date", isoDateNDaysFrom(today, 3));
+
+  if (fetchError) {
+    console.error("[leadgen-prospect-1hour-reminder] failed to fetch candidate appointments:", fetchError);
+    return summary;
+  }
+
+  const rows = (candidates ?? []) as LeadgenAppointmentRow[];
+  summary.candidatesScanned = rows.length;
+
+  const clientIds = Array.from(new Set(rows.map((appt) => appt.client_id)));
+  const { data: activeClientRows } = clientIds.length
+    ? await admin.from("leadgen_clients").select("id").in("id", clientIds).eq("active", true)
+    : { data: [] as { id: string }[] };
+  const activeClientIds = new Set((activeClientRows ?? []).map((c) => c.id));
+
+  for (const appt of rows) {
+    if (!activeClientIds.has(appt.client_id)) continue;
+    const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
+    if (scheduledMs < windowStartMs || scheduledMs > windowEndMs) continue;
+    if (scheduledMs <= nowMs) continue;
+
+    summary.eligible++;
+    const scheduledAppointmentAtIso = new Date(scheduledMs).toISOString();
+    const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
+
+    if (dryRun) {
+      const recipient = await resolveAppointmentEmailRecipient(admin, appt);
+      summary.results.push({
+        appointmentId: appt.id,
+        leadId: appt.lead_id,
+        businessName: appt.business_name,
+        scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
+        timezone: appt.timezone,
+        recipientEmail: recipient.recipientEmail,
+        outcome: "would_send",
+      });
+      continue;
+    }
+
+    const reminderId = await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "1_hour_reminder", occurrenceKey, scheduledAppointmentAtIso);
+    if (!reminderId) {
+      summary.skipped++;
+      summary.results.push({
+        appointmentId: appt.id,
+        leadId: appt.lead_id,
+        businessName: appt.business_name,
+        scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
+        timezone: appt.timezone,
+        recipientEmail: null,
+        outcome: "skipped_claimed_elsewhere",
+      });
+      continue;
+    }
+
+    const recipient = await resolveAppointmentEmailRecipient(admin, appt);
+    const resultBase = {
+      appointmentId: appt.id,
+      leadId: appt.lead_id,
+      businessName: recipient.businessName,
+      scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
+      timezone: appt.timezone,
+    };
+
+    if (!recipient.recipientEmail) {
+      await markReminderFailed(admin, reminderId, "No email address on file.");
+      summary.failed++;
+      summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_no_email", error: "No email address on file." });
+      continue;
+    }
+    if (!isValidEmail(recipient.recipientEmail)) {
+      await markReminderFailed(admin, reminderId, "Saved email address is invalid.");
+      summary.failed++;
+      summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "skipped_invalid_email", error: "Saved email address is invalid." });
+      continue;
+    }
+
+    const subject = buildAppointmentEmailSubject("auto_reminder_1h", recipient.clientName);
+    const body = buildAppointmentEmailBody(appt, recipient.recipientName, recipient.businessName, recipient.clientName, "auto_reminder_1h");
+
+    const sendResult = await sendLeadgenEmail(admin, {
+      clientId: appt.client_id,
+      campaignId: appt.campaign_id,
+      leadId: appt.lead_id,
+      appointmentId: appt.id,
+      templateKey: null,
+      toEmail: recipient.recipientEmail,
+      toName: recipient.recipientName,
+      subject,
+      body,
+      sentBy: null,
+      clientVisible: false,
+      senderDisplayNameOverride: settings.sender_name,
+      replyToOverride: settings.reply_to_email,
+    });
+
+    if (sendResult.error) {
+      await markReminderFailed(admin, reminderId, sendResult.error);
+      summary.failed++;
+      summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "failed", error: sendResult.error });
+      continue;
+    }
+
+    await markReminderSent(admin, reminderId, recipient.recipientEmail, sendResult.emailId);
+
+    if (appt.lead_id) {
+      await admin.from("leadgen_lead_activities").insert({
+        lead_id: appt.lead_id,
+        agent_id: null,
+        activity_type: "appointment_reminder_auto_sent",
+        notes: `Automatic 1-hour appointment reminder sent to ${recipient.recipientEmail}. Appointment: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone}).`,
+      });
+    }
+
+    summary.sent++;
+    summary.results.push({ ...resultBase, recipientEmail: recipient.recipientEmail, outcome: "sent" });
+  }
+
+  return summary;
+}
+
+// ---------------------------------------------------------------------
 // Display status for the UI (brief EMAIL TRACKING: "Show: Scheduled /
 // Sent / Delivered / Bounced / Failed... visible to both administrators
 // and the assigned agent")
@@ -457,7 +645,16 @@ export async function fetchLeadgenAppointmentReminderStatusMap(
 
   const { data: reminderRows } = await supabase.from(REMINDER_TABLE).select("*").in("appointment_id", appointmentIds);
   const reminders = (reminderRows ?? []) as LeadgenAppointmentReminderRow[];
-  const reminderByAppointmentId = new Map(reminders.map((r) => [r.appointment_id, r]));
+
+  // Two rows can exist per appointment now (one per reminder_type), so
+  // group by appointment id and pick out each type below rather than
+  // collapsing to one row per appointment.
+  const remindersByAppointmentId = new Map<string, LeadgenAppointmentReminderRow[]>();
+  for (const r of reminders) {
+    const list = remindersByAppointmentId.get(r.appointment_id) ?? [];
+    list.push(r);
+    remindersByAppointmentId.set(r.appointment_id, list);
+  }
 
   const emailIds = reminders.map((r) => r.email_id).filter((id): id is string => !!id);
   const { data: emailRows } = emailIds.length ? await supabase.from("leadgen_emails").select("*").in("id", emailIds) : { data: [] as LeadgenEmailRow[] };
@@ -466,9 +663,11 @@ export async function fetchLeadgenAppointmentReminderStatusMap(
   const statusByAppointmentId: Record<string, LeadgenAppointmentReminderStatusEntry> = {};
   for (const appt of appointments) {
     const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
-    const reminder = reminderByAppointmentId.get(appt.id);
-    const currentReminder = reminder && reminder.occurrence_key === occurrenceKey ? reminder : null;
-    const linkedEmail = currentReminder?.email_id ? (emailById.get(currentReminder.email_id) ?? null) : null;
+    const currentReminders = (remindersByAppointmentId.get(appt.id) ?? []).filter((r) => r.occurrence_key === occurrenceKey);
+    const reminder24h = currentReminders.find((r) => r.reminder_type === "24_hour_reminder") ?? null;
+    const reminder1h = currentReminders.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
+    const linkedEmail24h = reminder24h?.email_id ? (emailById.get(reminder24h.email_id) ?? null) : null;
+    const linkedEmail1h = reminder1h?.email_id ? (emailById.get(reminder1h.email_id) ?? null) : null;
 
     const isEligible =
       settings.automatic_reminders_enabled &&
@@ -476,8 +675,10 @@ export async function fetchLeadgenAppointmentReminderStatusMap(
       zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone) > nowMs;
 
     statusByAppointmentId[appt.id] = {
-      status: leadgenAppointmentReminderDisplayStatus(currentReminder, linkedEmail, isEligible),
-      errorDetail: leadgenAppointmentReminderErrorDetail(currentReminder, linkedEmail),
+      status24h: leadgenAppointmentReminderDisplayStatus(reminder24h, linkedEmail24h, isEligible),
+      errorDetail24h: leadgenAppointmentReminderErrorDetail(reminder24h, linkedEmail24h),
+      status1h: leadgenAppointmentReminderDisplayStatus(reminder1h, linkedEmail1h, isEligible),
+      errorDetail1h: leadgenAppointmentReminderErrorDetail(reminder1h, linkedEmail1h),
     };
   }
 
