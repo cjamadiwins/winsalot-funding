@@ -334,7 +334,9 @@ just fire-and-forget:
      retried delivery never double-logs.
   2. Updates the matching `crm_lead_emails` row's per-event timestamp column
      (`sent_at`/`delivered_at`/.../`failed_at`) and, only if the event isn't older than what's
-     already recorded, its `status`/`status_at`.
+     already recorded, its `status`/`status_at`. `email.bounced`/`email.failed` also record Resend's
+     own human-readable reason in `bounce_reason`/`failure_reason` (migration 0122), shown in the
+     Email Tracking page's "View Details" panel.
   3. Mirrors that status onto `crm_leads.last_email_status` / `last_email_status_at` — but only
      when this is the lead's most recently sent tracked email, so a late webhook for an older
      email can never overwrite what a newer email already reported.
@@ -363,13 +365,18 @@ just fire-and-forget:
   telling the agent to verify/correct the address (bounced) or check the reason before retrying
   (failed); a complaint tells them to consider not emailing that lead again.
 - **Admin-wide view** — **`/admin/crm/emails`** ("Email Tracking" in the admin nav) lists every
-  quote-request/follow-up email sent to a customer lead, newest first: recipient name, email
-  address, type, sent agent, sent date/time, and current status badge, each linking back to the
-  lead. It's a second, read-only view over the same `crm_lead_emails` rows `EmailStatusPanel`
-  already reads (service-role, scoped to `lead_id is not null` so it only ever shows customer
-  emails, not the provider-targeted rows the same table also holds — see migrations 0026/0028) —
-  it doesn't add any new tracking, writes, or Resend/webhook behavior of its own. Same pattern as
-  the Lead Generation CRM's own `/leadgen/admin/emails` page.
+  follow-up email sent to an opportunity's contact, newest first, through the shared
+  `EmailTrackingTable` component (`src/components/crm-ui/EmailTrackingTable.tsx`) also used by the
+  Lead Generation CRM's `/leadgen/admin/emails`. Five columns stay visible with no page-wide
+  horizontal scrolling on a standard laptop width — Sent, Lead/Business, Recipient, (shortened)
+  Subject, Delivery Status — with a search box and status filter above the table; everything else
+  (full subject, sender/agent, Resend id, delivered/opened/clicked timestamps, bounce/failure
+  reason) lives behind a per-row "View" toggle. Below the `md` breakpoint each email renders as a
+  stacked card instead of a table row. It's a second, read-only view over the same `crm_lead_emails`
+  rows `EmailStatusPanel` already reads (service-role, scoped to `opportunity_id is not null` so it
+  only ever shows opportunity-targeted sends, not the historical `lead_id` rows or the
+  provider-targeted rows the same table also holds — see migrations 0026/0028/0085) — it doesn't
+  add any new tracking, writes, or Resend/webhook behavior of its own.
 
 ### Setting up the Resend webhook
 
