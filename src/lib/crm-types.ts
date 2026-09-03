@@ -149,14 +149,19 @@ export const EMAIL_STATUS_LABELS: Record<EmailEventStatus, string> = {
   failed: "Failed",
 };
 
+// Color-coded per the Email Tracking design spec: Sent blue, Delivered
+// green, Opened purple, Clicked teal, Bounced/Complained/Failed red.
+// Delayed isn't in that spec (Resend's email.delivery_delayed has no
+// bucket there) - amber keeps it visually distinct from both the
+// "still going" statuses and the red failure ones.
 export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
-  sent: "bg-slate-100 text-slate-700",
-  delivered: "bg-sky-100 text-sky-800",
+  sent: "bg-sky-100 text-sky-800",
+  delivered: "bg-emerald-100 text-emerald-800",
   delayed: "bg-amber-100 text-amber-800",
   bounced: "bg-rose-100 text-rose-800",
   complained: "bg-rose-100 text-rose-800",
-  opened: "bg-emerald-100 text-emerald-800",
-  clicked: "bg-purple-100 text-purple-800",
+  opened: "bg-purple-100 text-purple-800",
+  clicked: "bg-teal-100 text-teal-800",
   failed: "bg-rose-100 text-rose-800",
 };
 
@@ -244,6 +249,8 @@ export type CrmLeadEmailRow = {
   opened_at: string | null;
   clicked_at: string | null;
   failed_at: string | null;
+  bounce_reason: string | null;
+  failure_reason: string | null;
 };
 
 // Display-safe subset of CrmLeadEmailRow for an opportunity's most

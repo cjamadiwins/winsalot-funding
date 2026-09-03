@@ -601,17 +601,23 @@ export type LeadgenEmailTemplateRow = {
 export const LEADGEN_EMAIL_STATUSES = ["draft", "sending", "sent", "delivered", "delayed", "bounced", "complained", "opened", "clicked", "failed"] as const;
 export type LeadgenEmailStatus = (typeof LEADGEN_EMAIL_STATUSES)[number];
 
+// Color-coded to match the Growth CRM's EMAIL_STATUS_STYLES (crm-types.ts)
+// so both CRMs' Email Tracking pages read the same way: Sent blue,
+// Delivered green, Opened purple, Clicked teal, Bounced/Complained/Failed
+// red. draft/sending are Lead Gen-only pre-send states with no Resend
+// event yet, styled grey like a "Queued" badge; delayed isn't in the spec
+// so it keeps its own amber.
 export const LEADGEN_EMAIL_STATUS_STYLES: Record<LeadgenEmailStatus, string> = {
   draft: "bg-slate-100 text-slate-600",
-  sending: "bg-amber-100 text-amber-800",
+  sending: "bg-slate-100 text-slate-600",
   sent: "bg-sky-100 text-sky-800",
   delivered: "bg-emerald-100 text-emerald-800",
   delayed: "bg-amber-100 text-amber-800",
   bounced: "bg-rose-100 text-rose-800",
-  complained: "bg-rose-200 text-rose-900",
-  opened: "bg-cyan-100 text-cyan-800",
-  clicked: "bg-indigo-100 text-indigo-800",
-  failed: "bg-rose-200 text-rose-900",
+  complained: "bg-rose-100 text-rose-800",
+  opened: "bg-purple-100 text-purple-800",
+  clicked: "bg-teal-100 text-teal-800",
+  failed: "bg-rose-100 text-rose-800",
 };
 
 // Display label shown in the UI - distinct from the raw DB value for

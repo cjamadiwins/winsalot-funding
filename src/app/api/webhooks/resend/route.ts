@@ -450,6 +450,8 @@ export async function POST(request: NextRequest) {
   const isNewer = new Date(eventAt) >= new Date(tracked.status_at);
 
   const updates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+  if (event.type === "email.bounced") updates.bounce_reason = event.data.bounce.message;
+  if (event.type === "email.failed") updates.failure_reason = event.data.failed.reason;
   if (isNewer) {
     updates.status = status;
     updates.status_at = eventAt;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import EmailTrackingTable, { type EmailTrackingRecord } from "@/components/crm-ui/EmailTrackingTable";
 import {
   EMAIL_STATUS_LABELS,
   EMAIL_STATUS_STYLES,
@@ -20,7 +21,8 @@ import {
 // provider-targeted rows the same table also holds (migrations 0026/0028)
 // - those aren't part of this view. Same admin-only, service-role-read
 // pattern already used by the Lead Generation CRM's own Email Tracking
-// page (/leadgen/admin/emails).
+// page (/leadgen/admin/emails), and the same EmailTrackingTable component
+// so both pages look and behave the same way.
 export default async function AdminCrmEmailsPage() {
   await requireCrmAdmin();
   const admin = getSupabaseAdmin();
@@ -38,6 +40,43 @@ export default async function AdminCrmEmailsPage() {
 
   const opportunityById = new Map((opportunities ?? []).map((o) => [o.id, o] as const));
   const agentById = new Map((agents ?? []).map((a) => [a.id, a] as const));
+
+  const records: EmailTrackingRecord[] = ((emails ?? []) as CrmLeadEmailRow[]).map((email) => {
+    const opportunity = email.opportunity_id
+      ? (opportunityById.get(email.opportunity_id) as Pick<CrmOpportunityRow, "id" | "business_name" | "contact_name"> | undefined)
+      : undefined;
+    const agent = email.agent_id ? (agentById.get(email.agent_id) as Pick<CrmUserRow, "id" | "full_name" | "email"> | undefined) : undefined;
+    const senderLabel = agent ? agent.full_name || agent.email : email.agent_id ? "Removed User" : "—";
+
+    return {
+      id: email.id,
+      sentAt: email.sent_at ?? email.created_at,
+      entityLabel: opportunity?.business_name ?? null,
+      entityHref: opportunity ? `/admin/crm/opportunities/${opportunity.id}` : null,
+      entityEmptyLabel: "No opportunity",
+      recipientEmail: email.to_email,
+      recipientName: opportunity?.contact_name ?? null,
+      subject: email.subject,
+      status: {
+        value: email.status,
+        label: EMAIL_STATUS_LABELS[email.status],
+        className: EMAIL_STATUS_STYLES[email.status],
+      },
+      details: [
+        { label: "Full Subject", value: email.subject },
+        { label: "Type", value: EMAIL_TYPE_LABELS[email.email_type] },
+        { label: "Sender / Agent", value: senderLabel },
+        { label: "Resend ID", value: email.resend_email_id },
+        { label: "Delivered", value: email.delivered_at ? new Date(email.delivered_at).toLocaleString() : "—" },
+        { label: "Opened", value: email.opened_at ? new Date(email.opened_at).toLocaleString() : "—" },
+        { label: "Clicked", value: email.clicked_at ? new Date(email.clicked_at).toLocaleString() : "—" },
+        {
+          label: "Failure / Bounce Reason",
+          value: email.bounce_reason || email.failure_reason || "—",
+        },
+      ],
+    };
+  });
 
   return (
     <div>
@@ -59,71 +98,8 @@ export default async function AdminCrmEmailsPage() {
       )}
 
       {!error && (
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          {!emails || emails.length === 0 ? (
-            <p className="text-[13.5px] text-slate-500">No tracked emails yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                    <th className="py-2 pr-3">Sent At</th>
-                    <th className="py-2 pr-3">Recipient</th>
-                    <th className="py-2 pr-3">Email Address</th>
-                    <th className="py-2 pr-3">Type</th>
-                    <th className="py-2 pr-3">Sent By</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3">Status Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(emails as CrmLeadEmailRow[]).map((email) => {
-                    const opportunity = email.opportunity_id
-                      ? (opportunityById.get(email.opportunity_id) as
-                          | Pick<CrmOpportunityRow, "id" | "business_name" | "contact_name">
-                          | undefined)
-                      : undefined;
-                    const agent = email.agent_id
-                      ? (agentById.get(email.agent_id) as Pick<CrmUserRow, "id" | "full_name" | "email"> | undefined)
-                      : undefined;
-
-                    return (
-                      <tr key={email.id} className="border-b border-slate-100 align-top">
-                        <td className="py-2 pr-3 text-slate-600">
-                          {new Date(email.sent_at ?? email.created_at).toLocaleString()}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {opportunity ? (
-                            <Link
-                              href={`/admin/crm/opportunities/${opportunity.id}`}
-                              className="font-medium text-sky-600 hover:text-sky-700"
-                            >
-                              {opportunity.contact_name || opportunity.business_name}
-                            </Link>
-                          ) : (
-                            <span className="text-slate-500">No opportunity</span>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 text-slate-700">{email.to_email}</td>
-                        <td className="py-2 pr-3 text-slate-700">{EMAIL_TYPE_LABELS[email.email_type]}</td>
-                        <td className="py-2 pr-3 text-slate-700">
-                          {agent ? agent.full_name || agent.email : email.agent_id ? "Removed User" : "—"}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${EMAIL_STATUS_STYLES[email.status]}`}
-                          >
-                            {EMAIL_STATUS_LABELS[email.status]}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-3 text-slate-500">{new Date(email.status_at).toLocaleString()}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <section className="mt-6 min-w-0 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <EmailTrackingTable records={records} />
         </section>
       )}
     </div>
