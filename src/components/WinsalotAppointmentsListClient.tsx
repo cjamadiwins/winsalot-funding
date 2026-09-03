@@ -22,6 +22,8 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   assignedAgentName: string | null;
   reminder24h: "scheduled" | "sent" | "failed";
   reminder1h: "scheduled" | "sent" | "failed";
+  reminder24hError: string | null;
+  reminder1hError: string | null;
 };
 
 export type WinsalotAppointmentActions = {
@@ -212,8 +214,18 @@ export default function WinsalotAppointmentsListClient({
                   {appt.assignedAgentName || "Unassigned"}
                 </p>
                 <p className="mt-0.5 flex flex-wrap gap-1.5 text-[11px]">
-                  <span className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder24h]}`}>24h: {REMINDER_LABEL[appt.reminder24h]}</span>
-                  <span className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder1h]}`}>1h: {REMINDER_LABEL[appt.reminder1h]}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder24h]}`}
+                    title={appt.reminder24hError ?? undefined}
+                  >
+                    24h: {REMINDER_LABEL[appt.reminder24h]}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder1h]}`}
+                    title={appt.reminder1hError ?? undefined}
+                  >
+                    1h: {REMINDER_LABEL[appt.reminder1h]}
+                  </span>
                 </p>
                 {appt.status === "cancelled" && (
                   <p className="mt-1 text-[12.5px] text-rose-600">

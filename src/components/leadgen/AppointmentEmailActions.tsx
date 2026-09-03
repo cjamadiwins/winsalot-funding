@@ -22,6 +22,7 @@ export default function AppointmentEmailActions({
   timezone,
   latestEmail,
   automaticReminderStatus,
+  automaticReminderError,
   isAdmin,
   onResend,
   onReminder,
@@ -45,6 +46,11 @@ export default function AppointmentEmailActions({
   // scheduled" means automatic reminders are off or this appointment
   // isn't eligible (already past, too far out, or not Booked/Confirmed).
   automaticReminderStatus?: string | null;
+  // The Resend/claim failure reason behind a "Failed"/"Bounced"
+  // automaticReminderStatus, shown as a hover tooltip on the badge -
+  // previously this text existed only in the database and server logs,
+  // never in the UI.
+  automaticReminderError?: string | null;
   // Gates the "Count this as the 24-hour reminder" checkbox (brief
   // MANUAL CONTROLS: admin-only).
   isAdmin?: boolean;
@@ -86,7 +92,10 @@ export default function AppointmentEmailActions({
       )}
 
       {automaticReminderStatus && (
-        <span className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+        <span
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          title={automaticReminderError ?? undefined}
+        >
           Automatic reminder: {automaticReminderStatus}
         </span>
       )}

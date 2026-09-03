@@ -6,12 +6,13 @@ import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
 import {
   leadgenAppointmentOccurrenceKey,
   leadgenBusinessAppointmentReminderDisplayStatus,
+  leadgenBusinessAppointmentReminderErrorDetail,
   resolveAppointmentNotificationRecipients,
   type LeadgenAppointmentNotificationRecipient,
   type LeadgenAppointmentRow,
-  type LeadgenBusinessAppointmentReminderDisplayStatus,
   type LeadgenBusinessAppointmentReminderRow,
   type LeadgenBusinessAppointmentReminderSettingsRow,
+  type LeadgenBusinessAppointmentReminderStatusEntry,
   type LeadgenBusinessAppointmentReminderType,
 } from "./leadgen-types";
 
@@ -432,7 +433,7 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
 export async function fetchLeadgenBusinessAppointmentReminderStatusMap(
   supabase: SupabaseClient,
   appointments: Pick<LeadgenAppointmentRow, "id" | "status" | "appointment_date" | "appointment_time">[]
-): Promise<Record<string, LeadgenBusinessAppointmentReminderDisplayStatus>> {
+): Promise<Record<string, LeadgenBusinessAppointmentReminderStatusEntry>> {
   if (appointments.length === 0) return {};
 
   const appointmentIds = appointments.map((a) => a.id);
@@ -446,7 +447,7 @@ export async function fetchLeadgenBusinessAppointmentReminderStatusMap(
     remindersByAppointmentId.set(r.appointment_id, list);
   }
 
-  const statusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderDisplayStatus> = {};
+  const statusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderStatusEntry> = {};
   for (const appt of appointments) {
     const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
     const currentReminders = (remindersByAppointmentId.get(appt.id) ?? []).filter((r) => r.occurrence_key === occurrenceKey);
@@ -454,7 +455,10 @@ export async function fetchLeadgenBusinessAppointmentReminderStatusMap(
     const reminder1h = currentReminders.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
     const isCurrentlyBookedOrConfirmed = ELIGIBLE_STATUSES.includes(appt.status);
 
-    statusByAppointmentId[appt.id] = leadgenBusinessAppointmentReminderDisplayStatus(isCurrentlyBookedOrConfirmed, reminder24h, reminder1h);
+    statusByAppointmentId[appt.id] = {
+      status: leadgenBusinessAppointmentReminderDisplayStatus(isCurrentlyBookedOrConfirmed, reminder24h, reminder1h),
+      errorDetail: leadgenBusinessAppointmentReminderErrorDetail(reminder24h, reminder1h),
+    };
   }
 
   return statusByAppointmentId;

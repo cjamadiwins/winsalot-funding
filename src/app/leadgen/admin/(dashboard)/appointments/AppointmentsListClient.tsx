@@ -14,7 +14,8 @@ import {
   LEADGEN_MEETING_TYPES,
   isLeadgenAppointmentCountable,
   type LeadgenAppointmentReminderSettingsRow,
-  type LeadgenBusinessAppointmentReminderDisplayStatus,
+  type LeadgenAppointmentReminderStatusEntry,
+  type LeadgenBusinessAppointmentReminderStatusEntry,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -64,12 +65,13 @@ export default function AppointmentsListClient({
   // status badge.
   latestEmailByAppointmentId?: Record<string, LeadgenEmailRow>;
   // "Automatic reminder: Scheduled/Sent/Delivered/.../Not scheduled"
-  // label per appointment id (brief EMAIL TRACKING).
-  automaticReminderStatusByAppointmentId?: Record<string, string>;
+  // label (plus the failure reason behind a Failed/Bounced one) per
+  // appointment id (brief EMAIL TRACKING).
+  automaticReminderStatusByAppointmentId?: Record<string, LeadgenAppointmentReminderStatusEntry>;
   // "Business Reminder: Scheduled/Sent/Failed/Cancelled" - the
   // client-facing (e.g. Brent's Essentials) 24-hour + 1-hour reminder
   // status, distinct from the prospect-facing one above.
-  businessReminderStatusByAppointmentId?: Record<string, LeadgenBusinessAppointmentReminderDisplayStatus>;
+  businessReminderStatusByAppointmentId?: Record<string, LeadgenBusinessAppointmentReminderStatusEntry>;
   // Current leadgen_appointment_reminder_settings row (brief "ADMIN
   // SETTINGS").
   reminderSettings: LeadgenAppointmentReminderSettingsRow;
@@ -585,10 +587,11 @@ export default function AppointmentsListClient({
                       {businessReminderStatusByAppointmentId?.[appt.id] && (
                         <span
                           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id]]
+                            LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                           }`}
+                          title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
                         >
-                          {businessReminderStatusByAppointmentId[appt.id]}
+                          {businessReminderStatusByAppointmentId[appt.id].status}
                         </span>
                       )}
                     </td>
@@ -638,7 +641,8 @@ export default function AppointmentsListClient({
                             appointmentTime={appt.appointment_time}
                             timezone={appt.timezone}
                             latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
-                            automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]}
+                            automaticReminderStatus={automaticReminderStatusByAppointmentId?.[appt.id]?.status}
+                            automaticReminderError={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail}
                             isAdmin
                             onResend={resendAppointmentNotificationAction}
                             onReminder={sendAppointmentReminderAction}
