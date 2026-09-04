@@ -101,6 +101,7 @@ function isoDateNDaysFrom(base: Date, days: number): string {
 const DEFAULT_SETTINGS: LeadgenAppointmentReminderSettingsRow = {
   id: SETTINGS_ID,
   automatic_reminders_enabled: false,
+  automatic_sms_reminders_enabled: false,
   reminder_hours_before: 24,
   sender_name: "Winsalot Corp.",
   reply_to_email: "info@winsalotcorp.com",
@@ -115,7 +116,12 @@ export async function fetchLeadgenAppointmentReminderSettings(supabase: Supabase
 
 export async function updateLeadgenAppointmentReminderSettings(
   supabase: SupabaseClient,
-  updates: Partial<Pick<LeadgenAppointmentReminderSettingsRow, "automatic_reminders_enabled" | "reminder_hours_before" | "sender_name" | "reply_to_email">>,
+  updates: Partial<
+    Pick<
+      LeadgenAppointmentReminderSettingsRow,
+      "automatic_reminders_enabled" | "automatic_sms_reminders_enabled" | "reminder_hours_before" | "sender_name" | "reply_to_email"
+    >
+  >,
   updatedByName: string
 ): Promise<{ error?: string }> {
   const { error } = await supabase
@@ -282,6 +288,7 @@ export type SmsReminderJobResult = {
 export type ReminderJobSummary = {
   dryRun: boolean;
   automaticRemindersEnabled: boolean;
+  automaticSmsRemindersEnabled: boolean;
   windowStartUtc: string;
   windowEndUtc: string;
   candidatesScanned: number;
@@ -372,6 +379,7 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
   const summary: ReminderJobSummary = {
     dryRun,
     automaticRemindersEnabled: settings.automatic_reminders_enabled,
+    automaticSmsRemindersEnabled: settings.automatic_sms_reminders_enabled,
     windowStartUtc: new Date(windowStartMs).toISOString(),
     windowEndUtc: new Date(windowEndMs).toISOString(),
     candidatesScanned: 0,
@@ -386,12 +394,15 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
     smsResults: [],
   };
 
-  // The toggle only gates the automatic cron path - a dry run always
-  // computes what *would* happen so an admin/tester can verify targeting
-  // before flipping it on. SMS shares this exact same gate (and the
-  // exact same eligibility window computed below) - there is no separate
-  // "automatic SMS reminders enabled" setting.
-  if (!settings.automatic_reminders_enabled && !dryRun) return summary;
+  // Each channel has its own independent toggle (migration 0126) - a dry
+  // run always computes what *would* happen on both regardless of either
+  // toggle, so an admin/tester can verify targeting before flipping
+  // either one on. The whole job only short-circuits (skipping even the
+  // database query below) when neither channel is enabled and this isn't
+  // a dry run - if only one channel is on, the job still runs and the
+  // other channel is simply never claimed/sent for any appointment (see
+  // the per-channel checks below).
+  if (!settings.automatic_reminders_enabled && !settings.automatic_sms_reminders_enabled && !dryRun) return summary;
 
   // Coarse prefilter in the database: appointment_date within
   // [today-1, today+3] safely covers every IANA zone's wall-clock date
@@ -451,8 +462,16 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
         outcome: "would_send",
       });
     } else {
-      const reminderId = await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "24_hour_reminder", occurrenceKey, scheduledAppointmentAtIso);
-      if (!reminderId) {
+      const reminderId = settings.automatic_reminders_enabled
+        ? await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "24_hour_reminder", occurrenceKey, scheduledAppointmentAtIso)
+        : null;
+      // automatic_reminders_enabled off -> reminderId is always null here,
+      // which already reads as "skipped_claimed_elsewhere" below. That
+      // reads oddly for "channel disabled" specifically, so the disabled
+      // case is called out on its own instead of falling into that branch.
+      if (!settings.automatic_reminders_enabled) {
+        // Email channel off - nothing claimed, nothing sent, nothing logged.
+      } else if (!reminderId) {
         summary.skipped++;
         summary.results.push({
           appointmentId: appt.id,
@@ -526,8 +545,11 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
       }
     }
 
-    // ---- SMS (new - independent of every email outcome above) ----
-    await recordLeadgenAppointmentSms(admin, summary, appt, "24_hour_reminder", occurrenceKey, scheduledMs, scheduledAppointmentAtIso, recipient.businessName, dryRun);
+    // ---- SMS (new - independent of every email outcome above, gated on
+    // its own automatic_sms_reminders_enabled toggle rather than email's). ----
+    if (dryRun || settings.automatic_sms_reminders_enabled) {
+      await recordLeadgenAppointmentSms(admin, summary, appt, "24_hour_reminder", occurrenceKey, scheduledMs, scheduledAppointmentAtIso, recipient.businessName, dryRun);
+    }
   }
 
   return summary;
@@ -569,6 +591,7 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
   const summary: ReminderJobSummary = {
     dryRun,
     automaticRemindersEnabled: settings.automatic_reminders_enabled,
+    automaticSmsRemindersEnabled: settings.automatic_sms_reminders_enabled,
     windowStartUtc: new Date(windowStartMs).toISOString(),
     windowEndUtc: new Date(windowEndMs).toISOString(),
     candidatesScanned: 0,
@@ -583,7 +606,7 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
     smsResults: [],
   };
 
-  if (!settings.automatic_reminders_enabled && !dryRun) return summary;
+  if (!settings.automatic_reminders_enabled && !settings.automatic_sms_reminders_enabled && !dryRun) return summary;
 
   const today = new Date(nowMs);
   const { data: candidates, error: fetchError } = await admin
@@ -631,8 +654,12 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
         outcome: "would_send",
       });
     } else {
-      const reminderId = await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "1_hour_reminder", occurrenceKey, scheduledAppointmentAtIso);
-      if (!reminderId) {
+      const reminderId = settings.automatic_reminders_enabled
+        ? await claimAutomaticReminderSlot(admin, appt.id, appt.lead_id, "1_hour_reminder", occurrenceKey, scheduledAppointmentAtIso)
+        : null;
+      if (!settings.automatic_reminders_enabled) {
+        // Email channel off - nothing claimed, nothing sent, nothing logged.
+      } else if (!reminderId) {
         summary.skipped++;
         summary.results.push({
           appointmentId: appt.id,
@@ -703,8 +730,11 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
       }
     }
 
-    // ---- SMS (new - independent of every email outcome above) ----
-    await recordLeadgenAppointmentSms(admin, summary, appt, "1_hour_reminder", occurrenceKey, scheduledMs, scheduledAppointmentAtIso, recipient.businessName, dryRun);
+    // ---- SMS (new - independent of every email outcome above, gated on
+    // its own automatic_sms_reminders_enabled toggle rather than email's). ----
+    if (dryRun || settings.automatic_sms_reminders_enabled) {
+      await recordLeadgenAppointmentSms(admin, summary, appt, "1_hour_reminder", occurrenceKey, scheduledMs, scheduledAppointmentAtIso, recipient.businessName, dryRun);
+    }
   }
 
   return summary;
@@ -812,7 +842,7 @@ export async function fetchLeadgenAppointmentSmsReminderStatusMap(
     const reminder1h = currentReminders.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
 
     const isEligible =
-      settings.automatic_reminders_enabled &&
+      settings.automatic_sms_reminders_enabled &&
       appt.sms_consent &&
       !!appt.phone &&
       (appt.status === "Booked" || appt.status === "Confirmed") &&

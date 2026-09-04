@@ -209,6 +209,18 @@ export type WinsalotSmsReminderStatusEntry = {
   errorDetail1h: string | null;
 };
 
+// Dedicated "automatic SMS reminders" toggle (migration 0126) -
+// runWinsalotAppointmentReminderJob's email path has never had a
+// settings row of its own (always unconditionally on whenever its cron
+// route is invoked); this new singleton exists solely to gate the SMS
+// side without introducing any new behavior for email.
+export type WinsalotAppointmentReminderSettingsRow = {
+  id: string;
+  automatic_sms_reminders_enabled: boolean;
+  updated_at: string;
+  updated_by_name: string | null;
+};
+
 // A reschedule/cancellation produces a fresh occurrence_key, which is
 // what lets a rescheduled appointment become eligible for brand new
 // 24h/1h reminders while the prior occurrence's send history stays

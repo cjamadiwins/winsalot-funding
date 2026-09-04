@@ -729,6 +729,11 @@ export type LeadgenAppointmentReminderRow = {
 export type LeadgenAppointmentReminderSettingsRow = {
   id: string;
   automatic_reminders_enabled: boolean;
+  // Independent "SMS off" switch (migration 0126) - never chained to
+  // automatic_reminders_enabled above, so SMS can be merged/deployed and
+  // stay fully inert while email reminders keep running exactly as they
+  // already do, until an admin explicitly turns SMS on.
+  automatic_sms_reminders_enabled: boolean;
   reminder_hours_before: number;
   sender_name: string;
   reply_to_email: string;

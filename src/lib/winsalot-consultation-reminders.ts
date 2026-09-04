@@ -10,12 +10,41 @@ import { sendAppointmentReminderSmsPair, type SmsOutcome } from "./appointment-s
 import {
   winsalotAppointmentOccurrenceKey,
   winsalotSmsReminderDisplayStatus,
+  type WinsalotAppointmentReminderSettingsRow,
   type WinsalotAppointmentRow,
   type WinsalotAppointmentSmsReminderRow,
   type WinsalotReminderType,
   type WinsalotSmsRecipientType,
   type WinsalotSmsReminderStatusEntry,
 } from "./winsalot-consultation-types";
+
+const SMS_SETTINGS_TABLE = "winsalot_appointment_reminder_settings";
+const SMS_SETTINGS_ID = "00000000-0000-0000-0000-000000000202";
+
+const DEFAULT_SMS_SETTINGS: WinsalotAppointmentReminderSettingsRow = {
+  id: SMS_SETTINGS_ID,
+  automatic_sms_reminders_enabled: false,
+  updated_at: new Date(0).toISOString(),
+  updated_by_name: null,
+};
+
+export async function fetchWinsalotAppointmentReminderSettings(supabase: SupabaseClient): Promise<WinsalotAppointmentReminderSettingsRow> {
+  const { data } = await supabase.from(SMS_SETTINGS_TABLE).select("*").maybeSingle();
+  return (data as WinsalotAppointmentReminderSettingsRow | null) ?? DEFAULT_SMS_SETTINGS;
+}
+
+export async function updateWinsalotAppointmentReminderSettings(
+  supabase: SupabaseClient,
+  automaticSmsRemindersEnabled: boolean,
+  updatedByName: string
+): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from(SMS_SETTINGS_TABLE)
+    .update({ automatic_sms_reminders_enabled: automaticSmsRemindersEnabled, updated_at: new Date().toISOString(), updated_by_name: updatedByName })
+    .eq("id", SMS_SETTINGS_ID);
+  if (error) return { error: "Failed to update SMS reminder settings." };
+  return {};
+}
 
 // Automatic prospect-facing 24-hour and 1-hour consultation reminders.
 // Same reliable architecture as the Lead Gen CRM's automatic business-
@@ -196,6 +225,7 @@ export type WinsalotSmsReminderJobResult = {
 
 export type WinsalotReminderJobSummary = {
   dryRun: boolean;
+  automaticSmsRemindersEnabled: boolean;
   candidatesScanned: number;
   eligible: number;
   sent: number;
@@ -264,9 +294,14 @@ async function recordWinsalotAppointmentSms(
 export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boolean }): Promise<WinsalotReminderJobSummary> {
   const dryRun = options?.dryRun ?? false;
   const admin = getSupabaseAdmin();
+  // Email below is completely unaffected by this setting - it has always
+  // run unconditionally whenever this job is invoked, and stays that way.
+  // Only the SMS block at the end of the loop consults it.
+  const smsSettings = await fetchWinsalotAppointmentReminderSettings(admin);
 
   const summary: WinsalotReminderJobSummary = {
     dryRun,
+    automaticSmsRemindersEnabled: smsSettings.automatic_sms_reminders_enabled,
     candidatesScanned: 0,
     eligible: 0,
     sent: 0,
@@ -372,8 +407,12 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
         }
       }
 
-      // ---- SMS (new - independent of every email outcome above) ----
-      await recordWinsalotAppointmentSms(admin, summary, appt, reminderType, occurrenceKey, scheduledMs, dryRun);
+      // ---- SMS (new - independent of every email outcome above, gated on
+      // its own automatic_sms_reminders_enabled toggle; email above is
+      // unconditional and untouched by this check). ----
+      if (dryRun || smsSettings.automatic_sms_reminders_enabled) {
+        await recordWinsalotAppointmentSms(admin, summary, appt, reminderType, occurrenceKey, scheduledMs, dryRun);
+      }
     }
   }
 
@@ -443,6 +482,7 @@ export async function fetchWinsalotSmsReminderStatusMap(
 ): Promise<Record<string, WinsalotSmsReminderStatusEntry>> {
   if (appointments.length === 0) return {};
 
+  const smsSettings = await fetchWinsalotAppointmentReminderSettings(supabase);
   const nowMs = Date.now();
   const appointmentIds = appointments.map((a) => a.id);
   const { data: reminderRows } = await supabase
@@ -467,7 +507,11 @@ export async function fetchWinsalotSmsReminderStatusMap(
     const r1 = current.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
 
     const isEligible =
-      appt.status === "booked" && appt.sms_consent && !!appt.phone && new Date(appt.appointment_start_at).getTime() > nowMs;
+      smsSettings.automatic_sms_reminders_enabled &&
+      appt.status === "booked" &&
+      appt.sms_consent &&
+      !!appt.phone &&
+      new Date(appt.appointment_start_at).getTime() > nowMs;
 
     result[appt.id] = {
       status24h: winsalotSmsReminderDisplayStatus(r24, isEligible),

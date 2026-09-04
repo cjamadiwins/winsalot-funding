@@ -309,6 +309,22 @@ export default function AppointmentsListClient({
               />
               Automatic 24-hour reminders: {reminderSettings.automatic_reminders_enabled ? "On" : "Off"}
             </label>
+            <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+              <input
+                type="hidden"
+                name="automatic_sms_reminders_enabled"
+                value={reminderSettings.automatic_sms_reminders_enabled ? "true" : "false"}
+              />
+              <input
+                type="checkbox"
+                defaultChecked={reminderSettings.automatic_sms_reminders_enabled}
+                onChange={(e) => {
+                  const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                  hidden.value = e.currentTarget.checked ? "true" : "false";
+                }}
+              />
+              Automatic SMS reminders: {reminderSettings.automatic_sms_reminders_enabled ? "On" : "Off"} (independent of email above)
+            </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-[12.5px] font-semibold text-slate-600">Reminder Timing (hours before appointment)</span>
               <input name="reminder_hours_before" type="number" min={1} step={1} defaultValue={reminderSettings.reminder_hours_before} required className={inputClass} />

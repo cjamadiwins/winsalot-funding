@@ -613,6 +613,7 @@ export async function updateLeadgenAppointmentReminderSettingsAction(formData: F
     supabase,
     {
       automatic_reminders_enabled: formData.get("automatic_reminders_enabled") === "true",
+      automatic_sms_reminders_enabled: formData.get("automatic_sms_reminders_enabled") === "true",
       reminder_hours_before: hoursBefore,
       sender_name: senderName,
       reply_to_email: replyToEmail,
