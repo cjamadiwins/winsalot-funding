@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAdminReminderSms,
+  buildAppointmentConfirmationSms,
   buildProspectReminderSms,
+  formatSmsDateLabel,
   formatSmsTimeLabel,
   isAppointmentToday,
   isValidMobileNumber,
@@ -77,6 +79,28 @@ describe("buildProspectReminderSms", () => {
   });
 });
 
+describe("buildAppointmentConfirmationSms", () => {
+  it("confirms the business, date, time, and opt-out instruction", () => {
+    expect(
+      buildAppointmentConfirmationSms({
+        businessName: "Brent's Essentials",
+        dateLabel: "Sep 8, 2026",
+        timeLabel: "3:00 PM EDT",
+      })
+    ).toBe("Winsalot Corp.: Your appointment with Brent's Essentials is confirmed for Sep 8, 2026 at 3:00 PM EDT. Reply STOP to opt out.");
+  });
+
+  it("keeps the complete opt-out suffix within one SMS segment", () => {
+    const message = buildAppointmentConfirmationSms({
+      businessName: "A".repeat(300),
+      dateLabel: "September 30, 2026",
+      timeLabel: "11:30 AM EDT",
+    });
+    expect(message.length).toBeLessThanOrEqual(160);
+    expect(message.endsWith("Reply STOP to opt out.")).toBe(true);
+  });
+});
+
 describe("buildAdminReminderSms", () => {
   it("includes the CRM label, business name, and contact name", () => {
     const message = buildAdminReminderSms({
@@ -136,6 +160,13 @@ describe("formatSmsTimeLabel", () => {
     const ms = Date.UTC(2026, 5, 15, 19, 0, 0); // 19:00 UTC
     const label = formatSmsTimeLabel(ms, "America/Toronto");
     expect(label).toMatch(/\d{1,2}:\d{2}\s*(AM|PM)\s*E[DS]T/);
+  });
+});
+
+describe("formatSmsDateLabel", () => {
+  it("formats the appointment date in its own timezone", () => {
+    const ms = Date.UTC(2026, 8, 5, 2, 0, 0); // Sep 4 in Toronto
+    expect(formatSmsDateLabel(ms, "America/Toronto")).toBe("Sep 4, 2026");
   });
 });
 
