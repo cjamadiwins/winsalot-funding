@@ -78,6 +78,27 @@ export default async function LeadgenAdminPayrollPage() {
         Payroll Currency (set on their profile), driven by attendance and admin-approved day counts.
       </p>
 
+      <nav aria-label="Payroll sections" className="mt-5 flex flex-wrap gap-2">
+        <a
+          href="#agent-payroll"
+          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-700"
+        >
+          Agent Payroll
+        </a>
+        <a
+          href="#holiday-pay"
+          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-700"
+        >
+          Holiday Pay
+        </a>
+        <a
+          href="#subcontractors"
+          className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+        >
+          Subcontractors
+        </a>
+      </nav>
+
       {error && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           Failed to load payroll: {error.message}
@@ -85,7 +106,7 @@ export default async function LeadgenAdminPayrollPage() {
       )}
 
       {!error && (
-        <div className="mt-6">
+        <div id="agent-payroll" className="mt-6 scroll-mt-6">
           <AdminPayrollClient
             companyName="Winsalot Corp"
             crmLabel="Lead Generation CRM"
@@ -109,7 +130,7 @@ export default async function LeadgenAdminPayrollPage() {
             reopenAction={reopenLeadgenPayrollAction}
           />
 
-          <div className="mt-8">
+          <div id="holiday-pay" className="mt-8 scroll-mt-6">
             <HolidayPayAdminSection
               crmLabel="Lead Generation CRM"
               agents={((agents ?? []) as LeadgenUserRow[]).map((a) => ({
@@ -131,7 +152,7 @@ export default async function LeadgenAdminPayrollPage() {
             />
           </div>
 
-          <div className="mt-8">
+          <div id="subcontractors" className="mt-8 scroll-mt-6">
             <SubcontractorsAdminSection
               crmLabel="Lead Generation CRM"
               subcontractors={subcontractorRows}
