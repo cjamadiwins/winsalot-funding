@@ -120,10 +120,10 @@ function shrinkToFit(build: (name: string) => string, name: string): string {
   return message;
 }
 
-export function buildProspectReminderSms(params: { businessName: string; isToday: boolean; timeLabel: string }): string {
-  const when = params.isToday ? "today" : "tomorrow";
+export function buildProspectReminderSms(params: { businessName: string; reminderType: SmsReminderType; timeLabel: string }): string {
+  const leadTime = params.reminderType === "24_hour_reminder" ? "24 hours" : "1 hour";
   return shrinkToFit(
-    (name) => `Reminder from Winsalot Corp.: Your appointment with ${name} is ${when} at ${params.timeLabel}. Reply STOP to opt out.`,
+    (name) => `Winsalot Corp.: Your phone call appointment with ${name} is in ${leadTime} at ${params.timeLabel}. STOP to opt out.`,
     params.businessName
   );
 }
@@ -133,13 +133,12 @@ export function formatSmsDateLabel(scheduledMs: number, timeZone: string): strin
     timeZone,
     month: "short",
     day: "numeric",
-    year: "numeric",
   }).format(new Date(scheduledMs));
 }
 
 export function buildAppointmentConfirmationSms(params: { businessName: string; dateLabel: string; timeLabel: string }): string {
   return shrinkToFit(
-    (name) => `Winsalot Corp.: Your appointment with ${name} is confirmed for ${params.dateLabel} at ${params.timeLabel}. Reply STOP to opt out.`,
+    (name) => `Winsalot Corp.: Your phone call appointment with ${name} is confirmed for ${params.dateLabel} at ${params.timeLabel}. STOP to opt out.`,
     params.businessName
   );
 }
@@ -409,7 +408,7 @@ export async function sendAppointmentReminderSmsPair(
   const isToday = isAppointmentToday(params.scheduledMs, params.timezone, nowMs);
   const timeLabel = formatSmsTimeLabel(params.scheduledMs, params.timezone);
 
-  const prospectMessage = buildProspectReminderSms({ businessName: params.businessName, isToday, timeLabel });
+  const prospectMessage = buildProspectReminderSms({ businessName: params.businessName, reminderType: params.reminderType, timeLabel });
   const adminMessage = buildAdminReminderSms({
     crmLabel: params.crmLabel,
     businessName: params.businessName,
