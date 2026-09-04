@@ -6,6 +6,7 @@ import {
   CALL_LOG_OUTCOMES,
   CALL_LOG_OUTCOME_STYLES,
   formatCallLogDate,
+  type CallLogClientOption,
   type CallLogOutcome,
   type CallLogRow,
 } from "@/lib/call-log";
@@ -15,19 +16,22 @@ type ActionResult = { error?: string };
 type Props = {
   crmLabel: string;
   records: CallLogRow[];
+  clients: CallLogClientOption[];
+  defaultClientId: string;
   createAction: (formData: FormData) => Promise<ActionResult>;
 };
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 
-export default function AgentCallLogClient({ crmLabel, records, createAction }: Props) {
+export default function AgentCallLogClient({ crmLabel, records, clients, defaultClientId, createAction }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
   const automaticNote = CALL_LOG_AUTOMATIC_NOTES[outcome];
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const canLogCalls = clients.length > 0;
 
   function selectOutcome(next: CallLogOutcome) {
     setOutcome(next);
@@ -57,14 +61,34 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
       </p>
 
       <form key={formKey} action={submit} className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 sm:grid-cols-2">
+        {!canLogCalls ? (
+          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            No assigned client or business is available. Ask an admin to assign one before logging calls.
+          </p>
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-3">
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Business Name
+            Client / Business
+            <select
+              name="client_id"
+              required
+              defaultValue={defaultClientId}
+              disabled={!canLogCalls}
+              className={`${inputClass} mt-1 bg-white disabled:bg-slate-100`}
+            >
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Business Name Called
             <input
               name="business_name"
               required
               autoFocus
-              placeholder="Paste business name"
+              placeholder="Paste prospect business name"
               autoComplete="off"
               className={`${inputClass} mt-1`}
             />
@@ -106,21 +130,11 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Automatic Note
-            <input
-              name="automatic_note"
-              value={automaticNote}
-              readOnly
-              className={`${inputClass} mt-1 bg-slate-50`}
-            />
+            <input name="automatic_note" value={automaticNote} readOnly className={`${inputClass} mt-1 bg-slate-50`} />
           </label>
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Extra Details (optional)
-            <input
-              name="extra_details"
-              placeholder="Add anything important"
-              autoComplete="off"
-              className={`${inputClass} mt-1`}
-            />
+            <input name="extra_details" placeholder="Add anything important" autoComplete="off" className={`${inputClass} mt-1`} />
           </label>
         </div>
 
@@ -129,7 +143,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !canLogCalls}
           className="mt-4 rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending ? "Saving..." : "Save Call"}
@@ -142,22 +156,19 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
             <h2 className="text-lg font-bold text-slate-900">My Recent Calls</h2>
             <p className="text-sm text-slate-500">Your latest 100 call logs.</p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">
-            {records.length}
-          </span>
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">{records.length}</span>
         </div>
 
         {records.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
-            No calls logged yet.
-          </p>
+          <p className="mt-4 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No calls logged yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <table className="min-w-[760px] w-full text-left text-sm">
+            <table className="min-w-[900px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Date &amp; Time</th>
-                  <th className="px-4 py-3">Business</th>
+                  <th className="px-4 py-3">Client / Business</th>
+                  <th className="px-4 py-3">Business Called</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Result</th>
                   <th className="px-4 py-3">Notes</th>
@@ -167,12 +178,11 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
                 {records.map((record) => (
                   <tr key={record.id} className="align-top">
                     <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatCallLogDate(record.created_at)}</td>
+                    <td className="px-4 py-3 font-medium text-slate-700">{record.client_name ?? "Not linked"}</td>
                     <td className="px-4 py-3 font-semibold text-slate-800">{record.business_name}</td>
                     <td className="px-4 py-3 text-slate-600">{record.phone}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[record.outcome]}`}>
-                        {record.outcome}
-                      </span>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[record.outcome]}`}>{record.outcome}</span>
                     </td>
                     <td className="max-w-md whitespace-pre-wrap px-4 py-3 text-slate-700">{record.notes}</td>
                   </tr>

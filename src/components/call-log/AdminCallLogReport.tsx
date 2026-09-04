@@ -3,6 +3,7 @@ import {
   CALL_LOG_OUTCOMES,
   CALL_LOG_OUTCOME_STYLES,
   formatCallLogDate,
+  type CallLogClientOption,
   type CallLogRow,
 } from "@/lib/call-log";
 
@@ -14,7 +15,9 @@ type Props = {
   backHref: string;
   entries: AdminCallLogEntry[];
   agents: AdminCallLogAgent[];
+  clients: CallLogClientOption[];
   selectedAgent: string;
+  selectedClient: string;
   selectedOutcome: string;
   errorMessage?: string | null;
 };
@@ -24,7 +27,9 @@ export default function AdminCallLogReport({
   backHref,
   entries,
   agents,
+  clients,
   selectedAgent,
+  selectedClient,
   selectedOutcome,
   errorMessage,
 }: Props) {
@@ -46,14 +51,20 @@ export default function AdminCallLogReport({
         </div>
       </div>
 
-      <form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1fr_auto]">
+      <form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
         <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Agent
           <select name="agent" defaultValue={selectedAgent} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal normal-case text-slate-900">
             <option value="all">All agents</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>{agent.name}</option>
-            ))}
+            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+          </select>
+        </label>
+
+        <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Client / Business
+          <select name="client" defaultValue={selectedClient} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal normal-case text-slate-900">
+            <option value="all">All clients</option>
+            {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
           </select>
         </label>
 
@@ -61,13 +72,11 @@ export default function AdminCallLogReport({
           Call Result
           <select name="outcome" defaultValue={selectedOutcome} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal normal-case text-slate-900">
             <option value="all">All results</option>
-            {CALL_LOG_OUTCOMES.map((outcome) => (
-              <option key={outcome} value={outcome}>{outcome}</option>
-            ))}
+            {CALL_LOG_OUTCOMES.map((outcome) => <option key={outcome} value={outcome}>{outcome}</option>)}
           </select>
         </label>
 
-        <button type="submit" className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
+        <button type="submit" className="self-end rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
           Apply Filters
         </button>
       </form>
@@ -77,17 +86,16 @@ export default function AdminCallLogReport({
           Call logs could not be loaded: {errorMessage}
         </p>
       ) : entries.length === 0 ? (
-        <p className="mt-5 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
-          No call logs match these filters.
-        </p>
+        <p className="mt-5 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No call logs match these filters.</p>
       ) : (
         <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="min-w-[900px] w-full text-left text-sm">
+          <table className="min-w-[1050px] w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Date &amp; Time</th>
                 <th className="px-4 py-3">Agent</th>
-                <th className="px-4 py-3">Business</th>
+                <th className="px-4 py-3">Client / Business</th>
+                <th className="px-4 py-3">Business Called</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Result</th>
                 <th className="px-4 py-3">Notes</th>
@@ -98,12 +106,11 @@ export default function AdminCallLogReport({
                 <tr key={entry.id} className="align-top">
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatCallLogDate(entry.created_at)}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{entry.agentName}</td>
+                  <td className="px-4 py-3 font-medium text-slate-700">{entry.client_name ?? "Not linked"}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800">{entry.business_name}</td>
                   <td className="px-4 py-3 text-slate-600">{entry.phone}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[entry.outcome]}`}>
-                      {entry.outcome}
-                    </span>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[entry.outcome]}`}>{entry.outcome}</span>
                   </td>
                   <td className="max-w-xl whitespace-pre-wrap px-4 py-3 text-slate-700">{entry.notes}</td>
                 </tr>

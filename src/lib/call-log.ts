@@ -24,10 +24,14 @@ export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
   Callback: "bg-orange-100 text-orange-800",
 };
 
+export type CallLogClientOption = { id: string; name: string };
+
 export type CallLogRow = {
   id: string;
   created_at: string;
   agent_id: string;
+  client_id: string | null;
+  client_name?: string | null;
   business_name: string;
   phone: string;
   outcome: CallLogOutcome;
