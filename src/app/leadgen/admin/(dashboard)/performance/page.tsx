@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeLeadgenAgentPerformance, leadgenDateKey, leadgenMondayOf, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
@@ -50,10 +51,20 @@ export default async function LeadgenAdminPerformancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Weekly booked-appointment performance against a target of 4 per agent, reset every Monday. Cancelled appointments never count.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Weekly booked-appointment performance against a target of 4 per agent, reset every Monday. Cancelled appointments never count.
+          </p>
+        </div>
+        <Link
+          href="/leadgen/admin/performance/call-notes"
+          className="rounded-full border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+        >
+          View All Call Notes
+        </Link>
+      </div>
 
       <div className="mt-6 space-y-6">
         {allAgents.length === 0 ? (
