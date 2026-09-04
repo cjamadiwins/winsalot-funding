@@ -1,10 +1,13 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
-import { getNextPayday, getUpcomingPaydays, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
+import { getNextPayday, getUpcomingPaydays, sumPayrollRecordsByCurrency, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
 import type { HolidayPayAssignmentRow, HolidayRow } from "@/lib/holiday-pay";
+import { sumSubcontractorPaymentsByCurrency, type SubcontractorPaymentRow, type SubcontractorRow } from "@/lib/subcontractor-payroll";
 import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
 import HolidayPayAdminSection from "@/components/payroll/HolidayPayAdminSection";
+import SubcontractorsAdminSection from "@/components/payroll/SubcontractorsAdminSection";
+import PayrollCostSummary from "@/components/payroll/PayrollCostSummary";
 import {
   approveLeadgenPayrollAction,
   cancelLeadgenPayrollAction,
@@ -25,6 +28,14 @@ import {
   removeAssignmentAction,
   updateHolidayAction,
 } from "./holiday-actions";
+import {
+  createSubcontractorAction,
+  createSubcontractorPaymentAction,
+  deactivateSubcontractorAction,
+  reactivateSubcontractorAction,
+  updateSubcontractorAction,
+  updateSubcontractorPaymentAction,
+} from "./subcontractor-actions";
 
 export default async function LeadgenAdminPayrollPage() {
   await requireLeadgenAdmin();
@@ -36,15 +47,28 @@ export default async function LeadgenAdminPayrollPage() {
     { data: auditLog, error: auditLogError },
     { data: holidays, error: holidaysError },
     { data: assignments, error: assignmentsError },
+    { data: subcontractors, error: subcontractorsError },
+    { data: subcontractorPayments, error: subcontractorPaymentsError },
+    { data: clients, error: clientsError },
   ] = await Promise.all([
     supabase.from("leadgen_users").select("*").eq("role", "agent").order("full_name"),
     supabase.from("leadgen_payroll").select("*").order("payday", { ascending: false }),
     supabase.from("leadgen_payroll_audit_log").select("*").order("created_at", { ascending: false }),
     supabase.from("holidays").select("*").is("deleted_at", null).order("holiday_date", { ascending: false }),
     supabase.from("holiday_pay_assignments").select("*").not("leadgen_user_id", "is", null),
+    supabase.from("leadgen_subcontractors").select("*").order("full_name"),
+    supabase.from("leadgen_subcontractor_payments").select("*").order("period_start", { ascending: false }),
+    supabase.from("leadgen_clients").select("id, name").order("name"),
   ]);
 
-  const error = agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError;
+  const error =
+    agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
+    subcontractorsError ?? subcontractorPaymentsError ?? clientsError;
+
+  const subcontractorRows = (subcontractors ?? []) as SubcontractorRow[];
+  const subcontractorPaymentRows = (subcontractorPayments ?? []) as SubcontractorPaymentRow[];
+  const subcontractorsById = new Map(subcontractorRows.map((s) => [s.id, s]));
+  const agentCurrencyById = new Map(((agents ?? []) as LeadgenUserRow[]).map((a) => [a.id, a.payroll_currency]));
 
   return (
     <div>
@@ -104,6 +128,28 @@ export default async function LeadgenAdminPayrollPage() {
               assignHolidayAction={assignHolidayAction}
               removeAssignmentAction={removeAssignmentAction}
               overrideAssignmentAmountAction={overrideAssignmentAmountAction}
+            />
+          </div>
+
+          <div className="mt-8">
+            <SubcontractorsAdminSection
+              crmLabel="Lead Generation CRM"
+              subcontractors={subcontractorRows}
+              payments={subcontractorPaymentRows}
+              businessClients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))}
+              createSubcontractorAction={createSubcontractorAction}
+              updateSubcontractorAction={updateSubcontractorAction}
+              deactivateSubcontractorAction={deactivateSubcontractorAction}
+              reactivateSubcontractorAction={reactivateSubcontractorAction}
+              createSubcontractorPaymentAction={createSubcontractorPaymentAction}
+              updateSubcontractorPaymentAction={updateSubcontractorPaymentAction}
+            />
+          </div>
+
+          <div className="mt-8">
+            <PayrollCostSummary
+              employeeTotals={sumPayrollRecordsByCurrency((records ?? []) as PayrollRecord[], agentCurrencyById)}
+              subcontractorTotals={sumSubcontractorPaymentsByCurrency(subcontractorPaymentRows, subcontractorsById)}
             />
           </div>
         </div>

@@ -124,6 +124,25 @@ export function calculateFinalPay(parts: {
   return Math.round(total * 100) / 100;
 }
 
+// Sums a set of payroll records' total_pay, grouped by each record's
+// owning agent's currency - never summed across currencies (no FX
+// conversion). Cancelled records are excluded, same as MyPayView's own
+// "my pay" filtering - a cancelled pay period was voided and never paid
+// out. Used to build the Employee/Agent Payroll side of the Payroll Cost
+// Summary shown alongside the Subcontractors section.
+export function sumPayrollRecordsByCurrency(
+  records: { agent_id: string; total_pay: number; status: PayrollStatus }[],
+  agentCurrencyById: Map<string, PayrollCurrency>
+): Partial<Record<PayrollCurrency, number>> {
+  const totals: Partial<Record<PayrollCurrency, number>> = {};
+  for (const record of records) {
+    if (record.status === "cancelled") continue;
+    const currency = agentCurrencyById.get(record.agent_id) ?? "NGN";
+    totals[currency] = Math.round(((totals[currency] ?? 0) + record.total_pay) * 100) / 100;
+  }
+  return totals;
+}
+
 // The shape of a row in crm_payroll / leadgen_payroll - identical columns
 // in both tables (see supabase/migrations/0054_crm_payroll.sql,
 // 0055_leadgen_payroll.sql, and 0063_payroll_attendance_integration.sql).
