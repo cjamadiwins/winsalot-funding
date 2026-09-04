@@ -32,6 +32,15 @@ export async function requireCrmUser(): Promise<CrmUserRow> {
     redirect("/agent/login?error=Your account is not set up for the CRM yet.");
   }
 
+  // A subcontractor is a real, active crm_users row (same table agents
+  // use), so without this check it would otherwise pass every check above
+  // and inherit full /agent/* access - every lead, activity, and RLS grant
+  // an agent has. Subcontractors get their own, deliberately narrower
+  // /subcontractor/* portal instead (requireCrmSubcontractor below).
+  if (crmUser.role === "subcontractor") {
+    redirect("/subcontractor/login");
+  }
+
   if (crmUser.role === "agent") {
     const { data: onboarding } = await supabase
       .from("crm_agent_onboarding")
@@ -106,6 +115,41 @@ export async function requireCrmAdmin(): Promise<CrmUserRow> {
   if (!crmUser) {
     await supabase.auth.signOut();
     redirect("/admin/login?error=This account is not set up for Growth CRM admin access.");
+  }
+
+  return crmUser as CrmUserRow;
+}
+
+// Gates /subcontractor/* pages - same "positive role check, defense in
+// depth alongside RLS" pattern as requireCrmAdmin above, just for
+// role='subcontractor' instead of 'admin'. A signed-in admin or agent
+// account (legitimate for this same CRM, just the wrong role for this
+// portal) is only redirected, not signed out; anything else (no row,
+// inactive, wrong CRM) is signed out so it can't linger as a
+// valid-looking cookie - identical treatment to every sibling gate in
+// this file.
+export async function requireCrmSubcontractor(): Promise<CrmUserRow> {
+  const supabase = await createSupabaseServerClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    redirect("/subcontractor/login");
+  }
+
+  const { data: crmUser } = await supabase
+    .from("crm_users")
+    .select("*")
+    .eq("id", authData.user.id)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (crmUser && crmUser.role !== "subcontractor") {
+    redirect("/subcontractor/login?error=This account does not have subcontractor access.");
+  }
+
+  if (!crmUser) {
+    await supabase.auth.signOut();
+    redirect("/subcontractor/login?error=This account is not set up for Growth CRM subcontractor access.");
   }
 
   return crmUser as CrmUserRow;

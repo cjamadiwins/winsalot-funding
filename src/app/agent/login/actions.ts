@@ -35,7 +35,7 @@ export async function agentLoginAction(formData: FormData) {
   logLoginTiming(attemptId, "crm_users lookup start", t0);
   const { data: crmUser } = await supabase
     .from("crm_users")
-    .select("id")
+    .select("id, role")
     .eq("id", data.user.id)
     .eq("active", true)
     .maybeSingle();
@@ -49,6 +49,17 @@ export async function agentLoginAction(formData: FormData) {
         "This account is not set up for the CRM. Ask an admin to add you as an agent."
       )}`
     );
+  }
+
+  // Subcontractors have their own, more restricted portal - never let a
+  // subcontractor login fall through to full /agent/* access, which has
+  // no role check of its own beyond "an active crm_users row" (see
+  // requireCrmUser in crm-auth.ts). Redirecting here, not silently
+  // continuing, is the fix for that gap - admin/agent accounts are
+  // otherwise unaffected, both keep signing in here exactly as before.
+  if (crmUser.role === "subcontractor") {
+    logLoginTiming(attemptId, "redirect: subcontractor account uses its own portal", t0);
+    redirect("/subcontractor/login");
   }
 
   logLoginTiming(attemptId, "crm_agent_onboarding lookup start", t0);

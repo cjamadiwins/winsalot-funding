@@ -11,7 +11,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.rewrite(new URL("/lead-generation", request.url));
   }
 
-  if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent"))) {
+  if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent") || pathname.startsWith("/subcontractor"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
   if (isGrowthCrmHost(host) && (pathname.startsWith("/leadgen") || pathname.startsWith("/client"))) {
@@ -33,6 +33,13 @@ export async function proxy(request: NextRequest) {
     return handleSessionGate(request, host, "/agent/login", "/agent/dashboard", [
       "/agent/set-password",
       "/agent/forgot-password",
+    ]);
+  }
+
+  if (pathname.startsWith("/subcontractor")) {
+    return handleSessionGate(request, host, "/subcontractor/login", "/subcontractor/dashboard", [
+      "/subcontractor/set-password",
+      "/subcontractor/forgot-password",
     ]);
   }
 
@@ -151,5 +158,5 @@ async function getUserWithTimeout(
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*", "/client/:path*"],
+  matcher: ["/", "/admin/:path*", "/agent/:path*", "/subcontractor/:path*", "/leadgen/:path*", "/client/:path*"],
 };

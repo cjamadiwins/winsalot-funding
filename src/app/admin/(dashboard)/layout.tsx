@@ -27,6 +27,7 @@ import {
   PhoneCall,
   Target,
   Megaphone,
+  Briefcase,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -37,6 +38,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Appointments", href: "/admin/crm/appointments", icon: <CalendarClock /> },
   { label: "Consultation Availability", href: "/admin/crm/consultation-availability", icon: <CalendarCog /> },
   { label: "Agents", href: "/admin/crm/agents", icon: <UserCog /> },
+  { label: "Subcontractors", href: "/admin/crm/subcontractors", icon: <Briefcase /> },
   { label: "Clients", href: "/admin/crm/clients", icon: <Building2 /> },
   { label: "Email Marketing", href: "/admin/crm/marketing", icon: <Megaphone /> },
   { label: "Invoices", href: "/admin/crm/invoices", icon: <Receipt /> },

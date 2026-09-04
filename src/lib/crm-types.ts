@@ -1,7 +1,7 @@
 import type { KpiTone } from "@/components/crm-ui/KpiCard";
 import type { PayrollCurrency } from "@/lib/payroll";
 
-export type CrmRole = "admin" | "agent";
+export type CrmRole = "admin" | "agent" | "subcontractor";
 
 export type CrmUserRow = {
   id: string;
@@ -19,6 +19,10 @@ export type CrmUserRow = {
   // Drives every payroll display/calculation for this agent - see
   // src/lib/payroll.ts's formatCurrency.
   payroll_currency: PayrollCurrency;
+  // Set only for role='subcontractor' - which crm_subcontractors profile
+  // this login is scoped to. Always null for admin/agent (migration 0136,
+  // mirrors leadgen_users.client_id + role='client' exactly).
+  subcontractor_id: string | null;
 };
 
 export type AgentAttendanceRow = {
