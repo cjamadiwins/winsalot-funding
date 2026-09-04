@@ -59,6 +59,10 @@ function parseNonNegativeAmount(formData: FormData, key: string): number | null 
   return value;
 }
 
+function validEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 // ---------------------------------------------------------------------
 // Subcontractor profile CRUD.
 // ---------------------------------------------------------------------
@@ -69,6 +73,8 @@ export async function createSubcontractorAction(crm: SubcontractorCrm, formData:
   const { subcontractors } = tablesFor(crm);
 
   const fullName = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
   const country = String(formData.get("country") ?? "").trim() || null;
   const currency = String(formData.get("currency") ?? "").trim();
   const payType = String(formData.get("pay_type") ?? "").trim();
@@ -77,12 +83,15 @@ export async function createSubcontractorAction(crm: SubcontractorCrm, formData:
   const businessClientId = String(formData.get("business_client_id") ?? "").trim() || null;
 
   if (!fullName) return { error: "Full name is required." };
+  if (email && !validEmail(email)) return { error: "Enter a valid email address." };
   if (!isValidCurrency(currency)) return { error: "Choose a valid currency." };
   if (!isValidPayType(payType)) return { error: "Choose a valid pay type." };
   if (payRate === null) return { error: "Pay rate must be zero or a positive number." };
 
   const { error } = await supabase.from(subcontractors).insert({
     full_name: fullName,
+    email,
+    phone,
     business_client_id: businessClientId,
     country,
     currency,
@@ -109,6 +118,8 @@ export async function updateSubcontractorAction(
   const { subcontractors } = tablesFor(crm);
 
   const fullName = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
   const country = String(formData.get("country") ?? "").trim() || null;
   const currency = String(formData.get("currency") ?? "").trim();
   const payType = String(formData.get("pay_type") ?? "").trim();
@@ -117,6 +128,7 @@ export async function updateSubcontractorAction(
   const businessClientId = String(formData.get("business_client_id") ?? "").trim() || null;
 
   if (!fullName) return { error: "Full name is required." };
+  if (email && !validEmail(email)) return { error: "Enter a valid email address." };
   if (!isValidCurrency(currency)) return { error: "Choose a valid currency." };
   if (!isValidPayType(payType)) return { error: "Choose a valid pay type." };
   if (payRate === null) return { error: "Pay rate must be zero or a positive number." };
@@ -125,6 +137,8 @@ export async function updateSubcontractorAction(
     .from(subcontractors)
     .update({
       full_name: fullName,
+      email,
+      phone,
       business_client_id: businessClientId,
       country,
       currency,

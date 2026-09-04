@@ -41,6 +41,9 @@ type Props = {
   reactivateSubcontractorAction: (subcontractorId: string) => Promise<ActionResult>;
   createSubcontractorPaymentAction: (subcontractorId: string, formData: FormData) => Promise<ActionResult>;
   updateSubcontractorPaymentAction: (paymentId: string, formData: FormData) => Promise<ActionResult>;
+  sendPortalInviteAction?: (subcontractorId: string) => Promise<ActionResult>;
+  setPortalActiveAction?: (subcontractorId: string, active: boolean) => Promise<ActionResult>;
+  resetPortalAction?: (subcontractorId: string) => Promise<ActionResult>;
 };
 
 const inputClasses =
@@ -80,6 +83,14 @@ function SubcontractorForm({
         <div>
           <label className={labelClasses}>Full Name</label>
           <input type="text" name="full_name" required defaultValue={subcontractor?.full_name} className={`${inputClasses} mt-1`} />
+        </div>
+        <div>
+          <label className={labelClasses}>Email</label>
+          <input type="email" name="email" defaultValue={subcontractor?.email ?? ""} className={`${inputClasses} mt-1`} />
+        </div>
+        <div>
+          <label className={labelClasses}>Phone</label>
+          <input type="tel" name="phone" defaultValue={subcontractor?.phone ?? ""} className={`${inputClasses} mt-1`} />
         </div>
         <div>
           <label className={labelClasses}>Business / Client (optional)</label>
@@ -426,6 +437,9 @@ export default function SubcontractorsAdminSection({
   reactivateSubcontractorAction,
   createSubcontractorPaymentAction,
   updateSubcontractorPaymentAction,
+  sendPortalInviteAction,
+  setPortalActiveAction,
+  resetPortalAction,
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -496,6 +510,7 @@ export default function SubcontractorsAdminSection({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-slate-900">{subcontractor.full_name}</p>
+                      {subcontractor.email && <p className="text-xs text-slate-500">{subcontractor.email}{subcontractor.phone ? ` · ${subcontractor.phone}` : ""}</p>}
                       <p className="text-xs text-slate-500">
                         {subcontractor.business_client_id
                           ? businessClientsById.get(subcontractor.business_client_id)?.name ?? "Former client"
@@ -527,6 +542,26 @@ export default function SubcontractorsAdminSection({
                     >
                       {expandedId === subcontractor.id ? "Hide Payments" : "Manage Payments"}
                     </button>
+                    {sendPortalInviteAction && (
+                      <button
+                        type="button"
+                        disabled={isPending || !subcontractor.email}
+                        onClick={() => runAction(() => sendPortalInviteAction(subcontractor.id))}
+                        className="text-indigo-600 hover:text-indigo-700 disabled:opacity-40"
+                      >
+                        {subcontractor.invited_at ? "Resend Portal Invite" : "Send Portal Invite"}
+                      </button>
+                    )}
+                    {resetPortalAction && subcontractor.auth_user_id && (
+                      <button type="button" disabled={isPending} onClick={() => runAction(() => resetPortalAction(subcontractor.id))} className="text-indigo-600 hover:text-indigo-700">
+                        Reset Portal Password
+                      </button>
+                    )}
+                    {setPortalActiveAction && subcontractor.auth_user_id && (
+                      <button type="button" disabled={isPending} onClick={() => runAction(() => setPortalActiveAction(subcontractor.id, !subcontractor.portal_active))} className={subcontractor.portal_active ? "text-rose-600 hover:text-rose-700" : "text-emerald-700 hover:text-emerald-800"}>
+                        {subcontractor.portal_active ? "Disable Portal" : "Enable Portal"}
+                      </button>
+                    )}
                     {subcontractor.active ? (
                       <button
                         type="button"

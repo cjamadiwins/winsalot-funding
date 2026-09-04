@@ -1,0 +1,6 @@
+"use client";
+import { useState, useTransition } from "react";
+export default function Form({ agreementId, action }: { agreementId: string; action: (id: string, data: FormData) => Promise<{ error?: string }> }) {
+  const [error, setError] = useState<string | null>(null); const [pending, start] = useTransition();
+  return <form action={(data) => start(async () => { const result = await action(agreementId, data); setError(result.error ?? null); })} className="mt-6 space-y-4 rounded-2xl border bg-slate-50 p-5"><label className="block text-sm font-medium">Full Legal Name<input name="full_name" required className="mt-1.5 w-full rounded-lg border bg-white px-3.5 py-3" /></label><label className="block text-sm font-medium">Typed Signature<input name="signature" required className="mt-1.5 w-full rounded-lg border bg-white px-3.5 py-3 font-serif italic" /></label><label className="flex items-start gap-3 text-sm"><input type="checkbox" name="accepted" value="yes" required className="mt-1"/><span>I have read and accept this Independent Contractor Agreement and consent to electronic signature.</span></label>{error && <p className="text-sm text-red-600">{error}</p>}<button disabled={pending} className="rounded-full bg-sky-600 px-5 py-2.5 font-semibold text-white disabled:opacity-60">{pending ? "Signing…" : "Accept and Sign"}</button></form>;
+}

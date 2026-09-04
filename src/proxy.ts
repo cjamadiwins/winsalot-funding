@@ -17,6 +17,9 @@ export async function proxy(request: NextRequest) {
   if (isGrowthCrmHost(host) && (pathname.startsWith("/leadgen") || pathname.startsWith("/client"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
+  if (isLeadGenHost(host) && pathname.startsWith("/subcontractor")) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
 
   if (pathname.startsWith("/admin")) {
     return handleSessionGate(
@@ -52,6 +55,14 @@ export async function proxy(request: NextRequest) {
       "/client/auth/callback",
       "/client/setup",
       "/client/reset-password",
+    ]);
+  }
+
+  if (pathname.startsWith("/subcontractor")) {
+    return handleSessionGate(request, host, "/subcontractor", "/subcontractor/dashboard", [
+      "/subcontractor/auth/callback",
+      "/subcontractor/setup",
+      "/subcontractor/reset-password",
     ]);
   }
 
@@ -151,5 +162,5 @@ async function getUserWithTimeout(
 }
 
 export const config = {
-  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*", "/client/:path*"],
+  matcher: ["/", "/admin/:path*", "/agent/:path*", "/leadgen/:path*", "/client/:path*", "/subcontractor/:path*"],
 };

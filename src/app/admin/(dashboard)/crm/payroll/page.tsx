@@ -36,6 +36,11 @@ import {
   updateSubcontractorAction,
   updateSubcontractorPaymentAction,
 } from "./subcontractor-actions";
+import {
+  resetSubcontractorPortalAction,
+  sendSubcontractorInviteAction,
+  setSubcontractorPortalActiveAction,
+} from "./subcontractor-portal-actions";
 
 export default async function AdminCrmPayrollPage() {
   await requireCrmAdmin();
@@ -164,6 +169,9 @@ export default async function AdminCrmPayrollPage() {
               reactivateSubcontractorAction={reactivateSubcontractorAction}
               createSubcontractorPaymentAction={createSubcontractorPaymentAction}
               updateSubcontractorPaymentAction={updateSubcontractorPaymentAction}
+              sendPortalInviteAction={sendSubcontractorInviteAction}
+              setPortalActiveAction={setSubcontractorPortalActiveAction}
+              resetPortalAction={resetSubcontractorPortalAction}
             />
           </div>
 
