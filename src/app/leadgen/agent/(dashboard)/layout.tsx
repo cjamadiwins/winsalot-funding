@@ -29,6 +29,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "My Leads", href: "/leadgen/agent/leads", icon: <Users /> },
   { label: "My Opportunities", href: "/leadgen/agent/my-opportunities", icon: <Target /> },
   { label: "Add Lead", href: "/leadgen/agent/leads/new", icon: <UserPlus /> },
+  { label: "Call Log", href: "/leadgen/agent/call-log", icon: <PhoneCall /> },
   { label: "My Appointments", href: "/leadgen/agent/appointments", icon: <CalendarCheck /> },
   { label: "My Attendance", href: "/leadgen/agent/my-attendance", icon: <CalendarDays /> },
   { label: "Leave Requests", href: "/leadgen/agent/leave-requests", icon: <CalendarOff /> },
