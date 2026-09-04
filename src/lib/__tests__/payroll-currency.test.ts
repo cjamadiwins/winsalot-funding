@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
+import { formatCurrency, PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS, sumPayrollRecordsByCurrency } from "@/lib/payroll";
 
 // Covers the per-agent Payroll Currency feature (migration 0134): every
 // payroll figure is the same plain number regardless of currency - there
@@ -47,5 +47,36 @@ describe("formatCurrency", () => {
       const digitsOnly = formatCurrency(amount, currency).replace(/[^\d.]/g, "");
       expect(digitsOnly).toBe("12345.67");
     }
+  });
+});
+
+describe("sumPayrollRecordsByCurrency", () => {
+  it("sums total_pay grouped by each record's agent's own currency, never blending currencies", () => {
+    const agentCurrencyById = new Map<string, "NGN" | "PHP" | "CAD" | "USD">([
+      ["ngn-agent", "NGN"],
+      ["php-agent", "PHP"],
+    ]);
+    const records = [
+      { agent_id: "ngn-agent", total_pay: 75_000, status: "paid" as const },
+      { agent_id: "ngn-agent", total_pay: 50_000, status: "approved" as const },
+      { agent_id: "php-agent", total_pay: 30_000, status: "paid" as const },
+    ];
+
+    expect(sumPayrollRecordsByCurrency(records, agentCurrencyById)).toEqual({ NGN: 125_000, PHP: 30_000 });
+  });
+
+  it("excludes cancelled records - a voided pay period was never paid out", () => {
+    const agentCurrencyById = new Map<string, "NGN" | "PHP" | "CAD" | "USD">([["ngn-agent", "NGN"]]);
+    const records = [
+      { agent_id: "ngn-agent", total_pay: 75_000, status: "paid" as const },
+      { agent_id: "ngn-agent", total_pay: 999_999, status: "cancelled" as const },
+    ];
+
+    expect(sumPayrollRecordsByCurrency(records, agentCurrencyById)).toEqual({ NGN: 75_000 });
+  });
+
+  it("falls back to NGN for an agent id not present in the lookup map", () => {
+    const records = [{ agent_id: "unknown-agent", total_pay: 1_000, status: "draft" as const }];
+    expect(sumPayrollRecordsByCurrency(records, new Map())).toEqual({ NGN: 1_000 });
   });
 });

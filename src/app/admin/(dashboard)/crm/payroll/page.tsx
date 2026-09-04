@@ -1,10 +1,13 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
-import { getNextPayday, getUpcomingPaydays, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
+import { getNextPayday, getUpcomingPaydays, sumPayrollRecordsByCurrency, type PayrollAuditLogRow, type PayrollRecord } from "@/lib/payroll";
 import type { HolidayPayAssignmentRow, HolidayRow } from "@/lib/holiday-pay";
+import { sumSubcontractorPaymentsByCurrency, type SubcontractorPaymentRow, type SubcontractorRow } from "@/lib/subcontractor-payroll";
 import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
 import HolidayPayAdminSection from "@/components/payroll/HolidayPayAdminSection";
+import SubcontractorsAdminSection from "@/components/payroll/SubcontractorsAdminSection";
+import PayrollCostSummary from "@/components/payroll/PayrollCostSummary";
 import {
   approvePayrollAction,
   cancelPayrollAction,
@@ -25,6 +28,14 @@ import {
   removeAssignmentAction,
   updateHolidayAction,
 } from "./holiday-actions";
+import {
+  createSubcontractorAction,
+  createSubcontractorPaymentAction,
+  deactivateSubcontractorAction,
+  reactivateSubcontractorAction,
+  updateSubcontractorAction,
+  updateSubcontractorPaymentAction,
+} from "./subcontractor-actions";
 
 export default async function AdminCrmPayrollPage() {
   await requireCrmAdmin();
@@ -36,15 +47,28 @@ export default async function AdminCrmPayrollPage() {
     { data: auditLog, error: auditLogError },
     { data: holidays, error: holidaysError },
     { data: assignments, error: assignmentsError },
+    { data: subcontractors, error: subcontractorsError },
+    { data: subcontractorPayments, error: subcontractorPaymentsError },
+    { data: clients, error: clientsError },
   ] = await Promise.all([
     supabase.from("crm_users").select("*").eq("role", "agent").order("full_name"),
     supabase.from("crm_payroll").select("*").order("payday", { ascending: false }),
     supabase.from("crm_payroll_audit_log").select("*").order("created_at", { ascending: false }),
     supabase.from("holidays").select("*").is("deleted_at", null).order("holiday_date", { ascending: false }),
     supabase.from("holiday_pay_assignments").select("*").not("crm_user_id", "is", null),
+    supabase.from("crm_subcontractors").select("*").order("full_name"),
+    supabase.from("crm_subcontractor_payments").select("*").order("period_start", { ascending: false }),
+    supabase.from("crm_clients").select("id, company_name").order("company_name"),
   ]);
 
-  const error = agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError;
+  const error =
+    agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
+    subcontractorsError ?? subcontractorPaymentsError ?? clientsError;
+
+  const subcontractorRows = (subcontractors ?? []) as SubcontractorRow[];
+  const subcontractorPaymentRows = (subcontractorPayments ?? []) as SubcontractorPaymentRow[];
+  const subcontractorsById = new Map(subcontractorRows.map((s) => [s.id, s]));
+  const agentCurrencyById = new Map(((agents ?? []) as CrmUserRow[]).map((a) => [a.id, a.payroll_currency]));
 
   return (
     <div>
@@ -104,6 +128,28 @@ export default async function AdminCrmPayrollPage() {
               assignHolidayAction={assignHolidayAction}
               removeAssignmentAction={removeAssignmentAction}
               overrideAssignmentAmountAction={overrideAssignmentAmountAction}
+            />
+          </div>
+
+          <div className="mt-8">
+            <SubcontractorsAdminSection
+              crmLabel="Winsalot Growth CRM"
+              subcontractors={subcontractorRows}
+              payments={subcontractorPaymentRows}
+              businessClients={(clients ?? []).map((c) => ({ id: c.id, name: c.company_name }))}
+              createSubcontractorAction={createSubcontractorAction}
+              updateSubcontractorAction={updateSubcontractorAction}
+              deactivateSubcontractorAction={deactivateSubcontractorAction}
+              reactivateSubcontractorAction={reactivateSubcontractorAction}
+              createSubcontractorPaymentAction={createSubcontractorPaymentAction}
+              updateSubcontractorPaymentAction={updateSubcontractorPaymentAction}
+            />
+          </div>
+
+          <div className="mt-8">
+            <PayrollCostSummary
+              employeeTotals={sumPayrollRecordsByCurrency((records ?? []) as PayrollRecord[], agentCurrencyById)}
+              subcontractorTotals={sumSubcontractorPaymentsByCurrency(subcontractorPaymentRows, subcontractorsById)}
             />
           </div>
         </div>
