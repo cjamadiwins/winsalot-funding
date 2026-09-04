@@ -62,7 +62,7 @@ export default async function LeadgenAdminPerformancePage() {
           href="/leadgen/admin/performance/call-notes"
           className="rounded-full border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
         >
-          View All Call Notes
+          View All Call Logs
         </Link>
       </div>
 
