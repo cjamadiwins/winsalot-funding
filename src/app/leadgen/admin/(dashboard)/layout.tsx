@@ -33,6 +33,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Opportunity Finder", href: "/leadgen/admin/opportunity-finder", icon: <Target /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
+  { label: "Call Logs", href: "/leadgen/admin/performance/call-notes", icon: <PhoneCall /> },
   { label: "Dialpad Performance", href: "/leadgen/admin/dialpad", icon: <PhoneCall /> },
   { label: "Incentives", href: "/leadgen/admin/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/leadgen/admin/attendance", icon: <Clock /> },
