@@ -402,7 +402,18 @@ export function formatNgn(amount: number): string {
 // display/formatting concept - there is no FX conversion anywhere in this
 // codebase, so a payroll figure is always the same number regardless of
 // which of these it's labelled with; only the symbol/formatting changes.
-export const PAYROLL_CURRENCIES = ["NGN", "PHP", "CAD", "USD"] as const;
+export const PAYROLL_CURRENCIES = [
+  "NGN",
+  "PHP",
+  "CAD",
+  "USD",
+  "GBP",
+  "EUR",
+  "GHS",
+  "KES",
+  "ZAR",
+  "INR",
+] as const;
 export type PayrollCurrency = (typeof PAYROLL_CURRENCIES)[number];
 
 export const PAYROLL_CURRENCY_LABELS: Record<PayrollCurrency, string> = {
@@ -410,6 +421,12 @@ export const PAYROLL_CURRENCY_LABELS: Record<PayrollCurrency, string> = {
   PHP: "PHP — Philippine Peso",
   CAD: "CAD — Canadian Dollar",
   USD: "USD — US Dollar",
+  GBP: "GBP — British Pound",
+  EUR: "EUR — Euro",
+  GHS: "GHS — Ghanaian Cedi",
+  KES: "KES — Kenyan Shilling",
+  ZAR: "ZAR — South African Rand",
+  INR: "INR — Indian Rupee",
 };
 
 const PAYROLL_CURRENCY_LOCALES: Record<PayrollCurrency, string> = {
@@ -417,6 +434,12 @@ const PAYROLL_CURRENCY_LOCALES: Record<PayrollCurrency, string> = {
   PHP: "en-PH",
   CAD: "en-CA",
   USD: "en-US",
+  GBP: "en-GB",
+  EUR: "en-IE",
+  GHS: "en-US",
+  KES: "en-KE",
+  ZAR: "en-US",
+  INR: "en-IN",
 };
 
 // The general form of formatNgn above, for an arbitrary agent currency -
@@ -430,6 +453,11 @@ export function formatCurrency(amount: number, currency: PayrollCurrency): strin
   return new Intl.NumberFormat(PAYROLL_CURRENCY_LOCALES[currency], {
     style: "currency",
     currency,
+    // "narrowSymbol" is identical to the default for every currency this
+    // codebase already shipped (NGN/PHP/CAD/USD/GBP/EUR/INR) - verified
+    // byte-for-byte - and is what gets GHS its "GH₵" and ZAR its plain "R"
+    // instead of the bare ISO code Intl falls back to otherwise.
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
