@@ -11,7 +11,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import { isLeadgenBrentsEssentials, isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
-import { isValidMobileNumber } from "@/lib/appointment-sms";
+import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
+import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 
 export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: string };
 
@@ -138,6 +139,17 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
       notes: `Appointment self-booked via the built-in booking page for ${date} ${time} (${LEADGEN_BOOKING_TIMEZONE}).`,
     });
   }
+
+  await sendImmediateAppointmentConfirmation(admin, {
+    table: "leadgen_appointment_sms_reminders",
+    appointmentId: appointment.id as string,
+    leadId: matchedLeadId,
+    scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(date, time, LEADGEN_BOOKING_TIMEZONE)).toISOString(),
+    timezone: LEADGEN_BOOKING_TIMEZONE,
+    prospectPhone: phone,
+    prospectConsent: isValidMobileNumber(phone),
+    businessName: client.name,
+  });
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
 

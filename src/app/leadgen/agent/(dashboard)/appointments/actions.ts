@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
-import { isValidMobileNumber } from "@/lib/appointment-sms";
+import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
+import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -91,6 +93,16 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     .select("id, name, contact_name, contact_email, appointment_notification_emails")
     .eq("id", clientId)
     .maybeSingle();
+  await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {
+    table: "leadgen_appointment_sms_reminders",
+    appointmentId: appointment.id as string,
+    leadId,
+    scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(appointmentDate, appointmentTime, timezone)).toISOString(),
+    timezone,
+    prospectPhone: phone,
+    prospectConsent: isValidMobileNumber(phone),
+    businessName: clientForNotify?.name ?? "our team",
+  });
   if (clientForNotify) {
     await notifyOfNewLeadgenAppointment(
       {
