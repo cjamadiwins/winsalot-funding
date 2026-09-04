@@ -32,7 +32,7 @@ alter table public.winsalot_appointments
 -- simpler rule and the safer one for compliance. Written only by the
 -- inbound Twilio webhook (service role) and read by both CRMs' reminder
 -- jobs before every prospect-facing send; the internal admin
--- notification (ADMIN_NOTIFICATION_PHONE) never consults this table, by
+-- notification (ADMIN_PHONE_NUMBER) never consults this table, by
 -- design - it is not a consumer the STOP/START compliance flow applies
 -- to, and the brief explicitly does not require consent for it.
 create table if not exists public.sms_opt_outs (
@@ -65,7 +65,7 @@ create policy "sms_opt_outs_crm_select"
 -- actually claimed, so an appointment with no row yet displays as
 -- "Scheduled" exactly like the email table. recipient_type splits the
 -- prospect-facing reminder (consent-gated) from the internal
--- ADMIN_NOTIFICATION_PHONE notification (never consent-gated) as two
+-- ADMIN_PHONE_NUMBER notification (never consent-gated) as two
 -- fully independent claims per occurrence, so one can never block or be
 -- confused with the other.
 -- ---------------------------------------------------------------------

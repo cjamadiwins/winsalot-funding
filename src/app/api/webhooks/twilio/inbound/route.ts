@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 // Records STOP/START (and Twilio's standard keyword synonyms - see
 // SMS_STOP_KEYWORDS/SMS_START_KEYWORDS) into sms_opt_outs, which both
 // CRMs' reminder jobs consult before every prospect-facing send (never
-// the internal ADMIN_NOTIFICATION_PHONE notification, which isn't
+// the internal ADMIN_PHONE_NUMBER notification, which isn't
 // consent-gated). Responds with empty TwiML rather than sending our own
 // confirmation text - Twilio's own carrier-level Advanced Opt-Out
 // feature (on by default on most toll-free/10DLC numbers) already

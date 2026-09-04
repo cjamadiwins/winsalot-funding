@@ -852,7 +852,7 @@ export type LeadgenBusinessAppointmentReminderSettingsRow = {
 // reminders.sql) - alongside the email reminder above, never replacing
 // it. recipient_type separates the prospect-facing reminder (gated on
 // sms_consent + a valid phone + not opted out) from the internal
-// ADMIN_NOTIFICATION_PHONE notification (neither gate applies) as two
+// ADMIN_PHONE_NUMBER notification (neither gate applies) as two
 // fully independent claims per occurrence. See
 // src/lib/appointment-sms.ts for the claim/send logic shared with the
 // Growth CRM's equivalent table.

@@ -253,7 +253,7 @@ export type SendAppointmentSmsParams = {
   occurrenceKey: string;
   scheduledAppointmentAtIso: string;
   // Raw phone as stored on the appointment (prospect) or
-  // process.env.ADMIN_NOTIFICATION_PHONE (admin) - null if not on file
+  // process.env.ADMIN_PHONE_NUMBER (admin) - null if not on file
   // / not configured.
   toPhoneRaw: string | null;
   // Ignored for recipientType "admin" - the internal notification is
@@ -268,7 +268,7 @@ export async function claimAndSendAppointmentSms(
   opts: SendAppointmentSmsParams
 ): Promise<{ outcome: SmsOutcome; error?: string; recipientPhone?: string | null }> {
   const requiresConsent = opts.recipientType === "prospect";
-  const noPhoneDetail = opts.recipientType === "admin" ? "ADMIN_NOTIFICATION_PHONE is not configured." : "No mobile number on file.";
+  const noPhoneDetail = opts.recipientType === "admin" ? "ADMIN_PHONE_NUMBER is not configured." : "No mobile number on file.";
 
   if (opts.dryRun) {
     if (requiresConsent && !opts.consentGiven) return { outcome: "skipped_no_consent" };
@@ -382,7 +382,7 @@ export async function sendAppointmentReminderSmsPair(
   const adminResult = await claimAndSendAppointmentSms(admin, {
     ...shared,
     recipientType: "admin",
-    toPhoneRaw: process.env.ADMIN_NOTIFICATION_PHONE ?? null,
+    toPhoneRaw: process.env.ADMIN_PHONE_NUMBER ?? null,
     consentGiven: true,
     message: adminMessage,
   });
