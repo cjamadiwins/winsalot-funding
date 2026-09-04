@@ -97,12 +97,12 @@ export default function AgentCampaignSelector({
     <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
       <div className="sm:flex sm:items-end sm:justify-between sm:gap-5">
         <div className="min-w-0 flex-1">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Campaign</h2>
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Business</h2>
           <p className="mt-1 text-[13px] text-slate-600">Select the business you are working on now.</p>
         </div>
         <div className="mt-3 flex min-w-0 flex-col gap-1.5 sm:mt-0 sm:w-80">
           <label htmlFor="current-campaign" className="text-[12px] font-semibold text-slate-700">
-            Select Campaign / Current Campaign
+            Select Business / Current Business
           </label>
           <select
             id="current-campaign"
@@ -127,13 +127,13 @@ export default function AgentCampaignSelector({
       </div>
 
       <div className="mt-4 rounded-xl border border-sky-300 bg-white px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Current Campaign</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Current Business</div>
         <div className="mt-1 text-2xl font-extrabold uppercase tracking-tight text-slate-900 sm:text-3xl">{businessLabel}</div>
       </div>
 
       <div className="mt-4 border-t border-sky-200 pt-4">
-        <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Campaign Call Script</h3>
-        {scriptKey === null && <p className="mt-2 text-[13.5px] text-slate-600">Select a campaign to view its call script.</p>}
+        <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Current Business Call Script</h3>
+        {scriptKey === null && <p className="mt-2 text-[13.5px] text-slate-600">Select a business to view its call script.</p>}
         {scriptKey === "brents-essentials" && (
           <div className="mt-3 text-[13.5px] leading-6 text-slate-700">
             <BrentsEssentialsCallScript agentFullName={agentFullName} />

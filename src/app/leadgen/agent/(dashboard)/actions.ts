@@ -37,7 +37,7 @@ export async function updateCurrentCampaignAction(
   // LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS, but this rejects any other
   // campaign id (e.g. "Q3 Growth Campaign") even if posted directly.
   if (campaignId && !isLeadgenAgentDashboardCampaignId(campaignId)) {
-    return { status: "error", message: "That campaign is not available for selection." };
+    return { status: "error", message: "That business is not available for selection." };
   }
 
   const admin = getSupabaseAdmin();
@@ -51,10 +51,10 @@ export async function updateCurrentCampaignAction(
       .maybeSingle();
 
     if (campaignError) {
-      return { status: "error", message: "Could not verify the selected campaign. Please try again." };
+      return { status: "error", message: "Could not verify the selected business. Please try again." };
     }
     if (!campaign) {
-      return { status: "error", message: "The selected campaign is no longer active." };
+      return { status: "error", message: "The selected business is no longer active." };
     }
   }
 
@@ -67,10 +67,10 @@ export async function updateCurrentCampaignAction(
     .select("id");
 
   if (error) {
-    return { status: "error", message: "Could not save your campaign selection. Please try again." };
+    return { status: "error", message: "Could not save your business selection. Please try again." };
   }
   if (!updated || updated.length === 0) {
-    return { status: "error", message: "Could not save your campaign selection: your agent account could not be found." };
+    return { status: "error", message: "Could not save your business selection: your agent account could not be found." };
   }
 
   revalidatePath("/leadgen/agent");
