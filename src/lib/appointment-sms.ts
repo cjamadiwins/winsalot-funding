@@ -12,7 +12,7 @@ import { sendTrackedSmsToNumber, toE164 } from "./twilio";
 // name, and whether a lead_id exists to attach, differ - so it lives
 // here once rather than being duplicated twice.
 
-export type SmsReminderType = "24_hour_reminder" | "1_hour_reminder";
+export type SmsReminderType = "booking_confirmation" | "24_hour_reminder" | "1_hour_reminder";
 export type SmsRecipientType = "prospect" | "admin";
 export type SmsReminderTable = "leadgen_appointment_sms_reminders" | "winsalot_appointment_sms_reminders";
 
@@ -124,6 +124,22 @@ export function buildProspectReminderSms(params: { businessName: string; isToday
   const when = params.isToday ? "today" : "tomorrow";
   return shrinkToFit(
     (name) => `Reminder from Winsalot Corp.: Your appointment with ${name} is ${when} at ${params.timeLabel}. Reply STOP to opt out.`,
+    params.businessName
+  );
+}
+
+export function formatSmsDateLabel(scheduledMs: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(scheduledMs));
+}
+
+export function buildAppointmentConfirmationSms(params: { businessName: string; dateLabel: string; timeLabel: string }): string {
+  return shrinkToFit(
+    (name) => `Winsalot Corp.: Your appointment with ${name} is confirmed for ${params.dateLabel} at ${params.timeLabel}. Reply STOP to opt out.`,
     params.businessName
   );
 }
@@ -311,6 +327,43 @@ export async function claimAndSendAppointmentSms(
     await markSmsTerminal(admin, opts.table, reminderId, "failed", detail);
     return { outcome: "failed", error: detail, recipientPhone: phoneE164 };
   }
+}
+
+// Immediate, prospect-facing confirmation used by every successful booking
+// path in both CRMs. It deliberately uses the same claim table, Twilio sender,
+// STOP lookup, and delivery callback as scheduled reminders. The unique claim
+// makes a retried server action harmless: the same appointment can only send
+// one confirmation for its current scheduled occurrence.
+export async function sendImmediateAppointmentConfirmation(
+  admin: SupabaseClient,
+  params: {
+    table: SmsReminderTable;
+    appointmentId: string;
+    leadId?: string | null;
+    scheduledAppointmentAtIso: string;
+    timezone: string;
+    prospectPhone: string | null;
+    prospectConsent: boolean;
+    businessName: string;
+  }
+): Promise<{ outcome: SmsOutcome; error?: string; recipientPhone?: string | null }> {
+  const scheduledMs = new Date(params.scheduledAppointmentAtIso).getTime();
+  const timeLabel = formatSmsTimeLabel(scheduledMs, params.timezone);
+  const dateLabel = formatSmsDateLabel(scheduledMs, params.timezone);
+
+  return claimAndSendAppointmentSms(admin, {
+    table: params.table,
+    appointmentId: params.appointmentId,
+    leadId: params.leadId,
+    reminderType: "booking_confirmation",
+    recipientType: "prospect",
+    occurrenceKey: params.scheduledAppointmentAtIso,
+    scheduledAppointmentAtIso: params.scheduledAppointmentAtIso,
+    toPhoneRaw: params.prospectPhone,
+    consentGiven: params.prospectConsent,
+    message: buildAppointmentConfirmationSms({ businessName: params.businessName, dateLabel, timeLabel }),
+    dryRun: false,
+  });
 }
 
 // ---------------------------------------------------------------------
