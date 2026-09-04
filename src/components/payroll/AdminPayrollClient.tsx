@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState, useTransition } from "re
 import {
   calculateFinalPay,
   FIXED_INTERNET_ALLOWANCE,
+  formatAmountInputDisplay,
   formatCurrency,
   formatDateShort,
   formatPayPeriodLabel,
@@ -11,6 +12,7 @@ import {
   hourlyRate,
   PAYROLL_AUDIT_ACTION_LABELS,
   PAYROLL_STATUS_LABELS,
+  sanitizeAmountInput,
   STANDARD_BIWEEKLY_WAGE,
   STANDARD_PAID_HOURS,
   type PayrollAuditLogRow,
@@ -459,14 +461,17 @@ function PayrollFormFields({
         <div>
           <label className={labelClasses}>Incentive / Bonus Earned ({currency})</label>
           <input
-            type="number"
-            name="bonus_commission"
-            min={0}
-            step="0.01"
-            value={values.bonusCommission}
-            onChange={(e) => setField("bonusCommission", e.target.value)}
+            type="text"
+            inputMode="decimal"
+            value={formatAmountInputDisplay(values.bonusCommission)}
+            onChange={(e) => setField("bonusCommission", sanitizeAmountInput(e.target.value))}
+            placeholder="0"
             className={`${inputClasses} mt-1`}
           />
+          {/* The visible field above is comma-formatted for display only -
+              this hidden input carries the plain numeric value that's
+              actually submitted and stored. */}
+          <input type="hidden" name="bonus_commission" value={values.bonusCommission} />
         </div>
         <div>
           <label className={labelClasses}>Admin Additions ({currency})</label>

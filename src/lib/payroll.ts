@@ -435,6 +435,33 @@ export function formatCurrency(amount: number, currency: PayrollCurrency): strin
   }).format(amount);
 }
 
+// Backing value for a comma-formatted money input field (e.g. Incentive /
+// Bonus Earned on the payroll form) - digits and at most one decimal
+// point, with any leading zeros stripped. This is what actually gets
+// calculated with and submitted; formatAmountInputDisplay below is
+// display-only. Guards against a field that still holds its "0" default
+// ending up showing a literal "010000" once the admin starts typing.
+export function sanitizeAmountInput(raw: string): string {
+  let cleaned = raw.replace(/[^\d.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+  }
+  const [intPart, decimalPart] = cleaned.split(".");
+  const strippedInt = intPart.replace(/^0+(?=\d)/, "");
+  return decimalPart === undefined ? strippedInt : `${strippedInt}.${decimalPart}`;
+}
+
+// Comma-grouped display text for a sanitizeAmountInput() value, e.g.
+// "10000" -> "10,000". Never touches the underlying numeric value - only
+// what's rendered in the visible input.
+export function formatAmountInputDisplay(raw: string): string {
+  if (!raw) return raw;
+  const [intPart, decimalPart] = raw.split(".");
+  const groupedInt = intPart === "" ? "" : Number(intPart).toLocaleString("en-US");
+  return decimalPart === undefined ? groupedInt : `${groupedInt}.${decimalPart}`;
+}
+
 // "August 21, 2026"
 export function formatDateLong(iso: string): string {
   return parseIsoDateUtc(iso).toLocaleDateString("en-US", {

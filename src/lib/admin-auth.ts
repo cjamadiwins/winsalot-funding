@@ -58,6 +58,14 @@ export async function requireAdminUser() {
     redirect("/admin/login?error=This account does not have access to the quote dashboard.");
   }
 
+  // Same rationale as the agent exclusion above - a subcontractor is a
+  // legitimate Growth CRM account, just for its own /subcontractor portal,
+  // never for the admin dashboard. Redirected (not signed out), the same
+  // treatment agent accounts get here.
+  if (crmUser?.role === "subcontractor") {
+    redirect("/admin/login?error=This account does not have access to the admin dashboard.");
+  }
+
   if (!crmUser || !crmUser.active) {
     await supabase.auth.signOut();
     redirect("/admin/login?error=This account is not set up for Growth CRM admin access.");
