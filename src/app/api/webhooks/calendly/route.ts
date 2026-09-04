@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
 
 export const runtime = "nodejs";
 
@@ -227,6 +228,7 @@ export async function POST(request: NextRequest) {
       contact_name: invitee.name ?? null,
       phone: invitee.text_reminder_number ?? null,
       email: invitee.email ?? null,
+      sms_consent: isValidMobileNumber(invitee.text_reminder_number),
       appointment_date: date,
       appointment_time: time,
       timezone,
@@ -259,6 +261,17 @@ export async function POST(request: NextRequest) {
       notes: `Appointment self-booked via booking link for ${date} ${time} (${timezone}).`,
     });
   }
+
+  await sendImmediateAppointmentConfirmation(admin, {
+    table: "leadgen_appointment_sms_reminders",
+    appointmentId: appointment.id as string,
+    leadId: matchedLeadId,
+    scheduledAppointmentAtIso: startTime,
+    timezone,
+    prospectPhone: invitee.text_reminder_number ?? null,
+    prospectConsent: isValidMobileNumber(invitee.text_reminder_number),
+    businessName: client.name,
+  });
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
 
