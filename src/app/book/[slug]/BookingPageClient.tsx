@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { formatLeadgenBookingSlot, LEADGEN_BOOKING_TIMEZONE_LABEL, type LeadgenBookingDay } from "@/lib/leadgen-booking";
 import { isValidEmail } from "@/lib/leadgen-types";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import { bookLeadgenAppointmentAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14.5px] text-slate-900";
@@ -31,7 +32,6 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [smsConsent, setSmsConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ date: string; time: string } | null>(null);
@@ -54,7 +54,6 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
     formData.set("business_name", businessName.trim());
     formData.set("email", email.trim());
     formData.set("phone", phone.trim());
-    if (smsConsent) formData.set("sms_consent", "on");
 
     try {
       const result = await Promise.race([
@@ -181,10 +180,7 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
                 <span className="text-[13px] font-semibold text-slate-600">Phone Number</span>
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required className={inputClass} />
               </label>
-              <label className="flex items-start gap-2 text-[12.5px] text-slate-600">
-                <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5" />
-                <span>Text me SMS reminders about this appointment (24 hours and 1 hour before). Reply STOP anytime to opt out.</span>
-              </label>
+              <p className="text-[12px] text-slate-500">{SMS_CONSENT_NOTICE}</p>
             </div>
           </div>
         )}

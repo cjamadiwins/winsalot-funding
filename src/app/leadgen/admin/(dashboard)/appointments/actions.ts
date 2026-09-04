@@ -7,6 +7,7 @@ import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import { claimManualAppointmentReminderSlot, updateLeadgenAppointmentReminderSettings } from "@/lib/leadgen-appointment-reminders";
+import { isValidMobileNumber } from "@/lib/appointment-sms";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
   LEADGEN_APPOINTMENT_STATUSES,
@@ -94,7 +95,10 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       contact_name: contactName,
       phone,
       email,
-      sms_consent: formData.get("sms_consent") === "on",
+      // No separate consent checkbox - every appointment with a valid
+      // mobile number is automatically eligible for SMS reminders, on
+      // the notice shown beneath the phone field.
+      sms_consent: isValidMobileNumber(phone),
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
       timezone,
@@ -285,12 +289,15 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
   // per the brief, never award/re-stamp an incentive twice from an edit).
   const incentiveStatusChanged = (existingAppointment.incentive_status ?? null) !== incentiveStatus;
 
+  const editedPhone = textOrNull(formData, "phone");
   const updatedFields: LeadgenAppointmentEditableFields = {
     business_name: businessName,
     contact_name: textOrNull(formData, "contact_name"),
-    phone: textOrNull(formData, "phone"),
+    phone: editedPhone,
     email: textOrNull(formData, "email"),
-    sms_consent: formData.get("sms_consent") === "on",
+    // Recomputed on every edit too - if the phone number changes, SMS
+    // eligibility follows the new number automatically.
+    sms_consent: isValidMobileNumber(editedPhone),
     appointment_date: appointmentDate,
     appointment_time: appointmentTime,
     timezone: String(formData.get("timezone") ?? "").trim() || existingAppointment.timezone,

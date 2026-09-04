@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import {
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL,
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE,
@@ -40,7 +41,7 @@ export type WinsalotAppointmentActions = {
   cancel: (id: string, reason: string | null) => Promise<{ error?: string }>;
   edit: (
     id: string,
-    input: { businessName: string; contactName: string; email: string; phone: string; smsConsent: boolean; serviceType: OpportunityType; notes: string }
+    input: { businessName: string; contactName: string; email: string; phone: string; serviceType: OpportunityType; notes: string }
   ) => Promise<{ error?: string }>;
   remove?: (id: string) => Promise<{ error?: string }>;
   // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
@@ -138,7 +139,6 @@ export default function WinsalotAppointmentsListClient({
         contactName: String(formData.get("contact_name") ?? ""),
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
-        smsConsent: formData.get("sms_consent") === "on",
         serviceType: String(formData.get("service_type") ?? "lead_generation") as OpportunityType,
         notes: String(formData.get("notes") ?? ""),
       });
@@ -362,10 +362,7 @@ export default function WinsalotAppointmentsListClient({
                 <input name="contact_name" defaultValue={appt.contact_name} placeholder="Contact name" className={inputClass} />
                 <input name="email" type="email" defaultValue={appt.email} placeholder="Email" className={inputClass} />
                 <input name="phone" defaultValue={appt.phone} placeholder="Phone" className={inputClass} />
-                <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
-                  <input type="checkbox" name="sms_consent" defaultChecked={appt.sms_consent} className="h-4 w-4" />
-                  SMS reminder consent
-                </label>
+                <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
                 <select name="service_type" defaultValue={appt.service_type} className={inputClass}>
                   {OPPORTUNITY_TYPES.map((t) => (
                     <option key={t} value={t}>

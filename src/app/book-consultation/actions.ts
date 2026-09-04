@@ -12,7 +12,6 @@ export type BookWinsalotConsultationInput = {
   businessName: string;
   email: string;
   phone: string;
-  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string;
   startUtcIso: string;
@@ -44,7 +43,6 @@ export async function bookWinsalotConsultationAction(input: BookWinsalotConsulta
     businessName: input.businessName,
     email: input.email,
     phone: input.phone,
-    smsConsent: input.smsConsent,
     serviceType: input.serviceType,
     notes: input.notes.trim() ? input.notes.trim() : null,
     startUtcIso: input.startUtcIso,

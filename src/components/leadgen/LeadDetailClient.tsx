@@ -39,6 +39,7 @@ import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
 import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
 import AppointmentEmailActions from "./AppointmentEmailActions";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -833,11 +834,6 @@ function BookAppointmentInlineForm({
       <input type="hidden" name="phone" value={lead.phone ?? ""} />
       <input type="hidden" name="email" value={lead.email ?? ""} />
 
-      <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
-        <input type="checkbox" name="sms_consent" className="h-4 w-4" />
-        SMS reminder consent (text {lead.phone || "this contact"} appointment reminders)
-      </label>
-
       <label className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>
         <input name="appointment_date" type="date" required className={inputClass} />
@@ -894,6 +890,7 @@ function BookAppointmentInlineForm({
         />
         Email the client a notification now
       </label>
+      <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
       <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
         {isPending ? "Booking…" : "Book Appointment"}
       </button>
