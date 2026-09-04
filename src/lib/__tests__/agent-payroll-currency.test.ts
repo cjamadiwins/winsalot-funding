@@ -72,11 +72,45 @@ describe("updateAgentAction (Growth CRM): payroll_currency", () => {
     const formData = new FormData();
     formData.set("full_name", "Test Agent");
     formData.set("role", "agent");
-    formData.set("payroll_currency", "EUR");
+    formData.set("payroll_currency", "JPY");
 
     const result = await updateAgentAction("agent-1", formData);
     expect(result.error).toMatch(/invalid payroll currency/i);
     expect(mockSupabase.updateMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts one of the newly added currencies (GHS) same as any other", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateAgentAction } = await import("@/app/admin/(dashboard)/crm/agents/actions");
+
+    const formData = new FormData();
+    formData.set("full_name", "Test Agent");
+    formData.set("role", "agent");
+    formData.set("active", "on");
+    formData.set("payroll_currency", "GHS");
+
+    const result = await updateAgentAction("agent-1", formData);
+    expect(result.error).toBeUndefined();
+    expect(mockSupabase.updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ payroll_currency: "GHS" })
+    );
+  });
+
+  it("changing one agent's currency does not touch any other agent's row", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateAgentAction } = await import("@/app/admin/(dashboard)/crm/agents/actions");
+
+    const formData = new FormData();
+    formData.set("full_name", "Test Agent");
+    formData.set("role", "agent");
+    formData.set("active", "on");
+    formData.set("payroll_currency", "USD");
+
+    await updateAgentAction("agent-only-this-one", formData);
+    expect(mockSupabase.eqMock).toHaveBeenCalledWith("id", "agent-only-this-one");
+    expect(mockSupabase.eqMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -107,7 +141,7 @@ describe("updateLeadgenUserAction (Lead Generation CRM): payroll_currency", () =
     const formData = new FormData();
     formData.set("full_name", "Test Agent");
     formData.set("active", "on");
-    formData.set("payroll_currency", "GBP");
+    formData.set("payroll_currency", "JPY");
 
     const result = await updateLeadgenUserAction("agent-2", formData);
     expect(result.error).toMatch(/invalid payroll currency/i);

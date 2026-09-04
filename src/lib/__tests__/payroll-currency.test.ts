@@ -7,8 +7,19 @@ import { formatCurrency, PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS, sumPayroll
 // varies per currency is formatCurrency's own symbol/formatting.
 
 describe("PAYROLL_CURRENCIES", () => {
-  it("supports exactly the four currencies in the brief", () => {
-    expect(PAYROLL_CURRENCIES).toEqual(["NGN", "PHP", "CAD", "USD"]);
+  it("supports all ten currencies agents can be paid in", () => {
+    expect(PAYROLL_CURRENCIES).toEqual([
+      "NGN",
+      "PHP",
+      "CAD",
+      "USD",
+      "GBP",
+      "EUR",
+      "GHS",
+      "KES",
+      "ZAR",
+      "INR",
+    ]);
   });
 
   it("has a human-readable label for every supported currency", () => {
@@ -34,6 +45,32 @@ describe("formatCurrency", () => {
 
   it("formats USD with a dollar sign", () => {
     expect(formatCurrency(75_000, "USD")).toBe("$75,000");
+  });
+
+  it("formats GBP with the Pound symbol", () => {
+    expect(formatCurrency(75_000, "GBP")).toBe("£75,000");
+  });
+
+  it("formats EUR with the Euro symbol", () => {
+    expect(formatCurrency(75_000, "EUR")).toBe("€75,000");
+  });
+
+  it("formats GHS with the Cedi symbol", () => {
+    expect(formatCurrency(75_000, "GHS")).toContain("₵");
+    expect(formatCurrency(75_000, "GHS")).toContain("75,000");
+  });
+
+  it("formats KES with a Kenyan Shilling symbol", () => {
+    expect(formatCurrency(75_000, "KES")).toMatch(/Ksh/i);
+    expect(formatCurrency(75_000, "KES")).toContain("75,000");
+  });
+
+  it("formats ZAR with the Rand symbol", () => {
+    expect(formatCurrency(75_000, "ZAR")).toMatch(/^R\s?75,000$/);
+  });
+
+  it("formats INR with the Rupee symbol", () => {
+    expect(formatCurrency(75_000, "INR")).toContain("₹");
   });
 
   it("never shows a trailing .00 for whole amounts, but does show cents when present", () => {
