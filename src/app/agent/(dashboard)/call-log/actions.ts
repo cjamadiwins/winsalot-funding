@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { CALL_LOG_AUTOMATIC_NOTES, isCallLogOutcome } from "@/lib/call-log";
+import { CALL_LOG_AUTOMATIC_NOTES, GROWTH_CRM_BUSINESS_CLIENT_NAME, isCallLogOutcome } from "@/lib/call-log";
 
 type ActionResult = { error?: string };
 
@@ -26,6 +26,11 @@ export async function createGrowthCallLogAction(formData: FormData): Promise<Act
     phone,
     outcome,
     notes,
+    // Growth CRM agents always prospect on Winsalot Corp.'s own behalf -
+    // never trust a client-supplied value for this even though the form
+    // field is read-only, since it's a plain HTML input an API call could
+    // bypass; the database also pins this via a check constraint.
+    business_client_name: GROWTH_CRM_BUSINESS_CLIENT_NAME,
   });
 
   if (error) return { error: `Failed to save the call: ${error.message}` };

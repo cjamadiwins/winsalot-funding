@@ -9,20 +9,30 @@ import {
   type CallLogOutcome,
   type CallLogRow,
 } from "@/lib/call-log";
+import SearchableSelect from "@/components/crm-ui/SearchableSelect";
 
 type ActionResult = { error?: string };
+
+// Growth CRM: the Business/Client is always the fixed value shown in
+// `value` - no selection needed, so the field renders read-only.
+// Lead Gen CRM: the agent must pick one of the CRM's existing clients.
+export type BusinessClientField =
+  | { mode: "fixed"; value: string }
+  | { mode: "select"; options: { id: string; name: string }[] };
 
 type Props = {
   crmLabel: string;
   records: CallLogRow[];
   createAction: (formData: FormData) => Promise<ActionResult>;
+  businessClientField: BusinessClientField;
 };
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 
-export default function AgentCallLogClient({ crmLabel, records, createAction }: Props) {
+export default function AgentCallLogClient({ crmLabel, records, createAction, businessClientField }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
+  const [clientId, setClientId] = useState<string | null>(null);
   const automaticNote = CALL_LOG_AUTOMATIC_NOTES[outcome];
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +47,10 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
   function submit(formData: FormData) {
     setError(null);
     setSaved(false);
+    if (businessClientField.mode === "select" && !clientId) {
+      setError("Select a Business / Client.");
+      return;
+    }
     startTransition(async () => {
       const result = await createAction(formData);
       if (result.error) {
@@ -45,6 +59,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
       }
       setSaved(true);
       setOutcome("No Answer");
+      setClientId(null);
       setFormKey((key) => key + 1);
     });
   }
@@ -80,6 +95,32 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
               className={`${inputClass} mt-1`}
             />
           </label>
+        </div>
+
+        <div className="mt-4">
+          {businessClientField.mode === "fixed" ? (
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Business / Client *
+              <input
+                value={businessClientField.value}
+                readOnly
+                disabled
+                className={`${inputClass} mt-1 bg-slate-50 text-slate-600`}
+              />
+              <span className="mt-1 block text-[11px] font-normal normal-case text-slate-400">
+                Agents prospect on behalf of Winsalot Corp. — set automatically.
+              </span>
+            </label>
+          ) : (
+            <SearchableSelect
+              label="Business / Client *"
+              placeholder="Search clients…"
+              options={businessClientField.options.map((client) => ({ value: client.id, label: client.name }))}
+              value={clientId}
+              onChange={setClientId}
+            />
+          )}
+          <input type="hidden" name="client_id" value={clientId ?? ""} />
         </div>
 
         <fieldset className="mt-4">
@@ -153,11 +194,12 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <table className="min-w-[760px] w-full text-left text-sm">
+            <table className="min-w-[900px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Date &amp; Time</th>
                   <th className="px-4 py-3">Business</th>
+                  <th className="px-4 py-3">Business / Client</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Result</th>
                   <th className="px-4 py-3">Notes</th>
@@ -168,6 +210,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
                   <tr key={record.id} className="align-top">
                     <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatCallLogDate(record.created_at)}</td>
                     <td className="px-4 py-3 font-semibold text-slate-800">{record.business_name}</td>
+                    <td className="px-4 py-3 text-slate-600">{record.businessClient}</td>
                     <td className="px-4 py-3 text-slate-600">{record.phone}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[record.outcome]}`}>

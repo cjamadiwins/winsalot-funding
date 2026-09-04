@@ -3,8 +3,13 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminCallLogReport, { type AdminCallLogEntry } from "@/components/call-log/AdminCallLogReport";
 import { isCallLogOutcome, type CallLogRow } from "@/lib/call-log";
 
-type SearchParams = Promise<{ agent?: string; outcome?: string }>;
+type SearchParams = Promise<{ agent?: string; outcome?: string; client?: string }>;
 type AgentRow = { id: string; full_name: string; email: string };
+type ClientRow = { id: string; name: string };
+type LeadgenCallLogRecord = Omit<CallLogRow, "businessClient"> & {
+  client_id: string | null;
+  leadgen_clients: { name: string } | null;
+};
 
 export default async function LeadgenAdminCallLogPage({ searchParams }: { searchParams: SearchParams }) {
   await requireLeadgenAdmin();
@@ -13,24 +18,29 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
 
   let query = admin
     .from("leadgen_call_logs")
-    .select("id, created_at, agent_id, business_name, phone, outcome, notes")
+    .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_id, leadgen_clients(name)")
     .order("created_at", { ascending: false })
     .limit(1000);
 
   if (params.agent && params.agent !== "all") query = query.eq("agent_id", params.agent);
   if (params.outcome && isCallLogOutcome(params.outcome)) query = query.eq("outcome", params.outcome);
+  if (params.client && params.client !== "all") query = query.eq("client_id", params.client);
 
-  const [{ data: logs, error }, { data: agents }] = await Promise.all([
+  const [{ data: logs, error }, { data: agents }, { data: clients }] = await Promise.all([
     query,
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").order("full_name"),
+    admin.from("leadgen_clients").select("id, name").order("name"),
   ]);
 
   const agentRows = (agents ?? []) as AgentRow[];
   const agentById = new Map(agentRows.map((agent) => [agent.id, agent.full_name || agent.email]));
-  const entries: AdminCallLogEntry[] = ((logs ?? []) as CallLogRow[]).map((log) => ({
-    ...log,
-    agentName: agentById.get(log.agent_id) ?? "Unknown agent",
-  }));
+  const entries: AdminCallLogEntry[] = ((logs ?? []) as unknown as LeadgenCallLogRecord[]).map(
+    ({ client_id: _client_id, leadgen_clients, ...log }) => ({
+      ...log,
+      businessClient: leadgen_clients?.name ?? "Unknown client",
+      agentName: agentById.get(log.agent_id) ?? "Unknown agent",
+    })
+  );
 
   return (
     <AdminCallLogReport
@@ -40,6 +50,10 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
       agents={agentRows.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
       selectedAgent={params.agent ?? "all"}
       selectedOutcome={params.outcome ?? "all"}
+      businessClientFilter={{
+        options: ((clients ?? []) as ClientRow[]).map((client) => ({ id: client.id, name: client.name })),
+        selected: params.client ?? "all",
+      }}
       errorMessage={error?.message}
     />
   );
