@@ -23,7 +23,7 @@ const inputClass =
 
 export default function AgentCallLogClient({ crmLabel, records, createAction }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
-  const [automaticNote, setAutomaticNote] = useState(CALL_LOG_AUTOMATIC_NOTES["No Answer"]);
+  const automaticNote = CALL_LOG_AUTOMATIC_NOTES[outcome];
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -31,7 +31,6 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
 
   function selectOutcome(next: CallLogOutcome) {
     setOutcome(next);
-    setAutomaticNote(CALL_LOG_AUTOMATIC_NOTES[next]);
     setSaved(false);
   }
 
@@ -46,7 +45,6 @@ export default function AgentCallLogClient({ crmLabel, records, createAction }: 
       }
       setSaved(true);
       setOutcome("No Answer");
-      setAutomaticNote(CALL_LOG_AUTOMATIC_NOTES["No Answer"]);
       setFormKey((key) => key + 1);
     });
   }
