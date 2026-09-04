@@ -5,6 +5,7 @@ import { isCallLogOutcome, type CallLogRow } from "@/lib/call-log";
 
 type SearchParams = Promise<{ agent?: string; outcome?: string }>;
 type AgentRow = { id: string; full_name: string; email: string };
+type CrmCallLogRecord = Omit<CallLogRow, "businessClient"> & { business_client_name: string };
 
 export default async function GrowthAdminCallLogPage({ searchParams }: { searchParams: SearchParams }) {
   await requireCrmAdmin();
@@ -13,7 +14,7 @@ export default async function GrowthAdminCallLogPage({ searchParams }: { searchP
 
   let query = admin
     .from("crm_call_logs")
-    .select("id, created_at, agent_id, business_name, phone, outcome, notes")
+    .select("id, created_at, agent_id, business_name, phone, outcome, notes, business_client_name")
     .order("created_at", { ascending: false })
     .limit(1000);
 
@@ -27,8 +28,9 @@ export default async function GrowthAdminCallLogPage({ searchParams }: { searchP
 
   const agentRows = (agents ?? []) as AgentRow[];
   const agentById = new Map(agentRows.map((agent) => [agent.id, agent.full_name || agent.email]));
-  const entries: AdminCallLogEntry[] = ((logs ?? []) as CallLogRow[]).map((log) => ({
+  const entries: AdminCallLogEntry[] = ((logs ?? []) as CrmCallLogRecord[]).map(({ business_client_name, ...log }) => ({
     ...log,
+    businessClient: business_client_name,
     agentName: agentById.get(log.agent_id) ?? "Unknown agent",
   }));
 

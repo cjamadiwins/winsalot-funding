@@ -24,6 +24,8 @@ export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
   Callback: "bg-orange-100 text-orange-800",
 };
 
+export const GROWTH_CRM_BUSINESS_CLIENT_NAME = "Winsalot Corp." as const;
+
 export type CallLogRow = {
   id: string;
   created_at: string;
@@ -32,6 +34,13 @@ export type CallLogRow = {
   phone: string;
   outcome: CallLogOutcome;
   notes: string;
+  // The client the agent is calling on behalf of - a required, permanent
+  // link chosen from each CRM's existing client records (never free text).
+  // Always "Winsalot Corp." in the Growth CRM (agents prospect on
+  // Winsalot's own behalf); the selected leadgen_clients.name in the Lead
+  // Generation CRM. Distinct from `business_name` above, which is the
+  // free-text name of the actual prospect/business being called.
+  businessClient: string;
 };
 
 export function isCallLogOutcome(value: string): value is CallLogOutcome {

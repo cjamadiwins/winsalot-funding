@@ -8,6 +8,10 @@ import {
 
 export type AdminCallLogEntry = CallLogRow & { agentName: string };
 export type AdminCallLogAgent = { id: string; name: string };
+export type AdminCallLogBusinessClientFilter = {
+  options: { id: string; name: string }[];
+  selected: string;
+};
 
 type Props = {
   title: string;
@@ -17,6 +21,10 @@ type Props = {
   selectedAgent: string;
   selectedOutcome: string;
   errorMessage?: string | null;
+  // Only the Lead Generation CRM (multiple clients) gets this filter -
+  // the Growth CRM's Business/Client is always "Winsalot Corp." on every
+  // row, so filtering by it would never narrow anything.
+  businessClientFilter?: AdminCallLogBusinessClientFilter;
 };
 
 export default function AdminCallLogReport({
@@ -27,6 +35,7 @@ export default function AdminCallLogReport({
   selectedAgent,
   selectedOutcome,
   errorMessage,
+  businessClientFilter,
 }: Props) {
   return (
     <div>
@@ -46,7 +55,11 @@ export default function AdminCallLogReport({
         </div>
       </div>
 
-      <form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1fr_auto]">
+      <form
+        className={`mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 ${
+          businessClientFilter ? "sm:grid-cols-[1fr_1fr_1fr_auto]" : "sm:grid-cols-[1fr_1fr_auto]"
+        }`}
+      >
         <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Agent
           <select name="agent" defaultValue={selectedAgent} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal normal-case text-slate-900">
@@ -56,6 +69,22 @@ export default function AdminCallLogReport({
             ))}
           </select>
         </label>
+
+        {businessClientFilter ? (
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Business / Client
+            <select
+              name="client"
+              defaultValue={businessClientFilter.selected}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal normal-case text-slate-900"
+            >
+              <option value="all">All clients</option>
+              {businessClientFilter.options.map((client) => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Call Result
@@ -82,12 +111,13 @@ export default function AdminCallLogReport({
         </p>
       ) : (
         <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="min-w-[900px] w-full text-left text-sm">
+          <table className="min-w-[1040px] w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Date &amp; Time</th>
                 <th className="px-4 py-3">Agent</th>
                 <th className="px-4 py-3">Business</th>
+                <th className="px-4 py-3">Business / Client</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Result</th>
                 <th className="px-4 py-3">Notes</th>
@@ -99,6 +129,7 @@ export default function AdminCallLogReport({
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatCallLogDate(entry.created_at)}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{entry.agentName}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800">{entry.business_name}</td>
+                  <td className="px-4 py-3 text-slate-600">{entry.businessClient}</td>
                   <td className="px-4 py-3 text-slate-600">{entry.phone}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[entry.outcome]}`}>
