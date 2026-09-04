@@ -138,6 +138,112 @@ describe("createHolidayAction", () => {
     await expect(createHolidayAction("growth", formData)).rejects.toThrow("not an admin");
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
+
+  it("always writes NGN as the currency, ignoring whatever a form submits - jurisdiction (e.g. Canada/Ontario) never determines payroll currency", async () => {
+    const mockSupabase = createMockSupabase({
+      holidays: [{ data: { id: "holiday-1" }, error: null }],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { createHolidayAction } = await import("@/lib/holiday-pay-actions");
+
+    const formData = new FormData();
+    formData.set("name", "Labour Day");
+    formData.set("holiday_date", "2026-09-07");
+    formData.set("jurisdiction", "Canada/Ontario");
+    formData.set("payment_type", "regular_paid_day");
+    formData.set("currency", "CAD"); // an admin (or a stale client) submitting CAD must not stick
+
+    const result = await createHolidayAction("leadgen", formData);
+    expect(result.error).toBeUndefined();
+
+    const holidaysCallIndex = mockSupabase.fromCalls.indexOf("holidays");
+    const holidaysChain = mockSupabase.from.mock.results[holidaysCallIndex].value as { insert: ReturnType<typeof vi.fn> };
+    expect(holidaysChain.insert).toHaveBeenCalledWith(expect.objectContaining({ currency: "NGN", jurisdiction: "Canada/Ontario" }));
+  });
+});
+
+describe("updateHolidayAction: currency always follows payroll (NGN), never the jurisdiction or a submitted value", () => {
+  it("rewrites an existing CAD-tagged holiday (e.g. a Canada/Ontario one) back to NGN on save", async () => {
+    const mockSupabase = createMockSupabase({
+      holidays: [
+        { data: { id: "holiday-1", deleted_at: null }, error: null }, // fetch existing
+        { data: null, error: null }, // update
+      ],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateHolidayAction } = await import("@/lib/holiday-pay-actions");
+
+    const formData = new FormData();
+    formData.set("name", "Labour Day");
+    formData.set("holiday_date", "2026-09-07");
+    formData.set("jurisdiction", "Canada/Ontario");
+    formData.set("payment_type", "regular_paid_day");
+    formData.set("currency", "CAD"); // stale/leftover value must not stick either
+
+    const result = await updateHolidayAction("leadgen", "holiday-1", formData);
+    expect(result.error).toBeUndefined();
+
+    const holidaysCallIndices = mockSupabase.fromCalls
+      .map((table, i) => (table === "holidays" ? i : -1))
+      .filter((i) => i !== -1);
+    const updateChain = mockSupabase.from.mock.results[holidaysCallIndices[1]].value as { update: ReturnType<typeof vi.fn> };
+    expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({ currency: "NGN", jurisdiction: "Canada/Ontario" }));
+  });
+});
+
+describe("assignHolidayAction: assignment-based eligibility (never automatic)", () => {
+  it("assigns pay only to the specific agents selected, leaving an unselected agent with no assignment", async () => {
+    const mockSupabase = createMockSupabase({
+      holidays: [{ data: { id: "h1", payment_type: "regular_paid_day", amount: null, percentage: null, deleted_at: null }, error: null }],
+      // The real query applies `.in("id", selectedIds)`, so only the
+      // selected agent is ever returned here - Agent Two (unassigned,
+      // e.g. because they were off before the holiday) never appears.
+      leadgen_users: [{ data: [{ id: "agent-1", full_name: "Agent One", email: "agent1@example.com" }], error: null }],
+      holiday_pay_assignments: [
+        { data: null, error: null }, // agent-1: no existing row
+        { data: null, error: null }, // insert succeeds
+      ],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { assignHolidayAction } = await import("@/lib/holiday-pay-actions");
+
+    const formData = new FormData();
+    formData.append("agent_ids", "agent-1");
+    const result = await assignHolidayAction("leadgen", "h1", formData);
+
+    expect(result.error).toBeUndefined();
+    expect(result.assignedCount).toBe(1);
+
+    const assignmentsCallIndex = mockSupabase.fromCalls.indexOf("holiday_pay_assignments");
+    const insertChain = mockSupabase.from.mock.results[assignmentsCallIndex + 1].value as { insert: ReturnType<typeof vi.fn> };
+    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({ leadgen_user_id: "agent-1", status: "assigned" }));
+
+    // Agent Two was never looked up, never queried for an existing row,
+    // and never inserted - "leave that agent unassigned" holds exactly.
+    const leadgenUsersCallIndex = mockSupabase.fromCalls.indexOf("leadgen_users");
+    const usersChain = mockSupabase.from.mock.results[leadgenUsersCallIndex].value as { in: ReturnType<typeof vi.fn> };
+    expect(usersChain.in).toHaveBeenCalledWith("id", ["agent-1"]);
+  });
+
+  it("never assigns anyone automatically when a holiday is created - eligibility always requires a separate, explicit Manage Assignments action", async () => {
+    const mockSupabase = createMockSupabase({
+      holidays: [{ data: { id: "holiday-1" }, error: null }],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { createHolidayAction } = await import("@/lib/holiday-pay-actions");
+
+    const formData = new FormData();
+    formData.set("name", "Labour Day");
+    formData.set("holiday_date", "2026-09-07");
+    formData.set("jurisdiction", "Canada/Ontario");
+    formData.set("payment_type", "regular_paid_day");
+
+    await createHolidayAction("leadgen", formData);
+
+    expect(mockSupabase.fromCalls).not.toContain("holiday_pay_assignments");
+    expect(mockSupabase.fromCalls).not.toContain("leadgen_users");
+    expect(mockSupabase.fromCalls).not.toContain("crm_users");
+  });
 });
 
 describe("deleteHolidayAction", () => {
@@ -326,8 +432,8 @@ describe("loadHolidayPaySummaryAction", () => {
       holiday_pay_assignments: [
         {
           data: [
-            { effective_amount: 7500, holidays: { name: "Labour Day", payment_type: "regular_paid_day", currency: "CAD" } },
-            { effective_amount: 2500, holidays: { name: "Boxing Day", payment_type: "fixed_amount", currency: "CAD" } },
+            { effective_amount: 7500, holidays: { name: "Labour Day", payment_type: "regular_paid_day", currency: "NGN" } },
+            { effective_amount: 2500, holidays: { name: "Boxing Day", payment_type: "fixed_amount", currency: "NGN" } },
           ],
           error: null,
         },
@@ -340,6 +446,24 @@ describe("loadHolidayPaySummaryAction", () => {
     expect(requireCrmAdminMock).toHaveBeenCalledTimes(1);
     expect(result.total).toBe(10_000);
     expect(result.items).toHaveLength(2);
+    expect(result.items?.every((item) => item.currency === "NGN")).toBe(true);
+  });
+
+  it("returns zero holiday pay for an agent who was never assigned to the holiday for that payday", async () => {
+    // Agent B (unassigned - e.g. the admin left them out because they
+    // were off before the holiday): the query still runs (scoped to this
+    // agent's id), it just matches no rows, exactly as it would against a
+    // real database with no matching assignment row.
+    const mockSupabase = createMockSupabase({
+      holiday_pay_assignments: [{ data: [], error: null }],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { loadHolidayPaySummaryAction } = await import("@/lib/holiday-pay-actions");
+
+    const result = await loadHolidayPaySummaryAction("leadgen", "agent-b-unassigned", "2026-09-18");
+    expect(result.error).toBeUndefined();
+    expect(result.total).toBe(0);
+    expect(result.items).toEqual([]);
   });
 
   it("requires an agent id and a payday", async () => {

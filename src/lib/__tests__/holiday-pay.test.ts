@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assignmentCrm,
   calculateHolidayPayAmount,
+  HOLIDAY_PAY_CURRENCY,
   isAssignmentActive,
   isHolidayActive,
   sharedIdentityKeyForEmail,
@@ -9,6 +10,12 @@ import {
 import { dailyRate, STANDARD_BIWEEKLY_WAGE, STANDARD_WORKING_DAYS } from "@/lib/payroll";
 
 const STANDARD_DAILY_RATE = dailyRate(STANDARD_BIWEEKLY_WAGE, STANDARD_WORKING_DAYS);
+
+describe("HOLIDAY_PAY_CURRENCY", () => {
+  it("is NGN - holiday pay always follows the agents' payroll currency, independent of a holiday's jurisdiction", () => {
+    expect(HOLIDAY_PAY_CURRENCY).toBe("NGN");
+  });
+});
 
 describe("calculateHolidayPayAmount", () => {
   it("returns 0 for an unpaid holiday regardless of amount/percentage", () => {

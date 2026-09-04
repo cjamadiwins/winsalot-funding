@@ -18,6 +18,7 @@ import { requireLeadgenAdmin } from "./leadgen-auth";
 import {
   calculateHolidayPayAmount,
   sharedIdentityKeyForEmail,
+  HOLIDAY_PAY_CURRENCY,
   HOLIDAY_PAYMENT_TYPES,
   type HolidayPaymentType,
 } from "./holiday-pay";
@@ -102,7 +103,6 @@ export async function createHolidayAction(crm: HolidayCrm, formData: FormData): 
   const paymentTypeRaw = String(formData.get("payment_type") ?? "").trim();
   const amount = parseAmount(formData, "amount");
   const percentage = parseAmount(formData, "percentage");
-  const currency = String(formData.get("currency") ?? "NGN").trim() || "NGN";
   const payrollPeriodPayday = String(formData.get("payroll_period_payday") ?? "").trim() || null;
   const eligibilityNotes = String(formData.get("eligibility_notes") ?? "").trim() || null;
 
@@ -129,7 +129,11 @@ export async function createHolidayAction(crm: HolidayCrm, formData: FormData): 
       payment_type: paymentTypeRaw,
       amount: paymentTypeRaw === "fixed_amount" ? amount : null,
       percentage: paymentTypeRaw === "percentage_premium" ? percentage : null,
-      currency,
+      // Holiday pay always follows the agents' actual payroll currency
+      // (NGN, system-wide today - see the HOLIDAY_PAY_CURRENCY comment),
+      // never whatever a form happens to submit - the jurisdiction above
+      // is independent and stays admin-editable.
+      currency: HOLIDAY_PAY_CURRENCY,
       payroll_period_payday: payrollPeriodPayday,
       eligibility_notes: eligibilityNotes,
       is_active: true,
@@ -173,7 +177,6 @@ export async function updateHolidayAction(crm: HolidayCrm, holidayId: string, fo
   const paymentTypeRaw = String(formData.get("payment_type") ?? "").trim();
   const amount = parseAmount(formData, "amount");
   const percentage = parseAmount(formData, "percentage");
-  const currency = String(formData.get("currency") ?? "NGN").trim() || "NGN";
   const payrollPeriodPayday = String(formData.get("payroll_period_payday") ?? "").trim() || null;
   const eligibilityNotes = String(formData.get("eligibility_notes") ?? "").trim() || null;
 
@@ -200,7 +203,8 @@ export async function updateHolidayAction(crm: HolidayCrm, holidayId: string, fo
       payment_type: paymentTypeRaw,
       amount: paymentTypeRaw === "fixed_amount" ? amount : null,
       percentage: paymentTypeRaw === "percentage_premium" ? percentage : null,
-      currency,
+      // See createHolidayAction - always NGN, never form-submitted.
+      currency: HOLIDAY_PAY_CURRENCY,
       payroll_period_payday: payrollPeriodPayday,
       eligibility_notes: eligibilityNotes,
       updated_at: new Date().toISOString(),
