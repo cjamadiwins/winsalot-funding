@@ -122,6 +122,12 @@ export type SubcontractorRow = {
   created_at: string;
   updated_at: string;
   full_name: string;
+  email: string | null;
+  phone: string | null;
+  auth_user_id: string | null;
+  portal_active: boolean;
+  invited_at: string | null;
+  last_login_at: string | null;
   business_client_id: string | null;
   country: string | null;
   currency: SubcontractorCurrency;
@@ -130,6 +136,26 @@ export type SubcontractorRow = {
   notes: string | null;
   active: boolean;
   deactivated_at: string | null;
+};
+
+export type SubcontractorAgreementStatus = "sent" | "signed" | "superseded";
+
+export type SubcontractorAgreementRow = {
+  id: string;
+  created_at: string;
+  subcontractor_id: string;
+  version: number;
+  status: SubcontractorAgreementStatus;
+  agreement_text: string;
+  currency: SubcontractorCurrency;
+  pay_type: SubcontractorPayType;
+  pay_rate: number;
+  issued_at: string;
+  opened_at: string | null;
+  accepted_at: string | null;
+  signer_full_name: string | null;
+  signer_signature_text: string | null;
+  accepted_by_auth_user: string | null;
 };
 
 // The shape of a row in crm_subcontractor_payments / leadgen_subcontractor_payments.
