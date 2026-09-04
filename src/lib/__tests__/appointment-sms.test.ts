@@ -46,19 +46,19 @@ describe("isValidMobileNumber", () => {
 
 describe("buildProspectReminderSms", () => {
   it("matches the brief's exact suggested wording for a short name", () => {
-    const message = buildProspectReminderSms({ businessName: "Brent's Essentials", isToday: false, timeLabel: "3:00 PM EST" });
-    expect(message).toBe("Reminder from Winsalot Corp.: Your appointment with Brent's Essentials is tomorrow at 3:00 PM EST. Reply STOP to opt out.");
+    const message = buildProspectReminderSms({ businessName: "Brent's Essentials", reminderType: "24_hour_reminder", timeLabel: "3:00 PM EST" });
+    expect(message).toBe("Winsalot Corp.: Your phone call appointment with Brent's Essentials is in 24 hours at 3:00 PM EST. STOP to opt out.");
   });
 
-  it("says 'today' when isToday is true", () => {
-    const message = buildProspectReminderSms({ businessName: "Mantra Collab", isToday: true, timeLabel: "9:30 AM EST" });
-    expect(message).toContain(" is today at 9:30 AM EST.");
+  it("identifies the 1-hour reminder", () => {
+    const message = buildProspectReminderSms({ businessName: "Mantra Collab", reminderType: "1_hour_reminder", timeLabel: "9:30 AM EST" });
+    expect(message).toContain("appointment with Mantra Collab is in 1 hour at 9:30 AM EST.");
   });
 
   it("never exceeds one SMS segment (160 GSM-7 chars)", () => {
     const message = buildProspectReminderSms({
       businessName: "A Very Long Business Name That Would Otherwise Blow Past The Single-Segment Limit For Sure",
-      isToday: false,
+      reminderType: "24_hour_reminder",
       timeLabel: "3:00 PM EST",
     });
     expect(message.length).toBeLessThanOrEqual(160);
@@ -67,14 +67,14 @@ describe("buildProspectReminderSms", () => {
   it("never truncates the compliance suffix, even for a very long name", () => {
     const message = buildProspectReminderSms({
       businessName: "A".repeat(300),
-      isToday: false,
+      reminderType: "1_hour_reminder",
       timeLabel: "3:00 PM EST",
     });
-    expect(message.endsWith("Reply STOP to opt out.")).toBe(true);
+    expect(message.endsWith("STOP to opt out.")).toBe(true);
   });
 
   it("falls back to a generic label for a blank name", () => {
-    const message = buildProspectReminderSms({ businessName: "   ", isToday: false, timeLabel: "3:00 PM EST" });
+    const message = buildProspectReminderSms({ businessName: "   ", reminderType: "24_hour_reminder", timeLabel: "3:00 PM EST" });
     expect(message).toContain("your business");
   });
 });
@@ -84,10 +84,10 @@ describe("buildAppointmentConfirmationSms", () => {
     expect(
       buildAppointmentConfirmationSms({
         businessName: "Brent's Essentials",
-        dateLabel: "Sep 8, 2026",
+        dateLabel: "Sep 8",
         timeLabel: "3:00 PM EDT",
       })
-    ).toBe("Winsalot Corp.: Your appointment with Brent's Essentials is confirmed for Sep 8, 2026 at 3:00 PM EDT. Reply STOP to opt out.");
+    ).toBe("Winsalot Corp.: Your phone call appointment with Brent's Essentials is confirmed for Sep 8 at 3:00 PM EDT. STOP to opt out.");
   });
 
   it("keeps the complete opt-out suffix within one SMS segment", () => {
@@ -97,7 +97,7 @@ describe("buildAppointmentConfirmationSms", () => {
       timeLabel: "11:30 AM EDT",
     });
     expect(message.length).toBeLessThanOrEqual(160);
-    expect(message.endsWith("Reply STOP to opt out.")).toBe(true);
+    expect(message.endsWith("STOP to opt out.")).toBe(true);
   });
 });
 
@@ -166,7 +166,7 @@ describe("formatSmsTimeLabel", () => {
 describe("formatSmsDateLabel", () => {
   it("formats the appointment date in its own timezone", () => {
     const ms = Date.UTC(2026, 8, 5, 2, 0, 0); // Sep 4 in Toronto
-    expect(formatSmsDateLabel(ms, "America/Toronto")).toBe("Sep 4, 2026");
+    expect(formatSmsDateLabel(ms, "America/Toronto")).toBe("Sep 4");
   });
 });
 
