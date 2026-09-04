@@ -94,6 +94,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       contact_name: contactName,
       phone,
       email,
+      sms_consent: formData.get("sms_consent") === "on",
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
       timezone,
@@ -194,6 +195,7 @@ const EDITABLE_APPOINTMENT_FIELDS: { key: keyof LeadgenAppointmentEditableFields
   { key: "contact_name", label: "Contact Name" },
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
+  { key: "sms_consent", label: "SMS Reminder Consent" },
   { key: "appointment_date", label: "Appointment Date" },
   { key: "appointment_time", label: "Appointment Time" },
   { key: "timezone", label: "Time Zone" },
@@ -211,6 +213,7 @@ type LeadgenAppointmentEditableFields = Pick<
   | "contact_name"
   | "phone"
   | "email"
+  | "sms_consent"
   | "appointment_date"
   | "appointment_time"
   | "timezone"
@@ -287,6 +290,7 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
     contact_name: textOrNull(formData, "contact_name"),
     phone: textOrNull(formData, "phone"),
     email: textOrNull(formData, "email"),
+    sms_consent: formData.get("sms_consent") === "on",
     appointment_date: appointmentDate,
     appointment_time: appointmentTime,
     timezone: String(formData.get("timezone") ?? "").trim() || existingAppointment.timezone,

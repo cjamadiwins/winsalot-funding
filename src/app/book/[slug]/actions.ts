@@ -51,6 +51,7 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
   const businessName = String(formData.get("business_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const smsConsent = formData.get("sms_consent") === "on";
 
   if (!date || !time) return { error: "Choose a date and time." };
   if (!contactName) return { error: "Enter your name." };
@@ -97,6 +98,7 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
       contact_name: contactName,
       phone,
       email,
+      sms_consent: smsConsent,
       appointment_date: date,
       appointment_time: time,
       timezone: LEADGEN_BOOKING_TIMEZONE,

@@ -31,6 +31,7 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ date: string; time: string } | null>(null);
@@ -53,6 +54,7 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
     formData.set("business_name", businessName.trim());
     formData.set("email", email.trim());
     formData.set("phone", phone.trim());
+    if (smsConsent) formData.set("sms_consent", "on");
 
     try {
       const result = await Promise.race([
@@ -178,6 +180,10 @@ export default function BookingPageClient({ slug, clientName, days }: { slug: st
               <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Phone Number</span>
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required className={inputClass} />
+              </label>
+              <label className="flex items-start gap-2 text-[12.5px] text-slate-600">
+                <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5" />
+                <span>Text me SMS reminders about this appointment (24 hours and 1 hour before). Reply STOP anytime to opt out.</span>
               </label>
             </div>
           </div>

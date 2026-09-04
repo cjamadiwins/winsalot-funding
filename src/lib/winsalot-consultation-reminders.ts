@@ -6,7 +6,16 @@ import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { createWinsalotActionToken } from "./winsalot-consultation-tokens";
 import { buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
-import { winsalotAppointmentOccurrenceKey, type WinsalotAppointmentRow, type WinsalotReminderType } from "./winsalot-consultation-types";
+import { sendAppointmentReminderSmsPair, type SmsOutcome } from "./appointment-sms";
+import {
+  winsalotAppointmentOccurrenceKey,
+  winsalotSmsReminderDisplayStatus,
+  type WinsalotAppointmentRow,
+  type WinsalotAppointmentSmsReminderRow,
+  type WinsalotReminderType,
+  type WinsalotSmsRecipientType,
+  type WinsalotSmsReminderStatusEntry,
+} from "./winsalot-consultation-types";
 
 // Automatic prospect-facing 24-hour and 1-hour consultation reminders.
 // Same reliable architecture as the Lead Gen CRM's automatic business-
@@ -171,6 +180,20 @@ export type WinsalotReminderJobResult = {
   error?: string;
 };
 
+// SMS results (src/lib/appointment-sms.ts) - one entry per recipient
+// type (prospect/admin) per eligible appointment/reminder_type,
+// independent of the email outcome above.
+export type WinsalotSmsReminderJobResult = {
+  appointmentId: string;
+  reminderType: WinsalotReminderType;
+  recipientType: WinsalotSmsRecipientType;
+  businessName: string;
+  scheduledAppointmentAtUtc: string;
+  recipientPhone: string | null;
+  outcome: SmsOutcome;
+  error?: string;
+};
+
 export type WinsalotReminderJobSummary = {
   dryRun: boolean;
   candidatesScanned: number;
@@ -179,7 +202,64 @@ export type WinsalotReminderJobSummary = {
   failed: number;
   skipped: number;
   results: WinsalotReminderJobResult[];
+  smsSent: number;
+  smsFailed: number;
+  smsSkipped: number;
+  smsResults: WinsalotSmsReminderJobResult[];
 };
+
+// Claims/sends the prospect + admin SMS pair for one appointment
+// occurrence/reminder_type and folds both outcomes into the summary -
+// same role as leadgen-appointment-reminders.ts's
+// recordLeadgenAppointmentSms, kept as its own near-identical function
+// here (rather than shared) because winsalot_appointments has no lead_id
+// and always has a single true UTC instant, unlike leadgen's
+// date+time+timezone triple.
+async function recordWinsalotAppointmentSms(
+  admin: SupabaseClient,
+  summary: WinsalotReminderJobSummary,
+  appt: WinsalotAppointmentRow,
+  reminderType: WinsalotReminderType,
+  occurrenceKey: string,
+  scheduledMs: number,
+  dryRun: boolean
+): Promise<void> {
+  const { prospect, admin: adminOutcome } = await sendAppointmentReminderSmsPair(admin, {
+    table: "winsalot_appointment_sms_reminders",
+    appointmentId: appt.id,
+    reminderType,
+    occurrenceKey,
+    scheduledMs,
+    scheduledAppointmentAtIso: appt.appointment_start_at,
+    timezone: appt.prospect_timezone || appt.business_timezone,
+    prospectPhone: appt.phone,
+    prospectConsent: appt.sms_consent,
+    businessName: appt.business_name,
+    contactName: appt.contact_name,
+    crmLabel: "Growth",
+    dryRun,
+  });
+
+  for (const [recipientType, result] of [
+    ["prospect", prospect],
+    ["admin", adminOutcome],
+  ] as const) {
+    if (result.outcome === "sent") summary.smsSent++;
+    else if (result.outcome === "failed") summary.smsFailed++;
+    else if (result.outcome !== "would_send") summary.smsSkipped++;
+
+    summary.smsResults.push({
+      appointmentId: appt.id,
+      reminderType,
+      recipientType,
+      businessName: appt.business_name,
+      scheduledAppointmentAtUtc: appt.appointment_start_at,
+      recipientPhone: result.recipientPhone ?? null,
+      outcome: result.outcome,
+      error: result.error,
+    });
+  }
+}
 
 export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boolean }): Promise<WinsalotReminderJobSummary> {
   const dryRun = options?.dryRun ?? false;
@@ -193,6 +273,10 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
     failed: 0,
     skipped: 0,
     results: [],
+    smsSent: 0,
+    smsFailed: 0,
+    smsSkipped: 0,
+    smsResults: [],
   };
 
   const nowMs = Date.now();
@@ -232,61 +316,64 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
         scheduledAppointmentAtUtc: appt.appointment_start_at,
       };
 
+      // ---- Email (unchanged behavior/outcomes - restructured from
+      // early `continue`s into if/else so the SMS block below always
+      // still runs for this appointment/reminder_type). ----
       if (dryRun) {
         summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "would_send" });
-        continue;
-      }
+      } else {
+        const reminderId = await claimReminderSlot(admin, appt.id, reminderType, occurrenceKey, appt.appointment_start_at);
+        if (!reminderId) {
+          summary.skipped++;
+          summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_claimed_elsewhere" });
+        } else {
+          const rescheduleToken = await createWinsalotActionToken("reschedule", appt.id);
+          const cancelToken = await createWinsalotActionToken("cancel", appt.id);
+          const email = buildWinsalotReminderEmail({
+            contactName: appt.contact_name,
+            businessName: appt.business_name,
+            serviceType: appt.service_type,
+            startUtcIso: appt.appointment_start_at,
+            timezone: appt.prospect_timezone || appt.business_timezone,
+            rescheduleUrl: `${getSiteUrl()}/book-consultation/reschedule/${rescheduleToken}`,
+            cancelUrl: `${getSiteUrl()}/book-consultation/cancel/${cancelToken}`,
+            reminderType,
+          });
 
-      const reminderId = await claimReminderSlot(admin, appt.id, reminderType, occurrenceKey, appt.appointment_start_at);
-      if (!reminderId) {
-        summary.skipped++;
-        summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_claimed_elsewhere" });
-        continue;
-      }
+          try {
+            const resend = getResendClient();
+            const { data: sendResult, error: sendError } = await resend.emails.send({
+              from: getEmailSender("growth"),
+              to: appt.email,
+              replyTo: getEmailReplyTo(),
+              subject: email.subject,
+              text: email.text,
+              html: email.html,
+            });
 
-      const rescheduleToken = await createWinsalotActionToken("reschedule", appt.id);
-      const cancelToken = await createWinsalotActionToken("cancel", appt.id);
-      const email = buildWinsalotReminderEmail({
-        contactName: appt.contact_name,
-        businessName: appt.business_name,
-        serviceType: appt.service_type,
-        startUtcIso: appt.appointment_start_at,
-        timezone: appt.prospect_timezone || appt.business_timezone,
-        rescheduleUrl: `${getSiteUrl()}/book-consultation/reschedule/${rescheduleToken}`,
-        cancelUrl: `${getSiteUrl()}/book-consultation/cancel/${cancelToken}`,
-        reminderType,
-      });
-
-      try {
-        const resend = getResendClient();
-        const { data: sendResult, error: sendError } = await resend.emails.send({
-          from: getEmailSender("growth"),
-          to: appt.email,
-          replyTo: getEmailReplyTo(),
-          subject: email.subject,
-          text: email.text,
-          html: email.html,
-        });
-
-        if (sendError || !sendResult) {
-          const errorDetail = sendError?.message ?? "Unknown Resend error.";
-          await markReminderFailed(admin, reminderId, errorDetail);
-          summary.failed++;
-          summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "failed", error: errorDetail });
-          continue;
+            if (sendError || !sendResult) {
+              const errorDetail = sendError?.message ?? "Unknown Resend error.";
+              await markReminderFailed(admin, reminderId, errorDetail);
+              summary.failed++;
+              summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "failed", error: errorDetail });
+            } else {
+              const sentAt = new Date().toISOString();
+              const crmLeadEmailId = await recordCrmLeadEmail(admin, appt, reminderType, sendResult.id, email.subject, sentAt);
+              await markReminderSent(admin, reminderId, appt.email, sendResult.id, crmLeadEmailId);
+              summary.sent++;
+              summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "sent" });
+            }
+          } catch (err) {
+            const errorDetail = err instanceof Error ? err.message : "Unknown error sending reminder.";
+            await markReminderFailed(admin, reminderId, errorDetail);
+            summary.failed++;
+            summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "failed", error: errorDetail });
+          }
         }
-
-        const sentAt = new Date().toISOString();
-        const crmLeadEmailId = await recordCrmLeadEmail(admin, appt, reminderType, sendResult.id, email.subject, sentAt);
-        await markReminderSent(admin, reminderId, appt.email, sendResult.id, crmLeadEmailId);
-        summary.sent++;
-        summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "sent" });
-      } catch (err) {
-        const errorDetail = err instanceof Error ? err.message : "Unknown error sending reminder.";
-        await markReminderFailed(admin, reminderId, errorDetail);
-        summary.failed++;
-        summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "failed", error: errorDetail });
       }
+
+      // ---- SMS (new - independent of every email outcome above) ----
+      await recordWinsalotAppointmentSms(admin, summary, appt, reminderType, occurrenceKey, scheduledMs, dryRun);
     }
   }
 
@@ -342,6 +429,51 @@ export async function fetchWinsalotReminderStatusMap(
       reminder1h: (r1?.status as "sent" | "failed") ?? "scheduled",
       reminder24hError: r24?.status === "failed" ? (r24.error_detail ?? null) : null,
       reminder1hError: r1?.status === "failed" ? (r1.error_detail ?? null) : null,
+    };
+  }
+  return result;
+}
+
+// SMS counterpart to fetchWinsalotReminderStatusMap above - reads
+// winsalot_appointment_sms_reminders' prospect-recipient rows only (the
+// admin notification's own rows aren't shown on a per-appointment badge).
+export async function fetchWinsalotSmsReminderStatusMap(
+  supabase: SupabaseClient,
+  appointments: Pick<WinsalotAppointmentRow, "id" | "status" | "appointment_start_at" | "sms_consent" | "phone">[]
+): Promise<Record<string, WinsalotSmsReminderStatusEntry>> {
+  if (appointments.length === 0) return {};
+
+  const nowMs = Date.now();
+  const appointmentIds = appointments.map((a) => a.id);
+  const { data: reminderRows } = await supabase
+    .from("winsalot_appointment_sms_reminders")
+    .select("*")
+    .eq("recipient_type", "prospect")
+    .in("appointment_id", appointmentIds);
+  const reminders = (reminderRows ?? []) as WinsalotAppointmentSmsReminderRow[];
+
+  const byAppointment = new Map<string, WinsalotAppointmentSmsReminderRow[]>();
+  for (const r of reminders) {
+    const list = byAppointment.get(r.appointment_id) ?? [];
+    list.push(r);
+    byAppointment.set(r.appointment_id, list);
+  }
+
+  const result: Record<string, WinsalotSmsReminderStatusEntry> = {};
+  for (const appt of appointments) {
+    const occurrenceKey = winsalotAppointmentOccurrenceKey(appt.appointment_start_at);
+    const current = (byAppointment.get(appt.id) ?? []).filter((r) => r.occurrence_key === occurrenceKey);
+    const r24 = current.find((r) => r.reminder_type === "24_hour_reminder") ?? null;
+    const r1 = current.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
+
+    const isEligible =
+      appt.status === "booked" && appt.sms_consent && !!appt.phone && new Date(appt.appointment_start_at).getTime() > nowMs;
+
+    result[appt.id] = {
+      status24h: winsalotSmsReminderDisplayStatus(r24, isEligible),
+      errorDetail24h: r24 && ["failed", "skipped", "opted_out"].includes(r24.status) ? r24.error_detail : null,
+      status1h: winsalotSmsReminderDisplayStatus(r1, isEligible),
+      errorDetail1h: r1 && ["failed", "skipped", "opted_out"].includes(r1.status) ? r1.error_detail : null,
     };
   }
   return result;

@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { fetchWinsalotReminderStatusMap } from "@/lib/winsalot-consultation-reminders";
+import { fetchWinsalotReminderStatusMap, fetchWinsalotSmsReminderStatusMap } from "@/lib/winsalot-consultation-reminders";
 import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import type { WinsalotAppointmentListRow } from "@/components/WinsalotAppointmentsListClient";
 import type { BookableOpportunity } from "./AgentAppointmentsClient";
@@ -42,7 +42,10 @@ export default async function AgentAppointmentsPage({
   };
 
   const rows = (data ?? []) as unknown as Row[];
-  const reminderStatusMap = await fetchWinsalotReminderStatusMap(supabase, rows);
+  const [reminderStatusMap, smsReminderStatusMap] = await Promise.all([
+    fetchWinsalotReminderStatusMap(supabase, rows),
+    fetchWinsalotSmsReminderStatusMap(supabase, rows),
+  ]);
 
   const appointments: WinsalotAppointmentListRow[] = rows.map((row) => ({
     ...row,
@@ -53,6 +56,10 @@ export default async function AgentAppointmentsPage({
     reminder1h: reminderStatusMap[row.id]?.reminder1h ?? "scheduled",
     reminder24hError: reminderStatusMap[row.id]?.reminder24hError ?? null,
     reminder1hError: reminderStatusMap[row.id]?.reminder1hError ?? null,
+    smsReminder24h: smsReminderStatusMap[row.id]?.status24h ?? "Scheduled",
+    smsReminder1h: smsReminderStatusMap[row.id]?.status1h ?? "Scheduled",
+    smsReminder24hError: smsReminderStatusMap[row.id]?.errorDetail24h ?? null,
+    smsReminder1hError: smsReminderStatusMap[row.id]?.errorDetail1h ?? null,
   }));
 
   return (

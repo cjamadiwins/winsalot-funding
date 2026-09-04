@@ -24,13 +24,24 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   reminder1h: "scheduled" | "sent" | "failed";
   reminder24hError: string | null;
   reminder1hError: string | null;
+  // SMS counterpart (src/lib/winsalot-consultation-reminders.ts's
+  // fetchWinsalotSmsReminderStatusMap) - the fuller Scheduled/Sending/
+  // Sent/Delivered/Failed/Skipped/Opted Out/Not scheduled set, unlike the
+  // email badge's simpler three states above.
+  smsReminder24h: string;
+  smsReminder1h: string;
+  smsReminder24hError: string | null;
+  smsReminder1hError: string | null;
 };
 
 export type WinsalotAppointmentActions = {
   getOfferedSlots: (excludeAppointmentId: string) => Promise<{ slotIsos: string[]; businessTimezone: string }>;
   reschedule: (id: string, startUtcIso: string) => Promise<{ error?: string }>;
   cancel: (id: string, reason: string | null) => Promise<{ error?: string }>;
-  edit: (id: string, input: { businessName: string; contactName: string; email: string; phone: string; serviceType: OpportunityType; notes: string }) => Promise<{ error?: string }>;
+  edit: (
+    id: string,
+    input: { businessName: string; contactName: string; email: string; phone: string; smsConsent: boolean; serviceType: OpportunityType; notes: string }
+  ) => Promise<{ error?: string }>;
   remove?: (id: string) => Promise<{ error?: string }>;
   // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
   // quick actions) - undefined for the agent view, where the incentive
@@ -44,6 +55,21 @@ const REMINDER_STYLE: Record<string, string> = {
   scheduled: "bg-slate-100 text-slate-600",
   sent: "bg-emerald-100 text-emerald-700",
   failed: "bg-rose-100 text-rose-700",
+};
+
+// SMS reminder display status (leadgenSmsReminderDisplayStatus /
+// winsalotSmsReminderDisplayStatus) - the fuller "Scheduled, Sent,
+// Delivered, Failed, Skipped or Opted Out" set from the brief.
+const SMS_STATUS_STYLE: Record<string, string> = {
+  Scheduled: "bg-slate-100 text-slate-600",
+  "Not scheduled": "bg-slate-100 text-slate-500",
+  Sending: "bg-sky-100 text-sky-700",
+  Sent: "bg-emerald-100 text-emerald-700",
+  Delivered: "bg-emerald-100 text-emerald-800",
+  Failed: "bg-rose-100 text-rose-700",
+  Skipped: "bg-amber-100 text-amber-700",
+  "Opted Out": "bg-slate-200 text-slate-600",
+  default: "bg-slate-100 text-slate-600",
 };
 
 export default function WinsalotAppointmentsListClient({
@@ -112,6 +138,7 @@ export default function WinsalotAppointmentsListClient({
         contactName: String(formData.get("contact_name") ?? ""),
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
+        smsConsent: formData.get("sms_consent") === "on",
         serviceType: String(formData.get("service_type") ?? "lead_generation") as OpportunityType,
         notes: String(formData.get("notes") ?? ""),
       });
@@ -226,6 +253,12 @@ export default function WinsalotAppointmentsListClient({
                   >
                     1h: {REMINDER_LABEL[appt.reminder1h]}
                   </span>
+                  <span className={`rounded-full px-2 py-0.5 font-semibold ${SMS_STATUS_STYLE[appt.smsReminder24h] ?? SMS_STATUS_STYLE.default}`} title={appt.smsReminder24hError ?? undefined}>
+                    SMS 24h: {appt.smsReminder24h}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 font-semibold ${SMS_STATUS_STYLE[appt.smsReminder1h] ?? SMS_STATUS_STYLE.default}`} title={appt.smsReminder1hError ?? undefined}>
+                    SMS 1h: {appt.smsReminder1h}
+                  </span>
                 </p>
                 {appt.status === "cancelled" && (
                   <p className="mt-1 text-[12.5px] text-rose-600">
@@ -329,6 +362,10 @@ export default function WinsalotAppointmentsListClient({
                 <input name="contact_name" defaultValue={appt.contact_name} placeholder="Contact name" className={inputClass} />
                 <input name="email" type="email" defaultValue={appt.email} placeholder="Email" className={inputClass} />
                 <input name="phone" defaultValue={appt.phone} placeholder="Phone" className={inputClass} />
+                <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
+                  <input type="checkbox" name="sms_consent" defaultChecked={appt.sms_consent} className="h-4 w-4" />
+                  SMS reminder consent
+                </label>
                 <select name="service_type" defaultValue={appt.service_type} className={inputClass}>
                   {OPPORTUNITY_TYPES.map((t) => (
                     <option key={t} value={t}>

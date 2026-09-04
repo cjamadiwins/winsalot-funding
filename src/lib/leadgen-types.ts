@@ -408,6 +408,11 @@ export type LeadgenAppointmentRow = {
   contact_name: string | null;
   phone: string | null;
   email: string | null;
+  // "SMS reminder consent" checkbox on the booking/edit forms - reuses
+  // the existing `phone` column above as the mobile number, defaults to
+  // false (migration 0125), so no existing appointment starts receiving
+  // SMS reminders without an explicit opt-in.
+  sms_consent: boolean;
   appointment_date: string;
   appointment_time: string;
   timezone: string;
@@ -835,6 +840,89 @@ export type LeadgenBusinessAppointmentReminderSettingsRow = {
   automatic_reminders_enabled: boolean;
   updated_at: string;
   updated_by_name: string | null;
+};
+
+// ---------------------------------------------------------------------
+// SMS appointment reminders (supabase/migrations/0125_appointment_sms_
+// reminders.sql) - alongside the email reminder above, never replacing
+// it. recipient_type separates the prospect-facing reminder (gated on
+// sms_consent + a valid phone + not opted out) from the internal
+// ADMIN_NOTIFICATION_PHONE notification (neither gate applies) as two
+// fully independent claims per occurrence. See
+// src/lib/appointment-sms.ts for the claim/send logic shared with the
+// Growth CRM's equivalent table.
+// ---------------------------------------------------------------------
+export const LEADGEN_SMS_REMINDER_TYPES = ["24_hour_reminder", "1_hour_reminder"] as const;
+export type LeadgenSmsReminderType = (typeof LEADGEN_SMS_REMINDER_TYPES)[number];
+
+export const LEADGEN_SMS_RECIPIENT_TYPES = ["prospect", "admin"] as const;
+export type LeadgenSmsRecipientType = (typeof LEADGEN_SMS_RECIPIENT_TYPES)[number];
+
+export const LEADGEN_SMS_REMINDER_STATUSES = ["sending", "sent", "delivered", "failed", "skipped", "opted_out"] as const;
+export type LeadgenSmsReminderStatus = (typeof LEADGEN_SMS_REMINDER_STATUSES)[number];
+
+export type LeadgenAppointmentSmsReminderRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  appointment_id: string;
+  lead_id: string | null;
+  reminder_type: LeadgenSmsReminderType;
+  recipient_type: LeadgenSmsRecipientType;
+  occurrence_key: string;
+  scheduled_appointment_at: string;
+  status: LeadgenSmsReminderStatus;
+  recipient_phone: string | null;
+  twilio_message_sid: string | null;
+  twilio_status: string | null;
+  error_detail: string | null;
+  attempt_count: number;
+  sent_at: string | null;
+  delivered_at: string | null;
+};
+
+// Display status per the brief: "Scheduled, Sent, Delivered, Failed,
+// Skipped or Opted Out." "Scheduled" is derived exactly like the email
+// badge - there's no row until a send is actually claimed, so an
+// eligible, not-yet-claimed appointment shows "Scheduled" purely from
+// the absence of a row.
+export type LeadgenSmsReminderDisplayStatus = "Scheduled" | "Sending" | "Sent" | "Delivered" | "Failed" | "Skipped" | "Opted Out" | "Not scheduled";
+
+export function leadgenSmsReminderDisplayStatus(
+  reminder: LeadgenAppointmentSmsReminderRow | null,
+  isEligibleForFutureReminder: boolean
+): LeadgenSmsReminderDisplayStatus {
+  if (!reminder) return isEligibleForFutureReminder ? "Scheduled" : "Not scheduled";
+  switch (reminder.status) {
+    case "delivered":
+      return "Delivered";
+    case "sent":
+      return "Sent";
+    case "failed":
+      return "Failed";
+    case "skipped":
+      return "Skipped";
+    case "opted_out":
+      return "Opted Out";
+    default:
+      return "Sending";
+  }
+}
+
+export type LeadgenSmsReminderStatusEntry = {
+  status24h: LeadgenSmsReminderDisplayStatus;
+  errorDetail24h: string | null;
+  status1h: LeadgenSmsReminderDisplayStatus;
+  errorDetail1h: string | null;
+};
+
+export type SmsOptOutRow = {
+  phone_e164: string;
+  opted_out_at: string | null;
+  opted_in_at: string | null;
+  last_keyword: string | null;
+  last_source_crm: "leadgen" | "growth" | null;
+  updated_at: string;
 };
 
 // The brief's requested four-value status shown "on the appointment

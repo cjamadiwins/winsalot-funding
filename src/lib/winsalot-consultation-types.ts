@@ -55,6 +55,11 @@ export type WinsalotAppointmentRow = {
   business_name: string;
   email: string;
   phone: string;
+  // "SMS reminder consent" checkbox on the booking/edit forms - reuses
+  // the existing `phone` field above as the mobile number. Defaults to
+  // false (migration 0125), so no existing appointment starts receiving
+  // SMS reminders without an explicit opt-in.
+  sms_consent: boolean;
   service_type: OpportunityType;
   notes: string | null;
 
@@ -144,6 +149,65 @@ export type WinsalotAppointmentReminderRow = {
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
+
+// ---------------------------------------------------------------------
+// SMS appointment reminders (supabase/migrations/0125_appointment_sms_
+// reminders.sql) - see the Lead Gen CRM's equivalent block in
+// leadgen-types.ts for the full rationale (recipient_type split, shared
+// claim/send logic in src/lib/appointment-sms.ts). Fully independent
+// table (winsalot_appointment_sms_reminders) from that CRM's own.
+// ---------------------------------------------------------------------
+export type WinsalotSmsRecipientType = "prospect" | "admin";
+export type WinsalotSmsReminderStatus = "sending" | "sent" | "delivered" | "failed" | "skipped" | "opted_out";
+
+export type WinsalotAppointmentSmsReminderRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  appointment_id: string;
+  reminder_type: WinsalotReminderType;
+  recipient_type: WinsalotSmsRecipientType;
+  occurrence_key: string;
+  scheduled_appointment_at: string;
+  status: WinsalotSmsReminderStatus;
+  recipient_phone: string | null;
+  twilio_message_sid: string | null;
+  twilio_status: string | null;
+  error_detail: string | null;
+  attempt_count: number;
+  sent_at: string | null;
+  delivered_at: string | null;
+};
+
+export type WinsalotSmsReminderDisplayStatus = "Scheduled" | "Sending" | "Sent" | "Delivered" | "Failed" | "Skipped" | "Opted Out" | "Not scheduled";
+
+export function winsalotSmsReminderDisplayStatus(
+  reminder: WinsalotAppointmentSmsReminderRow | null,
+  isEligibleForFutureReminder: boolean
+): WinsalotSmsReminderDisplayStatus {
+  if (!reminder) return isEligibleForFutureReminder ? "Scheduled" : "Not scheduled";
+  switch (reminder.status) {
+    case "delivered":
+      return "Delivered";
+    case "sent":
+      return "Sent";
+    case "failed":
+      return "Failed";
+    case "skipped":
+      return "Skipped";
+    case "opted_out":
+      return "Opted Out";
+    default:
+      return "Sending";
+  }
+}
+
+export type WinsalotSmsReminderStatusEntry = {
+  status24h: WinsalotSmsReminderDisplayStatus;
+  errorDetail24h: string | null;
+  status1h: WinsalotSmsReminderDisplayStatus;
+  errorDetail1h: string | null;
+};
 
 // A reschedule/cancellation produces a fresh occurrence_key, which is
 // what lets a rescheduled appointment become eligible for brand new

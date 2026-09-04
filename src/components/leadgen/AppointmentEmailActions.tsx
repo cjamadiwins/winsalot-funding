@@ -4,6 +4,21 @@ import { useState } from "react";
 import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, leadgenEmailStatusAt, type LeadgenEmailRow } from "@/lib/leadgen-types";
 import AppointmentEmailConfirmModal from "./AppointmentEmailConfirmModal";
 
+// SMS reminder display status (leadgenSmsReminderDisplayStatus) - the
+// fuller "Scheduled, Sent, Delivered, Failed, Skipped or Opted Out" set
+// from the brief, distinct from the three-state email styling above.
+const SMS_STATUS_STYLE: Record<string, string> = {
+  Scheduled: "bg-slate-100 text-slate-600",
+  "Not scheduled": "bg-slate-100 text-slate-500",
+  Sending: "bg-sky-100 text-sky-700",
+  Sent: "bg-emerald-100 text-emerald-700",
+  Delivered: "bg-emerald-100 text-emerald-800",
+  Failed: "bg-rose-100 text-rose-700",
+  Skipped: "bg-amber-100 text-amber-700",
+  "Opted Out": "bg-slate-200 text-slate-600",
+  default: "bg-slate-100 text-slate-600",
+};
+
 // "Resend Appointment Notification" / "Send Appointment Reminder" (brief
 // EMAIL FEATURES #3-6) - shared by the Lead Detail page's Appointments
 // section, the admin Appointments page, and the agent Appointments page,
@@ -25,6 +40,10 @@ export default function AppointmentEmailActions({
   automaticReminderError24h,
   automaticReminderStatus1h,
   automaticReminderError1h,
+  smsReminderStatus24h,
+  smsReminderError24h,
+  smsReminderStatus1h,
+  smsReminderError1h,
   isAdmin,
   onResend,
   onReminder,
@@ -53,6 +72,13 @@ export default function AppointmentEmailActions({
   automaticReminderError24h?: string | null;
   automaticReminderStatus1h?: string | null;
   automaticReminderError1h?: string | null;
+  // SMS counterpart (src/lib/leadgen-appointment-reminders.ts's
+  // fetchLeadgenAppointmentSmsReminderStatusMap) - the fuller Scheduled/
+  // Sending/Sent/Delivered/Failed/Skipped/Opted Out/Not scheduled set.
+  smsReminderStatus24h?: string | null;
+  smsReminderError24h?: string | null;
+  smsReminderStatus1h?: string | null;
+  smsReminderError1h?: string | null;
   // Gates the "Count this as the 24-hour reminder" checkbox (brief
   // MANUAL CONTROLS: admin-only).
   isAdmin?: boolean;
@@ -108,6 +134,24 @@ export default function AppointmentEmailActions({
           title={automaticReminderError1h ?? undefined}
         >
           Automatic 1h reminder: {automaticReminderStatus1h}
+        </span>
+      )}
+
+      {smsReminderStatus24h && (
+        <span
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsReminderStatus24h] ?? SMS_STATUS_STYLE.default}`}
+          title={smsReminderError24h ?? undefined}
+        >
+          SMS 24h reminder: {smsReminderStatus24h}
+        </span>
+      )}
+
+      {smsReminderStatus1h && (
+        <span
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsReminderStatus1h] ?? SMS_STATUS_STYLE.default}`}
+          title={smsReminderError1h ?? undefined}
+        >
+          SMS 1h reminder: {smsReminderStatus1h}
         </span>
       )}
 

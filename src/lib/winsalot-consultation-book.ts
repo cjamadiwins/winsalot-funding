@@ -27,6 +27,7 @@ export type WinsalotBookingInput = {
   businessName: string;
   email: string;
   phone: string;
+  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string | null;
   startUtcIso: string;
@@ -138,6 +139,7 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
       business_name: input.businessName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
+      sms_consent: input.smsConsent,
       service_type: input.serviceType,
       notes: input.notes,
       appointment_start_at: input.startUtcIso,
@@ -344,6 +346,7 @@ export type WinsalotAppointmentEditInput = {
   contactName: string;
   email: string;
   phone: string;
+  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string;
 };
@@ -368,6 +371,7 @@ export async function performWinsalotAppointmentEdit(appointmentId: string, inpu
       contact_name: input.contactName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
+      sms_consent: input.smsConsent,
       service_type: input.serviceType,
       notes: input.notes.trim() ? input.notes.trim() : null,
       updated_at: new Date().toISOString(),
