@@ -12,7 +12,7 @@ import { sendTrackedSmsToNumber, toE164 } from "./twilio";
 // name, and whether a lead_id exists to attach, differ - so it lives
 // here once rather than being duplicated twice.
 
-export type SmsReminderType = "booking_confirmation" | "24_hour_reminder" | "1_hour_reminder";
+export type SmsReminderType = "24_hour_reminder" | "1_hour_reminder";
 export type SmsRecipientType = "prospect" | "admin";
 export type SmsReminderTable = "leadgen_appointment_sms_reminders" | "winsalot_appointment_sms_reminders";
 
@@ -355,9 +355,13 @@ export async function sendImmediateAppointmentConfirmation(
     table: params.table,
     appointmentId: params.appointmentId,
     leadId: params.leadId,
-    reminderType: "booking_confirmation",
+    // Keep the existing database enum unchanged. The confirmation is
+    // distinguished from the real 1-hour reminder by its prefixed occurrence
+    // key, which is also part of the unique claim. This makes the feature
+    // deployable without a separate Supabase migration.
+    reminderType: "1_hour_reminder",
     recipientType: "prospect",
-    occurrenceKey: params.scheduledAppointmentAtIso,
+    occurrenceKey: `booking_confirmation:${params.scheduledAppointmentAtIso}`,
     scheduledAppointmentAtIso: params.scheduledAppointmentAtIso,
     toPhoneRaw: params.prospectPhone,
     consentGiven: params.prospectConsent,
