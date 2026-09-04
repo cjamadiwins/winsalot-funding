@@ -1,4 +1,4 @@
-import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
+import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminCallLogReport, { type AdminCallLogEntry } from "@/components/call-log/AdminCallLogReport";
 import { isCallLogOutcome, type CallLogRow } from "@/lib/call-log";
@@ -6,13 +6,13 @@ import { isCallLogOutcome, type CallLogRow } from "@/lib/call-log";
 type SearchParams = Promise<{ agent?: string; outcome?: string }>;
 type AgentRow = { id: string; full_name: string; email: string };
 
-export default async function LeadgenAdminCallLogPage({ searchParams }: { searchParams: SearchParams }) {
-  await requireLeadgenAdmin();
+export default async function GrowthAdminCallLogPage({ searchParams }: { searchParams: SearchParams }) {
+  await requireCrmAdmin();
   const params = await searchParams;
   const admin = getSupabaseAdmin();
 
   let query = admin
-    .from("leadgen_call_logs")
+    .from("crm_call_logs")
     .select("id, created_at, agent_id, business_name, phone, outcome, notes")
     .order("created_at", { ascending: false })
     .limit(1000);
@@ -22,7 +22,7 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
 
   const [{ data: logs, error }, { data: agents }] = await Promise.all([
     query,
-    admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").order("full_name"),
+    admin.from("crm_users").select("id, full_name, email").eq("role", "agent").order("full_name"),
   ]);
 
   const agentRows = (agents ?? []) as AgentRow[];
@@ -34,8 +34,8 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
 
   return (
     <AdminCallLogReport
-      title="Lead Generation Call Logs"
-      backHref="/leadgen/admin/performance"
+      title="Growth CRM Call Logs"
+      backHref="/admin/crm/performance"
       entries={entries}
       agents={agentRows.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
       selectedAgent={params.agent ?? "all"}
