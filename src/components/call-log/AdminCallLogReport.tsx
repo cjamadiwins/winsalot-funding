@@ -3,7 +3,6 @@ import {
   CALL_LOG_OUTCOMES,
   CALL_LOG_OUTCOME_STYLES,
   formatCallLogDate,
-  type CallLogOutcome,
   type CallLogRow,
 } from "@/lib/call-log";
 
