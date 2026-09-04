@@ -7,6 +7,7 @@ import { LogOut, Menu, X } from "lucide-react";
 import ClientLocalTimePanel from "./ClientLocalTimePanel";
 import type { LocationCountry } from "@/lib/timezone-locations";
 import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
+import { findActiveNavHref } from "@/lib/crm-nav-active";
 
 // `icon` takes an already-rendered element (e.g. `<Users />`), not a
 // component reference - every layout using CrmShell is a Server
@@ -17,11 +18,6 @@ import type { TimeZonePreferences } from "@/lib/user-time-zone-preferences";
 // awaiting admin review) - omit it (or pass 0) for every nav item that
 // doesn't need one, which is every existing item today.
 export type CrmNavItem = { label: string; href: string; icon: ReactNode; badgeCount?: number };
-
-function isNavItemActive(pathname: string, homeHref: string, href: string) {
-  if (href === homeHref) return pathname === homeHref;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 // Sidebar brand block, top-level for the same stable-identity reason as
 // SidebarNav below. `logoSrc` is optional - most CRM portals still get
@@ -75,10 +71,11 @@ function SidebarNav({
   homeHref: string;
   onNavigate?: () => void;
 }) {
+  const activeHref = findActiveNavHref(pathname, homeHref, navItems);
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
       {navItems.map((item) => {
-        const active = isNavItemActive(pathname, homeHref, item.href);
+        const active = item.href === activeHref;
         const iconEl = isValidElement(item.icon)
           ? cloneElement(item.icon as ReactElement<{ className?: string; strokeWidth?: number }>, {
               className: "h-[18px] w-[18px] shrink-0",
