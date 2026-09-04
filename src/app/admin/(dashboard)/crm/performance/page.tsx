@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
@@ -42,11 +43,21 @@ export default async function AdminCrmPerformancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Biweekly performance against five targets per agent, reset every two weeks: consultations booked, qualified opportunities,
-        applications submitted, proposals sent, and clients won.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Biweekly performance against five targets per agent, reset every two weeks: consultations booked, qualified opportunities,
+            applications submitted, proposals sent, and clients won.
+          </p>
+        </div>
+        <Link
+          href="/admin/crm/performance/call-notes"
+          className="rounded-full border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+        >
+          View All Call Logs
+        </Link>
+      </div>
 
       <div className="mt-6 space-y-6">
         {allAgents.length === 0 ? (
