@@ -16,6 +16,7 @@ import {
   markLeadgenPayrollPaidAction,
   reopenLeadgenPayrollAction,
   updateLeadgenPayrollAction,
+  updateLeadgenPayrollAgentCurrencyAction,
 } from "./actions";
 import {
   assignHolidayAction,
@@ -128,6 +129,7 @@ export default async function LeadgenAdminPayrollPage() {
             markPaidAction={markLeadgenPayrollPaidAction}
             cancelAction={cancelLeadgenPayrollAction}
             reopenAction={reopenLeadgenPayrollAction}
+            updateAgentCurrencyAction={updateLeadgenPayrollAgentCurrencyAction}
           />
 
           <div id="holiday-pay" className="mt-8 scroll-mt-6">

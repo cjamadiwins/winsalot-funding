@@ -148,3 +148,86 @@ describe("updateLeadgenUserAction (Lead Generation CRM): payroll_currency", () =
     expect(mockSupabase.updateMock).not.toHaveBeenCalled();
   });
 });
+
+// Covers the Pay Currency selector added directly to the Payroll page's
+// "Pay structure (advanced)" section (src/components/payroll/
+// AdminPayrollClient.tsx) - a single-field currency update the admin can
+// trigger without leaving the Payroll page, separate from the full-profile
+// updateAgentAction/updateLeadgenUserAction above.
+describe("updatePayrollAgentCurrencyAction (Growth CRM payroll page)", () => {
+  it("saves a valid currency onto exactly the one targeted agent's crm_users row", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updatePayrollAgentCurrencyAction } = await import("@/app/admin/(dashboard)/crm/payroll/actions");
+
+    const result = await updatePayrollAgentCurrencyAction("agent-1", "PHP");
+    expect(result.error).toBeUndefined();
+    expect(mockSupabase.from).toHaveBeenCalledWith("crm_users");
+    expect(mockSupabase.updateMock).toHaveBeenCalledWith({ payroll_currency: "PHP" });
+    expect(mockSupabase.eqMock).toHaveBeenCalledWith("id", "agent-1");
+  });
+
+  it("accepts a newly added currency (INR)", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updatePayrollAgentCurrencyAction } = await import("@/app/admin/(dashboard)/crm/payroll/actions");
+
+    const result = await updatePayrollAgentCurrencyAction("agent-1", "INR");
+    expect(result.error).toBeUndefined();
+    expect(mockSupabase.updateMock).toHaveBeenCalledWith({ payroll_currency: "INR" });
+  });
+
+  it("rejects an invalid currency and never calls update", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updatePayrollAgentCurrencyAction } = await import("@/app/admin/(dashboard)/crm/payroll/actions");
+
+    const result = await updatePayrollAgentCurrencyAction("agent-1", "JPY");
+    expect(result.error).toMatch(/invalid payroll currency/i);
+    expect(mockSupabase.updateMock).not.toHaveBeenCalled();
+  });
+
+  it("changing one agent's currency never touches another agent's row", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updatePayrollAgentCurrencyAction } = await import("@/app/admin/(dashboard)/crm/payroll/actions");
+
+    await updatePayrollAgentCurrencyAction("agent-only-this-one", "CAD");
+    expect(mockSupabase.eqMock).toHaveBeenCalledWith("id", "agent-only-this-one");
+    expect(mockSupabase.eqMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("updateLeadgenPayrollAgentCurrencyAction (Lead Generation CRM payroll page)", () => {
+  it("saves a valid currency onto exactly the one targeted agent's leadgen_users row", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateLeadgenPayrollAgentCurrencyAction } = await import("@/app/leadgen/admin/(dashboard)/payroll/actions");
+
+    const result = await updateLeadgenPayrollAgentCurrencyAction("agent-2", "USD");
+    expect(result.error).toBeUndefined();
+    expect(mockSupabase.from).toHaveBeenCalledWith("leadgen_users");
+    expect(mockSupabase.updateMock).toHaveBeenCalledWith({ payroll_currency: "USD" });
+    expect(mockSupabase.eqMock).toHaveBeenCalledWith("id", "agent-2");
+  });
+
+  it("accepts a newly added currency (KES)", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateLeadgenPayrollAgentCurrencyAction } = await import("@/app/leadgen/admin/(dashboard)/payroll/actions");
+
+    const result = await updateLeadgenPayrollAgentCurrencyAction("agent-2", "KES");
+    expect(result.error).toBeUndefined();
+    expect(mockSupabase.updateMock).toHaveBeenCalledWith({ payroll_currency: "KES" });
+  });
+
+  it("rejects an invalid currency and never calls update", async () => {
+    const mockSupabase = createUpdateOnlyMock();
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { updateLeadgenPayrollAgentCurrencyAction } = await import("@/app/leadgen/admin/(dashboard)/payroll/actions");
+
+    const result = await updateLeadgenPayrollAgentCurrencyAction("agent-2", "JPY");
+    expect(result.error).toMatch(/invalid payroll currency/i);
+    expect(mockSupabase.updateMock).not.toHaveBeenCalled();
+  });
+});

@@ -16,6 +16,7 @@ import {
   markPayrollPaidAction,
   reopenPayrollAction,
   updatePayrollAction,
+  updatePayrollAgentCurrencyAction,
 } from "./actions";
 import {
   assignHolidayAction,
@@ -118,6 +119,7 @@ export default async function AdminCrmPayrollPage() {
             markPaidAction={markPayrollPaidAction}
             cancelAction={cancelPayrollAction}
             reopenAction={reopenPayrollAction}
+            updateAgentCurrencyAction={updatePayrollAgentCurrencyAction}
           />
 
           <div id="holiday-pay" className="mt-8 scroll-mt-6">
