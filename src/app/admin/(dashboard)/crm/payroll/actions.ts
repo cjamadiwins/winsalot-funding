@@ -14,6 +14,7 @@ import {
 import {
   buildPayrollAdjustmentAuditRows,
   getPayPeriodForPayday,
+  PAYROLL_CURRENCIES,
   STANDARD_BIWEEKLY_PAY,
   STANDARD_BIWEEKLY_WAGE,
   STANDARD_PAID_HOURS,
@@ -537,6 +538,33 @@ export async function reopenPayrollAction(recordId: string, formData: FormData):
   });
 
   revalidatePath("/admin/crm/payroll");
+  revalidatePath("/agent/pay");
+  return {};
+}
+
+// Lets an admin set an agent's Payroll Currency directly from the Payroll
+// page's "Pay structure (advanced)" section, instead of having to leave
+// the page and go to Agent Management. Deliberately a single-field update
+// scoped to exactly one agent (crm_users.id = agentId) - unlike
+// updateAgentAction in crm/agents/actions.ts, this never touches
+// full_name/role/active, so it can't accidentally overwrite those from
+// stale form state carried on the payroll page. Currency is purely a
+// display/formatting concept (see formatCurrency's header comment in
+// src/lib/payroll.ts) - this never changes a wage amount or recalculates
+// any existing payroll record.
+export async function updatePayrollAgentCurrencyAction(agentId: string, currency: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+
+  if (!(PAYROLL_CURRENCIES as readonly string[]).includes(currency)) {
+    return { error: "Invalid payroll currency." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("crm_users").update({ payroll_currency: currency }).eq("id", agentId);
+  if (error) return { error: `Failed to update this agent's Payroll Currency: ${error.message}` };
+
+  revalidatePath("/admin/crm/payroll");
+  revalidatePath("/admin/crm/agents");
   revalidatePath("/agent/pay");
   return {};
 }

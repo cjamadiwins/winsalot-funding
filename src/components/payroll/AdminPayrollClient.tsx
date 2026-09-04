@@ -11,6 +11,8 @@ import {
   getPayPeriodForPayday,
   hourlyRate,
   PAYROLL_AUDIT_ACTION_LABELS,
+  PAYROLL_CURRENCIES,
+  PAYROLL_CURRENCY_LABELS,
   PAYROLL_STATUS_LABELS,
   sanitizeAmountInput,
   STANDARD_BIWEEKLY_WAGE,
@@ -77,6 +79,7 @@ type Props = {
   markPaidAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   cancelAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   reopenAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
+  updateAgentCurrencyAction: (agentId: string, currency: string) => Promise<ActionResult>;
 };
 
 const inputClasses =
@@ -143,6 +146,7 @@ function PayrollFormFields({
   requireConfirmApprovedEdit,
   loadAttendanceAction,
   loadHolidayPayAction,
+  updateAgentCurrencyAction,
 }: {
   agents: Agent[];
   defaultAgentId?: string;
@@ -152,6 +156,7 @@ function PayrollFormFields({
   requireConfirmApprovedEdit?: boolean;
   loadAttendanceAction: Props["loadAttendanceAction"];
   loadHolidayPayAction: Props["loadHolidayPayAction"];
+  updateAgentCurrencyAction: Props["updateAgentCurrencyAction"];
 }) {
   const [agentId, setAgentId] = useState(defaultAgentId ?? "");
   const [payday, setPayday] = useState(defaultPayday);
@@ -161,6 +166,15 @@ function PayrollFormFields({
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [confirmApprovedEdit, setConfirmApprovedEdit] = useState(false);
+  // Optimistic local override for the currency just saved for `agentId` -
+  // agents/updated payroll_currency only refreshes on the next server
+  // render (revalidatePath), so this keeps every label/symbol on the page
+  // in sync immediately after a successful save. Scoped to the specific
+  // agentId it was saved for, so switching to a different agent in the
+  // dropdown above never carries the previous agent's override along.
+  const [currencyOverride, setCurrencyOverride] = useState<{ agentId: string; currency: PayrollCurrency } | null>(null);
+  const [savingCurrency, setSavingCurrency] = useState(false);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
   const [holidayPaySummary, setHolidayPaySummary] = useState<
     { holidayName: string; effectiveAmount: number; currency: string }[] | null
   >(null);
@@ -243,7 +257,24 @@ function PayrollFormFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, payday]);
 
-  const currency: PayrollCurrency = agents.find((a) => a.id === agentId)?.payroll_currency ?? "NGN";
+  const currency: PayrollCurrency =
+    currencyOverride?.agentId === agentId
+      ? currencyOverride.currency
+      : (agents.find((a) => a.id === agentId)?.payroll_currency ?? "NGN");
+
+  async function handleCurrencyChange(nextCurrency: string) {
+    if (!agentId) return;
+    setSavingCurrency(true);
+    setCurrencyError(null);
+    const result = await updateAgentCurrencyAction(agentId, nextCurrency);
+    setSavingCurrency(false);
+    if (result?.error) {
+      setCurrencyError(result.error);
+      return;
+    }
+    setCurrencyOverride({ agentId, currency: nextCurrency as PayrollCurrency });
+  }
+
   const daysPresent = Number(values.daysPresent) || 0;
   const approvedPaidDays = Number(values.approvedPaidDays) || 0;
   const standardBiweeklyWage = Number(values.standardBiweeklyWage) || 0;
@@ -430,6 +461,29 @@ function PayrollFormFields({
           Pay structure (advanced)
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={labelClasses}>Pay Currency</label>
+            <select
+              value={currency}
+              disabled={!agentId || savingCurrency}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
+              className={`${inputClasses} mt-1`}
+            >
+              {PAYROLL_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {PAYROLL_CURRENCY_LABELS[c]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] normal-case text-slate-400">
+              {!agentId
+                ? "Select an agent above to change their Pay Currency."
+                : savingCurrency
+                  ? "Saving…"
+                  : "Applies to this agent only, immediately - every payroll label/symbol below updates to match."}
+            </p>
+            {currencyError && <p className="mt-1 text-xs font-medium normal-case text-rose-600">{currencyError}</p>}
+          </div>
           <div>
             <label className={labelClasses}>Standard Biweekly Wage ({currency})</label>
             <input
@@ -627,6 +681,7 @@ export default function AdminPayrollClient({
   markPaidAction,
   cancelAction,
   reopenAction,
+  updateAgentCurrencyAction,
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -788,6 +843,7 @@ export default function AdminPayrollClient({
             defaultPayday={nextPayday}
             loadAttendanceAction={loadAttendanceAction}
             loadHolidayPayAction={loadHolidayPayAction}
+            updateAgentCurrencyAction={updateAgentCurrencyAction}
           />
           <button type="submit" disabled={isPending} className={buttonClasses}>
             Save as Draft
@@ -828,6 +884,7 @@ export default function AdminPayrollClient({
                           requireConfirmApprovedEdit={record.status === "approved"}
                           loadAttendanceAction={loadAttendanceAction}
                           loadHolidayPayAction={loadHolidayPayAction}
+                          updateAgentCurrencyAction={updateAgentCurrencyAction}
                         />
                         <div className="flex items-center gap-3">
                           <button type="submit" disabled={isPending} className={buttonClasses}>
