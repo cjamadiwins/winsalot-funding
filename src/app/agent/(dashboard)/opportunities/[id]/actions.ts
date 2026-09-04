@@ -378,7 +378,6 @@ export async function bookConsultationAction(opportunityId: string, input: BookC
     businessName: input.businessName,
     email: input.email,
     phone: input.phone,
-    smsConsent: input.smsConsent,
     serviceType: input.serviceType,
     notes: input.notes.trim() ? input.notes.trim() : null,
     startUtcIso: input.startUtcIso,

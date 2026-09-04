@@ -26,6 +26,7 @@ import {
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
 import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailConfirmModal";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import {
   bookAppointmentAction,
   cancelOrReplaceAppointmentAction,
@@ -425,10 +426,7 @@ export default function AppointmentsListClient({
             <span className="text-[13px] font-semibold text-slate-600">Email</span>
             <input name="email" type="email" defaultValue={selectedLead?.email ?? ""} className={inputClass} key={`email-${selectedLeadId}`} />
           </label>
-          <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
-            <input type="checkbox" name="sms_consent" className="h-4 w-4" />
-            SMS reminder consent
-          </label>
+          <p className="text-[12px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>
             <input name="appointment_date" type="date" required className={inputClass} />
@@ -751,10 +749,7 @@ export default function AppointmentsListClient({
                             <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
                             <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
                           </label>
-                          <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
-                            <input type="checkbox" name="sms_consent" defaultChecked={appt.sms_consent} className="h-4 w-4" />
-                            SMS reminder consent
-                          </label>
+                          <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
                             <input name="appointment_date" type="date" required defaultValue={appt.appointment_date} className={inputClass} />

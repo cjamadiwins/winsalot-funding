@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
 
 export type BookConsultationInput = {
@@ -9,7 +10,6 @@ export type BookConsultationInput = {
   businessName: string;
   email: string;
   phone: string;
-  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string;
   startUtcIso: string;
@@ -50,7 +50,6 @@ export default function BookConsultationModal({
   const [businessNameValue, setBusinessNameValue] = useState(businessName);
   const [emailValue, setEmailValue] = useState(email ?? "");
   const [phoneValue, setPhoneValue] = useState(phone);
-  const [smsConsent, setSmsConsent] = useState(false);
   const [serviceType, setServiceType] = useState<OpportunityType>(opportunityType);
   const [notes, setNotes] = useState("");
 
@@ -81,7 +80,6 @@ export default function BookConsultationModal({
       businessName: businessNameValue,
       email: emailValue,
       phone: phoneValue,
-      smsConsent,
       serviceType,
       notes,
       startUtcIso: selectedSlot,
@@ -153,10 +151,7 @@ export default function BookConsultationModal({
                 </select>
               </Labeled>
             </div>
-            <label className="flex items-start gap-2 text-[12.5px] text-slate-600">
-              <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5" />
-              <span>SMS reminder consent - text this prospect appointment reminders (24 hours and 1 hour before).</span>
-            </label>
+            <p className="text-[12px] text-slate-500">{SMS_CONSENT_NOTICE}</p>
             <Labeled label="Notes (optional)">
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${fieldClass} resize-y`} />
             </Labeled>

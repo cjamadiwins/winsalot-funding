@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
+import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import { bookWinsalotConsultationAction } from "./actions";
 
 export type WinsalotPrefill = {
@@ -58,7 +59,6 @@ export default function BookingPageClient({
   const [businessName, setBusinessName] = useState(prefill?.businessName ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [phone, setPhone] = useState(prefill?.phone ?? "");
-  const [smsConsent, setSmsConsent] = useState(false);
   const [serviceType, setServiceType] = useState<OpportunityType>(prefill?.serviceType ?? "lead_generation");
   const [notes, setNotes] = useState("");
 
@@ -92,7 +92,6 @@ export default function BookingPageClient({
       businessName,
       email,
       phone,
-      smsConsent,
       serviceType,
       notes,
       startUtcIso: selectedSlot,
@@ -194,10 +193,7 @@ export default function BookingPageClient({
                 <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
               </Labeled>
             </div>
-            <label className="flex items-start gap-2 text-[12.5px] text-slate-600">
-              <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5" />
-              <span>Text me SMS reminders about this appointment (24 hours and 1 hour before). Reply STOP anytime to opt out.</span>
-            </label>
+            <p className="text-[12px] text-slate-500">{SMS_CONSENT_NOTICE}</p>
             <Labeled label="Service Interest">
               <select value={serviceType} onChange={(e) => setServiceType(e.target.value as OpportunityType)} className={inputClass}>
                 {OPPORTUNITY_TYPES.map((type) => (

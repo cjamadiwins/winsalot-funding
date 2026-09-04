@@ -408,10 +408,12 @@ export type LeadgenAppointmentRow = {
   contact_name: string | null;
   phone: string | null;
   email: string | null;
-  // "SMS reminder consent" checkbox on the booking/edit forms - reuses
-  // the existing `phone` column above as the mobile number, defaults to
-  // false (migration 0125), so no existing appointment starts receiving
-  // SMS reminders without an explicit opt-in.
+  // Automatically true whenever `phone` above is a valid mobile number
+  // at booking/edit time (isValidMobileNumber) - no separate consent
+  // checkbox; the SMS_CONSENT_NOTICE shown beneath every booking form
+  // discloses this instead. Defaults to false (migration 0125) so no
+  // pre-existing appointment (booked before this behavior existed)
+  // starts receiving SMS reminders until it's next booked or edited.
   sms_consent: boolean;
   appointment_date: string;
   appointment_time: string;

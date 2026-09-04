@@ -11,6 +11,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import { isLeadgenBrentsEssentials, isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
+import { isValidMobileNumber } from "@/lib/appointment-sms";
 
 export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: string };
 
@@ -51,7 +52,6 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
   const businessName = String(formData.get("business_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
-  const smsConsent = formData.get("sms_consent") === "on";
 
   if (!date || !time) return { error: "Choose a date and time." };
   if (!contactName) return { error: "Enter your name." };
@@ -98,7 +98,12 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
       contact_name: contactName,
       phone,
       email,
-      sms_consent: smsConsent,
+      // No separate consent checkbox - every appointment with a valid
+      // mobile number is automatically eligible for SMS reminders, on the
+      // notice shown beneath the phone field ("By booking an
+      // appointment, you agree to receive automated appointment reminder
+      // texts..."). Opt-out is still fully honored via STOP.
+      sms_consent: isValidMobileNumber(phone),
       appointment_date: date,
       appointment_time: time,
       timezone: LEADGEN_BOOKING_TIMEZONE,

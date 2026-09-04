@@ -4,6 +4,7 @@ import { fetchWinsalotAvailabilitySettings, fetchWinsalotBlackouts } from "./win
 import { generateWinsalotBookingSlots, isWinsalotSlotOffered, winsalotSlotEndIso } from "./winsalot-consultation-booking";
 import { notifyOfNewWinsalotAppointment, notifyOfWinsalotCancellation, notifyOfWinsalotReschedule } from "./winsalot-consultation-notifications";
 import { isValidEmail } from "./winsalot-consultation-types";
+import { isValidMobileNumber } from "./appointment-sms";
 import { CLOSED_STAGES, OPPORTUNITY_TYPES, shouldAdvanceStageForConsultationBooking, type OpportunityStage, type OpportunityType } from "./crm-types";
 import type { WinsalotAppointmentRow } from "./winsalot-consultation-types";
 
@@ -27,7 +28,6 @@ export type WinsalotBookingInput = {
   businessName: string;
   email: string;
   phone: string;
-  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string | null;
   startUtcIso: string;
@@ -139,7 +139,12 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
       business_name: input.businessName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
-      sms_consent: input.smsConsent,
+      // No separate consent checkbox - every appointment with a valid
+      // mobile number is automatically eligible for SMS reminders, on the
+      // notice shown beneath the phone field/booking button ("By booking
+      // an appointment, you agree to receive automated appointment
+      // reminder texts..."). Opt-out is still fully honored via STOP.
+      sms_consent: isValidMobileNumber(input.phone.trim()),
       service_type: input.serviceType,
       notes: input.notes,
       appointment_start_at: input.startUtcIso,
@@ -346,7 +351,6 @@ export type WinsalotAppointmentEditInput = {
   contactName: string;
   email: string;
   phone: string;
-  smsConsent: boolean;
   serviceType: OpportunityType;
   notes: string;
 };
@@ -371,7 +375,9 @@ export async function performWinsalotAppointmentEdit(appointmentId: string, inpu
       contact_name: input.contactName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
-      sms_consent: input.smsConsent,
+      // Recomputed on every edit too - if the phone number changes, SMS
+      // eligibility follows the new number automatically.
+      sms_consent: isValidMobileNumber(input.phone.trim()),
       service_type: input.serviceType,
       notes: input.notes.trim() ? input.notes.trim() : null,
       updated_at: new Date().toISOString(),

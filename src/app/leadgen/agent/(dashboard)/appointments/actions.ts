@@ -5,6 +5,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
+import { isValidMobileNumber } from "@/lib/appointment-sms";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string };
@@ -53,7 +54,10 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       contact_name: contactName,
       phone,
       email,
-      sms_consent: formData.get("sms_consent") === "on",
+      // No separate consent checkbox - every appointment with a valid
+      // mobile number is automatically eligible for SMS reminders, on
+      // the notice shown beneath the phone field / Book Appointment button.
+      sms_consent: isValidMobileNumber(phone),
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
       timezone,
