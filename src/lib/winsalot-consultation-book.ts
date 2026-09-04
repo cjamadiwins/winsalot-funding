@@ -4,7 +4,7 @@ import { fetchWinsalotAvailabilitySettings, fetchWinsalotBlackouts } from "./win
 import { generateWinsalotBookingSlots, isWinsalotSlotOffered, winsalotSlotEndIso } from "./winsalot-consultation-booking";
 import { notifyOfNewWinsalotAppointment, notifyOfWinsalotCancellation, notifyOfWinsalotReschedule } from "./winsalot-consultation-notifications";
 import { isValidEmail } from "./winsalot-consultation-types";
-import { isValidMobileNumber } from "./appointment-sms";
+import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "./appointment-sms";
 import { CLOSED_STAGES, OPPORTUNITY_TYPES, shouldAdvanceStageForConsultationBooking, type OpportunityStage, type OpportunityType } from "./crm-types";
 import type { WinsalotAppointmentRow } from "./winsalot-consultation-types";
 
@@ -191,6 +191,16 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
     agent_id: input.bookedByUserId,
     activity_type: "consultation_booked",
     notes: `Consultation ${bookedByLabel} for ${input.startUtcIso} (${settings.business_timezone}).`,
+  });
+
+  await sendImmediateAppointmentConfirmation(admin, {
+    table: "winsalot_appointment_sms_reminders",
+    appointmentId: appointment.id as string,
+    scheduledAppointmentAtIso: input.startUtcIso,
+    timezone: input.prospectTimezone || settings.business_timezone,
+    prospectPhone: input.phone.trim(),
+    prospectConsent: isValidMobileNumber(input.phone.trim()),
+    businessName: "Winsalot Corp.",
   });
 
   await notifyOfNewWinsalotAppointment(appointment as WinsalotAppointmentRow, input.bookedBy);
