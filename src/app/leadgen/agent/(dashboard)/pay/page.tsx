@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
-import { getNextPayday, type PayrollRecord } from "@/lib/payroll";
+import { getNextPayday, PAYROLL_CURRENCY_LABELS, type PayrollRecord } from "@/lib/payroll";
 import type { HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
 import MyPayView from "@/components/payroll/MyPayView";
 import HolidayPaySection from "@/components/payroll/HolidayPaySection";
@@ -28,7 +28,7 @@ export default async function LeadgenAgentPayPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">My Pay</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Your biweekly pay, in Nigerian Naira (₦). Only you can see this information.
+        Your biweekly pay, in {PAYROLL_CURRENCY_LABELS[agent.payroll_currency]}. Only you can see this information.
       </p>
 
       {error && (
@@ -45,9 +45,13 @@ export default async function LeadgenAgentPayPage() {
             agentName={agent.full_name}
             nextPayday={getNextPayday()}
             records={(records ?? []) as PayrollRecord[]}
+            currency={agent.payroll_currency}
           />
           {!holidayError && (
-            <HolidayPaySection assignments={(holidayAssignments ?? []) as HolidayPayAssignmentWithHoliday[]} />
+            <HolidayPaySection
+              assignments={(holidayAssignments ?? []) as HolidayPayAssignmentWithHoliday[]}
+              currency={agent.payroll_currency}
+            />
           )}
         </div>
       )}

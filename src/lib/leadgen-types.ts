@@ -7,6 +7,7 @@
 // for the schema this mirrors.
 
 import type { KpiTone } from "@/components/crm-ui/KpiCard";
+import type { PayrollCurrency } from "@/lib/payroll";
 
 export const LEADGEN_ROLES = ["admin", "agent", "client"] as const;
 export type LeadgenRole = (typeof LEADGEN_ROLES)[number];
@@ -39,6 +40,11 @@ export type LeadgenUserRow = {
   deactivated_at: string | null;
   deactivated_by: string | null;
   last_login_at: string | null;
+  // Admin-controlled, never derived from country/location (migration 0134).
+  // Drives every payroll display/calculation for this agent - see
+  // src/lib/payroll.ts's formatCurrency. Always null-less (not-null,
+  // defaulted) even for client-role rows, though it's meaningless for them.
+  payroll_currency: PayrollCurrency;
 };
 
 export type LeadgenAgentAttendanceRow = {

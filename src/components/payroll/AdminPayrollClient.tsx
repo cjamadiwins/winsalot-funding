@@ -4,8 +4,8 @@ import { startTransition, useEffect, useMemo, useState, useTransition } from "re
 import {
   calculateFinalPay,
   FIXED_INTERNET_ALLOWANCE,
+  formatCurrency,
   formatDateShort,
-  formatNgn,
   formatPayPeriodLabel,
   getPayPeriodForPayday,
   hourlyRate,
@@ -14,12 +14,13 @@ import {
   STANDARD_BIWEEKLY_WAGE,
   STANDARD_PAID_HOURS,
   type PayrollAuditLogRow,
+  type PayrollCurrency,
   type PayrollRecord,
   type PayrollStatus,
 } from "@/lib/payroll";
 import { buildPayStatementHtml, openPayStatementWindow } from "@/lib/pay-statement";
 
-type Agent = { id: string; full_name: string; email: string };
+type Agent = { id: string; full_name: string; email: string; payroll_currency: PayrollCurrency };
 
 type ActionResult = { error?: string };
 
@@ -240,6 +241,7 @@ function PayrollFormFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, payday]);
 
+  const currency: PayrollCurrency = agents.find((a) => a.id === agentId)?.payroll_currency ?? "NGN";
   const daysPresent = Number(values.daysPresent) || 0;
   const approvedPaidDays = Number(values.approvedPaidDays) || 0;
   const standardBiweeklyWage = Number(values.standardBiweeklyWage) || 0;
@@ -416,8 +418,8 @@ function PayrollFormFields({
       </div>
 
       <p className="text-sm text-slate-600">
-        Hourly Wage: <span className="font-semibold text-slate-900">{formatNgn(rate)}</span> · Gross Wage Earnings:{" "}
-        <span className="font-semibold text-slate-900">{formatNgn(basePayEarned)}</span> · Total Payable Days:{" "}
+        Hourly Wage: <span className="font-semibold text-slate-900">{formatCurrency(rate, currency)}</span> · Gross Wage Earnings:{" "}
+        <span className="font-semibold text-slate-900">{formatCurrency(basePayEarned, currency)}</span> · Total Payable Days:{" "}
         <span className="font-semibold text-slate-900">{totalPayableDays}</span>
       </p>
 
@@ -427,7 +429,7 @@ function PayrollFormFields({
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className={labelClasses}>Standard Biweekly Wage (₦)</label>
+            <label className={labelClasses}>Standard Biweekly Wage ({currency})</label>
             <input
               type="number"
               name="standard_biweekly_wage"
@@ -455,7 +457,7 @@ function PayrollFormFields({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className={labelClasses}>Incentive / Bonus Earned (₦)</label>
+          <label className={labelClasses}>Incentive / Bonus Earned ({currency})</label>
           <input
             type="number"
             name="bonus_commission"
@@ -467,7 +469,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Admin Additions (₦)</label>
+          <label className={labelClasses}>Admin Additions ({currency})</label>
           <input
             type="number"
             name="other_additions"
@@ -479,7 +481,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Holiday Pay (₦)</label>
+          <label className={labelClasses}>Holiday Pay ({currency})</label>
           <div className="mt-1 flex gap-2">
             <input
               type="number"
@@ -504,14 +506,14 @@ function PayrollFormFields({
             <ul className="mt-1 text-xs text-slate-500">
               {holidayPaySummary.map((item, i) => (
                 <li key={i}>
-                  {item.holidayName}: {formatNgn(item.effectiveAmount)}
+                  {item.holidayName}: {formatCurrency(item.effectiveAmount, item.currency as PayrollCurrency)}
                 </li>
               ))}
             </ul>
           )}
         </div>
         <div>
-          <label className={labelClasses}>Internet Allowance (₦, fixed)</label>
+          <label className={labelClasses}>Internet Allowance ({currency}, fixed)</label>
           <input
             type="number"
             name="internet_allowance"
@@ -523,7 +525,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Attendance Deduction (₦, automatic · admin adjustable)</label>
+          <label className={labelClasses}>Attendance Deduction ({currency}, automatic · admin adjustable)</label>
           <input
             type="number"
             name="deductions"
@@ -536,7 +538,7 @@ function PayrollFormFields({
         </div>
       </div>
 
-      <p className="text-base font-bold text-slate-900">Final Amount Payable: {formatNgn(finalPay)}</p>
+      <p className="text-base font-bold text-slate-900">Final Amount Payable: {formatCurrency(finalPay, currency)}</p>
 
       <div>
         <label className={labelClasses}>Admin Notes (visible to the agent)</label>
@@ -681,6 +683,7 @@ export default function AdminPayrollClient({
       companyName,
       crmLabel,
       agentName: agent?.full_name ?? "Former agent",
+      currency: agent?.payroll_currency ?? "NGN",
       payPeriodStart: record.pay_period_start,
       payPeriodEnd: record.pay_period_end,
       payday: record.payday,
@@ -790,6 +793,7 @@ export default function AdminPayrollClient({
       <div className="mt-8 space-y-8">
         {orderedAgentIds.map((agentId) => {
           const agent = agentsById.get(agentId);
+          const currency: PayrollCurrency = agent?.payroll_currency ?? "NGN";
           const agentRecords = groups.get(agentId)!.slice().sort((a, b) => (a.payday < b.payday ? 1 : -1));
           return (
             <div key={agentId}>
@@ -875,32 +879,32 @@ export default function AdminPayrollClient({
                           <div>
                             <dt className="text-xs text-slate-500">Hourly Wage</dt>
                             <dd className="font-medium text-slate-800">
-                              {formatNgn(hourlyRate(record.standard_biweekly_wage, record.standard_paid_hours))}
+                              {formatCurrency(hourlyRate(record.standard_biweekly_wage, record.standard_paid_hours), currency)}
                             </dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Gross Wage Earnings</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.base_pay_earned)}</dd>
+                            <dd className="font-medium text-slate-800">{formatCurrency(record.base_pay_earned, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Attendance Deductions</dt>
-                            <dd className="font-medium text-slate-800">-{formatNgn(record.deductions)}</dd>
+                            <dd className="font-medium text-slate-800">-{formatCurrency(record.deductions, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Internet Allowance</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.internet_allowance)}</dd>
+                            <dd className="font-medium text-slate-800">{formatCurrency(record.internet_allowance, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Incentive / Bonus</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.bonus_commission)}</dd>
+                            <dd className="font-medium text-slate-800">{formatCurrency(record.bonus_commission, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Other Additions</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.other_additions)}</dd>
+                            <dd className="font-medium text-slate-800">{formatCurrency(record.other_additions, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Holiday Pay</dt>
-                            <dd className="font-medium text-slate-800">{formatNgn(record.holiday_pay)}</dd>
+                            <dd className="font-medium text-slate-800">{formatCurrency(record.holiday_pay, currency)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs text-slate-500">Payment Method</dt>
@@ -915,7 +919,7 @@ export default function AdminPayrollClient({
                         </dl>
 
                         <p className="mt-3 text-base font-bold text-slate-900">
-                          Final Amount Payable: {formatNgn(record.total_pay)}
+                          Final Amount Payable: {formatCurrency(record.total_pay, currency)}
                         </p>
 
                         {record.admin_notes && (

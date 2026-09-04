@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LEADGEN_ROLES, type LeadgenClientRow, type LeadgenRole, type LeadgenUserRow } from "@/lib/leadgen-types";
+import { PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
 import { deactivateLeadgenUserAction, inviteLeadgenUserAction, reactivateLeadgenUserAction, updateLeadgenUserAction } from "../actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -162,6 +163,7 @@ export default function AgentsClient({
               <th className="p-3">Email</th>
               <th className="p-3">Role</th>
               <th className="p-3">Client</th>
+              <th className="p-3">Currency</th>
               <th className="p-3">Performance</th>
               <th className="p-3">Status</th>
               <th className="p-3">Actions</th>
@@ -187,6 +189,24 @@ export default function AgentsClient({
                   <td className="p-3 text-slate-600">{user.email}</td>
                   <td className="p-3 capitalize text-slate-600">{user.role}</td>
                   <td className="p-3 text-slate-600">{user.client_id ? clientById.get(user.client_id)?.name ?? "—" : "—"}</td>
+                  <td className="p-3 text-slate-600">
+                    {editingId === user.id ? (
+                      <select
+                        form={`edit-${user.id}`}
+                        name="payroll_currency"
+                        defaultValue={user.payroll_currency}
+                        className="rounded border border-slate-300 px-2 py-1 text-[12.5px]"
+                      >
+                        {PAYROLL_CURRENCIES.map((currency) => (
+                          <option key={currency} value={currency}>
+                            {PAYROLL_CURRENCY_LABELS[currency]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      user.payroll_currency
+                    )}
+                  </td>
                   <td className="p-3 text-slate-600">
                     {user.role === "agent" && perf
                       ? `${perf.leads} leads · ${perf.calls} calls · ${perf.appointments} appts`

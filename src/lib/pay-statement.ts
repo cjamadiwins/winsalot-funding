@@ -8,12 +8,15 @@
 // CRMs' payroll UIs; takes plain values rather than a PayrollRecord so it
 // never needs to import either CRM's types.
 
-import { formatNgn, formatPayPeriodLabel, formatDateLong, hourlyRate, type PayrollStatus } from "./payroll";
+import { formatCurrency, formatPayPeriodLabel, formatDateLong, hourlyRate, type PayrollCurrency, type PayrollStatus } from "./payroll";
 
 export type PayStatementInput = {
   companyName: string;
   crmLabel: string; // "Winsalot Growth CRM" or "Lead Generation CRM"
   agentName: string;
+  // The agent's own Payroll Currency - every amount below is formatted in
+  // this, never a fixed currency (see migration 0134).
+  currency: PayrollCurrency;
   payPeriodStart: string;
   payPeriodEnd: string;
   payday: string;
@@ -62,13 +65,13 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
     ["Approved Paid-Leave Hours", String(input.approvedPaidLeaveHours)],
     ["Regular Paid Hours", String(input.regularPaidHours)],
     ["Unpaid Hours", String(input.unpaidHours)],
-    ["Hourly Wage", formatNgn(rate)],
-    ["Gross Wage Earnings", formatNgn(input.basePayEarned)],
-    ["Attendance Deductions", `-${formatNgn(input.deductions)}`],
-    ["Internet Allowance", formatNgn(input.internetAllowance)],
-    ["Incentives / Bonuses", formatNgn(input.incentiveBonus)],
-    ["Other Additions", formatNgn(input.otherAdditions)],
-    ["Holiday Pay", formatNgn(input.holidayPay)],
+    ["Hourly Wage", formatCurrency(rate, input.currency)],
+    ["Gross Wage Earnings", formatCurrency(input.basePayEarned, input.currency)],
+    ["Attendance Deductions", `-${formatCurrency(input.deductions, input.currency)}`],
+    ["Internet Allowance", formatCurrency(input.internetAllowance, input.currency)],
+    ["Incentives / Bonuses", formatCurrency(input.incentiveBonus, input.currency)],
+    ["Other Additions", formatCurrency(input.otherAdditions, input.currency)],
+    ["Holiday Pay", formatCurrency(input.holidayPay, input.currency)],
   ];
 
   return `<!doctype html>
@@ -124,7 +127,7 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
 
     <table>
       ${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("\n      ")}
-      <tr class="total-row"><td>Final Net Payment</td><td>${escapeHtml(formatNgn(input.totalPay))}</td></tr>
+      <tr class="total-row"><td>Final Net Payment</td><td>${escapeHtml(formatCurrency(input.totalPay, input.currency))}</td></tr>
     </table>
 
     <p>

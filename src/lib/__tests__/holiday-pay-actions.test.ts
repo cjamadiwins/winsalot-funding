@@ -432,12 +432,13 @@ describe("loadHolidayPaySummaryAction", () => {
       holiday_pay_assignments: [
         {
           data: [
-            { effective_amount: 7500, holidays: { name: "Labour Day", payment_type: "regular_paid_day", currency: "NGN" } },
-            { effective_amount: 2500, holidays: { name: "Boxing Day", payment_type: "fixed_amount", currency: "NGN" } },
+            { effective_amount: 7500, holidays: { name: "Labour Day", payment_type: "regular_paid_day" } },
+            { effective_amount: 2500, holidays: { name: "Boxing Day", payment_type: "fixed_amount" } },
           ],
           error: null,
         },
       ],
+      crm_users: [{ data: { payroll_currency: "NGN" }, error: null }],
     });
     createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
     const { loadHolidayPaySummaryAction } = await import("@/lib/holiday-pay-actions");
@@ -449,6 +450,31 @@ describe("loadHolidayPaySummaryAction", () => {
     expect(result.items?.every((item) => item.currency === "NGN")).toBe(true);
   });
 
+  // The whole point of Payroll Currency (migration 0134): holiday pay is
+  // the same raw amount for everyone (no FX conversion), but it must be
+  // *shown* in each specific agent's own currency, never a currency tied
+  // to the holiday itself (holidays.currency is NGN for every row today).
+  it("shows holiday pay in the agent's own Payroll Currency, not NGN, for a PHP-paid agent", async () => {
+    const mockSupabase = createMockSupabase({
+      holiday_pay_assignments: [
+        {
+          data: [{ effective_amount: 7500, holidays: { name: "Labour Day", payment_type: "regular_paid_day" } }],
+          error: null,
+        },
+      ],
+      leadgen_users: [{ data: { payroll_currency: "PHP" }, error: null }],
+    });
+    createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
+    const { loadHolidayPaySummaryAction } = await import("@/lib/holiday-pay-actions");
+
+    const result = await loadHolidayPaySummaryAction("leadgen", "php-agent-1", "2026-09-18");
+    expect(result.error).toBeUndefined();
+    expect(result.total).toBe(7500);
+    expect(result.items).toEqual([
+      { holidayName: "Labour Day", paymentType: "regular_paid_day", effectiveAmount: 7500, currency: "PHP" },
+    ]);
+  });
+
   it("returns zero holiday pay for an agent who was never assigned to the holiday for that payday", async () => {
     // Agent B (unassigned - e.g. the admin left them out because they
     // were off before the holiday): the query still runs (scoped to this
@@ -456,6 +482,7 @@ describe("loadHolidayPaySummaryAction", () => {
     // real database with no matching assignment row.
     const mockSupabase = createMockSupabase({
       holiday_pay_assignments: [{ data: [], error: null }],
+      leadgen_users: [{ data: { payroll_currency: "NGN" }, error: null }],
     });
     createSupabaseServerClientMock.mockResolvedValue(mockSupabase);
     const { loadHolidayPaySummaryAction } = await import("@/lib/holiday-pay-actions");
