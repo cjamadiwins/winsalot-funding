@@ -22,6 +22,7 @@ import {
   LEADGEN_CONSULTATION_CTA_LABEL,
   isMantraCollabClient,
   type LeadgenAppointmentReminderStatusEntry,
+  type LeadgenSmsReminderStatusEntry,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -96,6 +97,7 @@ export default function LeadDetailClient({
   followUps,
   appointments,
   automaticReminderStatusByAppointmentId,
+  smsReminderStatusByAppointmentId,
   emails,
   consultationTemplate,
   consultationInvitationTemplate,
@@ -124,6 +126,8 @@ export default function LeadDetailClient({
   // one, if any) per appointment id (see
   // fetchLeadgenAppointmentReminderStatusMap in lib/leadgen-appointment-reminders.ts).
   automaticReminderStatusByAppointmentId?: Record<string, LeadgenAppointmentReminderStatusEntry>;
+  // SMS counterpart (fetchLeadgenAppointmentSmsReminderStatusMap).
+  smsReminderStatusByAppointmentId?: Record<string, LeadgenSmsReminderStatusEntry>;
   emails: LeadgenEmailRow[];
   consultationTemplate: LeadgenEmailTemplateRow | null;
   consultationInvitationTemplate: LeadgenEmailTemplateRow | null;
@@ -696,6 +700,10 @@ export default function LeadDetailClient({
                         automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
                         automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
                         automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
+                        smsReminderStatus24h={smsReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                        smsReminderError24h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                        smsReminderStatus1h={smsReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                        smsReminderError1h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
                         isAdmin={isAdmin}
                         onResend={actions.resendAppointmentNotification}
                         onReminder={actions.sendAppointmentReminder}
@@ -824,6 +832,11 @@ function BookAppointmentInlineForm({
       <input type="hidden" name="contact_name" value={lead.contact_name ?? ""} />
       <input type="hidden" name="phone" value={lead.phone ?? ""} />
       <input type="hidden" name="email" value={lead.email ?? ""} />
+
+      <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
+        <input type="checkbox" name="sms_consent" className="h-4 w-4" />
+        SMS reminder consent (text {lead.phone || "this contact"} appointment reminders)
+      </label>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>

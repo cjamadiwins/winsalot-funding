@@ -11,6 +11,7 @@ import {
   type LeadgenAppointmentRow,
   type LeadgenAppointmentReminderStatusEntry,
   type LeadgenBusinessAppointmentReminderStatusEntry,
+  type LeadgenSmsReminderStatusEntry,
   type LeadgenEmailRow,
 } from "@/lib/leadgen-types";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
@@ -25,6 +26,7 @@ export default function AgentAppointmentsListClient({
   latestEmailByAppointmentId,
   automaticReminderStatusByAppointmentId,
   businessReminderStatusByAppointmentId,
+  smsReminderStatusByAppointmentId,
   initialClientFilter,
   viewingClientName,
 }: {
@@ -42,6 +44,7 @@ export default function AgentAppointmentsListClient({
   latestEmailByAppointmentId: Record<string, LeadgenEmailRow>;
   automaticReminderStatusByAppointmentId: Record<string, LeadgenAppointmentReminderStatusEntry>;
   businessReminderStatusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderStatusEntry>;
+  smsReminderStatusByAppointmentId: Record<string, LeadgenSmsReminderStatusEntry>;
   // Set by the agent dashboard's "My Results by Client" section via
   // ?client=<id> - pre-selects the Client filter below.
   initialClientFilter?: string;
@@ -173,6 +176,10 @@ export default function AgentAppointmentsListClient({
                         automaticReminderError24h={automaticReminderStatusByAppointmentId[appt.id]?.errorDetail24h}
                         automaticReminderStatus1h={automaticReminderStatusByAppointmentId[appt.id]?.status1h}
                         automaticReminderError1h={automaticReminderStatusByAppointmentId[appt.id]?.errorDetail1h}
+                        smsReminderStatus24h={smsReminderStatusByAppointmentId[appt.id]?.status24h}
+                        smsReminderError24h={smsReminderStatusByAppointmentId[appt.id]?.errorDetail24h}
+                        smsReminderStatus1h={smsReminderStatusByAppointmentId[appt.id]?.status1h}
+                        smsReminderError1h={smsReminderStatusByAppointmentId[appt.id]?.errorDetail1h}
                         onResend={resendAppointmentNotificationAction}
                         onReminder={sendAppointmentReminderAction}
                       />

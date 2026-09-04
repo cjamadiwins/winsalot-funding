@@ -53,6 +53,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       contact_name: contactName,
       phone,
       email,
+      sms_consent: formData.get("sms_consent") === "on",
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
       timezone,

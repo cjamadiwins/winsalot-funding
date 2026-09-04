@@ -16,6 +16,7 @@ import {
   type LeadgenAppointmentReminderSettingsRow,
   type LeadgenAppointmentReminderStatusEntry,
   type LeadgenBusinessAppointmentReminderStatusEntry,
+  type LeadgenSmsReminderStatusEntry,
   type LeadgenAppointmentRow,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
@@ -49,6 +50,7 @@ export default function AppointmentsListClient({
   latestEmailByAppointmentId,
   automaticReminderStatusByAppointmentId,
   businessReminderStatusByAppointmentId,
+  smsReminderStatusByAppointmentId,
   reminderSettings,
   highlightId,
   initialClientFilter,
@@ -68,6 +70,9 @@ export default function AppointmentsListClient({
   // label (plus the failure reason behind a Failed/Bounced one) per
   // appointment id (brief EMAIL TRACKING).
   automaticReminderStatusByAppointmentId?: Record<string, LeadgenAppointmentReminderStatusEntry>;
+  // SMS counterpart - "Scheduled/Sending/Sent/Delivered/Failed/Skipped/
+  // Opted Out/Not scheduled" per appointment id.
+  smsReminderStatusByAppointmentId?: Record<string, LeadgenSmsReminderStatusEntry>;
   // "Business Reminder: Scheduled/Sent/Failed/Cancelled" - the
   // client-facing (e.g. Brent's Essentials) 24-hour + 1-hour reminder
   // status, distinct from the prospect-facing one above.
@@ -304,6 +309,22 @@ export default function AppointmentsListClient({
               />
               Automatic 24-hour reminders: {reminderSettings.automatic_reminders_enabled ? "On" : "Off"}
             </label>
+            <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+              <input
+                type="hidden"
+                name="automatic_sms_reminders_enabled"
+                value={reminderSettings.automatic_sms_reminders_enabled ? "true" : "false"}
+              />
+              <input
+                type="checkbox"
+                defaultChecked={reminderSettings.automatic_sms_reminders_enabled}
+                onChange={(e) => {
+                  const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                  hidden.value = e.currentTarget.checked ? "true" : "false";
+                }}
+              />
+              Automatic SMS reminders: {reminderSettings.automatic_sms_reminders_enabled ? "On" : "Off"} (independent of email above)
+            </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-[12.5px] font-semibold text-slate-600">Reminder Timing (hours before appointment)</span>
               <input name="reminder_hours_before" type="number" min={1} step={1} defaultValue={reminderSettings.reminder_hours_before} required className={inputClass} />
@@ -403,6 +424,10 @@ export default function AppointmentsListClient({
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Email</span>
             <input name="email" type="email" defaultValue={selectedLead?.email ?? ""} className={inputClass} key={`email-${selectedLeadId}`} />
+          </label>
+          <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
+            <input type="checkbox" name="sms_consent" className="h-4 w-4" />
+            SMS reminder consent
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>
@@ -645,6 +670,10 @@ export default function AppointmentsListClient({
                             automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
                             automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
                             automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
+                            smsReminderStatus24h={smsReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                            smsReminderError24h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                            smsReminderStatus1h={smsReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                            smsReminderError1h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
                             isAdmin
                             onResend={resendAppointmentNotificationAction}
                             onReminder={sendAppointmentReminderAction}
@@ -721,6 +750,10 @@ export default function AppointmentsListClient({
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
                             <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
+                          </label>
+                          <label className="flex items-center gap-2 text-[12.5px] text-slate-600 sm:col-span-2">
+                            <input type="checkbox" name="sms_consent" defaultChecked={appt.sms_consent} className="h-4 w-4" />
+                            SMS reminder consent
                           </label>
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
