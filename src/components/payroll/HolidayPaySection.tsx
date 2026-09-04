@@ -7,20 +7,12 @@
 // as an explicit .eq() in the page, so there is no path for one agent to
 // see another agent's holiday pay through this component.
 
-import { HOLIDAY_PAYMENT_TYPE_LABELS, type HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
-import { formatDateLong } from "@/lib/payroll";
+import { HOLIDAY_PAY_CURRENCY, HOLIDAY_PAYMENT_TYPE_LABELS, type HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
+import { formatDateLong, formatNgn } from "@/lib/payroll";
 
 type Props = {
   assignments: HolidayPayAssignmentWithHoliday[];
 };
-
-function formatAmount(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
 
 export default function HolidayPaySection({ assignments }: Props) {
   // A holiday the RLS/soft-delete has hidden (holidays comes back null
@@ -61,12 +53,12 @@ export default function HolidayPaySection({ assignments }: Props) {
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Amount</dt>
                     <dd className="font-medium text-[var(--color-ink)]">
-                      {formatAmount(assignment.effective_amount, holiday.currency)}
+                      {formatNgn(assignment.effective_amount)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Currency</dt>
-                    <dd className="font-medium text-[var(--color-ink)]">{holiday.currency}</dd>
+                    <dd className="font-medium text-[var(--color-ink)]">{HOLIDAY_PAY_CURRENCY}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Payroll Period</dt>

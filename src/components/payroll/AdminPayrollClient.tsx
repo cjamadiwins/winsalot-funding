@@ -504,7 +504,7 @@ function PayrollFormFields({
             <ul className="mt-1 text-xs text-slate-500">
               {holidayPaySummary.map((item, i) => (
                 <li key={i}>
-                  {item.holidayName}: {item.effectiveAmount} {item.currency}
+                  {item.holidayName}: {formatNgn(item.effectiveAmount)}
                 </li>
               ))}
             </ul>

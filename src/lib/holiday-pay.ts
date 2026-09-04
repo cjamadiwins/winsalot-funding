@@ -6,6 +6,17 @@
 
 import { STANDARD_BIWEEKLY_WAGE, STANDARD_WORKING_DAYS, dailyRate } from "./payroll";
 
+// The one currency Winsalot Corp actually pays agents in today, in both
+// CRMs (see payroll.ts's formatNgn - the same NGN formatting is shared,
+// unconditionally, by crm_payroll and leadgen_payroll). A holiday's
+// jurisdiction (e.g. "Canada/Ontario", which calendar it follows) is
+// independent of this - Winsalot can observe an Ontario statutory holiday
+// while still paying every agent's holiday pay in NGN, because that's
+// their payroll currency, not the jurisdiction's. Not admin-editable per
+// holiday - see createHolidayAction/updateHolidayAction, which always
+// write this constant regardless of what a form submits.
+export const HOLIDAY_PAY_CURRENCY = "NGN" as const;
+
 export const HOLIDAY_PAYMENT_TYPES = ["regular_paid_day", "fixed_amount", "percentage_premium", "unpaid"] as const;
 
 export type HolidayPaymentType = (typeof HOLIDAY_PAYMENT_TYPES)[number];
