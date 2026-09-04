@@ -7,6 +7,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getAuthRedirectBaseUrl } from "@/lib/site-url";
 import { fetchActiveAssignedModules, fetchOwnProgressByModuleId } from "@/lib/crm-training-data";
 import { isModuleCompletedForUser } from "@/lib/crm-training-types";
+import { PAYROLL_CURRENCIES, type PayrollCurrency } from "@/lib/payroll";
 
 // Every action below returns { error } instead of throwing. Next.js
 // redacts any error *thrown* from a Server Action in production builds
@@ -190,14 +191,18 @@ export async function updateAgentAction(
   const fullName = String(formData.get("full_name") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
   const active = formData.get("active") === "on";
+  const payrollCurrency = String(formData.get("payroll_currency") ?? "").trim();
 
   if (!fullName) return { error: "Name is required." };
   if (role !== "admin" && role !== "agent") return { error: "Invalid role." };
+  if (!(PAYROLL_CURRENCIES as readonly string[]).includes(payrollCurrency)) {
+    return { error: "Invalid payroll currency." };
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("crm_users")
-    .update({ full_name: fullName, role, active })
+    .update({ full_name: fullName, role, active, payroll_currency: payrollCurrency as PayrollCurrency })
     .eq("id", agentId);
 
   if (error) return { error: "Failed to update the agent." };

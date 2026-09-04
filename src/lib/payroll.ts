@@ -378,6 +378,44 @@ export function formatNgn(amount: number): string {
   }).format(amount);
 }
 
+// Every currency an agent's Payroll Currency (crm_users.payroll_currency /
+// leadgen_users.payroll_currency, migration 0134) can be set to. Purely a
+// display/formatting concept - there is no FX conversion anywhere in this
+// codebase, so a payroll figure is always the same number regardless of
+// which of these it's labelled with; only the symbol/formatting changes.
+export const PAYROLL_CURRENCIES = ["NGN", "PHP", "CAD", "USD"] as const;
+export type PayrollCurrency = (typeof PAYROLL_CURRENCIES)[number];
+
+export const PAYROLL_CURRENCY_LABELS: Record<PayrollCurrency, string> = {
+  NGN: "NGN — Nigerian Naira",
+  PHP: "PHP — Philippine Peso",
+  CAD: "CAD — Canadian Dollar",
+  USD: "USD — US Dollar",
+};
+
+const PAYROLL_CURRENCY_LOCALES: Record<PayrollCurrency, string> = {
+  NGN: "en-NG",
+  PHP: "en-PH",
+  CAD: "en-CA",
+  USD: "en-US",
+};
+
+// The general form of formatNgn above, for an arbitrary agent currency -
+// "₦75,000" / "₱75,000" / "CA$75,000" / "$75,000" for whole amounts, with
+// cents shown only when present. Every payroll display (regular pay,
+// deductions, holiday pay, adjustments, payroll history, Final Amount
+// Payable) formats with this using the specific agent's own
+// payroll_currency, looked up live rather than stored per-record - see the
+// migration 0134 header comment.
+export function formatCurrency(amount: number, currency: PayrollCurrency): string {
+  return new Intl.NumberFormat(PAYROLL_CURRENCY_LOCALES[currency], {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 // "August 21, 2026"
 export function formatDateLong(iso: string): string {
   return parseIsoDateUtc(iso).toLocaleDateString("en-US", {

@@ -1,12 +1,13 @@
 "use client";
 
 import {
+  formatCurrency,
   formatDateLong,
   formatDateShort,
-  formatNgn,
   formatPayPeriodLabel,
   hourlyRate,
   PAYROLL_STATUS_LABELS,
+  type PayrollCurrency,
   type PayrollRecord,
   type PayrollStatus,
 } from "@/lib/payroll";
@@ -19,6 +20,9 @@ type Props = {
   nextPayday: string;
   /** Already scoped to just this agent and ordered by payday desc (most recent/upcoming first). */
   records: PayrollRecord[];
+  // This agent's own Payroll Currency - every amount below is formatted in
+  // it, never a fixed currency (see migration 0134).
+  currency: PayrollCurrency;
 };
 
 const STATUS_BADGE_CLASSES: Record<PayrollStatus, string> = {
@@ -36,7 +40,7 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
   );
 }
 
-export default function MyPayView({ companyName, crmLabel, agentName, nextPayday, records }: Props) {
+export default function MyPayView({ companyName, crmLabel, agentName, nextPayday, records, currency }: Props) {
   // Agents only ever see Draft/Approved/Paid records that are actually
   // theirs to review here - a Cancelled pay period was voided and never
   // paid out, so it's left out of "my pay" entirely rather than showing
@@ -51,6 +55,7 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
       companyName,
       crmLabel,
       agentName,
+      currency,
       payPeriodStart: record.pay_period_start,
       payPeriodEnd: record.pay_period_end,
       payday: record.payday,
@@ -125,38 +130,38 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Hourly Wage</dt>
                 <dd className="font-medium text-[var(--color-ink)]">
-                  {formatNgn(hourlyRate(current.standard_biweekly_wage, current.standard_paid_hours))}
+                  {formatCurrency(hourlyRate(current.standard_biweekly_wage, current.standard_paid_hours), currency)}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Gross Wage Earnings</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.base_pay_earned)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatCurrency(current.base_pay_earned, currency)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Attendance Deductions</dt>
-                <dd className="font-medium text-[var(--color-ink)]">-{formatNgn(current.deductions)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">-{formatCurrency(current.deductions, currency)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Internet Allowance</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.internet_allowance)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatCurrency(current.internet_allowance, currency)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Incentive / Bonus</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.bonus_commission)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatCurrency(current.bonus_commission, currency)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Other Additions</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.other_additions)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatCurrency(current.other_additions, currency)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--color-text-muted)]">Holiday Pay</dt>
-                <dd className="font-medium text-[var(--color-ink)]">{formatNgn(current.holiday_pay)}</dd>
+                <dd className="font-medium text-[var(--color-ink)]">{formatCurrency(current.holiday_pay, currency)}</dd>
               </div>
             </dl>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-lg font-bold text-[var(--color-ink-strong)]">
-                Final Amount: {formatNgn(current.total_pay)}
+                Final Amount: {formatCurrency(current.total_pay, currency)}
               </p>
               <StatusBadge status={current.status} />
             </div>
@@ -215,7 +220,7 @@ export default function MyPayView({ companyName, crmLabel, agentName, nextPayday
                       {record.actual_payment_date ? formatDateShort(record.actual_payment_date) : formatDateShort(record.payday)}
                     </td>
                     <td className="py-2.5 pr-4 text-[var(--color-ink)]">{record.total_payable_days}</td>
-                    <td className="py-2.5 pr-4 font-medium text-[var(--color-ink)]">{formatNgn(record.total_pay)}</td>
+                    <td className="py-2.5 pr-4 font-medium text-[var(--color-ink)]">{formatCurrency(record.total_pay, currency)}</td>
                     <td className="py-2.5 pr-4">
                       <StatusBadge status={record.status} />
                     </td>

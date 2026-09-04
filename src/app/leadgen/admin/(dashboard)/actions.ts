@@ -17,6 +17,7 @@ import {
   slugifyClientName,
   type LeadgenRole,
 } from "@/lib/leadgen-types";
+import { PAYROLL_CURRENCIES, type PayrollCurrency } from "@/lib/payroll";
 
 type ActionResult = {
   error?: string;
@@ -742,12 +743,19 @@ export async function updateLeadgenUserAction(userId: string, formData: FormData
   const currentAdmin = await requireLeadgenAdmin();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const active = formData.get("active") === "on";
+  const payrollCurrency = String(formData.get("payroll_currency") ?? "").trim();
 
   if (!fullName) return { error: "Name is required." };
   if (userId === currentAdmin.id && !active) return { error: "You can't deactivate your own account." };
+  if (!(PAYROLL_CURRENCIES as readonly string[]).includes(payrollCurrency)) {
+    return { error: "Invalid payroll currency." };
+  }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("leadgen_users").update({ full_name: fullName, active }).eq("id", userId);
+  const { error } = await supabase
+    .from("leadgen_users")
+    .update({ full_name: fullName, active, payroll_currency: payrollCurrency as PayrollCurrency })
+    .eq("id", userId);
 
   if (error) return { error: "Failed to update this user." };
 

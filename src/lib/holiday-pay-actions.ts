@@ -553,24 +553,36 @@ export async function loadHolidayPaySummaryAction(
 
   const supabase = await createSupabaseServerClient();
   const agentColumn = crm === "growth" ? "crm_user_id" : "leadgen_user_id";
+  const usersTable = crm === "growth" ? "crm_users" : "leadgen_users";
 
-  const { data, error } = await supabase
-    .from("holiday_pay_assignments")
-    .select("effective_amount, holidays!inner(name, payment_type, currency, payroll_period_payday, deleted_at)")
-    .eq(agentColumn, agentId)
-    .eq("status", "assigned")
-    .eq("holidays.payroll_period_payday", payday)
-    .is("holidays.deleted_at", null);
+  // Holiday pay is always shown in the agent's own payroll currency, never
+  // the (now vestigial) holidays.currency column - see payroll.ts's
+  // formatCurrency and migration 0134's header comment. Looked up live
+  // here, alongside the assignments, rather than stored on the assignment
+  // row, so a later currency change on the agent's profile is reflected
+  // immediately without rewriting any historical assignment.
+  const [{ data, error }, { data: agentRow, error: agentError }] = await Promise.all([
+    supabase
+      .from("holiday_pay_assignments")
+      .select("effective_amount, holidays!inner(name, payment_type, payroll_period_payday, deleted_at)")
+      .eq(agentColumn, agentId)
+      .eq("status", "assigned")
+      .eq("holidays.payroll_period_payday", payday)
+      .is("holidays.deleted_at", null),
+    supabase.from(usersTable).select("payroll_currency").eq("id", agentId).maybeSingle(),
+  ]);
 
   if (error) return { error: `Failed to load holiday pay: ${error.message}` };
+  if (agentError) return { error: `Failed to load agent: ${agentError.message}` };
 
-  type Row = { effective_amount: number; holidays: { name: string; payment_type: HolidayPaymentType; currency: string } };
+  const currency = agentRow?.payroll_currency ?? "NGN";
+  type Row = { effective_amount: number; holidays: { name: string; payment_type: HolidayPaymentType } };
   const rows = (data ?? []) as unknown as Row[];
   const items: HolidayPaySummaryItem[] = rows.map((row) => ({
     holidayName: row.holidays.name,
     paymentType: row.holidays.payment_type,
     effectiveAmount: row.effective_amount,
-    currency: row.holidays.currency,
+    currency,
   }));
   const total = Math.round(items.reduce((sum, item) => sum + item.effectiveAmount, 0) * 100) / 100;
 

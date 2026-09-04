@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { CrmUserRow } from "@/lib/crm-types";
 import type { AgentOnboardingAdminRow } from "@/lib/crm-onboarding-types";
+import { PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
 import { inviteAgentAction, removeAgentAction, resendAgentAccessEmailAction, reviewAgentOnboardingAction, updateAgentAction } from "./actions";
 
 const inputClasses =
@@ -113,6 +114,7 @@ export default function AgentsClient({
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3">Currency</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Onboarding</th>
               <th className="px-4 py-3" />
@@ -124,7 +126,7 @@ export default function AgentsClient({
               return (
               <tr key={agent.id} className="border-b border-slate-100 last:border-0 align-top">
                 {editingId === agent.id ? (
-                  <td colSpan={6} className="px-4 py-4">
+                  <td colSpan={7} className="px-4 py-4">
                     <form
                       action={(formData) =>
                         runAction(
@@ -143,6 +145,17 @@ export default function AgentsClient({
                       <select name="role" defaultValue={agent.role} className={`${inputClasses} max-w-[140px]`}>
                         <option value="agent">Agent</option>
                         <option value="admin">Admin</option>
+                      </select>
+                      <select
+                        name="payroll_currency"
+                        defaultValue={agent.payroll_currency}
+                        className={`${inputClasses} max-w-[220px]`}
+                      >
+                        {PAYROLL_CURRENCIES.map((currency) => (
+                          <option key={currency} value={currency}>
+                            {PAYROLL_CURRENCY_LABELS[currency]}
+                          </option>
+                        ))}
                       </select>
                       <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input type="checkbox" name="active" defaultChecked={agent.active} />
@@ -165,6 +178,7 @@ export default function AgentsClient({
                     <td className="px-4 py-3 font-medium text-slate-900">{agent.full_name}</td>
                     <td className="px-4 py-3 text-slate-600">{agent.email}</td>
                     <td className="px-4 py-3 text-slate-600 capitalize">{agent.role}</td>
+                    <td className="px-4 py-3 text-slate-600">{agent.payroll_currency}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -243,7 +257,7 @@ export default function AgentsClient({
 
             {agents.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No agents yet.
                 </td>
               </tr>

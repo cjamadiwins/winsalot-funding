@@ -9,16 +9,15 @@
 
 import { useState, useTransition } from "react";
 import {
-  HOLIDAY_PAY_CURRENCY,
   HOLIDAY_PAYMENT_TYPES,
   HOLIDAY_PAYMENT_TYPE_LABELS,
   type HolidayPaymentType,
   type HolidayPayAssignmentRow,
   type HolidayRow,
 } from "@/lib/holiday-pay";
-import { formatDateShort, formatNgn } from "@/lib/payroll";
+import { formatCurrency, formatDateShort, type PayrollCurrency } from "@/lib/payroll";
 
-type Agent = { id: string; full_name: string; email: string };
+type Agent = { id: string; full_name: string; email: string; payroll_currency: PayrollCurrency };
 
 type AssignResult = { error?: string; assignedCount?: number; skipped?: { name: string; reason: string }[] };
 type ActionResult = { error?: string };
@@ -90,9 +89,12 @@ function HolidayForm({
         </div>
         <div>
           <label className={labelClasses}>Currency</label>
-          <input type="text" disabled value={HOLIDAY_PAY_CURRENCY} className={`${inputClasses} mt-1 bg-slate-50 text-slate-500`} />
+          <p className={`${inputClasses} mt-1 border-none bg-slate-50 px-3.5 py-2.5 text-slate-500`}>
+            Follows each assigned agent
+          </p>
           <p className="mt-1 text-[11px] font-normal normal-case text-slate-400">
-            Holiday pay always follows the agent&apos;s payroll currency — independent of the jurisdiction above.
+            Holiday pay is one amount, shown to each agent in their own Payroll Currency (set on their profile) —
+            independent of the jurisdiction above.
           </p>
         </div>
       </div>
@@ -282,7 +284,7 @@ function AssignmentsPanel({
                 <div>
                   <p className="font-medium text-slate-800">{agent?.full_name ?? "Former agent"}</p>
                   <p className="text-slate-500">
-                    {formatNgn(assignment.effective_amount)}
+                    {formatCurrency(assignment.effective_amount, agent?.payroll_currency ?? "NGN")}
                     {assignment.override_amount !== null && (
                       <span> (overridden - {assignment.override_reason})</span>
                     )}
@@ -447,7 +449,7 @@ export default function HolidayPayAdminSection({
                         <span className="font-normal text-slate-500">- {formatDateShort(holiday.holiday_date)}</span>
                       </p>
                       <p className="text-xs text-slate-500">
-                        {holiday.jurisdiction} · {HOLIDAY_PAYMENT_TYPE_LABELS[holiday.payment_type]} · {HOLIDAY_PAY_CURRENCY}
+                        {holiday.jurisdiction} · {HOLIDAY_PAYMENT_TYPE_LABELS[holiday.payment_type]}
                       </p>
                       {holiday.eligibility_notes && (
                         <p className="mt-1 text-xs italic text-slate-500">{holiday.eligibility_notes}</p>

@@ -1,4 +1,5 @@
 import type { KpiTone } from "@/components/crm-ui/KpiCard";
+import type { PayrollCurrency } from "@/lib/payroll";
 
 export type CrmRole = "admin" | "agent";
 
@@ -14,6 +15,10 @@ export type CrmUserRow = {
   // them (see src/lib/attendance-pay.ts). Admin-set from the Attendance
   // page, migration 0075.
   scheduled_start_time: string | null;
+  // Admin-controlled, never derived from country/location (migration 0134).
+  // Drives every payroll display/calculation for this agent - see
+  // src/lib/payroll.ts's formatCurrency.
+  payroll_currency: PayrollCurrency;
 };
 
 export type AgentAttendanceRow = {

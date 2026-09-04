@@ -50,8 +50,8 @@ export default async function LeadgenAdminPayrollPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Payroll</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Manage biweekly pay records for Lead Generation CRM agents. Paid every 14 days in Nigerian Naira
-        (₦), driven by attendance and admin-approved day counts.
+        Manage biweekly pay records for Lead Generation CRM agents. Paid every 14 days, in each agent&apos;s own
+        Payroll Currency (set on their profile), driven by attendance and admin-approved day counts.
       </p>
 
       {error && (
@@ -69,6 +69,7 @@ export default async function LeadgenAdminPayrollPage() {
               id: a.id,
               full_name: a.full_name,
               email: a.email,
+              payroll_currency: a.payroll_currency,
             }))}
             records={(records ?? []) as PayrollRecord[]}
             auditLog={(auditLog ?? []) as PayrollAuditLogRow[]}
@@ -91,6 +92,7 @@ export default async function LeadgenAdminPayrollPage() {
                 id: a.id,
                 full_name: a.full_name,
                 email: a.email,
+                payroll_currency: a.payroll_currency,
               }))}
               holidays={(holidays ?? []) as HolidayRow[]}
               assignments={(assignments ?? []) as HolidayPayAssignmentRow[]}

@@ -7,14 +7,18 @@
 // as an explicit .eq() in the page, so there is no path for one agent to
 // see another agent's holiday pay through this component.
 
-import { HOLIDAY_PAY_CURRENCY, HOLIDAY_PAYMENT_TYPE_LABELS, type HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
-import { formatDateLong, formatNgn } from "@/lib/payroll";
+import { HOLIDAY_PAYMENT_TYPE_LABELS, type HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
+import { formatCurrency, formatDateLong, type PayrollCurrency } from "@/lib/payroll";
 
 type Props = {
   assignments: HolidayPayAssignmentWithHoliday[];
+  // This agent's own Payroll Currency (crm_users.payroll_currency /
+  // leadgen_users.payroll_currency) - holiday pay is always shown in it,
+  // never a currency tied to the holiday itself. See migration 0134.
+  currency: PayrollCurrency;
 };
 
-export default function HolidayPaySection({ assignments }: Props) {
+export default function HolidayPaySection({ assignments, currency }: Props) {
   // A holiday the RLS/soft-delete has hidden (holidays comes back null
   // from the embedded join) is never shown - this agent has nothing
   // meaningful to see for it anymore.
@@ -53,12 +57,12 @@ export default function HolidayPaySection({ assignments }: Props) {
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Amount</dt>
                     <dd className="font-medium text-[var(--color-ink)]">
-                      {formatNgn(assignment.effective_amount)}
+                      {formatCurrency(assignment.effective_amount, currency)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Currency</dt>
-                    <dd className="font-medium text-[var(--color-ink)]">{HOLIDAY_PAY_CURRENCY}</dd>
+                    <dd className="font-medium text-[var(--color-ink)]">{currency}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-muted)]">Payroll Period</dt>
