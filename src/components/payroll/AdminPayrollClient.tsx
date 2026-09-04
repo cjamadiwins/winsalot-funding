@@ -188,11 +188,16 @@ function PayrollFormFields({
         const suggestedAbsence = Math.max(result.summary!.weekdayCount - result.summary!.daysPresent - approved, 0);
         const approvedLeaveHours = Number(v.approvedPaidLeaveHours) || 0;
         const suggestedUnpaidHours = Math.max(0, result.hourlySummary!.unpaidHours - approvedLeaveHours);
+        const wage = Number(v.standardBiweeklyWage) || STANDARD_BIWEEKLY_WAGE;
+        const standardHours = Number(v.standardPaidHours) || STANDARD_PAID_HOURS;
+        const automaticAttendanceDeduction =
+          Math.round(suggestedUnpaidHours * hourlyRate(wage, standardHours) * 100) / 100;
         return {
           ...v,
           unpaidAbsenceDays: String(suggestedAbsence),
           regularPaidHours: result.hourlySummary!.regularPaidHours.toFixed(2),
           unpaidHours: suggestedUnpaidHours.toFixed(2),
+          deductions: String(automaticAttendanceDeduction),
         };
       });
     } finally {
@@ -321,7 +326,7 @@ function PayrollFormFields({
               </p>
             )}
             {attendance.openTodayDate && <p>Agent is currently clocked in today.</p>}
-            <p>Fields below were pre-filled from this - review and adjust before saving.</p>
+            <p>Hours and the attendance deduction below were calculated automatically. Admin can review and adjust before saving.</p>
           </div>
         )}
       </div>
@@ -462,7 +467,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Other Additions (₦)</label>
+          <label className={labelClasses}>Admin Additions (₦)</label>
           <input
             type="number"
             name="other_additions"
@@ -518,7 +523,7 @@ function PayrollFormFields({
           />
         </div>
         <div>
-          <label className={labelClasses}>Attendance Deductions (₦)</label>
+          <label className={labelClasses}>Attendance Deduction (₦, automatic · admin adjustable)</label>
           <input
             type="number"
             name="deductions"
