@@ -79,17 +79,25 @@ export const REQUIRED_PLANNED_NOTICE_DAYS = 7;
 
 // Exact policy copy from the spec, shown at the top of every Leave
 // Requests page (agent and admin, both CRMs) - kept here once so it can
-// never drift between the four places it's rendered. Leave approval and
-// pay approval are two separate decisions, so the agent-facing
-// explanation and the admin policy box carry deliberately different
-// wording (the agent doesn't need the short-notice/decline mechanics
-// spelled out; the admin does) - see AGENT_LEAVE_POLICY_BODY and
-// ADMIN_LEAVE_POLICY_BODY below.
+// never drift between the four places it's rendered.
+//
+// The agent page shows the SAME full current policy the admin page does
+// (spec: "Replace it with the SAME full current Leave and Attendance
+// Policy shown on the admin page"), just split into two paragraphs so the
+// existing, useful agent-facing explanation (paragraph 1,
+// AGENT_LEAVE_POLICY_BODY) still reads first, followed by the policy's
+// notice-period/decline mechanics (paragraph 2, LEAVE_POLICY_NOTICE_BODY) -
+// see each agent client component. ADMIN_LEAVE_POLICY_BODY is built by
+// concatenating its own lead-in sentences with this same
+// LEAVE_POLICY_NOTICE_BODY, so the notice-period wording can never drift
+// between the two pages.
 export const LEAVE_POLICY_TITLE = "Leave and Attendance Policy";
 export const AGENT_LEAVE_POLICY_BODY =
   "Management will review both your request for time off and whether the leave will be paid. Approved leave may be paid or unpaid.";
+export const LEAVE_POLICY_NOTICE_BODY =
+  "Planned leave should normally be requested at least seven days in advance. Emergency leave may be reviewed afterward at management's discretion. If leave is declined, any absence will be handled under the company's normal attendance and payroll rules.";
 export const ADMIN_LEAVE_POLICY_BODY =
-  "Leave approval and pay approval are reviewed separately. Approved leave may be paid or unpaid. Planned leave should normally be requested at least seven days in advance. Emergency leave may be reviewed afterward at management's discretion. If leave is declined, any absence will be handled under the company's normal attendance and payroll rules.";
+  `Leave approval and pay approval are reviewed separately. Approved leave may be paid or unpaid. ${LEAVE_POLICY_NOTICE_BODY}`;
 
 function parseIsoDateUtc(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);

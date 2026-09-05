@@ -181,21 +181,20 @@ export default function AdminLeaveRequestsClient({
         <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-              <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Dates</th>
-              <th className="px-4 py-3">Notice</th>
-              <th className="px-4 py-3">Reason</th>
-              <th className="px-4 py-3">Leave Status</th>
-              <th className="px-4 py-3">Pay Status</th>
-              <th className="px-4 py-3">Attendance</th>
-              <th className="px-4 py-3" />
+              <th className="px-3 py-3">Agent</th>
+              <th className="px-3 py-3">Type / Notice</th>
+              <th className="px-3 py-3">Dates</th>
+              <th className="px-3 py-3">Reason</th>
+              <th className="px-3 py-3">Leave Status</th>
+              <th className="px-3 py-3">Pay Status</th>
+              <th className="px-3 py-3">Attendance</th>
+              <th className="sticky right-0 z-10 bg-[var(--crm-surface)] px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
+                <td colSpan={8} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
                   No leave requests match these filters.
                 </td>
               </tr>
@@ -209,29 +208,33 @@ export default function AdminLeaveRequestsClient({
                     id={`leave-request-${r.id}`}
                     className={flashId === r.id ? "bg-amber-50 transition-colors" : "transition-colors"}
                   >
-                    <td className="px-4 py-3 font-medium text-[var(--color-ink-strong)]">{agentName}</td>
-                    <td className="px-4 py-3">{LEAVE_TYPE_LABELS[r.leave_type]}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-3 font-medium text-[var(--color-ink-strong)]">{agentName}</td>
+                    <td className="px-3 py-3">
+                      <div className="whitespace-nowrap">{LEAVE_TYPE_LABELS[r.leave_type]}</div>
+                      <div className="mt-0.5 whitespace-nowrap text-xs text-[var(--color-text-muted)]">
+                        {r.notice_days}d notice
+                        {r.is_short_notice && (
+                          <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
+                            Short Notice
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
                       {formatDateLong(r.start_date)} – {formatDateLong(r.end_date)}
                     </td>
-                    <td className="px-4 py-3">
-                      {r.notice_days}d
-                      {r.is_short_notice && (
-                        <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
-                          Short Notice
-                        </span>
-                      )}
+                    <td className="max-w-[160px] px-3 py-3">
+                      <span className="block truncate" title={r.reason}>
+                        {r.reason}
+                      </span>
                     </td>
-                    <td className="max-w-xs px-4 py-3">
-                      <span className="line-clamp-2">{r.reason}</span>
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
                         {LEAVE_STATUS_LABELS[r.status]}
                       </span>
                       {r.decision_note && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Note: {r.decision_note}</p>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       {r.status === "approved" ? (
                         <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${PAY_STATUS_STYLES[r.pay_status]}`}>
                           {PAY_STATUS_LABELS[r.pay_status]}
@@ -240,7 +243,7 @@ export default function AdminLeaveRequestsClient({
                         <span className="text-xs text-[var(--color-text-muted)]">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <span className="text-xs text-[var(--color-text-muted)]">
                         {LEAVE_ATTENDANCE_STATUS_LABELS[r.attendance_status]}
                       </span>
@@ -251,7 +254,11 @@ export default function AdminLeaveRequestsClient({
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td
+                      className={`sticky right-0 z-10 px-3 py-3 text-right shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)] ${
+                        flashId === r.id ? "bg-amber-50" : "bg-[var(--crm-surface)]"
+                      }`}
+                    >
                       {r.status === "pending" && (
                         <div className="flex justify-end gap-3">
                           <button
@@ -367,7 +374,7 @@ export default function AdminLeaveRequestsClient({
                   </tr>
                   {isDeciding && (
                     <tr>
-                      <td colSpan={9} className="bg-slate-50 px-4 py-4">
+                      <td colSpan={8} className="bg-slate-50 px-4 py-4">
                         <form
                           action={(fd) => {
                             const action = decisionKind === "approve" ? approveAction : declineAction;
@@ -415,7 +422,7 @@ export default function AdminLeaveRequestsClient({
                   )}
                   {editingId === r.id && (
                     <tr>
-                      <td colSpan={9} className="bg-slate-50 px-4 py-4">
+                      <td colSpan={8} className="bg-slate-50 px-4 py-4">
                         {r.status === "approved" && (
                           <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
                             This request is currently Approved. Saving changes here may automatically reverse or update
