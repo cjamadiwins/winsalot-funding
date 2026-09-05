@@ -3,8 +3,16 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { fetchWinsalotAvailabilitySettings, fetchWinsalotBlackouts } from "./winsalot-consultation-availability";
 import { generateWinsalotBookingSlots, isWinsalotSlotOffered, winsalotSlotEndIso } from "./winsalot-consultation-booking";
 import { notifyOfNewWinsalotAppointment, notifyOfWinsalotCancellation, notifyOfWinsalotReschedule } from "./winsalot-consultation-notifications";
+import { fetchWinsalotAppointmentReminderSettings } from "./winsalot-consultation-reminders";
 import { isValidEmail } from "./winsalot-consultation-types";
-import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "./appointment-sms";
+import {
+  buildCompanyAppointmentBookingSms,
+  claimAndSendAppointmentSms,
+  formatSmsDateWithWeekdayLabel,
+  formatSmsTimeLabel,
+  isValidMobileNumber,
+  sendImmediateAppointmentConfirmation,
+} from "./appointment-sms";
 import { CLOSED_STAGES, OPPORTUNITY_TYPES, shouldAdvanceStageForConsultationBooking, type OpportunityStage, type OpportunityType } from "./crm-types";
 import type { WinsalotAppointmentRow } from "./winsalot-consultation-types";
 
@@ -201,6 +209,39 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
     prospectPhone: input.phone.trim(),
     prospectConsent: isValidMobileNumber(input.phone.trim()),
     businessName: "Winsalot Corp.",
+  });
+
+  // Immediate booking SMS to Winsalot Corp's own Company SMS Notification
+  // Number (Growth CRM only, admin-editable - see
+  // winsalot-consultation-reminders.ts / migration 0141). Never consent-
+  // gated (this is Winsalot's own internal notification, not a message to
+  // the prospect) and a no-op (recorded "Skipped", not a failure) whenever
+  // the number isn't configured - never requires a crm_clients record.
+  const reminderSettings = await fetchWinsalotAppointmentReminderSettings(admin);
+  const bookedMs = new Date(input.startUtcIso).getTime();
+  await claimAndSendAppointmentSms(admin, {
+    table: "winsalot_appointment_sms_reminders",
+    appointmentId: appointment.id as string,
+    reminderType: "1_hour_reminder",
+    recipientType: "admin",
+    // Same prefixed-occurrence-key trick as the prospect confirmation
+    // above - distinguishes this immediate send from the real 1-hour
+    // reminder without a database migration to the reminder_type enum.
+    // Safe to share the exact key with the prospect confirmation's own
+    // claim: recipient_type is part of the unique constraint, so the two
+    // never collide.
+    occurrenceKey: `booking_confirmation:${input.startUtcIso}`,
+    scheduledAppointmentAtIso: input.startUtcIso,
+    toPhoneRaw: reminderSettings.company_sms_notification_number,
+    consentGiven: true,
+    message: buildCompanyAppointmentBookingSms({
+      contactName: input.contactName.trim(),
+      businessName: input.businessName.trim(),
+      dateLabel: formatSmsDateWithWeekdayLabel(bookedMs, settings.business_timezone),
+      timeLabel: formatSmsTimeLabel(bookedMs, settings.business_timezone),
+      prospectPhone: input.phone.trim(),
+    }),
+    dryRun: false,
   });
 
   await notifyOfNewWinsalotAppointment(appointment as WinsalotAppointmentRow, input.bookedBy);

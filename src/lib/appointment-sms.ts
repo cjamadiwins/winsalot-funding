@@ -205,6 +205,28 @@ export function buildClientAppointmentBookingSms(params: {
   return lines.join("\n");
 }
 
+// Immediate on-booking SMS to Winsalot Corp's own Company SMS
+// Notification Number (Growth CRM only - see winsalot-consultation-book.ts)
+// - distinct from buildClientAppointmentBookingSms above, which notifies a
+// Lead Gen CRM *client* business about a prospect appointment booked with
+// them. This one tells Winsalot Corp itself that a Growth CRM consultation
+// was just booked, with no client record involved.
+export function buildCompanyAppointmentBookingSms(params: {
+  contactName: string;
+  businessName: string;
+  dateLabel: string;
+  timeLabel: string;
+  prospectPhone: string | null;
+}): string {
+  const lines = [
+    "Winsalot Growth CRM: New consultation booked",
+    `${params.contactName.trim()} (${params.businessName.trim()})`,
+    `${params.dateLabel} at ${params.timeLabel}`,
+  ];
+  if (params.prospectPhone?.trim()) lines.push(`Phone: ${params.prospectPhone.trim()}`);
+  return lines.join("\n");
+}
+
 // 24-hour/1-hour reminder SMS to the client/business - single segment
 // where possible, per the brief's example
 // ("Reminder: Brent's Essentials has an appointment with John Smith
@@ -350,7 +372,7 @@ export async function claimAndSendAppointmentSms(
   const requiresConsent = opts.recipientType === "prospect";
   const noPhoneDetail =
     opts.recipientType === "admin"
-      ? "ADMIN_PHONE_NUMBER is not configured."
+      ? "No admin/company SMS notification number configured (ADMIN_PHONE_NUMBER, or the Growth CRM's Company SMS Notification Number)."
       : opts.recipientType === "client"
         ? "No SMS Notification Number on file for this client."
         : "No mobile number on file.";

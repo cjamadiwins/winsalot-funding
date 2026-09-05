@@ -9,6 +9,7 @@ import {
   updateWinsalotAvailabilitySettings,
   type UpdateWinsalotAvailabilityInput,
 } from "@/lib/winsalot-consultation-availability";
+import { updateWinsalotCompanySmsNotificationNumber } from "@/lib/winsalot-consultation-reminders";
 
 export async function updateWinsalotAvailabilityAction(formData: FormData): Promise<{ error?: string }> {
   const crmUser = await requireCrmAdmin();
@@ -62,6 +63,16 @@ export async function removeWinsalotBlackoutAction(id: string): Promise<{ error?
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
   const result = await removeWinsalotBlackout(supabase, id);
+  revalidatePath("/admin/crm/consultation-availability");
+  return result;
+}
+
+export async function updateWinsalotCompanySmsNumberAction(formData: FormData): Promise<{ error?: string }> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const raw = String(formData.get("company_sms_notification_number") ?? "").trim();
+  const result = await updateWinsalotCompanySmsNotificationNumber(supabase, raw || null, crmUser.full_name || crmUser.email);
   revalidatePath("/admin/crm/consultation-availability");
   return result;
 }

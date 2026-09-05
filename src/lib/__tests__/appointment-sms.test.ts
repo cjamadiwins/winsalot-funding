@@ -4,6 +4,7 @@ import {
   buildAppointmentConfirmationSms,
   buildClientAppointmentBookingSms,
   buildClientAppointmentReminderSms,
+  buildCompanyAppointmentBookingSms,
   buildProspectReminderSms,
   formatSmsDateLabel,
   formatSmsDateWithWeekdayLabel,
@@ -176,6 +177,32 @@ describe("buildClientAppointmentBookingSms", () => {
       prospectPhone: null,
     });
     expect(message).toContain("New prospect");
+  });
+});
+
+describe("buildCompanyAppointmentBookingSms", () => {
+  it("includes the contact name, business name, date/time, and prospect phone", () => {
+    const message = buildCompanyAppointmentBookingSms({
+      contactName: "Jane Doe",
+      businessName: "Acme Co",
+      dateLabel: "Friday, Sep 5",
+      timeLabel: "12:00 PM EDT",
+      prospectPhone: "416-555-1234",
+    });
+    expect(message).toBe(
+      ["Winsalot Growth CRM: New consultation booked", "Jane Doe (Acme Co)", "Friday, Sep 5 at 12:00 PM EDT", "Phone: 416-555-1234"].join("\n")
+    );
+  });
+
+  it("omits the phone line when no prospect phone is on file", () => {
+    const message = buildCompanyAppointmentBookingSms({
+      contactName: "Jane Doe",
+      businessName: "Acme Co",
+      dateLabel: "Sep 5",
+      timeLabel: "9:00 AM EDT",
+      prospectPhone: null,
+    });
+    expect(message).not.toContain("Phone:");
   });
 });
 
