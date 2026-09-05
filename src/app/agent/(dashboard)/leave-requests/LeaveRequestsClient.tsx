@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { CrmLeaveRequestRow } from "@/lib/crm-types";
 import {
-  LEAVE_POLICY_BODY,
+  AGENT_LEAVE_POLICY_BODY,
   LEAVE_POLICY_TITLE,
-  LEAVE_STATUS_LABELS,
   LEAVE_STATUS_STYLES,
   LEAVE_TYPE_LABELS,
   computeNoticeDays,
+  formatLeaveDecisionLabel,
   isShortNotice,
 } from "@/lib/leave-requests";
 import { formatDateLong } from "@/lib/payroll";
@@ -71,7 +71,7 @@ export default function LeaveRequestsClient({
     <div>
       <div className="rounded-xl border border-sky-200 bg-sky-50 p-5">
         <h2 className="text-sm font-bold uppercase tracking-wide text-sky-900">{LEAVE_POLICY_TITLE}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-sky-900">{LEAVE_POLICY_BODY}</p>
+        <p className="mt-2 text-sm leading-relaxed text-sky-900">{AGENT_LEAVE_POLICY_BODY}</p>
       </div>
 
       <form key={formKey} action={handleSubmit} className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
@@ -180,7 +180,7 @@ export default function LeaveRequestsClient({
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
-                      {LEAVE_STATUS_LABELS[r.status]}
+                      {formatLeaveDecisionLabel(r.status, r.pay_status)}
                     </span>
                     {r.decision_note && (
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">Note: {r.decision_note}</p>

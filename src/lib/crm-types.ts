@@ -561,7 +561,7 @@ export function toDatetimeLocal(iso: string): string {
 // Generation CRM's identically-shaped leadgen_leave_requests - this row
 // type is per-CRM only because the table (and its agent_id FK target,
 // crm_users) is.
-import type { LeaveAttendanceStatus, LeaveStatus, LeaveType } from "./leave-requests";
+import type { LeaveAttendanceStatus, LeaveRequestAuditAction, LeaveStatus, LeaveType, PayStatus } from "./leave-requests";
 
 export type CrmLeaveRequestRow = {
   id: string;
@@ -571,6 +571,9 @@ export type CrmLeaveRequestRow = {
   end_date: string;
   reason: string;
   status: LeaveStatus;
+  // Pay Status: decided alongside (never ahead of) Leave Status - only
+  // ever "paid"/"unpaid" once status is "approved" (migration 0143).
+  pay_status: PayStatus;
   notice_days: number;
   is_short_notice: boolean;
   submitted_at: string;
@@ -614,16 +617,7 @@ export type CrmLeaveRequestAuditLogRow = {
   leave_request_id: string;
   agent_id: string | null;
   agent_name: string;
-  action:
-    | "submitted"
-    | "approved"
-    | "declined"
-    | "attendance_marked_paid_leave"
-    | "attendance_marked_unpaid_absence"
-    | "deduction_confirmed"
-    | "payroll_applied"
-    | "edited"
-    | "deleted";
+  action: LeaveRequestAuditAction;
   performed_by: string | null;
   performed_by_name: string;
   note: string | null;

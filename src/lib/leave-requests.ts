@@ -9,8 +9,23 @@ import { dailyRate, hourlyRate, weekdaysInRange } from "./payroll";
 import { SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
 
 export type LeaveType = "planned" | "emergency";
+// Leave Status: management's decision on the time-off request itself,
+// independent of whether it's paid - see PayStatus below. This is the
+// "two-part leave decision": a request can be Approved + Paid, Approved
+// + Unpaid, or Declined, decided as two separate fields rather than one.
 export type LeaveStatus = "pending" | "approved" | "declined";
-export type LeaveAttendanceStatus = "none" | "paid_leave" | "unpaid_absence";
+// Pay Status: whether an *approved* leave's workdays are paid. Only ever
+// meaningfully Paid/Unpaid once Leave Status is "approved" - a
+// pending or declined request has nothing to decide yet and stays
+// "pending" (see the DB check constraint requiring exactly this).
+export type PayStatus = "pending" | "paid" | "unpaid";
+// "none": nothing marked yet (pending, or approved/declined but not yet
+// applied to attendance). "paid_leave": Approved + Paid. "unpaid_leave":
+// Approved + Unpaid - a genuinely approved absence that just isn't paid,
+// distinct from "unpaid_absence": a *declined* request the agent was
+// absent for anyway, handled under the pre-existing attendance/absence
+// rules this feature never touches.
+export type LeaveAttendanceStatus = "none" | "paid_leave" | "unpaid_leave" | "unpaid_absence";
 
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   planned: "Planned Leave",
@@ -29,11 +44,33 @@ export const LEAVE_STATUS_STYLES: Record<LeaveStatus, string> = {
   declined: "bg-rose-100 text-rose-800",
 };
 
+export const PAY_STATUS_LABELS: Record<PayStatus, string> = {
+  pending: "Pending",
+  paid: "Paid",
+  unpaid: "Unpaid",
+};
+
+export const PAY_STATUS_STYLES: Record<PayStatus, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  paid: "bg-emerald-100 text-emerald-800",
+  unpaid: "bg-orange-100 text-orange-800",
+};
+
 export const LEAVE_ATTENDANCE_STATUS_LABELS: Record<LeaveAttendanceStatus, string> = {
   none: "Not marked",
   paid_leave: "Paid Leave",
+  unpaid_leave: "Unpaid Leave",
   unpaid_absence: "Unapproved Absence — Unpaid",
 };
+
+// The single combined label the agent-facing history shows per the spec's
+// own examples ("Approved / Paid", "Approved / Unpaid", "Declined",
+// "Pending") - Pay Status is only ever shown alongside an Approved Leave
+// Status, since it's the only state where it means anything.
+export function formatLeaveDecisionLabel(status: LeaveStatus, payStatus: PayStatus): string {
+  if (status === "approved") return `Approved / ${PAY_STATUS_LABELS[payStatus === "pending" ? "pending" : payStatus]}`;
+  return LEAVE_STATUS_LABELS[status];
+}
 
 // The minimum number of days' advance notice a Planned Leave request must
 // give to avoid the Short Notice flag - "Planned leave must be requested
@@ -42,10 +79,17 @@ export const REQUIRED_PLANNED_NOTICE_DAYS = 7;
 
 // Exact policy copy from the spec, shown at the top of every Leave
 // Requests page (agent and admin, both CRMs) - kept here once so it can
-// never drift between the four places it's rendered.
+// never drift between the four places it's rendered. Leave approval and
+// pay approval are two separate decisions, so the agent-facing
+// explanation and the admin policy box carry deliberately different
+// wording (the agent doesn't need the short-notice/decline mechanics
+// spelled out; the admin does) - see AGENT_LEAVE_POLICY_BODY and
+// ADMIN_LEAVE_POLICY_BODY below.
 export const LEAVE_POLICY_TITLE = "Leave and Attendance Policy";
-export const LEAVE_POLICY_BODY =
-  "Approved leave is paid. Planned leave must be requested at least seven days in advance and approved by management. Emergency leave may be approved afterward at management's discretion. Absences without approval are unpaid.";
+export const AGENT_LEAVE_POLICY_BODY =
+  "Management will review both your request for time off and whether the leave will be paid. Approved leave may be paid or unpaid.";
+export const ADMIN_LEAVE_POLICY_BODY =
+  "Leave approval and pay approval are reviewed separately. Approved leave may be paid or unpaid. Planned leave should normally be requested at least seven days in advance. Emergency leave may be reviewed afterward at management's discretion. If leave is declined, any absence will be handled under the company's normal attendance and payroll rules.";
 
 function parseIsoDateUtc(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -163,6 +207,7 @@ export type LeaveRequestAuditAction =
   | "approved"
   | "declined"
   | "attendance_marked_paid_leave"
+  | "attendance_marked_unpaid_leave"
   | "attendance_marked_unpaid_absence"
   | "deduction_confirmed"
   | "payroll_applied"
@@ -174,6 +219,7 @@ export const LEAVE_AUDIT_ACTION_LABELS: Record<LeaveRequestAuditAction, string> 
   approved: "Request approved",
   declined: "Request declined",
   attendance_marked_paid_leave: "Marked Paid Leave",
+  attendance_marked_unpaid_leave: "Marked Unpaid Leave",
   attendance_marked_unpaid_absence: "Marked Unapproved Absence — Unpaid",
   deduction_confirmed: "Deduction confirmed",
   payroll_applied: "Applied to payroll",
@@ -182,18 +228,24 @@ export const LEAVE_AUDIT_ACTION_LABELS: Record<LeaveRequestAuditAction, string> 
 };
 
 // What attendance_status must become when an admin edits a request's
-// status (directly, or as a side effect of reversing/redeciding it) -
-// "Approved paid leave must remain recorded as paid leave" / "Declined or
-// unapproved leave must not count as paid leave." A request that was
-// never attendance-marked (`none`) stays `none` - editing never invents a
+// Leave Status and/or Pay Status (directly, or as a side effect of
+// reversing/redeciding it) - "Approved + Paid must remain recorded as
+// Paid Leave," "Approved + Unpaid must be recorded as Unpaid Leave,"
+// "Declined must not count as approved leave." A request that was never
+// attendance-marked (`none`) stays `none` - editing never invents a
 // marking that was never made; it only ever keeps an *existing* marking
 // truthful to the current decision.
 export function reconcileAttendanceStatusForStatusChange(
   oldAttendanceStatus: LeaveAttendanceStatus,
-  newStatus: LeaveStatus
+  newStatus: LeaveStatus,
+  newPayStatus: PayStatus
 ): LeaveAttendanceStatus {
   if (oldAttendanceStatus === "none") return "none";
-  if (newStatus === "approved") return "paid_leave";
+  if (newStatus === "approved") {
+    if (newPayStatus === "paid") return "paid_leave";
+    if (newPayStatus === "unpaid") return "unpaid_leave";
+    return "none"; // approved but pay not yet decided - nothing to record yet
+  }
   if (newStatus === "declined") return "unpaid_absence";
   return "none"; // pending - nothing decided, nothing to record yet
 }
