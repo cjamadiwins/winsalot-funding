@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { formatLeaveDateRangeLabel, type LeaveRequestAuditAction } from "./leave-requests";
+import { formatLeaveDateRangeLabel, type LeaveRequestAuditAction, type PayStatus } from "./leave-requests";
 
 // Audit trail + in-app notifications for the Winsalot Growth CRM's Leave
 // Requests feature (crm_leave_requests / crm_leave_request_audit_log,
@@ -107,6 +107,9 @@ export async function notifyAgentOfCrmLeaveDecision(input: {
   startDate: string;
   endDate: string;
   status: "approved" | "declined";
+  // Only meaningful (and only ever "paid"/"unpaid") when status is
+  // "approved" - a declined request never carries a Pay Status decision.
+  payStatus?: PayStatus;
   decisionNote?: string | null;
 }): Promise<void> {
   const admin = getSupabaseAdmin();
@@ -121,9 +124,13 @@ export async function notifyAgentOfCrmLeaveDecision(input: {
   if (existing) return;
 
   const dateRangeLabel = formatLeaveDateRangeLabel(input.startDate, input.endDate);
+  const decisionLabel =
+    input.status === "approved"
+      ? `approved and marked ${input.payStatus === "unpaid" ? "unpaid" : "paid"}`
+      : "declined";
   const { error } = await admin.from("crm_notifications").insert({
     user_id: input.agentId,
-    title: `Your leave request for ${dateRangeLabel} was ${input.status}.`,
+    title: `Your leave request for ${dateRangeLabel} was ${decisionLabel}.`,
     body: input.decisionNote ?? null,
     link_path: linkPath,
   });

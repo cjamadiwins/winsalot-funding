@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { getResendClient } from "./resend";
 import { getLeadgenReplyToEmail, getLeadgenSenderEmail, textToSimpleHtml } from "./leadgen-email";
 import { getSiteUrl } from "./site-url";
-import { formatLeaveDateRangeLabel, type LeaveRequestAuditAction } from "./leave-requests";
+import { formatLeaveDateRangeLabel, type LeaveRequestAuditAction, type PayStatus } from "./leave-requests";
 
 // Audit trail + notifications for the Lead Generation CRM's Leave
 // Requests feature (leadgen_leave_requests / leadgen_leave_request_audit_log,
@@ -141,11 +141,18 @@ export async function notifyAgentOfLeadgenLeaveDecision(input: {
   startDate: string;
   endDate: string;
   status: "approved" | "declined";
+  // Only meaningful (and only ever "paid"/"unpaid") when status is
+  // "approved" - a declined request never carries a Pay Status decision.
+  payStatus?: PayStatus;
   decisionNote?: string | null;
 }): Promise<void> {
   const admin = getSupabaseAdmin();
   const dateRangeLabel = formatLeaveDateRangeLabel(input.startDate, input.endDate);
   const linkPath = leadgenLeaveRequestAgentLinkPath(input.leaveRequestId);
+  const decisionLabel =
+    input.status === "approved"
+      ? `approved and marked ${input.payStatus === "unpaid" ? "unpaid" : "paid"}`
+      : "declined";
 
   const { data: existing } = await admin
     .from("leadgen_notifications")
@@ -157,7 +164,7 @@ export async function notifyAgentOfLeadgenLeaveDecision(input: {
   if (!existing) {
     const { error } = await admin.from("leadgen_notifications").insert({
       user_id: input.agentId,
-      title: `Your leave request for ${dateRangeLabel} was ${input.status}.`,
+      title: `Your leave request for ${dateRangeLabel} was ${decisionLabel}.`,
       body: input.decisionNote ?? null,
       link_path: linkPath,
     });
@@ -169,7 +176,7 @@ export async function notifyAgentOfLeadgenLeaveDecision(input: {
   const body = [
     `Hi ${input.agentName},`,
     "",
-    `Your leave request for ${dateRangeLabel} was ${input.status}.`,
+    `Your leave request for ${dateRangeLabel} was ${decisionLabel}.`,
     input.decisionNote ? `Note from the admin: ${input.decisionNote}` : "",
     "",
     `View it here: ${crmLink}`,

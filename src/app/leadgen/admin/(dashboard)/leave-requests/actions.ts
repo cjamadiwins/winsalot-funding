@@ -14,6 +14,7 @@ import {
   type LeaveAttendanceStatus,
   type LeaveStatus,
   type LeaveType,
+  type PayStatus,
 } from "@/lib/leave-requests";
 import { STANDARD_BIWEEKLY_WAGE, STANDARD_PAID_HOURS, hourlyRate } from "@/lib/payroll";
 import { notifyAgentOfLeadgenLeaveDecision, recordLeadgenLeaveAudit } from "@/lib/leadgen-leave-notifications";
@@ -64,12 +65,23 @@ export async function approveLeadgenLeaveRequestAction(requestId: string, formDa
   if (existing.deleted_at) return { error: "This leave request has been deleted." };
   if (existing.status !== "pending") return { error: "Only pending requests can be approved." };
 
+  // Approving Leave Status and deciding Pay Status happen together, as
+  // one atomic decision - the spec's own examples always pair them
+  // ("Approved + Paid" / "Approved + Unpaid"), and the DB enforces that
+  // pay_status can only be paid/unpaid once status is approved.
+  const payStatusRaw = String(formData.get("pay_status") ?? "").trim();
+  if (payStatusRaw !== "paid" && payStatusRaw !== "unpaid") {
+    return { error: "Select whether this leave will be paid or unpaid." };
+  }
+  const payStatus = payStatusRaw as PayStatus;
+
   const note = String(formData.get("decision_note") ?? "").trim() || null;
 
   const { error } = await supabase
     .from("leadgen_leave_requests")
     .update({
       status: "approved",
+      pay_status: payStatus,
       decision_note: note,
       decided_by: admin.id,
       decided_by_name: performedByName(admin),
@@ -86,6 +98,7 @@ export async function approveLeadgenLeaveRequestAction(requestId: string, formDa
     performedById: admin.id,
     performedByName: performedByName(admin),
     note,
+    details: { pay_status: payStatus },
   });
 
   await notifyAgentOfLeadgenLeaveDecision({
@@ -96,6 +109,7 @@ export async function approveLeadgenLeaveRequestAction(requestId: string, formDa
     startDate: existing.start_date,
     endDate: existing.end_date,
     status: "approved",
+    payStatus,
     decisionNote: note,
   });
 
@@ -162,7 +176,7 @@ export async function markLeadgenLeaveAttendanceAction(requestId: string, formDa
   const supabase = await createSupabaseServerClient();
 
   const targetStatus = String(formData.get("attendance_status") ?? "").trim();
-  if (targetStatus !== "paid_leave" && targetStatus !== "unpaid_absence") {
+  if (targetStatus !== "paid_leave" && targetStatus !== "unpaid_leave" && targetStatus !== "unpaid_absence") {
     return { error: "Invalid attendance status." };
   }
 
@@ -172,8 +186,11 @@ export async function markLeadgenLeaveAttendanceAction(requestId: string, formDa
   if (existing.attendance_status !== "none") {
     return { error: "This request's attendance has already been marked." };
   }
-  if (targetStatus === "paid_leave" && existing.status !== "approved") {
-    return { error: "Only approved requests can be marked as Paid Leave." };
+  if (targetStatus === "paid_leave" && (existing.status !== "approved" || existing.pay_status !== "paid")) {
+    return { error: "Only requests Approved with Pay Status Paid can be marked as Paid Leave." };
+  }
+  if (targetStatus === "unpaid_leave" && (existing.status !== "approved" || existing.pay_status !== "unpaid")) {
+    return { error: "Only requests Approved with Pay Status Unpaid can be marked as Unpaid Leave." };
   }
   if (targetStatus === "unpaid_absence" && existing.status !== "declined") {
     return { error: "Only declined requests can be marked as Unapproved Absence." };
@@ -189,7 +206,7 @@ export async function markLeadgenLeaveAttendanceAction(requestId: string, formDa
   };
   let auditDetails: Record<string, unknown> | null = null;
 
-  if (targetStatus === "unpaid_absence") {
+  if (targetStatus === "unpaid_leave" || targetStatus === "unpaid_absence") {
     const { data: latestPayroll } = await supabase
       .from("leadgen_payroll")
       .select("standard_biweekly_wage, standard_paid_hours")
@@ -207,19 +224,27 @@ export async function markLeadgenLeaveAttendanceAction(requestId: string, formDa
       standardPaidHours
     );
 
+    const reasonPrefix = targetStatus === "unpaid_leave" ? "Approved leave (unpaid)" : "Unapproved absence";
+    const reasonSuffix = targetStatus === "unpaid_leave" ? "leave approved, pay declined" : "leave request declined";
     updates.deduction_amount = amount;
-    updates.deduction_reason = `Unapproved absence: ${existing.start_date} to ${existing.end_date} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, ${hours} unpaid hour${hours === 1 ? "" : "s"}, leave request declined)`;
+    updates.deduction_reason = `${reasonPrefix}: ${existing.start_date} to ${existing.end_date} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, ${hours} unpaid hour${hours === 1 ? "" : "s"}, ${reasonSuffix})`;
     auditDetails = { deduction_amount: amount, scheduled_days: scheduledDays, unpaid_hours: hours };
   }
 
   const { error } = await supabase.from("leadgen_leave_requests").update(updates).eq("id", requestId);
   if (error) return { error: `Failed to update attendance status: ${error.message}` };
 
+  const auditAction =
+    targetStatus === "paid_leave"
+      ? "attendance_marked_paid_leave"
+      : targetStatus === "unpaid_leave"
+        ? "attendance_marked_unpaid_leave"
+        : "attendance_marked_unpaid_absence";
   await recordLeadgenLeaveAudit({
     leaveRequestId: requestId,
     agentId: existing.agent_id,
     agentName,
-    action: targetStatus === "paid_leave" ? "attendance_marked_paid_leave" : "attendance_marked_unpaid_absence",
+    action: auditAction,
     performedById: admin.id,
     performedByName: performedByName(admin),
     details: auditDetails,
@@ -237,8 +262,8 @@ export async function confirmLeadgenLeaveDeductionAction(requestId: string): Pro
   const { data: existing, error: fetchError } = await fetchLeaveRequestWithAgent(supabase, requestId);
   if (fetchError || !existing) return { error: fetchError ?? "Leave request not found." };
   if (existing.deleted_at) return { error: "This leave request has been deleted." };
-  if (existing.attendance_status !== "unpaid_absence") {
-    return { error: "Only requests marked Unapproved Absence have a deduction to confirm." };
+  if (existing.attendance_status !== "unpaid_absence" && existing.attendance_status !== "unpaid_leave") {
+    return { error: "Only requests marked Unpaid Leave or Unapproved Absence have a deduction to confirm." };
   }
   if (existing.payroll_applied_id) {
     return { error: "This deduction has already been applied to payroll." };
@@ -439,7 +464,7 @@ async function reverseLeadgenLeaveRequestPayrollEffect(
   const { data: payroll } = await supabase.from("leadgen_payroll").select("*").eq("id", existing.payroll_applied_id).maybeSingle();
   if (!payroll) return null;
 
-  if (existing.attendance_status === "unpaid_absence") {
+  if (existing.attendance_status === "unpaid_absence" || existing.attendance_status === "unpaid_leave") {
     const newDeductions = Math.max(0, Number(payroll.deductions) - Number(existing.deduction_amount ?? 0));
     await supabase.from("leadgen_payroll").update({ deductions: newDeductions }).eq("id", payroll.id);
     await supabase.from("leadgen_payroll_audit_log").insert({
@@ -448,7 +473,10 @@ async function reverseLeadgenLeaveRequestPayrollEffect(
       action: "deduction_changed",
       performed_by: admin.id,
       performed_by_name: performedByName(admin),
-      reason: "Leave request edited or deleted - reversing the previously applied unapproved-absence deduction.",
+      reason:
+        existing.attendance_status === "unpaid_leave"
+          ? "Leave request edited or deleted - reversing the previously applied unpaid-leave deduction."
+          : "Leave request edited or deleted - reversing the previously applied unapproved-absence deduction.",
       details: { leave_request_id: existing.id, from: payroll.deductions, to: newDeductions },
     });
     return { payroll_id: payroll.id, reversed: "deduction", from: payroll.deductions, to: newDeductions };
@@ -529,6 +557,22 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
   if (statusRaw !== "pending" && statusRaw !== "approved" && statusRaw !== "declined") return { error: "Invalid status." };
   const newStatus = statusRaw as LeaveStatus;
 
+  // Pay Status is only ever meaningful alongside an Approved Leave
+  // Status - a pending/declined request always forces it back to
+  // "pending" server-side, regardless of what the form submitted,
+  // matching "If Leave Status = Declined, do not require the admin to
+  // select Paid/Unpaid."
+  let payStatus: PayStatus;
+  if (newStatus === "approved") {
+    const payStatusRaw = String(formData.get("pay_status") ?? "").trim();
+    if (payStatusRaw !== "paid" && payStatusRaw !== "unpaid") {
+      return { error: "Select whether this leave will be paid or unpaid." };
+    }
+    payStatus = payStatusRaw as PayStatus;
+  } else {
+    payStatus = "pending";
+  }
+
   if (existing.status === "approved" && formData.get("confirm_approved_edit") !== "true") {
     return { error: "Editing an approved request requires confirmation." };
   }
@@ -537,6 +581,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
   const now = new Date().toISOString();
   const datesChanged = startDate !== existing.start_date || endDate !== existing.end_date;
   const statusChanged = newStatus !== existing.status;
+  const payStatusChanged = payStatus !== existing.pay_status;
 
   const noticeDays = computeNoticeDays(existing.submitted_at, startDate);
   const shortNotice = isShortNotice(leaveType, noticeDays);
@@ -549,6 +594,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
     notice_days: noticeDays,
     is_short_notice: shortNotice,
     status: newStatus,
+    pay_status: payStatus,
   };
 
   if (statusChanged) {
@@ -560,7 +606,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
   let reversalDetails: Record<string, unknown> | null = null;
   let newAttendanceStatus: LeaveAttendanceStatus = existing.attendance_status;
 
-  if (datesChanged || statusChanged) {
+  if (datesChanged || statusChanged || payStatusChanged) {
     if (existing.payroll_applied_id) {
       reversalDetails = await reverseLeadgenLeaveRequestPayrollEffect(supabase, admin, existing);
       updates.payroll_applied_id = null;
@@ -571,7 +617,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
       updates.deduction_confirmed_at = null;
     }
 
-    newAttendanceStatus = reconcileAttendanceStatusForStatusChange(existing.attendance_status, newStatus);
+    newAttendanceStatus = reconcileAttendanceStatusForStatusChange(existing.attendance_status, newStatus, payStatus);
     updates.attendance_status = newAttendanceStatus;
 
     if (newAttendanceStatus === "none") {
@@ -602,8 +648,10 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
         standardBiweeklyWage,
         standardPaidHours
       );
+      const reasonPrefix = newAttendanceStatus === "unpaid_leave" ? "Approved leave (unpaid)" : "Unapproved absence";
+      const reasonSuffix = newAttendanceStatus === "unpaid_leave" ? "leave approved, pay declined" : "leave request declined";
       updates.deduction_amount = amount;
-      updates.deduction_reason = `Unapproved absence: ${startDate} to ${endDate} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, ${hours} unpaid hour${hours === 1 ? "" : "s"}, leave request declined)`;
+      updates.deduction_reason = `${reasonPrefix}: ${startDate} to ${endDate} (${scheduledDays} scheduled working day${scheduledDays === 1 ? "" : "s"}, ${hours} unpaid hour${hours === 1 ? "" : "s"}, ${reasonSuffix})`;
       updates.attendance_marked_at = now;
       updates.attendance_marked_by = admin.id;
       updates.attendance_marked_by_name = performedByName(admin);
@@ -619,6 +667,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
   if (existing.end_date !== endDate) changed.end_date = { from: existing.end_date, to: endDate };
   if (existing.reason !== reason) changed.reason = { from: existing.reason, to: reason };
   if (statusChanged) changed.status = { from: existing.status, to: newStatus };
+  if (payStatusChanged) changed.pay_status = { from: existing.pay_status, to: payStatus };
   if (newAttendanceStatus !== existing.attendance_status) {
     changed.attendance_status = { from: existing.attendance_status, to: newAttendanceStatus };
   }
@@ -633,7 +682,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
     details: { changed, payroll_reversal: reversalDetails },
   });
 
-  if (statusChanged && (newStatus === "approved" || newStatus === "declined")) {
+  if ((statusChanged || payStatusChanged) && (newStatus === "approved" || newStatus === "declined")) {
     await notifyAgentOfLeadgenLeaveDecision({
       leaveRequestId: requestId,
       agentId: existing.agent_id,
@@ -642,6 +691,7 @@ export async function updateLeadgenLeaveRequestAction(requestId: string, formDat
       startDate,
       endDate,
       status: newStatus,
+      payStatus,
       decisionNote: existing.decision_note ?? null,
     });
   }

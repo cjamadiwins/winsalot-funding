@@ -1190,7 +1190,7 @@ export function isValidEmail(value: string): boolean {
 // with the Cleaning CRM since that logic has nothing CRM-specific about
 // it (same reasoning as src/lib/payroll.ts being shared); only the row
 // shape is duplicated here, matching this file's own stated convention.
-import type { LeaveAttendanceStatus, LeaveStatus, LeaveType } from "./leave-requests";
+import type { LeaveAttendanceStatus, LeaveRequestAuditAction, LeaveStatus, LeaveType, PayStatus } from "./leave-requests";
 
 export type LeadgenLeaveRequestRow = {
   id: string;
@@ -1200,6 +1200,9 @@ export type LeadgenLeaveRequestRow = {
   end_date: string;
   reason: string;
   status: LeaveStatus;
+  // Pay Status: decided alongside (never ahead of) Leave Status - only
+  // ever "paid"/"unpaid" once status is "approved" (migration 0143).
+  pay_status: PayStatus;
   notice_days: number;
   is_short_notice: boolean;
   submitted_at: string;
@@ -1240,16 +1243,7 @@ export type LeadgenLeaveRequestAuditLogRow = {
   leave_request_id: string;
   agent_id: string | null;
   agent_name: string;
-  action:
-    | "submitted"
-    | "approved"
-    | "declined"
-    | "attendance_marked_paid_leave"
-    | "attendance_marked_unpaid_absence"
-    | "deduction_confirmed"
-    | "payroll_applied"
-    | "edited"
-    | "deleted";
+  action: LeaveRequestAuditAction;
   performed_by: string | null;
   performed_by_name: string;
   note: string | null;
