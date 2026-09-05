@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { CrmLeaveRequestRow } from "@/lib/crm-types";
 import {
   AGENT_LEAVE_POLICY_BODY,
+  LEAVE_POLICY_NOTICE_BODY,
   LEAVE_POLICY_TITLE,
   LEAVE_STATUS_STYLES,
   LEAVE_TYPE_LABELS,
@@ -72,6 +73,7 @@ export default function LeaveRequestsClient({
       <div className="rounded-xl border border-sky-200 bg-sky-50 p-5">
         <h2 className="text-sm font-bold uppercase tracking-wide text-sky-900">{LEAVE_POLICY_TITLE}</h2>
         <p className="mt-2 text-sm leading-relaxed text-sky-900">{AGENT_LEAVE_POLICY_BODY}</p>
+        <p className="mt-2 text-sm leading-relaxed text-sky-900">{LEAVE_POLICY_NOTICE_BODY}</p>
       </div>
 
       <form key={formKey} action={handleSubmit} className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
