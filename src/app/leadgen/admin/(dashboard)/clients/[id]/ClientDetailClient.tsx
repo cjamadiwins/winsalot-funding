@@ -241,6 +241,21 @@ export default function ClientDetailClient({
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-600">Client SMS Notification Number</span>
+                <input
+                  name="sms_notification_number"
+                  type="tel"
+                  placeholder="e.g. 416-555-1234"
+                  defaultValue={client.sms_notification_number ?? ""}
+                  className={inputClass}
+                />
+                <span className="text-[12px] text-slate-500">
+                  The SMS equivalent of Appointment Notification Emails above: this number gets a text the moment one of this client&apos;s
+                  appointments is booked, plus the 24-hour and 1-hour reminders before it. Leave blank to skip SMS for this client - the
+                  booking flow and every other notification are unaffected either way.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Internal Notes</span>
                 <textarea name="notes" defaultValue={client.notes ?? ""} className={`${inputClass} min-h-[60px] resize-y`} />
               </label>
@@ -281,6 +296,7 @@ export default function ClientDetailClient({
               <Row label="Services Information Link" value={client.services_info_link} />
               <Row label="Calendly Event Type URI" value={client.calendly_event_type_uri} />
               <Row label="Appointment Notification Emails" value={(client.appointment_notification_emails ?? []).join(", ") || null} />
+              <Row label="Client SMS Notification Number" value={client.sms_notification_number} />
               {client.notes && (
                 <div className="border-t border-slate-100 pt-2">
                   <dt className="text-slate-500">Notes</dt>

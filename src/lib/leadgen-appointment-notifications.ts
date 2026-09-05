@@ -4,6 +4,8 @@ import { sendSmsToNumber } from "./twilio";
 import { getSiteUrl } from "./site-url";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { resolveAppointmentNotificationRecipients, type LeadgenAppointmentRow, type LeadgenClientRow } from "./leadgen-types";
+import { claimAndSendAppointmentSms, buildClientAppointmentBookingSms, formatSmsDateWithWeekdayLabel, formatSmsTimeLabel } from "./appointment-sms";
+import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
 
 type AppointmentForNotify = Pick<
   LeadgenAppointmentRow,
@@ -90,6 +92,12 @@ function buildCustomerConfirmationBody(appt: AppointmentForNotify, clientName: s
 //    Mantra Collab. Strictly scoped to the client actually connected to
 //    this appointment, so one client's recipients can never receive
 //    another's appointments.
+// 5. An immediate SMS to this client's own sms_notification_number
+//    (migration 0140), when one is saved - a business/client-facing
+//    counterpart to the prospect's own immediate confirmation SMS
+//    (sendImmediateAppointmentConfirmation in lib/appointment-sms.ts).
+//    Skipped entirely (not an error) when the client has no number saved,
+//    same "graceful no-op" behavior as every other optional channel here.
 // Uses Promise.allSettled so a failure in one channel never blocks the
 // others, same pattern as the cleaning CRM's notifyAdminOfCustomerResponse
 // (src/app/customer-quote/[token]/actions.ts). Shared by every source
@@ -112,7 +120,7 @@ function buildCustomerConfirmationBody(appt: AppointmentForNotify, clientName: s
 // flow.
 export async function notifyOfNewLeadgenAppointment(
   appt: AppointmentForNotify,
-  client: Pick<LeadgenClientRow, "id" | "name" | "contact_name" | "contact_email" | "appointment_notification_emails">,
+  client: Pick<LeadgenClientRow, "id" | "name" | "contact_name" | "contact_email" | "appointment_notification_emails" | "sms_notification_number">,
   agentName: string | null
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -152,6 +160,41 @@ export async function notifyOfNewLeadgenAppointment(
     }),
     sendSmsToNumber(adminSmsNumber, summaryText.slice(0, 1500)),
   ];
+
+  if (client.sms_notification_number) {
+    const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
+    const scheduledAppointmentAtIso = new Date(scheduledMs).toISOString();
+    tasks.push(
+      claimAndSendAppointmentSms(supabase, {
+        table: "leadgen_appointment_sms_reminders",
+        appointmentId: appt.id,
+        leadId: appt.lead_id,
+        // Reuses the existing '1_hour_reminder' enum value rather than
+        // adding a new one - the immediate send is distinguished from the
+        // real 1-hour reminder by its prefixed occurrence key (also part
+        // of the unique claim), same technique as the prospect's own
+        // immediate confirmation (sendImmediateAppointmentConfirmation).
+        reminderType: "1_hour_reminder",
+        recipientType: "client",
+        occurrenceKey: `booking_confirmation:${scheduledAppointmentAtIso}`,
+        scheduledAppointmentAtIso,
+        toPhoneRaw: client.sms_notification_number,
+        consentGiven: true,
+        message: buildClientAppointmentBookingSms({
+          businessName: client.name,
+          prospectName: appt.contact_name,
+          dateLabel: formatSmsDateWithWeekdayLabel(scheduledMs, appt.timezone),
+          timeLabel: formatSmsTimeLabel(scheduledMs, appt.timezone),
+          prospectPhone: appt.phone,
+        }),
+        dryRun: false,
+      }).then((result) => {
+        if (result.outcome === "failed") {
+          console.error(`[leadgen] Failed to send client booking SMS for appointment ${appt.id}:`, result.error);
+        }
+      })
+    );
+  }
 
   for (const recipient of resolveAppointmentNotificationRecipients(client)) {
     tasks.push(

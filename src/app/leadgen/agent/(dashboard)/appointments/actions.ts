@@ -90,7 +90,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
 
   const { data: clientForNotify } = await supabase
     .from("leadgen_clients")
-    .select("id, name, contact_name, contact_email, appointment_notification_emails")
+    .select("id, name, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("id", clientId)
     .maybeSingle();
   await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {

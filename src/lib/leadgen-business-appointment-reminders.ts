@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { sendLeadgenEmail } from "./leadgen-email";
 import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
+import { claimAndSendAppointmentSms, buildClientAppointmentReminderSms, formatSmsTimeLabel, isAppointmentToday, type SmsOutcome } from "./appointment-sms";
 import {
   leadgenAppointmentOccurrenceKey,
   leadgenBusinessAppointmentReminderDisplayStatus,
@@ -98,18 +99,25 @@ export async function updateLeadgenBusinessAppointmentReminderSettings(
 type BusinessReminderRecipients = {
   recipients: LeadgenAppointmentNotificationRecipient[];
   clientName: string;
+  // Admin-editable "Client SMS Notification Number" (migration 0140) -
+  // null when this client hasn't set one, in which case the SMS block
+  // below skips gracefully via claimAndSendAppointmentSms's own
+  // "skipped_no_phone" outcome, exactly like the email block already does
+  // for a client with no recipients.
+  smsNumber: string | null;
 };
 
 async function resolveBusinessReminderRecipients(supabase: SupabaseClient, appointment: LeadgenAppointmentRow): Promise<BusinessReminderRecipients> {
   const { data: client } = await supabase
     .from("leadgen_clients")
-    .select("name, contact_name, contact_email, appointment_notification_emails")
+    .select("name, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("id", appointment.client_id)
     .maybeSingle();
 
   return {
     recipients: client ? resolveAppointmentNotificationRecipients(client) : [],
     clientName: client?.name ?? appointment.business_name,
+    smsNumber: client?.sms_notification_number ?? null,
   };
 }
 
@@ -236,6 +244,21 @@ export type BusinessReminderJobResult = {
   error?: string;
 };
 
+// SMS results (src/lib/appointment-sms.ts, 'client' recipient type) - one
+// entry per eligible appointment/reminder_type, entirely independent of
+// the email outcome above: a failed/skipped email never blocks an SMS
+// send for the same occurrence, and vice versa.
+export type BusinessReminderSmsResult = {
+  appointmentId: string;
+  leadId: string | null;
+  reminderType: LeadgenBusinessAppointmentReminderType;
+  businessName: string;
+  scheduledAppointmentAtUtc: string;
+  recipientPhone: string | null;
+  outcome: SmsOutcome;
+  error?: string;
+};
+
 export type BusinessReminderJobSummary = {
   dryRun: boolean;
   automaticRemindersEnabled: boolean;
@@ -245,6 +268,10 @@ export type BusinessReminderJobSummary = {
   failed: number;
   skipped: number;
   results: BusinessReminderJobResult[];
+  smsSent: number;
+  smsFailed: number;
+  smsSkipped: number;
+  smsResults: BusinessReminderSmsResult[];
 };
 
 function isoDateNDaysFrom(base: Date, days: number): string {
@@ -266,6 +293,10 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
     failed: 0,
     skipped: 0,
     results: [],
+    smsSent: 0,
+    smsFailed: 0,
+    smsSkipped: 0,
+    smsResults: [],
   };
 
   if (!settings.automatic_reminders_enabled && !dryRun) return summary;
@@ -317,37 +348,7 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
       summary.eligible++;
       const scheduledAppointmentAtIso = new Date(scheduledMs).toISOString();
       const occurrenceKey = leadgenAppointmentOccurrenceKey(appt.appointment_date, appt.appointment_time);
-
-      if (dryRun) {
-        const { recipients } = await resolveBusinessReminderRecipients(admin, appt);
-        summary.results.push({
-          appointmentId: appt.id,
-          leadId: appt.lead_id,
-          reminderType,
-          businessName: appt.business_name,
-          scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
-          recipientEmail: recipients.length > 0 ? recipients.map((r) => r.email).join(", ") : null,
-          outcome: "would_send",
-        });
-        continue;
-      }
-
-      const reminderId = await claimReminderSlot(admin, appt.id, appt.lead_id, reminderType, occurrenceKey, scheduledAppointmentAtIso);
-      if (!reminderId) {
-        summary.skipped++;
-        summary.results.push({
-          appointmentId: appt.id,
-          leadId: appt.lead_id,
-          reminderType,
-          businessName: appt.business_name,
-          scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
-          recipientEmail: null,
-          outcome: "skipped_claimed_elsewhere",
-        });
-        continue;
-      }
-
-      const { recipients, clientName } = await resolveBusinessReminderRecipients(admin, appt);
+      const { recipients, clientName, smsNumber } = await resolveBusinessReminderRecipients(admin, appt);
       const resultBase = {
         appointmentId: appt.id,
         leadId: appt.lead_id,
@@ -356,69 +357,117 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
         scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
       };
 
-      if (recipients.length === 0) {
-        await markReminderFailed(admin, reminderId, "No contact email on file for this client.");
-        summary.failed++;
-        summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_no_email", error: "No contact email on file for this client." });
-        continue;
-      }
+      // ---- Email (unchanged behavior/outcomes from before this change -
+      // only restructured from early `continue`s into if/else so the SMS
+      // block below always still runs for this appointment/reminder_type). ----
+      if (dryRun) {
+        summary.results.push({ ...resultBase, recipientEmail: recipients.length > 0 ? recipients.map((r) => r.email).join(", ") : null, outcome: "would_send" });
+      } else {
+        const reminderId = await claimReminderSlot(admin, appt.id, appt.lead_id, reminderType, occurrenceKey, scheduledAppointmentAtIso);
 
-      const subject = buildBusinessReminderSubject(reminderType, appt.business_name);
+        if (!reminderId) {
+          summary.skipped++;
+          summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_claimed_elsewhere" });
+        } else if (recipients.length === 0) {
+          await markReminderFailed(admin, reminderId, "No contact email on file for this client.");
+          summary.failed++;
+          summary.results.push({ ...resultBase, recipientEmail: null, outcome: "skipped_no_email", error: "No contact email on file for this client." });
+        } else {
+          const subject = buildBusinessReminderSubject(reminderType, appt.business_name);
 
-      // One send per recipient (e.g. both Vikas and Praveen for Mantra
-      // Collab) - a failure for one recipient never blocks another's, and
-      // the reminder slot itself (claimed above, once per appointment/
-      // type/occurrence) still only ever "sends" once per recipient no
-      // matter how many times this job runs.
-      const sendOutcomes: { recipient: LeadgenAppointmentNotificationRecipient; emailId?: string; error?: string }[] = [];
-      for (const recipient of recipients) {
-        const body = buildBusinessReminderBody(appt, scheduledMs, reminderType, recipient.name);
-        const sendResult = await sendLeadgenEmail(admin, {
-          clientId: appt.client_id,
-          campaignId: appt.campaign_id,
-          leadId: appt.lead_id,
-          appointmentId: appt.id,
-          templateKey: null,
-          toEmail: recipient.email,
-          toName: recipient.name,
-          subject,
-          body,
-          // System-generated send - no signed-in human triggered this.
-          sentBy: null,
-          clientVisible: false,
-        });
-        if (sendResult.error) {
-          console.error(`[leadgen-business-appointment-reminders] failed to send to ${recipient.email}:`, sendResult.error);
+          // One send per recipient (e.g. both Vikas and Praveen for Mantra
+          // Collab) - a failure for one recipient never blocks another's, and
+          // the reminder slot itself (claimed above, once per appointment/
+          // type/occurrence) still only ever "sends" once per recipient no
+          // matter how many times this job runs.
+          const sendOutcomes: { recipient: LeadgenAppointmentNotificationRecipient; emailId?: string; error?: string }[] = [];
+          for (const recipient of recipients) {
+            const body = buildBusinessReminderBody(appt, scheduledMs, reminderType, recipient.name);
+            const sendResult = await sendLeadgenEmail(admin, {
+              clientId: appt.client_id,
+              campaignId: appt.campaign_id,
+              leadId: appt.lead_id,
+              appointmentId: appt.id,
+              templateKey: null,
+              toEmail: recipient.email,
+              toName: recipient.name,
+              subject,
+              body,
+              // System-generated send - no signed-in human triggered this.
+              sentBy: null,
+              clientVisible: false,
+            });
+            if (sendResult.error) {
+              console.error(`[leadgen-business-appointment-reminders] failed to send to ${recipient.email}:`, sendResult.error);
+            }
+            sendOutcomes.push({ recipient, emailId: sendResult.error ? undefined : sendResult.emailId, error: sendResult.error });
+          }
+
+          const successes = sendOutcomes.filter((o) => !o.error);
+          const attemptedEmails = recipients.map((r) => r.email).join(", ");
+
+          if (successes.length === 0) {
+            const errorDetail = sendOutcomes.map((o) => `${o.recipient.email}: ${o.error}`).join("; ");
+            await markReminderFailed(admin, reminderId, errorDetail);
+            summary.failed++;
+            summary.results.push({ ...resultBase, recipientEmail: attemptedEmails, outcome: "failed", error: errorDetail });
+          } else {
+            const sentEmails = successes.map((o) => o.recipient.email).join(", ");
+            await markReminderSent(admin, reminderId, sentEmails, successes[0].emailId!);
+
+            if (appt.lead_id) {
+              const label = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
+              await admin.from("leadgen_lead_activities").insert({
+                lead_id: appt.lead_id,
+                agent_id: null,
+                activity_type: "appointment_business_reminder_auto_sent",
+                notes: `Automatic ${label} appointment reminder sent to ${sentEmails} (${clientName}). Appointment: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone}).`,
+              });
+            }
+
+            summary.sent++;
+            summary.results.push({ ...resultBase, recipientEmail: sentEmails, outcome: "sent" });
+          }
         }
-        sendOutcomes.push({ recipient, emailId: sendResult.error ? undefined : sendResult.emailId, error: sendResult.error });
       }
 
-      const successes = sendOutcomes.filter((o) => !o.error);
-      const attemptedEmails = recipients.map((r) => r.email).join(", ");
+      // ---- SMS (new - independent of every email outcome above, to the
+      // client's own sms_notification_number rather than its email
+      // recipient list; skips gracefully via claimAndSendAppointmentSms's
+      // own "skipped_no_phone" outcome when smsNumber is null). ----
+      const smsResult = await claimAndSendAppointmentSms(admin, {
+        table: "leadgen_appointment_sms_reminders",
+        appointmentId: appt.id,
+        leadId: appt.lead_id,
+        reminderType,
+        recipientType: "client",
+        occurrenceKey,
+        scheduledAppointmentAtIso,
+        toPhoneRaw: smsNumber,
+        consentGiven: true,
+        message: buildClientAppointmentReminderSms({
+          businessName: clientName,
+          prospectName: appt.contact_name,
+          isToday: isAppointmentToday(scheduledMs, appt.timezone, nowMs),
+          timeLabel: formatSmsTimeLabel(scheduledMs, appt.timezone),
+        }),
+        dryRun,
+      });
 
-      if (successes.length === 0) {
-        const errorDetail = sendOutcomes.map((o) => `${o.recipient.email}: ${o.error}`).join("; ");
-        await markReminderFailed(admin, reminderId, errorDetail);
-        summary.failed++;
-        summary.results.push({ ...resultBase, recipientEmail: attemptedEmails, outcome: "failed", error: errorDetail });
-        continue;
-      }
+      if (smsResult.outcome === "sent") summary.smsSent++;
+      else if (smsResult.outcome === "failed") summary.smsFailed++;
+      else if (smsResult.outcome !== "would_send") summary.smsSkipped++;
 
-      const sentEmails = successes.map((o) => o.recipient.email).join(", ");
-      await markReminderSent(admin, reminderId, sentEmails, successes[0].emailId!);
-
-      if (appt.lead_id) {
-        const label = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
-        await admin.from("leadgen_lead_activities").insert({
-          lead_id: appt.lead_id,
-          agent_id: null,
-          activity_type: "appointment_business_reminder_auto_sent",
-          notes: `Automatic ${label} appointment reminder sent to ${sentEmails} (${clientName}). Appointment: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone}).`,
-        });
-      }
-
-      summary.sent++;
-      summary.results.push({ ...resultBase, recipientEmail: sentEmails, outcome: "sent" });
+      summary.smsResults.push({
+        appointmentId: appt.id,
+        leadId: appt.lead_id,
+        reminderType,
+        businessName: clientName,
+        scheduledAppointmentAtUtc: scheduledAppointmentAtIso,
+        recipientPhone: smsResult.recipientPhone ?? null,
+        outcome: smsResult.outcome,
+        error: smsResult.error,
+      });
     }
   }
 

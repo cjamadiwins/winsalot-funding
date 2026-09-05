@@ -18,11 +18,11 @@ export type BookLeadgenAppointmentResult = { error?: string; appointmentId?: str
 
 async function findActiveClientBySlug(
   slug: string
-): Promise<Pick<LeadgenClientRow, "id" | "name" | "slug" | "contact_name" | "contact_email" | "appointment_notification_emails"> | null> {
+): Promise<Pick<LeadgenClientRow, "id" | "name" | "slug" | "contact_name" | "contact_email" | "appointment_notification_emails" | "sms_notification_number"> | null> {
   const admin = getSupabaseAdmin();
   const { data: clients } = await admin
     .from("leadgen_clients")
-    .select("id, name, slug, contact_name, contact_email, appointment_notification_emails")
+    .select("id, name, slug, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("active", true);
   return (clients ?? []).find((c) => slugifyForLeadgenBookingPath(c.name) === slug || c.slug.toLowerCase() === slug.toLowerCase()) ?? null;
 }

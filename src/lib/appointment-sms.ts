@@ -13,7 +13,12 @@ import { sendTrackedSmsToNumber, toE164 } from "./twilio";
 // here once rather than being duplicated twice.
 
 export type SmsReminderType = "24_hour_reminder" | "1_hour_reminder";
-export type SmsRecipientType = "prospect" | "admin";
+// "client" (the leadgen_clients.sms_notification_number recipient - see
+// migration 0140) is leadgen-only: winsalot_appointment_sms_reminders'
+// own check constraint still only allows 'prospect'/'admin', so passing
+// "client" with table "winsalot_appointment_sms_reminders" would fail at
+// the database rather than silently succeeding.
+export type SmsRecipientType = "prospect" | "admin" | "client";
 export type SmsReminderTable = "leadgen_appointment_sms_reminders" | "winsalot_appointment_sms_reminders";
 
 export type SmsOutcome =
@@ -160,6 +165,66 @@ export function buildAdminReminderSms(params: {
 }
 
 // ---------------------------------------------------------------------
+// Client/business-facing messages (leadgen only - see the 'client'
+// recipient type above) - the CRM client itself (e.g. Brent's
+// Essentials, Mantra Collab) being told about a prospect's appointment
+// with them. Never consent/opt-out-gated, same as the admin channel:
+// leadgen_clients.sms_notification_number is entered by an admin on the
+// client's own record, not collected from an SMS-replying member of the
+// public.
+// ---------------------------------------------------------------------
+
+// Weekday + short month + day (e.g. "Friday, Sep 5") for the immediate
+// booking SMS - distinct from formatSmsDateLabel above (which omits the
+// weekday) because the brief's exact example for this message includes it.
+export function formatSmsDateWithWeekdayLabel(scheduledMs: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long", month: "short", day: "numeric" }).format(new Date(scheduledMs));
+}
+
+// Immediate on-booking SMS to the client/business - deliberately not run
+// through shrinkToFit/SMS_SEGMENT_LIMIT like every message above: this is
+// a multi-line notification (business name, prospect name, date/time,
+// prospect phone, "Booked by Winsalot Corp.") per the brief's exact
+// format, and getting that format right matters more here than staying
+// within one 160-char SMS segment - Twilio transparently sends a longer
+// body as a multi-part message.
+export function buildClientAppointmentBookingSms(params: {
+  businessName: string;
+  prospectName: string | null;
+  dateLabel: string;
+  timeLabel: string;
+  prospectPhone: string | null;
+}): string {
+  const lines = [
+    `New appointment booked for ${params.businessName.trim() || "your business"}`,
+    params.prospectName?.trim() || "New prospect",
+    `${params.dateLabel} at ${params.timeLabel}`,
+  ];
+  if (params.prospectPhone?.trim()) lines.push(`Phone: ${params.prospectPhone.trim()}`);
+  lines.push("Booked by Winsalot Corp.");
+  return lines.join("\n");
+}
+
+// 24-hour/1-hour reminder SMS to the client/business - single segment
+// where possible, per the brief's example
+// ("Reminder: Brent's Essentials has an appointment with John Smith
+// tomorrow at 12:00 PM."). Shrinks the prospect name first (it's the more
+// disposable half of the sentence for a business reading its own
+// reminder), then the business name itself, only as a last resort.
+export function buildClientAppointmentReminderSms(params: { businessName: string; prospectName: string | null; isToday: boolean; timeLabel: string }): string {
+  const when = params.isToday ? "today" : "tomorrow";
+  let businessName = params.businessName.trim() || "Your business";
+  let prospectName = params.prospectName?.trim() || "a prospect";
+  let message = `Reminder: ${businessName} has an appointment with ${prospectName} ${when} at ${params.timeLabel}.`;
+  while (message.length > SMS_SEGMENT_LIMIT && (prospectName.length > 1 || businessName.length > 1)) {
+    if (prospectName.length > 1) prospectName = prospectName.slice(0, -2).trimEnd() + "…";
+    else businessName = businessName.slice(0, -2).trimEnd() + "…";
+    message = `Reminder: ${businessName} has an appointment with ${prospectName} ${when} at ${params.timeLabel}.`;
+  }
+  return message;
+}
+
+// ---------------------------------------------------------------------
 // Claim + send - same atomic-insert-then-conditional-retry technique as
 // every existing email reminder table in this codebase (see
 // leadgen-appointment-reminders.ts / winsalot-consultation-reminders.ts),
@@ -283,7 +348,12 @@ export async function claimAndSendAppointmentSms(
   opts: SendAppointmentSmsParams
 ): Promise<{ outcome: SmsOutcome; error?: string; recipientPhone?: string | null }> {
   const requiresConsent = opts.recipientType === "prospect";
-  const noPhoneDetail = opts.recipientType === "admin" ? "ADMIN_PHONE_NUMBER is not configured." : "No mobile number on file.";
+  const noPhoneDetail =
+    opts.recipientType === "admin"
+      ? "ADMIN_PHONE_NUMBER is not configured."
+      : opts.recipientType === "client"
+        ? "No SMS Notification Number on file for this client."
+        : "No mobile number on file.";
 
   if (opts.dryRun) {
     if (requiresConsent && !opts.consentGiven) return { outcome: "skipped_no_consent" };
