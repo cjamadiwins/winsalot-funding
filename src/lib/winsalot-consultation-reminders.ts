@@ -6,7 +6,15 @@ import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { createWinsalotActionToken } from "./winsalot-consultation-tokens";
 import { buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
-import { sendAppointmentReminderSmsPair, type SmsOutcome } from "./appointment-sms";
+import {
+  buildAdminReminderSms,
+  buildProspectReminderSms,
+  claimAndSendAppointmentSms,
+  formatSmsTimeLabel,
+  isAppointmentToday,
+  isValidMobileNumber,
+  type SmsOutcome,
+} from "./appointment-sms";
 import {
   winsalotAppointmentOccurrenceKey,
   winsalotSmsReminderDisplayStatus,
@@ -24,6 +32,7 @@ const SMS_SETTINGS_ID = "00000000-0000-0000-0000-000000000202";
 const DEFAULT_SMS_SETTINGS: WinsalotAppointmentReminderSettingsRow = {
   id: SMS_SETTINGS_ID,
   automatic_sms_reminders_enabled: false,
+  company_sms_notification_number: null,
   updated_at: new Date(0).toISOString(),
   updated_by_name: null,
 };
@@ -43,6 +52,32 @@ export async function updateWinsalotAppointmentReminderSettings(
     .update({ automatic_sms_reminders_enabled: automaticSmsRemindersEnabled, updated_at: new Date().toISOString(), updated_by_name: updatedByName })
     .eq("id", SMS_SETTINGS_ID);
   if (error) return { error: "Failed to update SMS reminder settings." };
+  return {};
+}
+
+// Growth CRM's own "Company SMS Notification Number" (migration 0141) -
+// Winsalot Corp's number for the immediate booking SMS and 24-hour/1-hour
+// reminder SMS, admin-editable from /admin/crm/consultation-availability.
+// Deliberately its own update function (not folded into the toggle above)
+// since it has its own validation and is conceptually independent of
+// whether *prospect* SMS reminders are switched on.
+export async function updateWinsalotCompanySmsNotificationNumber(
+  supabase: SupabaseClient,
+  companySmsNotificationNumber: string | null,
+  updatedByName: string
+): Promise<{ error?: string }> {
+  if (companySmsNotificationNumber && !isValidMobileNumber(companySmsNotificationNumber)) {
+    return { error: "Enter a valid mobile number, or leave blank to turn off company SMS notifications." };
+  }
+  const { error } = await supabase
+    .from(SMS_SETTINGS_TABLE)
+    .update({
+      company_sms_notification_number: companySmsNotificationNumber,
+      updated_at: new Date().toISOString(),
+      updated_by_name: updatedByName,
+    })
+    .eq("id", SMS_SETTINGS_ID);
+  if (error) return { error: "Failed to update the Company SMS Notification Number." };
   return {};
 }
 
@@ -238,13 +273,18 @@ export type WinsalotReminderJobSummary = {
   smsResults: WinsalotSmsReminderJobResult[];
 };
 
-// Claims/sends the prospect + admin SMS pair for one appointment
-// occurrence/reminder_type and folds both outcomes into the summary -
-// same role as leadgen-appointment-reminders.ts's
-// recordLeadgenAppointmentSms, kept as its own near-identical function
-// here (rather than shared) because winsalot_appointments has no lead_id
-// and always has a single true UTC instant, unlike leadgen's
-// date+time+timezone triple.
+// Claims/sends the prospect reminder SMS (gated on
+// automatic_sms_reminders_enabled/dryRun by the caller) and the Winsalot
+// Corp company-notification SMS (sent independently of that toggle - see
+// its own header comment below) for one appointment occurrence/
+// reminder_type, folding both outcomes into the summary. Not implemented
+// via the shared sendAppointmentReminderSmsPair (src/lib/appointment-sms.ts)
+// because that helper hardcodes process.env.ADMIN_PHONE_NUMBER for its
+// "admin" recipient and sends both recipients under one gate - Growth
+// CRM needs its own Company SMS Notification Number (migration 0141) as
+// the phone source, sent unconditionally, with the prospect reminder able
+// to stay off independently. leadgen-appointment-reminders.ts still uses
+// the shared pair helper unchanged.
 async function recordWinsalotAppointmentSms(
   admin: SupabaseClient,
   summary: WinsalotReminderJobSummary,
@@ -252,28 +292,55 @@ async function recordWinsalotAppointmentSms(
   reminderType: WinsalotReminderType,
   occurrenceKey: string,
   scheduledMs: number,
+  companySmsNotificationNumber: string | null,
+  sendProspectReminder: boolean,
   dryRun: boolean
 ): Promise<void> {
-  const { prospect, admin: adminOutcome } = await sendAppointmentReminderSmsPair(admin, {
-    table: "winsalot_appointment_sms_reminders",
+  const timezone = appt.prospect_timezone || appt.business_timezone;
+  const timeLabel = formatSmsTimeLabel(scheduledMs, timezone);
+  const isToday = isAppointmentToday(scheduledMs, timezone, Date.now());
+
+  const shared = {
+    table: "winsalot_appointment_sms_reminders" as const,
     appointmentId: appt.id,
     reminderType,
     occurrenceKey,
-    scheduledMs,
     scheduledAppointmentAtIso: appt.appointment_start_at,
-    timezone: appt.prospect_timezone || appt.business_timezone,
-    prospectPhone: appt.phone,
-    prospectConsent: appt.sms_consent,
-    businessName: appt.business_name,
-    contactName: appt.contact_name,
-    crmLabel: "Growth",
     dryRun,
-  });
+  };
 
-  for (const [recipientType, result] of [
-    ["prospect", prospect],
-    ["admin", adminOutcome],
-  ] as const) {
+  const outcomes: [WinsalotSmsRecipientType, Awaited<ReturnType<typeof claimAndSendAppointmentSms>>][] = [];
+
+  if (sendProspectReminder) {
+    outcomes.push([
+      "prospect",
+      await claimAndSendAppointmentSms(admin, {
+        ...shared,
+        recipientType: "prospect",
+        toPhoneRaw: appt.phone,
+        consentGiven: appt.sms_consent,
+        message: buildProspectReminderSms({ businessName: appt.business_name, reminderType, timeLabel }),
+      }),
+    ]);
+  }
+
+  // Winsalot Corp's own reminder - never consent-gated (this is Winsalot's
+  // internal notification, not a message to the prospect), and always
+  // attempted regardless of sendProspectReminder/automatic_sms_reminders_enabled
+  // - a missing/invalid company number is recorded "Skipped" by
+  // claimAndSendAppointmentSms itself, never a hard failure.
+  outcomes.push([
+    "admin",
+    await claimAndSendAppointmentSms(admin, {
+      ...shared,
+      recipientType: "admin",
+      toPhoneRaw: companySmsNotificationNumber,
+      consentGiven: true,
+      message: buildAdminReminderSms({ crmLabel: "Growth", businessName: appt.business_name, contactName: appt.contact_name, isToday, timeLabel }),
+    }),
+  ]);
+
+  for (const [recipientType, result] of outcomes) {
     if (result.outcome === "sent") summary.smsSent++;
     else if (result.outcome === "failed") summary.smsFailed++;
     else if (result.outcome !== "would_send") summary.smsSkipped++;
@@ -407,12 +474,23 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
         }
       }
 
-      // ---- SMS (new - independent of every email outcome above, gated on
-      // its own automatic_sms_reminders_enabled toggle; email above is
-      // unconditional and untouched by this check). ----
-      if (dryRun || smsSettings.automatic_sms_reminders_enabled) {
-        await recordWinsalotAppointmentSms(admin, summary, appt, reminderType, occurrenceKey, scheduledMs, dryRun);
-      }
+      // ---- SMS (independent of every email outcome above). The prospect
+      // reminder stays gated on automatic_sms_reminders_enabled/dryRun,
+      // unchanged from before; Winsalot Corp's own company notification is
+      // always attempted regardless of that toggle - see
+      // recordWinsalotAppointmentSms's header comment. Email above is
+      // unconditional and untouched by either. ----
+      await recordWinsalotAppointmentSms(
+        admin,
+        summary,
+        appt,
+        reminderType,
+        occurrenceKey,
+        scheduledMs,
+        smsSettings.company_sms_notification_number,
+        dryRun || smsSettings.automatic_sms_reminders_enabled,
+        dryRun
+      );
     }
   }
 

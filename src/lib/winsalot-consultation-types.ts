@@ -219,6 +219,13 @@ export type WinsalotSmsReminderStatusEntry = {
 export type WinsalotAppointmentReminderSettingsRow = {
   id: string;
   automatic_sms_reminders_enabled: boolean;
+  // Global, admin-editable "Company SMS Notification Number" (migration
+  // 0141) - Winsalot Corp's own phone number for the immediate booking
+  // SMS and the 24-hour/1-hour reminder SMS, Growth CRM only. Null/blank
+  // means it isn't configured yet, in which case those company sends are
+  // skipped (recorded "Skipped", never a hard failure) exactly like a
+  // missing process.env.ADMIN_PHONE_NUMBER always has been.
+  company_sms_notification_number: string | null;
   updated_at: string;
   updated_by_name: string | null;
 };

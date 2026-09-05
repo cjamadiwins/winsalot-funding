@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { WinsalotAvailabilitySettingsRow, WinsalotBlackoutRow } from "@/lib/winsalot-consultation-types";
-import { addWinsalotBlackoutAction, removeWinsalotBlackoutAction, updateWinsalotAvailabilityAction } from "./actions";
+import type { WinsalotAppointmentReminderSettingsRow, WinsalotAvailabilitySettingsRow, WinsalotBlackoutRow } from "@/lib/winsalot-consultation-types";
+import {
+  addWinsalotBlackoutAction,
+  removeWinsalotBlackoutAction,
+  updateWinsalotAvailabilityAction,
+  updateWinsalotCompanySmsNumberAction,
+} from "./actions";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -14,15 +19,19 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export default function ConsultationAvailabilityClient({
   settings,
   blackouts,
+  reminderSettings,
 }: {
   settings: WinsalotAvailabilitySettingsRow;
   blackouts: WinsalotBlackoutRow[];
+  reminderSettings: WinsalotAppointmentReminderSettingsRow;
 }) {
   const [isPending, startTransition] = useTransition();
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(settings.available_weekdays);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [blackoutError, setBlackoutError] = useState<string | null>(null);
+  const [companySmsError, setCompanySmsError] = useState<string | null>(null);
+  const [companySmsSaved, setCompanySmsSaved] = useState(false);
 
   function toggleWeekday(day: number) {
     setSelectedWeekdays((current) => (current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort()));
@@ -50,6 +59,16 @@ export default function ConsultationAvailabilityClient({
   function handleRemoveBlackout(id: string) {
     startTransition(async () => {
       await removeWinsalotBlackoutAction(id);
+    });
+  }
+
+  function handleSaveCompanySmsNumber(formData: FormData) {
+    setCompanySmsError(null);
+    setCompanySmsSaved(false);
+    startTransition(async () => {
+      const result = await updateWinsalotCompanySmsNumberAction(formData);
+      if (result.error) setCompanySmsError(result.error);
+      else setCompanySmsSaved(true);
     });
   }
 
@@ -110,6 +129,30 @@ export default function ConsultationAvailabilityClient({
             Save Schedule
           </button>
         </form>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Company SMS Notification Number</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Winsalot Corp&apos;s own phone number for Growth CRM consultation bookings — receives an immediate SMS the
+          moment an appointment is booked, plus automatic 24-hour and 1-hour reminders. No client record is needed
+          for Winsalot Corp to receive these; this number applies only to the Growth CRM.
+        </p>
+        <form action={handleSaveCompanySmsNumber} className="mt-4 flex flex-wrap items-end gap-3">
+          <Labeled label="Company SMS Notification Number">
+            <input
+              name="company_sms_notification_number"
+              defaultValue={reminderSettings.company_sms_notification_number ?? ""}
+              placeholder="e.g. +14165551234"
+              className={inputClass}
+            />
+          </Labeled>
+          <button type="submit" disabled={isPending} className={buttonClass}>
+            Save
+          </button>
+        </form>
+        {companySmsError && <p className="mt-2 text-sm text-rose-600">{companySmsError}</p>}
+        {companySmsSaved && !companySmsError && <p className="mt-2 text-sm font-medium text-emerald-600">Saved.</p>}
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
