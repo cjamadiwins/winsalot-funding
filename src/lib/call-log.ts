@@ -34,6 +34,13 @@ export type CallLogRow = {
   phone: string;
   outcome: CallLogOutcome;
   notes: string;
+  // Lead Gen CRM only (leadgen_call_logs.client_visible_note, migration
+  // 0142) - a separate, optional note an admin can write for the client
+  // to see on their own Client Portal Call Activity page. Never the same
+  // as `notes` above (internal/agent-facing, never shown to a client
+  // login) and never populated for the Growth CRM's crm_call_logs, which
+  // has no such column and no client login to show it to.
+  client_visible_note?: string | null;
   // The client the agent is calling on behalf of - a required, permanent
   // link chosen from each CRM's existing client records (never free text).
   // Always "Winsalot Corp." in the Growth CRM (agents prospect on

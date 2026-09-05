@@ -5,12 +5,16 @@ import {
   formatCallLogDate,
   type CallLogRow,
 } from "@/lib/call-log";
+import CallLogClientNoteEditor from "./CallLogClientNoteEditor";
 
 export type AdminCallLogEntry = CallLogRow & { agentName: string };
 export type AdminCallLogAgent = { id: string; name: string };
 export type AdminCallLogBusinessClientFilter = {
   options: { id: string; name: string }[];
   selected: string;
+};
+export type AdminCallLogClientVisibleNote = {
+  updateAction: (logId: string, note: string) => Promise<{ error?: string }>;
 };
 
 type Props = {
@@ -25,6 +29,12 @@ type Props = {
   // the Growth CRM's Business/Client is always "Winsalot Corp." on every
   // row, so filtering by it would never narrow anything.
   businessClientFilter?: AdminCallLogBusinessClientFilter;
+  // Only the Lead Generation CRM passes this - its leadgen_call_logs table
+  // has a client_visible_note column and a Client Portal that reads it
+  // (src/app/client/(portal)/call-activity/page.tsx); the Growth CRM's
+  // crm_call_logs has no such column, so this column is omitted there
+  // entirely rather than shown disabled/empty.
+  clientVisibleNote?: AdminCallLogClientVisibleNote;
 };
 
 export default function AdminCallLogReport({
@@ -36,6 +46,7 @@ export default function AdminCallLogReport({
   selectedOutcome,
   errorMessage,
   businessClientFilter,
+  clientVisibleNote,
 }: Props) {
   return (
     <div>
@@ -121,6 +132,7 @@ export default function AdminCallLogReport({
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Result</th>
                 <th className="px-4 py-3">Notes</th>
+                {clientVisibleNote && <th className="px-4 py-3">Client-Visible Note</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -137,6 +149,11 @@ export default function AdminCallLogReport({
                     </span>
                   </td>
                   <td className="max-w-xl whitespace-pre-wrap px-4 py-3 text-slate-700">{entry.notes}</td>
+                  {clientVisibleNote && (
+                    <td className="max-w-xs px-4 py-3 text-slate-700">
+                      <CallLogClientNoteEditor logId={entry.id} initialNote={entry.client_visible_note} updateAction={clientVisibleNote.updateAction} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
