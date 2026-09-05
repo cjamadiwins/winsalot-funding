@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   agreedTargetLabel,
@@ -15,7 +15,13 @@ import {
   type CrmIntakeSubmissionRow,
   type CrmIntakeSubmissionEditRow,
 } from "@/lib/crm-agreement-types";
-import { saveIntakeQuestionsAction, sendIntakeFormAction, resendIntakeFormAction, correctIntakeSubmissionFieldAction } from "../[id]/actions";
+import {
+  saveIntakeQuestionsAction,
+  sendIntakeFormAction,
+  resendIntakeFormAction,
+  correctIntakeSubmissionFieldAction,
+  markIntakeReviewedAction,
+} from "../[id]/actions";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -55,6 +61,13 @@ export default function IntakeBuilderClient({
       router.refresh();
     });
   }
+
+  // Client Intake sidebar badge: opening this specific intake form is what
+  // counts as reviewing it, not just loading the list page - a no-op once
+  // already reviewed, so it's safe to fire on every mount.
+  useEffect(() => {
+    void markIntakeReviewedAction(config.id);
+  }, [config.id]);
 
   function updateQuestion(index: number, patch: Partial<CrmIntakeQuestion>) {
     setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, ...patch } : q)));

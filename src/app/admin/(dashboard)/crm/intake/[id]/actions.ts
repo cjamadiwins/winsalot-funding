@@ -8,7 +8,7 @@ import type { CrmUserRow } from "@/lib/crm-types";
 import { DEFAULT_INTAKE_QUESTIONS, type CrmIntakeQuestion, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import { createIntakeToken } from "@/lib/crm-agreement-tokens";
 import { sendIntakeFormEmail, sendIntakeSubmittedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
-import { notifyAdminsOfIntakeNotificationFailure } from "@/lib/crm-agreement-notifications";
+import { notifyAdminsOfIntakeNotificationFailure, intakeAdminLinkPath } from "@/lib/crm-agreement-notifications";
 
 type ActionResult = { error?: string };
 
@@ -192,5 +192,29 @@ export async function correctIntakeSubmissionFieldAction(submissionId: string, f
     new_value: newValue,
   });
 
+  return {};
+}
+
+// Client Intake sidebar badge - marks this admin's own "intake submitted"
+// notification (crm_notifications, already the badge's source - see
+// src/app/admin/(dashboard)/layout.tsx) read as soon as they open this
+// specific intake form's builder page, not only when they click the
+// notification itself from the bell dropdown. Never touches another
+// admin's copy of the same notification (crm_notifications RLS already
+// scopes updates to user_id = auth.uid()), and never the separate
+// "notify=failed" email-failure notification, which stays its own
+// concern until the admin acts on it directly.
+export async function markIntakeReviewedAction(intakeConfigId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("crm_notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("link_path", intakeAdminLinkPath(intakeConfigId))
+    .eq("is_read", false);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin", "layout");
   return {};
 }

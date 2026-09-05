@@ -9,6 +9,7 @@ import {
   activatePilotAction,
   startPilotResultsReviewAction,
   deleteOnboardingRecordAction,
+  markOnboardingRecordReviewedAction,
 } from "../agreements/actions";
 import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus } from "@/lib/crm-agreement-types";
 import ManageOnboardingRecordModal from "./ManageOnboardingRecordModal";
@@ -96,6 +97,15 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
     });
   }
 
+  // Client Onboarding sidebar badge: the specific row was actually opened
+  // (View or Edit), not just the dashboard's own list page loading -
+  // fire-and-forget, never blocks the navigation/modal it's paired with.
+  function markReviewed(row: OnboardingRow) {
+    startTransition(() => {
+      void markOnboardingRecordReviewedAction(row.agreementId);
+    });
+  }
+
   return (
     <div>
       {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -140,10 +150,18 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                 <td className="px-3 py-3 text-slate-600">{row.nextAction}</td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                    <Link href={`/admin/crm/agreements/${row.agreementId}`} className={buttonClasses}>
+                    <Link href={`/admin/crm/agreements/${row.agreementId}`} onClick={() => markReviewed(row)} className={buttonClasses}>
                       View
                     </Link>
-                    <button type="button" disabled={isPending} onClick={() => setEditingAgreementId(row.agreementId)} className={buttonClasses}>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        setEditingAgreementId(row.agreementId);
+                        markReviewed(row);
+                      }}
+                      className={buttonClasses}
+                    >
                       Edit
                     </button>
                     <button type="button" disabled={isPending} onClick={() => handleDelete(row)} className={dangerButtonClasses}>

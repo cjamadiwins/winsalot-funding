@@ -66,7 +66,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }, { count: unreadOnboardingCount }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadCrmChatUnreadCount(supabase, user.id),
@@ -76,6 +76,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // never a separate "reviewed" flag that could drift out of sync.
     supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/agreements%"),
     supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/intake%"),
+    // Client Onboarding badge (migration 0145) - same "not yet superseded"
+    // filter the onboarding dashboard itself uses, restricted to rows the
+    // admin hasn't opened from that dashboard yet.
+    supabase.from("crm_client_agreements").select("id", { count: "exact", head: true }).neq("status", "superseded").is("onboarding_reviewed_at", null),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -86,6 +90,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     if (item.href === "/admin/crm/chat") return { ...item, badgeCount: chatUnreadCount };
     if (item.href === "/admin/crm/agreements") return { ...item, badgeCount: unreadAgreementCount ?? 0 };
     if (item.href === "/admin/crm/intake") return { ...item, badgeCount: unreadIntakeCount ?? 0 };
+    if (item.href === "/admin/crm/onboarding") return { ...item, badgeCount: unreadOnboardingCount ?? 0 };
     return item;
   });
 

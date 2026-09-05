@@ -203,6 +203,13 @@ export type CrmClientAgreementRow = {
   admin_notified_at: string | null;
   admin_notification_failed_at: string | null;
   admin_notification_error: string | null;
+
+  // Client Onboarding sidebar badge (migration 0145) - null means this
+  // record hasn't been opened from the Onboarding dashboard yet. Distinct
+  // from admin_reviewed_confirmation above and from crm_notifications'
+  // is_read (Client Agreements' own badge source) - see that migration's
+  // header comment for why these three never share a column.
+  onboarding_reviewed_at: string | null;
 };
 
 // Whether an agreement's commercial/legal terms are locked - the single

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   updateAgreementDraftAction,
   sendAgreementAction,
@@ -18,6 +18,7 @@ import {
   generatePilotInvoiceAction,
   linkPilotInvoiceAction,
   updatePilotPaymentStatusAction,
+  markAgreementReviewedAction,
   type AgreementDraftInput,
   type PilotResultsInput,
   type ConvertPilotInput,
@@ -164,6 +165,13 @@ export default function AgreementDetailClient({
       router.refresh();
     });
   }
+
+  // Client Agreements sidebar badge: opening this specific agreement is
+  // what counts as reviewing it, not just loading the list page - a no-op
+  // once already reviewed, so it's safe to fire on every mount.
+  useEffect(() => {
+    void markAgreementReviewedAction(agreement.id);
+  }, [agreement.id]);
 
   return (
     <div>

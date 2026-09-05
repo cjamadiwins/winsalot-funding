@@ -29,7 +29,7 @@ import {
 } from "@/lib/crm-agreement-types";
 import { createAgreementToken } from "@/lib/crm-agreement-tokens";
 import { sendAgreementSignEmail, sendAgreementSignedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
-import { notifyAdminsOfAgreementNotificationFailure } from "@/lib/crm-agreement-notifications";
+import { notifyAdminsOfAgreementNotificationFailure, agreementAdminLinkPath } from "@/lib/crm-agreement-notifications";
 import { getSiteUrl } from "@/lib/site-url";
 import { createInvoiceAction, type LineItemInput } from "../invoices/actions";
 
@@ -1263,5 +1263,48 @@ export async function deleteOnboardingRecordAction(agreementId: string): Promise
 
   revalidatePath("/admin/crm/onboarding");
   revalidatePath("/admin/crm/agreements");
+  return {};
+}
+
+// Client Onboarding sidebar badge (migration 0145) - fired when the admin
+// opens a specific onboarding row (View or Edit), never just from loading
+// the dashboard's own list page. A no-op once already reviewed, so it's
+// safe to call unconditionally on every open.
+export async function markOnboardingRecordReviewedAction(agreementId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ onboarding_reviewed_at: new Date().toISOString() })
+    .eq("id", agreementId)
+    .is("onboarding_reviewed_at", null);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin", "layout");
+  return {};
+}
+
+// Client Agreements sidebar badge - marks this admin's own "signed
+// agreement" notification (crm_notifications, already the badge's source
+// - see src/app/admin/(dashboard)/layout.tsx) read as soon as they open
+// this specific agreement's detail page, not only when they click the
+// notification itself from the bell dropdown. Never touches another
+// admin's copy of the same notification (crm_notifications RLS already
+// scopes updates to user_id = auth.uid()), and never the separate
+// "notify=failed" email-failure notification, which stays its own
+// concern until the admin acts on it directly.
+export async function markAgreementReviewedAction(agreementId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("crm_notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("link_path", agreementAdminLinkPath(agreementId))
+    .eq("is_read", false);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin", "layout");
   return {};
 }
