@@ -4,7 +4,8 @@ import { useActionState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, PhoneCall, Upload } from "lucide-react";
 import { formatDialpadDuration, type DialpadWorkspace } from "@/lib/dialpad-report";
-import type { DialpadDashboardData } from "@/lib/dialpad-report-data";
+import type { DialpadDashboardData, DialpadUserStatRow } from "@/lib/dialpad-report-data";
+import { formatDateShort } from "@/lib/payroll";
 
 type ImportState = { error?: string; success?: string };
 type ImportAction = (state: ImportState, formData: FormData) => Promise<ImportState>;
@@ -59,6 +60,18 @@ export default function DialpadPerformanceDashboard({
   const averageDurationSeconds = totals.calls > 0 ? Math.round(totals.duration / totals.calls) : 0;
   const maxCalls = Math.max(1, ...data.summaries.map((row) => row.total_calls));
 
+  // Purely factual, informational flags - never an automatic
+  // "poor-performing agent" label from a single metric. Both only ever
+  // fire relative to this report's own cohort (never an absolute floor,
+  // which would just flag everyone whenever the whole week ran short),
+  // and only once there's more than one agent to compare against.
+  const cohortSize = data.summaries.filter((row) => row.total_calls > 0).length;
+  const avgCallsPerAgent = cohortSize > 0 ? totals.calls / cohortSize : 0;
+  const flagsFor = (row: DialpadUserStatRow) => ({
+    lowVolume: cohortSize >= 2 && avgCallsPerAgent > 0 && row.total_calls > 0 && row.total_calls < avgCallsPerAgent * 0.3,
+    shortAvgTalk: cohortSize >= 2 && averageDurationSeconds > 0 && row.average_duration_seconds > 0 && row.average_duration_seconds < averageDurationSeconds * 0.5,
+  });
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -75,7 +88,7 @@ export default function DialpadPerformanceDashboard({
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-right shadow-sm">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Current report</div>
             <div className="mt-0.5 text-sm font-bold text-slate-900">
-              {data.selectedReport.period_start} – {data.selectedReport.period_end}
+              {formatDateShort(data.selectedReport.period_start)} – {formatDateShort(data.selectedReport.period_end)}
             </div>
           </div>
         )}
@@ -133,7 +146,7 @@ export default function DialpadPerformanceDashboard({
           >
             {data.reports.map((report) => (
               <option key={report.id} value={report.id}>
-                {report.period_start} – {report.period_end} ({report.user_count} users)
+                {formatDateShort(report.period_start)} – {formatDateShort(report.period_end)} ({report.user_count} users)
               </option>
             ))}
           </select>
@@ -149,13 +162,12 @@ export default function DialpadPerformanceDashboard({
         </section>
       ) : (
         <>
-          <section className={`grid gap-3 sm:grid-cols-2 ${isAgent ? "xl:grid-cols-6" : "xl:grid-cols-5"}`}>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Stat label="Total Calls" value={totals.calls.toLocaleString()} tone="blue" />
-            <Stat label="Placed" value={totals.placed.toLocaleString()} tone="indigo" />
-            <Stat label="Answered" value={totals.answered.toLocaleString()} tone="green" />
-            <Stat label="Missed" value={totals.missed.toLocaleString()} tone="red" />
-            <Stat label="Total Duration" value={formatDialpadDuration(totals.duration)} tone="slate" />
-            {isAgent && <Stat label="Average Duration" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />}
+            <Stat label="Outbound Calls" value={totals.placed.toLocaleString()} tone="indigo" />
+            <Stat label="Answered Calls" value={totals.answered.toLocaleString()} tone="green" />
+            <Stat label="Avg Talk Time" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />
+            <Stat label="Total Talk Time" value={formatDialpadDuration(totals.duration)} tone="slate" />
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -168,7 +180,7 @@ export default function DialpadPerformanceDashboard({
               </div>
               <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-slate-600">
                 <Legend color="bg-blue-500" label="Total" />
-                <Legend color="bg-indigo-500" label="Placed" />
+                <Legend color="bg-indigo-500" label="Outbound" />
                 <Legend color="bg-emerald-500" label="Answered" />
                 <Legend color="bg-rose-500" label="Missed" />
               </div>
@@ -196,18 +208,41 @@ export default function DialpadPerformanceDashboard({
               <h2 className="text-base font-bold text-slate-900">{isAgent ? "Your performance" : "User performance"}</h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px] text-left text-sm">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  <tr><th className="p-3">User</th><th className="p-3">Role</th><th className="p-3">Calls</th><th className="p-3">Placed</th><th className="p-3">Answered</th><th className="p-3">Missed</th><th className="p-3">Total Duration</th><th className="p-3">Avg. Duration</th></tr>
+                  <tr><th className="p-3">Agent</th><th className="p-3">Calls</th><th className="p-3">Outbound</th><th className="p-3">Answered</th><th className="p-3">Avg Talk</th><th className="p-3">Total Talk</th></tr>
                 </thead>
                 <tbody>
-                  {data.summaries.map((row) => (
-                    <tr key={row.id} className="border-t border-slate-100">
-                      <td className="p-3"><div className="font-semibold text-slate-900">{row.agent_name}</div>{row.agent_email && <div className="text-xs text-slate-500">{row.agent_email}</div>}</td>
-                      <td className="p-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${row.agent_role === "admin" ? "bg-purple-100 text-purple-800" : "bg-sky-100 text-sky-800"}`}>{row.agent_role === "admin" ? "Admin" : "Agent"}</span></td>
-                      <td className="p-3 font-bold text-slate-900">{row.total_calls}</td><td className="p-3 text-slate-700">{row.placed_calls}</td><td className="p-3 text-emerald-700">{row.answered_calls}</td><td className="p-3 text-rose-700">{row.missed_calls}</td><td className="p-3 text-slate-700">{formatDialpadDuration(row.total_duration_seconds)}</td><td className="p-3 text-slate-700">{formatDialpadDuration(row.average_duration_seconds)}</td>
-                    </tr>
-                  ))}
+                  {data.summaries.map((row) => {
+                    const flags = flagsFor(row);
+                    return (
+                      <tr key={row.id} className="border-t border-slate-100">
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-900">{row.agent_name}</div>
+                          {row.agent_email && <div className="text-xs text-slate-500">{row.agent_email}</div>}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.agent_role === "admin" ? "bg-purple-100 text-purple-800" : "bg-sky-100 text-sky-800"}`}>
+                              {row.agent_role === "admin" ? "Admin" : "Agent"}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{row.inbound_calls} inbound</span>
+                            <span className="text-[10px] text-slate-400">{row.voicemails} voicemail{row.voicemails === 1 ? "" : "s"}</span>
+                            <span className="text-[10px] text-rose-500">{row.missed_calls} missed</span>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{row.total_calls}</div>
+                          {flags.lowVolume && <FlagTag label="Below average volume" />}
+                        </td>
+                        <td className="p-3 text-slate-700">{row.placed_calls}</td>
+                        <td className="p-3 text-emerald-700">{row.answered_calls}</td>
+                        <td className="p-3">
+                          <div className="text-slate-700">{formatDialpadDuration(row.average_duration_seconds)}</div>
+                          {flags.shortAvgTalk && <FlagTag label="Short avg. talk time" />}
+                        </td>
+                        <td className="p-3 text-slate-700">{formatDialpadDuration(row.total_duration_seconds)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -243,4 +278,11 @@ export function Legend({ color, label }: { color: string; label: string }) { ret
 export function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   const height = value === 0 ? 3 : Math.max(8, Math.round((value / max) * 100));
   return <div className={`relative w-5 rounded-t-md ${color}`} style={{ height: `${height}%` }} title={String(value)}><span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-500">{value}</span></div>;
+}
+
+// Purely informational, never "poor performer" wording - see flagsFor()
+// above for the (relative-to-cohort-only) thresholds that decide when
+// these appear.
+function FlagTag({ label }: { label: string }) {
+  return <div className="mt-0.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">{label}</div>;
 }

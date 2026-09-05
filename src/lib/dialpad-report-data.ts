@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseDialpadCsv, resolveDialpadIdentity, type DialpadWorkspace } from "./dialpad-report";
+import { parseDialpadCsv, resolveDialpadIdentity, extractDateRangeFromCsv, type DialpadWorkspace, type ParsedDialpadReport } from "./dialpad-report";
+import { findLatestDialpadUserStatisticsCsv, readDialpadCsvFile } from "./dialpad-csv-source";
 
 export type DialpadReportRow = {
   id: string;
@@ -24,6 +25,8 @@ export type DialpadUserStatRow = {
   placed_calls: number;
   answered_calls: number;
   missed_calls: number;
+  inbound_calls: number;
+  voicemails: number;
   total_duration_seconds: number;
   average_duration_seconds: number;
 };
@@ -60,13 +63,34 @@ function normalized(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function resolveRole(summary: { agentName: string; agentEmail: string | null }, directory: UserDirectoryEntry[]) {
-  const mappedRole = resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentRole;
-  if (mappedRole) return mappedRole;
+// Ground truth for a Dialpad row's display name and role is the real CRM
+// / Lead Gen agent directory whenever it actually holds one for this
+// email or name - never a hardcoded assumption ("Use the existing
+// Winsalot agent mapping already present in the CRM... Do not hardcode
+// assumptions if the mapping already exists"). A directory row whose
+// full_name is still just its own login email (no one has renamed it
+// yet) carries no more information than the CSV already has, so it falls
+// through to the cosmetic DIALPAD_IDENTITIES fallback (dialpad-report.ts)
+// instead of replacing a good name with an email address - that fallback,
+// and the raw CSV name below it, are the only hardcoding left, and only
+// for Dialpad seats with no real per-person CRM record at all yet.
+function resolveIdentity(
+  summary: { agentName: string; agentEmail: string | null },
+  directory: UserDirectoryEntry[]
+): { agentName: string; agentRole: "admin" | "agent" } {
   const email = normalized(summary.agentEmail);
   const name = normalized(summary.agentName);
   const matches = directory.filter((user) => (email && normalized(user.email) === email) || (name && normalized(user.full_name) === name));
-  return matches.some((user) => user.role === "admin") ? "admin" : "agent";
+  const role: "admin" | "agent" = matches.some((user) => user.role === "admin")
+    ? "admin"
+    : matches.length > 0
+      ? "agent"
+      : (resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentRole ?? "agent");
+
+  const namedMatch = matches.find((user) => user.full_name && normalized(user.full_name) !== normalized(user.email));
+  if (namedMatch) return { agentName: namedMatch.full_name, agentRole: role };
+
+  return { agentName: resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentName, agentRole: role };
 }
 
 export async function loadDialpadDashboardData(supabase: SupabaseClient, reportId?: string): Promise<DialpadDashboardData> {
@@ -112,6 +136,99 @@ export async function loadDialpadAgentDashboardData(supabase: SupabaseClient): P
   return { report, summary: (summary ?? null) as DialpadUserStatRow | null };
 }
 
+// Shared by the manual "Import weekly Dialpad CSV" upload action and the
+// automatic repo-CSV sync below - the only difference between the two is
+// where periodStart/periodEnd/sourceFileName/parsed come from, never how
+// the rows get written.
+async function insertDialpadReport(params: {
+  supabase: SupabaseClient;
+  workspace: DialpadWorkspace;
+  importedById: string;
+  importedByName: string;
+  sourceFileName: string;
+  periodStart: string;
+  periodEnd: string;
+  parsed: ParsedDialpadReport;
+}): Promise<{ error?: string; success?: string }> {
+  const { supabase, workspace, importedById, importedByName, sourceFileName, periodStart, periodEnd, parsed } = params;
+  if (parsed.summaries.length === 0) return { error: "No Dialpad users were found in this CSV." };
+
+  const [{ data: crmUsers }, { data: leadgenUsers }] = await Promise.all([
+    supabase.from("crm_users").select("full_name,email,role,active").eq("active", true),
+    supabase.from("leadgen_users").select("full_name,email,role,active").eq("active", true).in("role", ["admin", "agent"]),
+  ]);
+  const directory = [...(crmUsers ?? []), ...(leadgenUsers ?? [])] as UserDirectoryEntry[];
+
+  const { data: report, error: reportError } = await supabase
+    .from("dialpad_call_reports")
+    .insert({
+      period_start: periodStart,
+      period_end: periodEnd,
+      source_file_name: sourceFileName,
+      source_workspace: workspace,
+      imported_by: importedById,
+      imported_by_name: importedByName,
+      user_count: parsed.summaries.length,
+      call_count: parsed.summaries.reduce((total, summary) => total + summary.totalCalls, 0),
+    })
+    .select("id")
+    .single();
+  if (reportError || !report) {
+    if (reportError?.code === "23505") return { error: "That Dialpad week has already been imported." };
+    return { error: "The report could not be saved." };
+  }
+
+  const summaryRows = parsed.summaries.map((summary) => {
+    const identity = resolveIdentity(summary, directory);
+    return {
+      report_id: report.id,
+      agent_name: identity.agentName,
+      agent_email: summary.agentEmail,
+      agent_role: identity.agentRole,
+      total_calls: summary.totalCalls,
+      placed_calls: summary.placedCalls,
+      answered_calls: summary.answeredCalls,
+      missed_calls: summary.missedCalls,
+      inbound_calls: summary.inboundCalls,
+      voicemails: summary.voicemails,
+      total_duration_seconds: summary.totalDurationSeconds,
+      average_duration_seconds: summary.averageDurationSeconds,
+    };
+  });
+  const { error: summaryError } = await supabase.from("dialpad_user_stats").insert(summaryRows);
+  if (summaryError) {
+    await supabase.from("dialpad_call_reports").delete().eq("id", report.id);
+    return { error: "The per-user Dialpad totals could not be saved." };
+  }
+
+  if (parsed.calls.length > 0) {
+    const roleByIdentity = new Map(summaryRows.map((summary) => [normalized(summary.agent_email || summary.agent_name), summary.agent_role]));
+    const nameByIdentity = new Map(summaryRows.map((summary) => [normalized(summary.agent_email || summary.agent_name), summary.agent_name]));
+    for (let index = 0; index < parsed.calls.length; index += 250) {
+      const callRows = parsed.calls.slice(index, index + 250).map((call) => {
+        const key = normalized(call.agentEmail || call.agentName);
+        return {
+          report_id: report.id,
+          external_call_id: call.externalCallId,
+          agent_name: nameByIdentity.get(key) ?? call.agentName,
+          agent_email: call.agentEmail,
+          agent_role: roleByIdentity.get(key) ?? "agent",
+          direction: call.direction,
+          call_status: call.status,
+          started_at: call.startedAt,
+          duration_seconds: call.durationSeconds,
+          phone_number: call.phoneNumber,
+          raw_data: call.raw,
+        };
+      });
+      const { error: callsError } = await supabase.from("dialpad_call_rows").insert(callRows);
+      if (callsError) return { error: "The summary was saved, but some detailed call rows could not be imported." };
+    }
+  }
+
+  return { success: `Imported ${parsed.summaries.length} users and ${summaryRows.reduce((total, row) => total + row.total_calls, 0)} calls.` };
+}
+
 export async function importDialpadCsv(params: {
   supabase: SupabaseClient;
   workspace: DialpadWorkspace;
@@ -130,77 +247,87 @@ export async function importDialpadCsv(params: {
     return { error: "Choose a valid Monday-through-Sunday report period." };
   }
 
-  let parsed;
+  let parsed: ParsedDialpadReport;
   try {
     parsed = parseDialpadCsv(await file.text());
   } catch (error) {
     return { error: error instanceof Error ? error.message : "The Dialpad CSV could not be read." };
   }
-  if (parsed.summaries.length === 0) return { error: "No Dialpad users were found in this CSV." };
 
-  const [{ data: crmUsers }, { data: leadgenUsers }] = await Promise.all([
-    supabase.from("crm_users").select("full_name,email,role,active").eq("active", true),
-    supabase.from("leadgen_users").select("full_name,email,role,active").eq("active", true).in("role", ["admin", "agent"]),
-  ]);
-  const directory = [...(crmUsers ?? []), ...(leadgenUsers ?? [])] as UserDirectoryEntry[];
+  return insertDialpadReport({ supabase, workspace, importedById, importedByName, sourceFileName: file.name, periodStart, periodEnd, parsed });
+}
 
-  const { data: report, error: reportError } = await supabase
-    .from("dialpad_call_reports")
-    .insert({
-      period_start: periodStart,
-      period_end: periodEnd,
-      source_file_name: file.name,
-      source_workspace: workspace,
-      imported_by: importedById,
-      imported_by_name: importedByName,
-      user_count: parsed.summaries.length,
-      call_count: parsed.summaries.reduce((total, summary) => total + summary.totalCalls, 0),
-    })
-    .select("id")
-    .single();
-  if (reportError || !report) {
-    if (reportError?.code === "23505") return { error: "That Dialpad week has already been imported." };
-    return { error: "The report could not be saved." };
-  }
+export type DialpadSyncResult = { imported?: boolean; fileName?: string; periodStart?: string; periodEnd?: string };
 
-  const summaryRows = parsed.summaries.map((summary) => ({
-    report_id: report.id,
-    agent_name: summary.agentName,
-    agent_email: summary.agentEmail,
-    agent_role: resolveRole(summary, directory),
-    total_calls: summary.totalCalls,
-    placed_calls: summary.placedCalls,
-    answered_calls: summary.answeredCalls,
-    missed_calls: summary.missedCalls,
-    total_duration_seconds: summary.totalDurationSeconds,
-    average_duration_seconds: summary.averageDurationSeconds,
-  }));
-  const { error: summaryError } = await supabase.from("dialpad_user_stats").insert(summaryRows);
-  if (summaryError) {
-    await supabase.from("dialpad_call_reports").delete().eq("id", report.id);
-    return { error: "The per-user Dialpad totals could not be saved." };
-  }
+// Automatic counterpart to the manual upload above - the weekly workflow
+// is "Dialpad -> User Statistics -> CSV export -> upload CSV to GitHub ->
+// CRM automatically displays the latest report", so this looks for the
+// latest User Statistics CSV committed to the repo and imports it the
+// same way a manual upload would, without anyone clicking Import. Called
+// from every Dialpad Performance page load (admin and agent, both CRMs);
+// it is a deliberate no-op whenever there's nothing new:
+//   - no valid User Statistics CSV in the repo at all,
+//   - that period is already imported (dialpad_call_reports' own unique
+//     (period_start, period_end) constraint - the same guard the manual
+//     upload already relies on), or
+//   - the calling session isn't an admin, so the RLS policies that gate
+//     every insert here (dialpad_call_reports_admin_all, etc.) reject the
+//     write - which is exactly why this is safe to call unconditionally
+//     from agent pages too: an agent's own session can never write these
+//     tables, sync or not.
+// Never throws and never surfaces an error to the page it's called from -
+// a bad or unreadable file here should never break a dashboard that
+// would otherwise still have a perfectly good previously-imported report
+// to show.
+export async function ensureLatestDialpadReportImported(params: {
+  supabase: SupabaseClient;
+  workspace: DialpadWorkspace;
+  importedById: string;
+  importedByName: string;
+}): Promise<DialpadSyncResult> {
+  const { supabase, workspace, importedById, importedByName } = params;
 
-  if (parsed.calls.length > 0) {
-    const roleByIdentity = new Map(summaryRows.map((summary) => [normalized(summary.agent_email || summary.agent_name), summary.agent_role]));
-    for (let index = 0; index < parsed.calls.length; index += 250) {
-      const callRows = parsed.calls.slice(index, index + 250).map((call) => ({
-        report_id: report.id,
-        external_call_id: call.externalCallId,
-        agent_name: call.agentName,
-        agent_email: call.agentEmail,
-        agent_role: roleByIdentity.get(normalized(call.agentEmail || call.agentName)) ?? "agent",
-        direction: call.direction,
-        call_status: call.status,
-        started_at: call.startedAt,
-        duration_seconds: call.durationSeconds,
-        phone_number: call.phoneNumber,
-        raw_data: call.raw,
-      }));
-      const { error: callsError } = await supabase.from("dialpad_call_rows").insert(callRows);
-      if (callsError) return { error: "The summary was saved, but some detailed call rows could not be imported." };
+  try {
+    const candidate = findLatestDialpadUserStatisticsCsv();
+    if (!candidate) return {};
+
+    const csvText = readDialpadCsvFile(candidate.filePath);
+
+    let periodStart = candidate.periodStart;
+    let periodEnd = candidate.periodEnd;
+    // The filename only ever carried a single-day stamp (no explicit
+    // range) - cross-check against the CSV's own date column, which is
+    // the more reliable source when the two disagree.
+    if (periodStart === periodEnd) {
+      const fromContents = extractDateRangeFromCsv(csvText);
+      if (fromContents) {
+        periodStart = fromContents.periodStart;
+        periodEnd = fromContents.periodEnd;
+      }
     }
-  }
 
-  return { success: `Imported ${parsed.summaries.length} users and ${summaryRows.reduce((total, row) => total + row.total_calls, 0)} calls.` };
+    const { data: existing } = await supabase
+      .from("dialpad_call_reports")
+      .select("id")
+      .eq("period_start", periodStart)
+      .eq("period_end", periodEnd)
+      .maybeSingle();
+    if (existing) return { fileName: candidate.fileName, periodStart, periodEnd };
+
+    const parsed = parseDialpadCsv(csvText);
+    const result = await insertDialpadReport({
+      supabase,
+      workspace,
+      importedById,
+      importedByName,
+      sourceFileName: candidate.fileName,
+      periodStart,
+      periodEnd,
+      parsed,
+    });
+    if (result.error) return {};
+    return { imported: true, fileName: candidate.fileName, periodStart, periodEnd };
+  } catch {
+    return {};
+  }
 }
