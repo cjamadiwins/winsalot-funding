@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractDateRangeFromCsv,
   formatDialpadDuration,
   parseDialpadCsv,
   parseDurationSeconds,
@@ -106,5 +107,35 @@ describe("Dialpad report parser", () => {
       }),
     ]);
     expect(parsed.summaries).toHaveLength(2);
+  });
+
+  it("captures inbound calls and voicemails from a real Dialpad User Statistics export", () => {
+    const parsed = parseDialpadCsv(
+      [
+        "date,user_id,name,email,type,all_calls,inbound_calls,outbound_calls,voicemails,missed,handled,answered,talk_duration,avg_talk_duration",
+        "2026-08-21,111,Winsalot Corp.,agent@winsalotcorp.com,user,156,2,154,0,0,122,2,40.52,0.33",
+        "2026-08-24,111,Winsalot Corp.,agent@winsalotcorp.com,user,164,2,162,1,1,125,1,70.7,0.57",
+      ].join("\n")
+    );
+
+    expect(parsed.summaries).toEqual([
+      expect.objectContaining({ agentName: "Henry Osuji", totalCalls: 320, inboundCalls: 4, voicemails: 1 }),
+    ]);
+  });
+
+  it("does not invent missing metrics: a CSV with no voicemails column defaults it to zero", () => {
+    const parsed = parseDialpadCsv(["User,Calls,Placed,Answered,Missed", "Agent One,10,8,6,2"].join("\n"));
+    expect(parsed.summaries[0]).toEqual(expect.objectContaining({ voicemails: 0, inboundCalls: 0 }));
+  });
+
+  it("derives the report period from the CSV's own date column", () => {
+    const range = extractDateRangeFromCsv(
+      ["date,name,all_calls", "2026-08-24,Agent One,10", "2026-08-21,Agent One,5", "2026-08-22,,0"].join("\n")
+    );
+    expect(range).toEqual({ periodStart: "2026-08-21", periodEnd: "2026-08-24" });
+  });
+
+  it("returns null when the CSV has no usable date column", () => {
+    expect(extractDateRangeFromCsv(["name,all_calls", "Agent One,10"].join("\n"))).toBeNull();
   });
 });

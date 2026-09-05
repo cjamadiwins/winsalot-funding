@@ -19,6 +19,8 @@ export type DialpadUserSummary = {
   placedCalls: number;
   answeredCalls: number;
   missedCalls: number;
+  inboundCalls: number;
+  voicemails: number;
   totalDurationSeconds: number;
   averageDurationSeconds: number;
 };
@@ -61,6 +63,8 @@ const HEADER_ALIASES = {
   // calls the agent answered, so it must come after "handled" here.
   answeredCalls: ["handled", "answered", "answered calls", "connected", "connected calls"],
   missedCalls: ["missed", "missed calls", "unanswered", "unanswered calls"],
+  inboundCalls: ["inbound calls", "inbound", "received calls"],
+  voicemails: ["voicemails", "voicemail", "total voicemails"],
   totalDuration: ["total duration", "duration total"],
   averageDuration: ["avg duration", "average duration", "average call duration"],
   // Dialpad's own stats exports report these two in fractional minutes
@@ -241,6 +245,8 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
         placedCalls: 0,
         answeredCalls: 0,
         missedCalls: 0,
+        inboundCalls: 0,
+        voicemails: 0,
         totalDurationSeconds: 0,
         averageDurationSeconds: 0,
         rowCount: 0,
@@ -252,6 +258,8 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
       accumulator.placedCalls += numberValue(valueFor(row, HEADER_ALIASES.placedCalls));
       accumulator.answeredCalls += numberValue(valueFor(row, HEADER_ALIASES.answeredCalls));
       accumulator.missedCalls += numberValue(valueFor(row, HEADER_ALIASES.missedCalls));
+      accumulator.inboundCalls += numberValue(valueFor(row, HEADER_ALIASES.inboundCalls));
+      accumulator.voicemails += numberValue(valueFor(row, HEADER_ALIASES.voicemails));
       accumulator.totalDurationSeconds += totalDurationSeconds;
       accumulator.rowCount += 1;
       accumulator.lastAverageDurationSeconds =
@@ -266,6 +274,8 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
       placedCalls: summary.placedCalls,
       answeredCalls: summary.answeredCalls,
       missedCalls: summary.missedCalls,
+      inboundCalls: summary.inboundCalls,
+      voicemails: summary.voicemails,
       totalDurationSeconds: summary.totalDurationSeconds,
       // A single contributing row's own average is preserved as-is; once
       // multiple rows are merged, per-row averages can't be averaged
@@ -309,6 +319,8 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
       placedCalls: 0,
       answeredCalls: 0,
       missedCalls: 0,
+      inboundCalls: 0,
+      voicemails: 0,
       totalDurationSeconds: 0,
       averageDurationSeconds: 0,
     };
@@ -316,6 +328,7 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
     summary.placedCalls += /outbound|placed/.test(call.direction.toLowerCase()) ? 1 : 0;
     summary.answeredCalls += isAnswered(call.status, call.durationSeconds) ? 1 : 0;
     summary.missedCalls += isMissed(call.status) ? 1 : 0;
+    summary.inboundCalls += /inbound|received/.test(call.direction.toLowerCase()) ? 1 : 0;
     summary.totalDurationSeconds += call.durationSeconds;
     grouped.set(key, summary);
   });
@@ -325,6 +338,34 @@ export function parseDialpadCsv(csv: string): ParsedDialpadReport {
     averageDurationSeconds: summary.totalCalls > 0 ? Math.round(summary.totalDurationSeconds / summary.totalCalls) : 0,
   }));
   return { summaries, calls };
+}
+
+// Fallback period detection straight from the CSV's own per-row "date"
+// column (Dialpad's User Statistics export has one such column, one row
+// per agent per day) - used only when the uploaded file's name didn't
+// carry a parseable date range, per spec ("Automatically detect the
+// start and end dates from the uploaded CSV filename or CSV contents").
+// Reuses the same row parser as parseDialpadCsv() rather than a second
+// implementation.
+export function extractDateRangeFromCsv(csv: string): { periodStart: string; periodEnd: string } | null {
+  let records: Record<string, string>[];
+  try {
+    records = toRecords(csv);
+  } catch {
+    return null;
+  }
+
+  let periodStart: string | null = null;
+  let periodEnd: string | null = null;
+  for (const row of records) {
+    const raw = valueFor(row, HEADER_ALIASES.startedAt);
+    if (!raw) continue;
+    const isoDate = raw.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) continue;
+    if (!periodStart || isoDate < periodStart) periodStart = isoDate;
+    if (!periodEnd || isoDate > periodEnd) periodEnd = isoDate;
+  }
+  return periodStart && periodEnd ? { periodStart, periodEnd } : null;
 }
 
 export function formatDialpadDuration(seconds: number) {
