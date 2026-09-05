@@ -479,6 +479,12 @@ export async function updateClientAction(clientId: string, formData: FormData): 
 
   if (error) {
     if (error.code === "23505") return { error: `The slug "${slug}" is already in use by another client.` };
+    // Logged (not just returned) so a schema-drift failure - e.g. a
+    // migration committed but not yet applied to this database, like
+    // sms_notification_number's 42703 "column does not exist" before
+    // migration 0140 was applied - shows up in server logs instead of only
+    // the opaque generic message below.
+    console.error("[leadgen] Failed to update client:", clientId, error);
     return { error: "Failed to update the client." };
   }
 
