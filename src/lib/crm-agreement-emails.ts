@@ -6,12 +6,19 @@ import { escapeHtml } from "./html";
 import { renderAgreementPdfBuffer } from "./crm-agreement-pdf";
 import {
   AGREEMENT_SERVICE_TYPE_LABELS,
-  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  pilotProgramLabel,
   signedAgreementNotificationTitle,
   intakeSubmittedNotificationTitle,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "./crm-agreement-types";
+
+// "your complimentary pilot program agreement" only ever applies to a
+// Free Pilot - a Paid Pilot's own outbound emails must never claim it's
+// complimentary/free (migration 0144).
+function pilotAgreementPhrase(agreement: Pick<CrmClientAgreementRow, "pilot_type">): string {
+  return agreement.pilot_type === "paid" ? "pilot program agreement" : "complimentary pilot program agreement";
+}
 
 // Every email in this module is sent via getEmailSender("growth") -
 // already "Winsalot Corp"-branded with no agent name (see
@@ -35,14 +42,14 @@ function ctaButtonHtml(url: string, label: string): string {
 export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, token: string): Promise<{ error?: string }> {
   const signUrl = `${getSiteUrl()}/agreement-sign/${token}`;
   const isPilot = agreement.campaign_type === "free_pilot";
-  const docLabel = isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Service Agreement";
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
   const subject = `Your Winsalot Corp ${docLabel} is ready to sign - ${agreement.legal_business_name}`;
   const greeting = agreement.contact_person.trim().split(/\s+/)[0] || "there";
 
   const text = [
     `Hi ${greeting},`,
     "",
-    `Your Winsalot Corp ${isPilot ? "complimentary pilot program agreement" : "service agreement"} for ${agreement.legal_business_name} is ready for your review and signature.`,
+    `Your Winsalot Corp ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${agreement.legal_business_name} is ready for your review and signature.`,
     "",
     `Please review and sign here: ${signUrl}`,
     "",
@@ -55,7 +62,7 @@ export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, t
 
   const html = textToSimpleHtml([
     `Hi ${escapeHtml(greeting)},`,
-    `Your Winsalot Corp ${isPilot ? "complimentary pilot program agreement" : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
+    `Your Winsalot Corp ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
   ]) + ctaButtonHtml(signUrl, `Review and Sign ${isPilot ? "Pilot Agreement" : "Agreement"}`) + textToSimpleHtml([
     "If you have any questions, just reply to this email.",
     "Best regards,<br>Winsalot Corp<br>Empowering Businesses, One Solution at a Time.",
@@ -96,7 +103,7 @@ export async function sendSignedAgreementClientCopy(
   template: Pick<CrmAgreementTemplateRow, "content">
 ): Promise<{ error?: string }> {
   const isPilot = agreement.campaign_type === "free_pilot";
-  const docLabel = isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Service Agreement";
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
   const pdfBuffer = await renderAgreementPdfBuffer({ agreement, template });
   const filename = `Winsalot-Corp-Agreement-${agreement.legal_business_name.replace(/[^a-z0-9]+/gi, "-")}.pdf`;
   const subject = `Signed: Winsalot Corp ${docLabel} - ${agreement.legal_business_name}`;

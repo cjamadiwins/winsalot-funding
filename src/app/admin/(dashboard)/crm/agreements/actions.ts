@@ -12,6 +12,8 @@ import {
   AGREEMENT_CURRENCIES,
   CAMPAIGN_TYPES,
   CLIENT_MANUAL_STATUSES,
+  PILOT_TYPES,
+  PAYMENT_STATUSES,
   isAgreementLocked,
   type AgreementServiceType,
   type AgreementTargetType,
@@ -22,11 +24,14 @@ import {
   type ClientManualStatus,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
+  type PaymentStatus,
+  type PilotType,
 } from "@/lib/crm-agreement-types";
 import { createAgreementToken } from "@/lib/crm-agreement-tokens";
 import { sendAgreementSignEmail, sendAgreementSignedAdminNotificationEmail, getGrowthCrmNotificationEmail } from "@/lib/crm-agreement-emails";
 import { notifyAdminsOfAgreementNotificationFailure } from "@/lib/crm-agreement-notifications";
 import { getSiteUrl } from "@/lib/site-url";
+import { createInvoiceAction, type LineItemInput } from "../invoices/actions";
 
 type ActionResult = { error?: string };
 
@@ -265,6 +270,7 @@ export type AgreementDraftInput = {
   monthlyTarget: number;
   monthlyFee: number;
   setupFee: number | null;
+  currency: AgreementCurrency;
   targetIndustries: string[];
   targetLocations: string[];
   campaignStartDate: string | null;
@@ -274,14 +280,19 @@ export type AgreementDraftInput = {
   renewalTerms: string | null;
   cancellationTerms: string | null;
   additionalNotes: string | null;
-  // Free Pilot Program fields - only read/validated when the agreement's
-  // own campaign_type is 'free_pilot' (campaign_type itself is set once
-  // at creation and never accepted here).
+  // Free/Paid Pilot Program fields - only read/validated when the
+  // agreement's own campaign_type is 'free_pilot' (campaign_type itself
+  // is set once at creation and never accepted here). monthlyFee/setupFee/
+  // currency above are reused as the Pilot Fee/Setup Fee/Currency when
+  // pilotType is 'paid' (see migration 0144's header comment) rather than
+  // duplicated into pilot-specific fields.
+  pilotType: PilotType;
   pilotDuration: string | null;
   pilotEndDate: string | null;
   expectedCallVolume: string | null;
   qualificationCriteria: string | null;
   resultsReviewDate: string | null;
+  paymentDueDate: string | null;
 };
 
 // Editing a draft (brief section 3/11 "Edit Draft"). Only ever allowed
@@ -291,7 +302,7 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
   const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const { data: agreement } = await supabase.from("crm_client_agreements").select("status, campaign_type").eq("id", agreementId).maybeSingle();
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("status, campaign_type, payment_status").eq("id", agreementId).maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be edited. Create a new version instead." };
 
@@ -301,6 +312,8 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
   if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Monthly target must be a positive number." };
 
   const isPilot = agreement.campaign_type === "free_pilot";
+  const pilotType: PilotType = isPilot && PILOT_TYPES.includes(input.pilotType) ? input.pilotType : "free";
+  const isPaidPilot = isPilot && pilotType === "paid";
 
   if (isPilot) {
     if (!input.pilotDuration?.trim()) return { error: "Pilot duration is required." };
@@ -310,42 +323,60 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
     if (!input.qualificationCriteria?.trim()) return { error: "Qualification criteria is required." };
     if (input.targetIndustries.length === 0) return { error: "At least one target industry is required." };
     if (input.targetLocations.length === 0) return { error: "At least one target location is required." };
+    if (isPaidPilot) {
+      if (!AGREEMENT_CURRENCIES.includes(input.currency)) return { error: "Invalid currency." };
+      if (input.monthlyFee < 0) return { error: "Pilot fee cannot be negative." };
+      if (input.setupFee !== null && input.setupFee < 0) return { error: "Setup fee cannot be negative." };
+    }
   } else {
     if (!AGREEMENT_BILLING_FREQUENCIES.includes(input.billingFrequency)) return { error: "Invalid billing frequency." };
     if (input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
   }
 
-  // A free pilot always shows Pilot Fee: $0 / Setup Fee: $0 - forced
-  // server-side regardless of what was submitted, even though the UI
-  // never renders fee inputs for a pilot draft.
-  const { error } = await supabase
-    .from("crm_client_agreements")
-    .update({
-      legal_business_name: input.legalBusinessName,
-      contact_person: input.contactPerson,
-      business_email: input.businessEmail,
-      service_type: input.serviceType,
-      target_type: input.targetType,
-      monthly_target: input.monthlyTarget,
-      monthly_fee: isPilot ? 0 : input.monthlyFee,
-      setup_fee: isPilot ? 0 : input.setupFee,
-      target_industries: input.targetIndustries,
-      target_locations: input.targetLocations,
-      campaign_start_date: input.campaignStartDate,
-      billing_frequency: input.billingFrequency,
-      payment_due_terms: input.paymentDueTerms,
-      initial_term: input.initialTerm,
-      renewal_terms: input.renewalTerms,
-      cancellation_terms: input.cancellationTerms,
-      additional_notes: input.additionalNotes,
-      pilot_duration: isPilot ? input.pilotDuration : null,
-      pilot_end_date: isPilot ? input.pilotEndDate : null,
-      expected_call_volume: isPilot ? input.expectedCallVolume : null,
-      qualification_criteria: isPilot ? input.qualificationCriteria : null,
-      results_review_date: isPilot ? input.resultsReviewDate : null,
-      updated_by: admin.id,
-    })
-    .eq("id", agreementId);
+  // A Free Pilot always shows Pilot Fee: $0 / Setup Fee: $0, forced
+  // server-side regardless of what was submitted - a Paid Pilot's actual
+  // amounts are only ever accepted when pilotType is explicitly 'paid'.
+  const updates: Record<string, unknown> = {
+    legal_business_name: input.legalBusinessName,
+    contact_person: input.contactPerson,
+    business_email: input.businessEmail,
+    service_type: input.serviceType,
+    target_type: input.targetType,
+    monthly_target: input.monthlyTarget,
+    monthly_fee: isPilot ? (isPaidPilot ? input.monthlyFee : 0) : input.monthlyFee,
+    setup_fee: isPilot ? (isPaidPilot ? input.setupFee : 0) : input.setupFee,
+    currency: input.currency,
+    target_industries: input.targetIndustries,
+    target_locations: input.targetLocations,
+    campaign_start_date: input.campaignStartDate,
+    billing_frequency: input.billingFrequency,
+    payment_due_terms: input.paymentDueTerms,
+    initial_term: input.initialTerm,
+    renewal_terms: input.renewalTerms,
+    cancellation_terms: input.cancellationTerms,
+    additional_notes: input.additionalNotes,
+    pilot_type: isPilot ? pilotType : "free",
+    pilot_duration: isPilot ? input.pilotDuration : null,
+    pilot_end_date: isPilot ? input.pilotEndDate : null,
+    expected_call_volume: isPilot ? input.expectedCallVolume : null,
+    qualification_criteria: isPilot ? input.qualificationCriteria : null,
+    results_review_date: isPilot ? input.resultsReviewDate : null,
+    payment_due_date: isPaidPilot ? input.paymentDueDate : null,
+    updated_by: admin.id,
+  };
+  // payment_status is mainly a quick-editor field the admin sets directly
+  // (see updatePilotPaymentStatusAction) - a plain draft edit leaves a
+  // deliberate choice (Pending/Paid/Partially Paid/Overdue/Waived)
+  // untouched. Two exceptions: it resets to 'not_required' the moment the
+  // pilot stops being a Paid Pilot (so a stale "Pending"/"Waived" never
+  // lingers on a Free Pilot or standard agreement), and it initializes to
+  // 'pending' the moment a pilot first becomes a Paid Pilot (so a fresh
+  // Paid Pilot never shows the contradictory "Payment Status: Not
+  // Required" before the admin has touched it).
+  if (!isPaidPilot) updates.payment_status = "not_required";
+  else if (agreement.payment_status === "not_required") updates.payment_status = "pending";
+
+  const { error } = await supabase.from("crm_client_agreements").update(updates).eq("id", agreementId);
 
   if (error) return { error: "Failed to save the draft." };
 
@@ -563,6 +594,134 @@ export async function updateAgreementInvoiceStatusAction(
     });
   }
 
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Paid Pilot invoicing/payment tracking (migration 0144). A Paid Pilot
+// never uses the lightweight crm_agreement_invoices tracker above (that
+// guard already refuses every pilot, paid or free) - instead it links to
+// a real crm_invoices row, the CRM's own actual invoicing system
+// (migration 0091), by calling createInvoiceAction directly rather than
+// re-implementing invoice creation here. payment_status is a separate,
+// admin-set summary field (Not Required/Pending/Paid/Partially Paid/
+// Overdue/Waived) independent of both pilot_status and any linked
+// invoice's own status - see the type's own comment in
+// crm-agreement-types.ts.
+// ---------------------------------------------------------------------
+
+// "Allow admin to generate ... an invoice using the existing CRM invoice
+// system. Pre-fill the client name and pilot amount where possible. Do
+// not duplicate the invoice system." - builds the exact FormData
+// createInvoiceAction itself expects and calls it unchanged, so a pilot's
+// invoice is a completely ordinary crm_invoices row, editable/sendable/
+// payable through the existing Invoices page like any other. Refuses to
+// run a second time for the same pilot ("If an invoice already exists for
+// the pilot, link to it instead of creating unnecessary duplicates").
+export async function generatePilotInvoiceAction(agreementId: string): Promise<ActionResult & { invoiceId?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, pilot_type, status, client_id, opportunity_id, monthly_fee, setup_fee, currency, contact_person, payment_due_date, invoice_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot" || agreement.pilot_type !== "paid") {
+    return { error: "Only a Paid Pilot can have an invoice generated." };
+  }
+  if (agreement.status !== "signed") return { error: "The pilot agreement must be signed before generating an invoice." };
+  if (agreement.invoice_id) return { error: "An invoice already exists for this pilot - open it from the Invoices page instead." };
+
+  const lineItems: LineItemInput[] = [{ description: "Pilot Fee", quantity: 1, unit_price: Number(agreement.monthly_fee) }];
+  if (agreement.setup_fee) lineItems.push({ description: "Setup Fee", quantity: 1, unit_price: Number(agreement.setup_fee) });
+
+  const formData = new FormData();
+  formData.set("client_id", agreement.client_id);
+  formData.set("billing_contact_name", agreement.contact_person);
+  formData.set("currency", agreement.currency);
+  formData.set("line_items", JSON.stringify(lineItems));
+  if (agreement.payment_due_date) formData.set("due_date", agreement.payment_due_date);
+
+  const result = await createInvoiceAction(formData);
+  if (result.error || !result.invoiceId) return { error: result.error ?? "Failed to generate the invoice." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ invoice_id: result.invoiceId, payment_status: "pending", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: `Invoice created, but failed to link it to the pilot: ${error.message}` };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "onboarding_invoice_recorded",
+    notes: `Invoice generated for paid pilot by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/invoices");
+  return { invoiceId: result.invoiceId };
+}
+
+// "If an invoice already exists for the pilot, link to it instead of
+// creating unnecessary duplicates" - covers an invoice the admin already
+// created manually on the Invoices page for this same client before
+// using Generate Invoice above. Never overwrites an existing link.
+export async function linkPilotInvoiceAction(agreementId: string, invoiceId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, pilot_type, client_id, invoice_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot" || agreement.pilot_type !== "paid") {
+    return { error: "Only a Paid Pilot can have an invoice linked." };
+  }
+  if (agreement.invoice_id) return { error: "This pilot already has a linked invoice." };
+
+  const { data: invoice } = await supabase.from("crm_invoices").select("id, client_id").eq("id", invoiceId).maybeSingle();
+  if (!invoice) return { error: "Invoice not found." };
+  if (invoice.client_id !== agreement.client_id) return { error: "That invoice belongs to a different client." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ invoice_id: invoiceId, payment_status: "pending", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: "Failed to link this invoice." };
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// The admin's own quick payment-status editor - deliberately independent
+// of pilot_status (never advances or is advanced by any lifecycle
+// action) and independent of a linked invoice's own status, since
+// "Waived"/"Not Required" have no invoice-status equivalent.
+export async function updatePilotPaymentStatusAction(agreementId: string, status: PaymentStatus): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  if (!PAYMENT_STATUSES.includes(status)) return { error: "Invalid payment status." };
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("campaign_type, pilot_type").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.campaign_type !== "free_pilot" || agreement.pilot_type !== "paid") {
+    return { error: "Payment status only applies to a Paid Pilot." };
+  }
+
+  const { error } = await supabase.from("crm_client_agreements").update({ payment_status: status, updated_by: admin.id }).eq("id", agreementId);
+  if (error) return { error: "Failed to update the payment status." };
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
   revalidatePath("/admin/crm/onboarding");
   return {};
 }
@@ -853,7 +1012,7 @@ export async function extendPilotAction(pilotAgreementId: string, input: ExtendP
 
   const { data: pilot } = await supabase.from("crm_client_agreements").select("*").eq("id", pilotAgreementId).maybeSingle();
   if (!pilot) return { error: "Pilot agreement not found." };
-  if (pilot.campaign_type !== "free_pilot") return { error: "Only a Free Pilot Program agreement can be extended." };
+  if (pilot.campaign_type !== "free_pilot") return { error: "Only a pilot agreement can be extended." };
   if (pilot.pilot_status !== "results_review") return { error: "The pilot must be in results review before it can be extended." };
 
   const { data: newAgreement, error: insertError } = await supabase
@@ -870,8 +1029,14 @@ export async function extendPilotAction(pilotAgreementId: string, input: ExtendP
       business_email: pilot.business_email,
       service_type: pilot.service_type,
       monthly_target: input.newTarget,
-      monthly_fee: 0,
-      setup_fee: 0,
+      // Carries the original pilot's own fee, setup fee, currency and pay
+      // terms forward unchanged - an extended pilot is the same Free or
+      // Paid Pilot continuing, not a fresh decision, so a Paid Pilot's
+      // fee must never silently reset to $0 on extension.
+      pilot_type: pilot.pilot_type,
+      monthly_fee: pilot.pilot_type === "paid" ? pilot.monthly_fee : 0,
+      setup_fee: pilot.pilot_type === "paid" ? pilot.setup_fee : 0,
+      currency: pilot.currency,
       target_industries: pilot.target_industries,
       target_locations: pilot.target_locations,
       campaign_start_date: pilot.campaign_start_date,
@@ -974,6 +1139,10 @@ export type ManageOnboardingRecordInput = {
   currency: AgreementCurrency;
   campaignStartDate: string | null;
   pilotEndDate: string | null;
+  // Only read/applied when campaignType is 'free_pilot' - see
+  // AgreementDraftInput's own comment on reusing monthlyFee/setupFee/
+  // currency above as the Pilot Fee/Setup Fee/Currency for a Paid Pilot.
+  pilotType: PilotType;
 };
 
 export async function updateOnboardingRecordAction(agreementId: string, input: ManageOnboardingRecordInput): Promise<ActionResult> {
@@ -1007,13 +1176,19 @@ export async function updateOnboardingRecordAction(agreementId: string, input: M
     if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Target must be a positive number." };
 
     const isPilot = input.campaignType === "free_pilot";
+    const pilotType: PilotType = isPilot && PILOT_TYPES.includes(input.pilotType) ? input.pilotType : "free";
+    const isPaidPilot = isPilot && pilotType === "paid";
     updates.service_type = input.serviceType;
     updates.monthly_target = input.monthlyTarget;
-    updates.monthly_fee = isPilot ? 0 : input.monthlyFee;
-    updates.setup_fee = isPilot ? 0 : input.setupFee;
+    updates.monthly_fee = isPilot ? (isPaidPilot ? input.monthlyFee : 0) : input.monthlyFee;
+    updates.setup_fee = isPilot ? (isPaidPilot ? input.setupFee : 0) : input.setupFee;
     updates.currency = input.currency;
     updates.campaign_start_date = input.campaignStartDate;
+    updates.pilot_type = isPilot ? pilotType : "free";
     if (isPilot) updates.pilot_end_date = input.pilotEndDate;
+    // Same payment_status initialization/reset rule as updateAgreementDraftAction above.
+    if (!isPaidPilot) updates.payment_status = "not_required";
+    else if (agreement.payment_status === "not_required") updates.payment_status = "pending";
 
     if (input.campaignType !== agreement.campaign_type) {
       const template = await getActiveAgreementTemplate(supabase, templateKindFor(input.campaignType));

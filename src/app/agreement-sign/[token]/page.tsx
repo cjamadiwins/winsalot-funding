@@ -4,7 +4,9 @@ import { resolveAgreementToken } from "@/lib/crm-agreement-tokens";
 import {
   renderAgreementTemplate,
   AGREEMENT_SERVICE_TYPE_LABELS,
-  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  PAYMENT_STATUS_LABELS,
+  pilotProgramLabel,
+  pilotTotalCost,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "@/lib/crm-agreement-types";
@@ -55,6 +57,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
 
   const sections = renderAgreementTemplate(template as Pick<CrmAgreementTemplateRow, "content">, agreement as CrmClientAgreementRow);
   const isPilot = agreement.campaign_type === "free_pilot";
+  const isPaid = isPilot && agreement.pilot_type === "paid";
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -64,7 +67,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">{isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Client Service Agreement"}</h2>
+        <h2 className="text-xl font-bold text-slate-900">{isPilot ? pilotProgramLabel(agreement) : "Client Service Agreement"}</h2>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="font-semibold text-slate-500">Client</dt>
@@ -78,12 +81,26 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
             <>
               <div>
                 <dt className="font-semibold text-slate-500">Pilot Fee</dt>
-                <dd className="text-slate-900">$0</dd>
+                <dd className="text-slate-900">{isPaid ? `$${Number(agreement.monthly_fee).toLocaleString()} ${agreement.currency}` : "$0"}</dd>
               </div>
               <div>
                 <dt className="font-semibold text-slate-500">Setup Fee</dt>
-                <dd className="text-slate-900">$0</dd>
+                <dd className="text-slate-900">{agreement.setup_fee ? `$${Number(agreement.setup_fee).toLocaleString()} ${agreement.currency}` : "$0"}</dd>
               </div>
+              {isPaid && (
+                <div>
+                  <dt className="font-semibold text-slate-500">Total Pilot Cost</dt>
+                  <dd className="text-slate-900">
+                    ${pilotTotalCost(agreement).toLocaleString()} {agreement.currency}
+                  </dd>
+                </div>
+              )}
+              {isPaid && (
+                <div>
+                  <dt className="font-semibold text-slate-500">Payment Status</dt>
+                  <dd className="text-slate-900">{PAYMENT_STATUS_LABELS[agreement.payment_status as keyof typeof PAYMENT_STATUS_LABELS]}</dd>
+                </div>
+              )}
               <div>
                 <dt className="font-semibold text-slate-500">End Date</dt>
                 <dd className="text-slate-900">{formatDate(agreement.pilot_end_date)}</dd>
@@ -109,7 +126,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
           {sections.map((section) => (
             <div key={section.key}>
               <h3 className="text-[15px] font-bold text-slate-900">{section.title}</h3>
-              <p className="mt-1 text-sm leading-relaxed text-slate-700">{section.body}</p>
+              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">{section.body}</p>
             </div>
           ))}
 

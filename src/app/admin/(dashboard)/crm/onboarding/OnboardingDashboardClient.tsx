@@ -10,7 +10,7 @@ import {
   startPilotResultsReviewAction,
   deleteOnboardingRecordAction,
 } from "../agreements/actions";
-import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus } from "@/lib/crm-agreement-types";
+import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus } from "@/lib/crm-agreement-types";
 import ManageOnboardingRecordModal from "./ManageOnboardingRecordModal";
 
 // Everything the Manage modal's Edit form needs - kept as its own type so
@@ -31,6 +31,7 @@ export type ManageFields = {
   currency: AgreementCurrency;
   campaignStartDate: string | null;
   pilotEndDate: string | null;
+  pilotType: PilotType;
   isLocked: boolean;
 };
 
@@ -49,6 +50,8 @@ export type OnboardingRow = {
   nextAction: string;
   agreementStatus: string;
   isPilot: boolean;
+  pilotType: PilotType;
+  paymentStatus: PaymentStatus;
   pilotStatus: string;
   intakeConfigId: string | null;
   intakeStatus: string;
@@ -124,7 +127,9 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                 <td className="px-3 py-3 text-slate-600">{row.campaignTypeLabel}</td>
                 <td className="px-3 py-3 text-slate-600">{row.serviceTypeLabel}</td>
                 <td className="px-3 py-3 text-slate-600">{row.monthlyTarget}</td>
-                <td className="px-3 py-3 text-slate-600">{row.isPilot ? "$0 (Free Pilot)" : `$${row.monthlyFee.toLocaleString()}`}</td>
+                <td className="px-3 py-3 text-slate-600">
+                  {row.isPilot ? (row.pilotType === "paid" ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)` : "$0 (Free Pilot)") : `$${row.monthlyFee.toLocaleString()}`}
+                </td>
                 <td className="px-3 py-3">
                   <span className="inline-flex rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-800">{row.stage}</span>
                 </td>

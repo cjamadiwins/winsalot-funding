@@ -57,6 +57,43 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
 export const PILOT_STATUSES = ["not_started", "active", "results_review", "converted", "extended", "closed"] as const;
 export type PilotStatus = (typeof PILOT_STATUSES)[number];
 
+// A pilot (campaign_type = 'free_pilot') can now be either Free or Paid -
+// deliberately a separate field from campaign_type rather than a rename
+// of it, so every existing "free_pilot" row, constraint, and code path
+// keeps its exact current meaning ("this is a pilot"); pilot_type is the
+// new, narrower question of whether *this* pilot is charged for
+// (migration 0144). Never confuse this with PilotStatus above - Pilot
+// Status is the lifecycle (Active/Results Review/...), Pilot Type is
+// purely financial and, once signed, locked like the fee fields
+// themselves (see the guard trigger in migration 0144).
+export const PILOT_TYPES = ["free", "paid"] as const;
+export type PilotType = (typeof PILOT_TYPES)[number];
+
+export const PILOT_TYPE_LABELS: Record<PilotType, string> = {
+  free: "Free Pilot",
+  paid: "Paid Pilot",
+};
+
+// A pilot's payment summary - deliberately independent of both
+// PilotStatus (the lifecycle) and a linked invoice's own status (an
+// invoice may not exist at all yet, or the admin may need to record
+// "Waived" or "Not Required", neither of which any crm_invoices status
+// value means) - the admin sets this directly (see
+// updatePilotPaymentStatusAction). Standard (non-pilot) agreements never
+// read this column; it stays at its harmless 'not_required' default for
+// them.
+export const PAYMENT_STATUSES = ["not_required", "pending", "paid", "partially_paid", "overdue", "waived"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  not_required: "Not Required",
+  pending: "Pending",
+  paid: "Paid",
+  partially_paid: "Partially Paid",
+  overdue: "Overdue",
+  waived: "Waived",
+};
+
 export const AGREEMENT_CURRENCIES = ["CAD", "USD"] as const;
 export type AgreementCurrency = (typeof AGREEMENT_CURRENCIES)[number];
 
@@ -133,6 +170,18 @@ export type CrmClientAgreementRow = {
   expected_call_volume: string | null;
   qualification_criteria: string | null;
   results_review_date: string | null;
+
+  // Free-or-paid pilot fields (migration 0144) - pilot_type only ever
+  // meaningful when campaign_type is 'free_pilot'; a Paid Pilot's actual
+  // amounts still live in monthly_fee/setup_fee/currency above (reused,
+  // not duplicated - see that migration's header comment). payment_status/
+  // payment_due_date/invoice_id are never locked by the signed-guard
+  // trigger, since payment happens after signing, exactly like
+  // pilot_status above.
+  pilot_type: PilotType;
+  payment_status: PaymentStatus;
+  payment_due_date: string | null;
+  invoice_id: string | null;
 
   admin_reviewed_confirmation: boolean;
 
@@ -336,6 +385,82 @@ export function buildAgreementTargetStatement(agreement: Pick<CrmClientAgreement
 
 export type RenderedAgreementSection = { key: string; title: string; body: string };
 
+// Whether a pilot agreement is a Paid Pilot - the single source of truth
+// every pilot-fee display (admin preview, PDF, public sign page, emails)
+// uses so none of them can disagree. A standard (non-pilot) agreement is
+// never "paid pilot" regardless of its own pilot_type value (which stays
+// at its harmless default for those rows).
+export function isPaidPilot(agreement: Pick<CrmClientAgreementRow, "campaign_type" | "pilot_type">): boolean {
+  return agreement.campaign_type === "free_pilot" && agreement.pilot_type === "paid";
+}
+
+// Pilot Fee + Setup Fee - the one place this addition happens, so the
+// admin preview, PDF, sign page, and invoice pre-fill can never compute a
+// different total from the same agreement.
+export function pilotTotalCost(agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "setup_fee">): number {
+  return Number(agreement.monthly_fee) + Number(agreement.setup_fee ?? 0);
+}
+
+// The document title used everywhere a pilot's own program type is named
+// (admin badge, PDF title, public sign page heading, outbound emails) -
+// never calls a Paid Pilot "complimentary", and never calls a Free Pilot
+// anything but complimentary, so wording can't silently drift stale if a
+// pilot is later converted from one to the other (a new agreement version
+// re-derives this fresh from its own pilot_type every time).
+export const COMPLIMENTARY_PILOT_PROGRAM_LABEL = "Complimentary Pilot Program";
+export const PAID_PILOT_PROGRAM_LABEL = "Paid Pilot Program";
+
+export function pilotProgramLabel(agreement: Pick<CrmClientAgreementRow, "pilot_type">): string {
+  return agreement.pilot_type === "paid" ? PAID_PILOT_PROGRAM_LABEL : COMPLIMENTARY_PILOT_PROGRAM_LABEL;
+}
+
+// Dynamic "Pilot Fees" section body (spec: "Replace the existing 'Fees'
+// section with dynamic wording based on the selected pilot type" / "Do
+// not leave any hardcoded '$0' wording if the pilot is paid") - the only
+// place this wording is generated, so the admin preview, PDF, and public
+// sign page can never show three different numbers for the same pilot.
+// A standard (non-pilot) agreement never calls this - it keeps using its
+// own template-stored Fees wording untouched.
+export function buildPilotFeesStatement(
+  agreement: Pick<CrmClientAgreementRow, "pilot_type" | "monthly_fee" | "setup_fee" | "currency">
+): string {
+  const setupFee = Number(agreement.setup_fee ?? 0);
+  if (agreement.pilot_type === "paid") {
+    const pilotFee = Number(agreement.monthly_fee);
+    const total = pilotFee + setupFee;
+    return [
+      "This is a paid pilot program.",
+      "",
+      `Pilot Fee: $${pilotFee.toLocaleString()}`,
+      `Setup Fee: $${setupFee.toLocaleString()}`,
+      `Total Pilot Cost: $${total.toLocaleString()}`,
+      `Currency: ${agreement.currency}`,
+      "",
+      "Payment terms will follow the amount and due date stated in this pilot agreement or invoice.",
+    ].join("\n");
+  }
+  return [
+    "This pilot program is being provided at no charge for the agreed pilot scope and period.",
+    "",
+    "Pilot Fee: $0",
+    `Setup Fee: $${setupFee.toLocaleString()}`,
+    "",
+    "Any services requested outside the agreed pilot scope may require separate approval and pricing.",
+  ].join("\n");
+}
+
+// Dynamic "Pilot Program Scope" section body - the seeded pilot template
+// (migration 0098) originally described every pilot as "a complimentary,
+// time-limited pilot program"; that claim is only ever true for a Free
+// Pilot, so this function is the one place that wording is generated,
+// exactly like buildPilotFeesStatement above, rather than left as static
+// template text a Paid Pilot's agreement would otherwise inherit
+// unchanged.
+export function buildPilotServicesStatement(agreement: Pick<CrmClientAgreementRow, "pilot_type" | "service_type">): string {
+  const descriptor = agreement.pilot_type === "paid" ? "a" : "a complimentary,";
+  return `Winsalot Corp will provide ${descriptor} time-limited pilot program to the Client, consisting of prospecting, outreach, and qualification activities directed at the Client's target industries and locations, for the purpose of generating ${serviceNounPlural(agreement.service_type)} on the Client's behalf, for the agreed pilot duration and scope set out in this Agreement.`;
+}
+
 // Renders every template section for one agreement, substituting
 // placeholders. The "monthly_target" section's body is fully replaced by
 // buildAgreementTargetStatement() (rather than just token-substituted)
@@ -343,10 +468,14 @@ export type RenderedAgreementSection = { key: string; title: string; body: strin
 // regardless of what the template's own stored body text says - the
 // template still carries a human-readable copy of it for the preview/
 // legal-review screen, but this function is the single source of truth
-// for what actually reaches the client.
+// for what actually reaches the client. A pilot's "fees" and "services"
+// sections are likewise always fully replaced by buildPilotFeesStatement()/
+// buildPilotServicesStatement() (never the template's own stored $0/
+// "complimentary" wording), so a Paid Pilot's agreement never inherits a
+// stale free-pilot claim - see those functions' own comments.
 export function renderAgreementTemplate(
   template: Pick<CrmAgreementTemplateRow, "content">,
-  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target">
+  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target" | "campaign_type" | "pilot_type" | "monthly_fee" | "setup_fee" | "currency">
 ): RenderedAgreementSection[] {
   const replacements: Record<string, string> = {
     service_noun_singular: serviceNounSingular(agreement.service_type),
@@ -354,10 +483,17 @@ export function renderAgreementTemplate(
     service_label: serviceLabel(agreement.service_type),
     monthly_target: String(agreement.monthly_target),
   };
+  const isPilot = agreement.campaign_type === "free_pilot";
 
   return template.content.map((section) => {
     if (section.key === "monthly_target") {
       return { ...section, body: buildAgreementTargetStatement(agreement) };
+    }
+    if (isPilot && section.key === "fees") {
+      return { ...section, title: "Pilot Fees", body: buildPilotFeesStatement(agreement) };
+    }
+    if (isPilot && section.key === "services") {
+      return { ...section, body: buildPilotServicesStatement(agreement) };
     }
     const body = section.body.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => replacements[token] ?? `{{${token}}}`);
     return { ...section, title: section.title.replace(/\{\{(\w+)\}\}/g, (_m, t: string) => replacements[t] ?? `{{${t}}}`), body };
@@ -382,15 +518,24 @@ export const AGREED_TARGET_NOTICE =
 export const PILOT_TARGET_NOTICE =
   "This target is based on your signed pilot program agreement. Please contact Winsalot Corp if a change is required.";
 
-// The exact required Free Pilot Program disclosure paragraph (verbatim,
-// no interpolation needed - it reads generically). Also baked directly
-// into the seeded pilot template's own body (migration 0098) so the
-// agreement preview/PDF/public sign page all show identical wording;
-// exported here for reuse (e.g. the fee-summary badge) and for tests.
-export const PILOT_PROGRAM_DISCLOSURE =
-  "Winsalot Corp will provide this pilot program at no charge for the agreed period and scope. The agreed number of qualified leads or appointments is a target and not a guarantee. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp does not guarantee that a lead or appointment will result in a sale. The pilot will end on the stated end date unless both parties agree in writing to extend it or begin a paid monthly campaign.";
-
-export const COMPLIMENTARY_PILOT_PROGRAM_LABEL = "Complimentary Pilot Program";
+// The required Pilot Terms and No Guarantee disclosure (migration 0144) -
+// deliberately written to work for BOTH a Free Pilot and a Paid Pilot
+// (never claims the pilot is free, never says "at no charge"), replacing
+// the old free-only wording that assumed every pilot was complimentary.
+// Also baked directly into the seeded pilot template's own body (migration
+// 0098) so the agreement preview/PDF/public sign page all show identical
+// wording; exported here for reuse and for tests.
+export const PILOT_PROGRAM_DISCLOSURE = [
+  "Winsalot Corp will provide the pilot services for the agreed period, scope, target market, and deliverables.",
+  "",
+  "A pilot program is intended to test campaign performance and service fit.",
+  "",
+  "Winsalot Corp does not guarantee a specific number of sales, closed deals, revenue, funding approvals, or customer conversions unless a specific deliverable is expressly stated in the agreement.",
+  "",
+  "Where the pilot includes a defined target number of leads or appointments, Winsalot Corp will work toward that agreed target during the pilot period.",
+  "",
+  "At the end of the pilot, both parties may review the results and decide whether to continue, extend, modify, or end the service.",
+].join("\n");
 
 // ---------------------------------------------------------------------
 // Onboarding stage - derived, never stored (see migration 0097's header
