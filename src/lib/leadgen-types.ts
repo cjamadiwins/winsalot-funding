@@ -91,6 +91,16 @@ export type LeadgenClientRow = {
   // falls back to contact_email/contact_name, so a client without this
   // set keeps its prior single-recipient behavior unchanged.
   appointment_notification_emails: string[] | null;
+  // Admin-editable "Client SMS Notification Number" (migration 0140) -
+  // who gets the immediate on-booking SMS and the 24-hour/1-hour business
+  // SMS reminders for this client's appointments, via the 'client'
+  // recipient type in src/lib/appointment-sms.ts. Null means this client
+  // hasn't set one yet - every send path skips the client SMS gracefully
+  // rather than failing the booking flow. Deliberately a single number
+  // (unlike appointment_notification_emails' list) and independent of
+  // contact_phone, which is this client's general contact number and not
+  // necessarily the right number for automated appointment texts.
+  sms_notification_number: string | null;
 };
 
 export const LEADGEN_CAMPAIGN_STATUSES = ["active", "paused", "completed"] as const;
@@ -857,18 +867,21 @@ export type LeadgenBusinessAppointmentReminderSettingsRow = {
 
 // ---------------------------------------------------------------------
 // SMS appointment reminders (supabase/migrations/0125_appointment_sms_
-// reminders.sql) - alongside the email reminder above, never replacing
-// it. recipient_type separates the prospect-facing reminder (gated on
-// sms_consent + a valid phone + not opted out) from the internal
-// ADMIN_PHONE_NUMBER notification (neither gate applies) as two
-// fully independent claims per occurrence. See
-// src/lib/appointment-sms.ts for the claim/send logic shared with the
-// Growth CRM's equivalent table.
+// reminders.sql, extended by 0140_leadgen_client_sms_notifications.sql) -
+// alongside the email reminder above, never replacing it. recipient_type
+// separates the prospect-facing reminder (gated on sms_consent + a valid
+// phone + not opted out) from the internal ADMIN_PHONE_NUMBER
+// notification and the leadgen_clients.sms_notification_number
+// notification (neither gate applies to either of those) as fully
+// independent claims per occurrence. 'client' is leadgen-only - the
+// Growth CRM's winsalot_appointment_sms_reminders table still only
+// allows 'prospect'/'admin'. See src/lib/appointment-sms.ts for the
+// claim/send logic shared with the Growth CRM's equivalent table.
 // ---------------------------------------------------------------------
 export const LEADGEN_SMS_REMINDER_TYPES = ["24_hour_reminder", "1_hour_reminder"] as const;
 export type LeadgenSmsReminderType = (typeof LEADGEN_SMS_REMINDER_TYPES)[number];
 
-export const LEADGEN_SMS_RECIPIENT_TYPES = ["prospect", "admin"] as const;
+export const LEADGEN_SMS_RECIPIENT_TYPES = ["prospect", "admin", "client"] as const;
 export type LeadgenSmsRecipientType = (typeof LEADGEN_SMS_RECIPIENT_TYPES)[number];
 
 export const LEADGEN_SMS_REMINDER_STATUSES = ["sending", "sent", "delivered", "failed", "skipped", "opted_out"] as const;

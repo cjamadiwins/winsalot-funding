@@ -433,6 +433,7 @@ export async function createClientAction(formData: FormData): Promise<ActionResu
       calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
       appointment_notification_emails: emailListOrNull(formData, "appointment_notification_emails"),
+      sms_notification_number: textOrNull(formData, "sms_notification_number"),
       created_by: admin.id,
     })
     .select("id")
@@ -470,6 +471,7 @@ export async function updateClientAction(clientId: string, formData: FormData): 
       calendly_event_type_uri: textOrNull(formData, "calendly_event_type_uri"),
       notes: textOrNull(formData, "notes"),
       appointment_notification_emails: emailListOrNull(formData, "appointment_notification_emails"),
+      sms_notification_number: textOrNull(formData, "sms_notification_number"),
       active: formData.get("active") !== "false",
       updated_at: new Date().toISOString(),
     })

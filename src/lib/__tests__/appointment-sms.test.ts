@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildAdminReminderSms,
   buildAppointmentConfirmationSms,
+  buildClientAppointmentBookingSms,
+  buildClientAppointmentReminderSms,
   buildProspectReminderSms,
   formatSmsDateLabel,
+  formatSmsDateWithWeekdayLabel,
   formatSmsTimeLabel,
   isAppointmentToday,
   isValidMobileNumber,
@@ -135,6 +138,84 @@ describe("buildAdminReminderSms", () => {
       timeLabel: "3:00 PM EST",
     });
     expect(message.length).toBeLessThanOrEqual(160);
+  });
+});
+
+describe("buildClientAppointmentBookingSms", () => {
+  it("matches the brief's exact multi-line format", () => {
+    const message = buildClientAppointmentBookingSms({
+      businessName: "Brent's Essentials",
+      prospectName: "John Smith",
+      dateLabel: "Friday, Sep 5",
+      timeLabel: "12:00 PM EDT",
+      prospectPhone: "416-555-1234",
+    });
+    expect(message).toBe(
+      ["New appointment booked for Brent's Essentials", "John Smith", "Friday, Sep 5 at 12:00 PM EDT", "Phone: 416-555-1234", "Booked by Winsalot Corp."].join("\n")
+    );
+  });
+
+  it("omits the phone line when no prospect phone is on file", () => {
+    const message = buildClientAppointmentBookingSms({
+      businessName: "Mantra Collab",
+      prospectName: "Jane Doe",
+      dateLabel: "Sep 5",
+      timeLabel: "9:00 AM EDT",
+      prospectPhone: null,
+    });
+    expect(message).not.toContain("Phone:");
+    expect(message.endsWith("Booked by Winsalot Corp.")).toBe(true);
+  });
+
+  it("falls back to a generic prospect label when the name is blank", () => {
+    const message = buildClientAppointmentBookingSms({
+      businessName: "Brent's Essentials",
+      prospectName: null,
+      dateLabel: "Sep 5",
+      timeLabel: "12:00 PM EDT",
+      prospectPhone: null,
+    });
+    expect(message).toContain("New prospect");
+  });
+});
+
+describe("buildClientAppointmentReminderSms", () => {
+  it("matches the brief's exact wording for the 24-hour ('tomorrow') case", () => {
+    const message = buildClientAppointmentReminderSms({
+      businessName: "Brent's Essentials",
+      prospectName: "John Smith",
+      isToday: false,
+      timeLabel: "12:00 PM",
+    });
+    expect(message).toBe("Reminder: Brent's Essentials has an appointment with John Smith tomorrow at 12:00 PM.");
+  });
+
+  it("says 'today' for the 1-hour case", () => {
+    const message = buildClientAppointmentReminderSms({
+      businessName: "Mantra Collab",
+      prospectName: "Jane Doe",
+      isToday: true,
+      timeLabel: "9:00 AM EDT",
+    });
+    expect(message).toContain("today at 9:00 AM EDT");
+  });
+
+  it("never exceeds one SMS segment, shrinking the prospect name before the business name", () => {
+    const message = buildClientAppointmentReminderSms({
+      businessName: "B".repeat(80),
+      prospectName: "P".repeat(80),
+      isToday: false,
+      timeLabel: "3:00 PM EST",
+    });
+    expect(message.length).toBeLessThanOrEqual(160);
+    expect(message).toContain("B".repeat(80));
+  });
+});
+
+describe("formatSmsDateWithWeekdayLabel", () => {
+  it("formats the appointment date with its weekday, in its own timezone", () => {
+    const ms = Date.UTC(2026, 8, 5, 16, 0, 0); // Sep 5, 2026 is a Saturday
+    expect(formatSmsDateWithWeekdayLabel(ms, "America/Toronto")).toBe("Saturday, Sep 5");
   });
 });
 
