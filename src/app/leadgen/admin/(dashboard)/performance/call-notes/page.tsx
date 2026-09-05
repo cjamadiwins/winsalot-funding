@@ -2,6 +2,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminCallLogReport, { type AdminCallLogEntry } from "@/components/call-log/AdminCallLogReport";
 import { isCallLogOutcome, type CallLogRow } from "@/lib/call-log";
+import { updateCallLogClientVisibleNoteAction } from "./actions";
 
 type SearchParams = Promise<{ agent?: string; outcome?: string; client?: string }>;
 type AgentRow = { id: string; full_name: string; email: string };
@@ -18,7 +19,7 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
 
   let query = admin
     .from("leadgen_call_logs")
-    .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_id, leadgen_clients(name)")
+    .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_visible_note, client_id, leadgen_clients(name)")
     .order("created_at", { ascending: false })
     .limit(1000);
 
@@ -54,6 +55,7 @@ export default async function LeadgenAdminCallLogPage({ searchParams }: { search
         options: ((clients ?? []) as ClientRow[]).map((client) => ({ id: client.id, name: client.name })),
         selected: params.client ?? "all",
       }}
+      clientVisibleNote={{ updateAction: updateCallLogClientVisibleNoteAction }}
       errorMessage={error?.message}
     />
   );

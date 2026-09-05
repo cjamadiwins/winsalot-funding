@@ -15,7 +15,7 @@ export default async function LeadgenAgentCallLogPage() {
   const [{ data }, { data: clients }] = await Promise.all([
     supabase
       .from("leadgen_call_logs")
-      .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_id, leadgen_clients(name)")
+      .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_visible_note, client_id, leadgen_clients(name)")
       .order("created_at", { ascending: false })
       .limit(100),
     supabase.from("leadgen_clients").select("id, name").eq("active", true).order("name"),
