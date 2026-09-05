@@ -63,34 +63,34 @@ function normalized(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
-// Ground truth for a Dialpad row's display name and role is the real CRM
-// / Lead Gen agent directory whenever it actually holds one for this
-// email or name - never a hardcoded assumption ("Use the existing
-// Winsalot agent mapping already present in the CRM... Do not hardcode
-// assumptions if the mapping already exists"). A directory row whose
-// full_name is still just its own login email (no one has renamed it
-// yet) carries no more information than the CSV already has, so it falls
-// through to the cosmetic DIALPAD_IDENTITIES fallback (dialpad-report.ts)
-// instead of replacing a good name with an email address - that fallback,
-// and the raw CSV name below it, are the only hardcoding left, and only
-// for Dialpad seats with no real per-person CRM record at all yet.
-function resolveIdentity(
+// The curated DIALPAD_IDENTITIES table (dialpad-report.ts) exists
+// specifically for shared Dialpad seats that have no genuine per-person
+// CRM record - e.g. a company inbox whose crm_users/leadgen_users row is
+// still just its own login email, or (as found for info@winsalotcorp.com)
+// a generic company name like "Winsalot Corp" rather than an actual
+// person - so it takes priority whenever it has an entry for this email:
+// a shared/generic directory row that carries no more real information
+// than the CSV already has can never downgrade a name a human already
+// curated. Any Dialpad email NOT in that table still prefers a real,
+// genuinely per-person directory match over inventing anything ("Use the
+// existing Winsalot agent mapping already present in the CRM... Do not
+// hardcode assumptions if the mapping already exists").
+export function resolveIdentity(
   summary: { agentName: string; agentEmail: string | null },
   directory: UserDirectoryEntry[]
 ): { agentName: string; agentRole: "admin" | "agent" } {
+  const mapped = resolveDialpadIdentity(summary.agentName, summary.agentEmail);
+  if (mapped.agentRole) return { agentName: mapped.agentName, agentRole: mapped.agentRole };
+
   const email = normalized(summary.agentEmail);
   const name = normalized(summary.agentName);
   const matches = directory.filter((user) => (email && normalized(user.email) === email) || (name && normalized(user.full_name) === name));
-  const role: "admin" | "agent" = matches.some((user) => user.role === "admin")
-    ? "admin"
-    : matches.length > 0
-      ? "agent"
-      : (resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentRole ?? "agent");
+  const role: "admin" | "agent" = matches.some((user) => user.role === "admin") ? "admin" : matches.length > 0 ? "agent" : "agent";
 
   const namedMatch = matches.find((user) => user.full_name && normalized(user.full_name) !== normalized(user.email));
   if (namedMatch) return { agentName: namedMatch.full_name, agentRole: role };
 
-  return { agentName: resolveDialpadIdentity(summary.agentName, summary.agentEmail).agentName, agentRole: role };
+  return { agentName: mapped.agentName, agentRole: role };
 }
 
 export async function loadDialpadDashboardData(supabase: SupabaseClient, reportId?: string): Promise<DialpadDashboardData> {
