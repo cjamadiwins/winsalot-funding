@@ -15,6 +15,9 @@ import {
   convertPilotToPaidCampaignAction,
   extendPilotAction,
   closePilotAction,
+  generatePilotInvoiceAction,
+  linkPilotInvoiceAction,
+  updatePilotPaymentStatusAction,
   type AgreementDraftInput,
   type PilotResultsInput,
   type ConvertPilotInput,
@@ -26,16 +29,26 @@ import {
   AGREEMENT_SERVICE_TYPE_LABELS,
   AGREEMENT_TARGET_TYPES,
   AGREEMENT_BILLING_FREQUENCIES,
-  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  AGREEMENT_CURRENCIES,
+  PILOT_TYPES,
+  PILOT_TYPE_LABELS,
+  PAYMENT_STATUSES,
+  PAYMENT_STATUS_LABELS,
+  pilotProgramLabel,
+  pilotTotalCost,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
+  type AgreementCurrency,
+  type PilotType,
+  type PaymentStatus,
   type CrmClientAgreementRow,
   type CrmAgreementEventRow,
   type CrmAgreementInvoiceRow,
   type CrmPilotResultsRow,
   type RenderedAgreementSection,
 } from "@/lib/crm-agreement-types";
+import type { CrmInvoiceRow } from "@/lib/crm-invoices-types";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -51,6 +64,7 @@ function toDraftInput(a: CrmClientAgreementRow): AgreementDraftInput {
     monthlyTarget: a.monthly_target,
     monthlyFee: a.monthly_fee,
     setupFee: a.setup_fee,
+    currency: a.currency,
     targetIndustries: a.target_industries,
     targetLocations: a.target_locations,
     campaignStartDate: a.campaign_start_date,
@@ -60,13 +74,17 @@ function toDraftInput(a: CrmClientAgreementRow): AgreementDraftInput {
     renewalTerms: a.renewal_terms,
     cancellationTerms: a.cancellation_terms,
     additionalNotes: a.additional_notes,
+    pilotType: a.pilot_type,
     pilotDuration: a.pilot_duration,
     pilotEndDate: a.pilot_end_date,
     expectedCallVolume: a.expected_call_volume,
     qualificationCriteria: a.qualification_criteria,
     resultsReviewDate: a.results_review_date,
+    paymentDueDate: a.payment_due_date,
   };
 }
+
+type LinkableInvoice = Pick<CrmInvoiceRow, "id" | "invoice_number" | "status" | "total" | "currency">;
 
 export default function AgreementDetailClient({
   agreement,
@@ -77,6 +95,8 @@ export default function AgreementDetailClient({
   invoice,
   openRecordInvoice,
   pilotResults,
+  linkedPilotInvoice,
+  linkableInvoices,
   retryAdminNotificationAction,
 }: {
   agreement: CrmClientAgreementRow;
@@ -87,10 +107,17 @@ export default function AgreementDetailClient({
   invoice: CrmAgreementInvoiceRow | null;
   openRecordInvoice: boolean;
   pilotResults: CrmPilotResultsRow | null;
+  // Paid Pilot invoicing (migration 0144) - the real crm_invoices row
+  // already linked to this pilot, if any, and (when none is linked yet)
+  // the client's other invoices the admin could link instead of
+  // generating a new one.
+  linkedPilotInvoice: LinkableInvoice | null;
+  linkableInvoices: LinkableInvoice[];
   retryAdminNotificationAction: (agreementId: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const isPilot = agreement.campaign_type === "free_pilot";
+  const isPaidPilot = isPilot && agreement.pilot_type === "paid";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [copyLinkMessage, setCopyLinkMessage] = useState<string | null>(null);
@@ -104,6 +131,8 @@ export default function AgreementDetailClient({
     dateSent: "",
     paymentDueDate: "",
   });
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(agreement.payment_status);
+  const [selectedLinkInvoiceId, setSelectedLinkInvoiceId] = useState("");
   const [resultsForm, setResultsForm] = useState({
     callsCompleted: pilotResults?.calls_completed?.toString() ?? "",
     decisionMakersReached: pilotResults?.decision_makers_reached?.toString() ?? "",
@@ -144,7 +173,15 @@ export default function AgreementDetailClient({
       <div className="mt-2 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{agreement.legal_business_name}</h1>
         <div className="flex items-center gap-2">
-          {isPilot && <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">{COMPLIMENTARY_PILOT_PROGRAM_LABEL}</span>}
+          {isPilot && (
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                isPaidPilot ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {pilotProgramLabel(agreement)}
+            </span>
+          )}
           <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold capitalize text-indigo-800">{agreement.status}</span>
         </div>
       </div>
@@ -223,6 +260,15 @@ export default function AgreementDetailClient({
 
             {isPilot ? (
               <>
+                <Field label="Pilot Type">
+                  <select value={draft.pilotType} onChange={(e) => set("pilotType", e.target.value as PilotType)} className={inputClass}>
+                    {PILOT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {PILOT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="Pilot Duration (e.g. 6 weeks)">
                   <input value={draft.pilotDuration ?? ""} onChange={(e) => set("pilotDuration", e.target.value || null)} className={inputClass} />
                 </Field>
@@ -238,6 +284,35 @@ export default function AgreementDetailClient({
                 <Field label="Results-Review Date">
                   <input type="date" value={draft.resultsReviewDate ?? ""} onChange={(e) => set("resultsReviewDate", e.target.value || null)} className={inputClass} />
                 </Field>
+                {draft.pilotType === "paid" && (
+                  <>
+                    <Field label="Pilot Fee">
+                      <input type="number" min={0} step="0.01" value={draft.monthlyFee} onChange={(e) => set("monthlyFee", Number(e.target.value))} className={inputClass} />
+                    </Field>
+                    <Field label="Setup Fee (if applicable)">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={draft.setupFee ?? ""}
+                        onChange={(e) => set("setupFee", e.target.value ? Number(e.target.value) : null)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Currency">
+                      <select value={draft.currency} onChange={(e) => set("currency", e.target.value as AgreementCurrency)} className={inputClass}>
+                        {AGREEMENT_CURRENCIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Payment Due Date">
+                      <input type="date" value={draft.paymentDueDate ?? ""} onChange={(e) => set("paymentDueDate", e.target.value || null)} className={inputClass} />
+                    </Field>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -278,9 +353,14 @@ export default function AgreementDetailClient({
               </>
             )}
           </div>
-          {isPilot && (
+          {isPilot && draft.pilotType === "free" && (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] font-semibold text-emerald-800">
-              {COMPLIMENTARY_PILOT_PROGRAM_LABEL} — Pilot Fee: $0 · Setup Fee: $0
+              Free Pilot — the pilot itself is provided at no charge. Pilot Fee: $0 · Setup Fee: $0
+            </p>
+          )}
+          {isPilot && draft.pilotType === "paid" && (
+            <p className="rounded-lg bg-sky-50 px-3 py-2 text-[12.5px] font-semibold text-sky-800">
+              Paid Pilot — Total Pilot Cost: ${(Number(draft.monthlyFee) + Number(draft.setupFee ?? 0)).toLocaleString()} {draft.currency}
             </p>
           )}
           <Field label="Additional Notes">
@@ -317,8 +397,11 @@ export default function AgreementDetailClient({
             <Info label="Service Type" value={AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type]} />
             {isPilot ? (
               <>
-                <Info label="Pilot Fee" value="$0" />
-                <Info label="Setup Fee" value="$0" />
+                <Info label="Pilot Type" value={PILOT_TYPE_LABELS[agreement.pilot_type]} />
+                <Info label="Pilot Fee" value={isPaidPilot ? `$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "$0"} />
+                <Info label="Setup Fee" value={agreement.setup_fee ? `$${agreement.setup_fee.toLocaleString()} ${agreement.currency}` : "$0"} />
+                {isPaidPilot && <Info label="Total Pilot Cost" value={`$${pilotTotalCost(agreement).toLocaleString()} ${agreement.currency}`} />}
+                {isPaidPilot && <Info label="Payment Due Date" value={agreement.payment_due_date ?? "-"} />}
                 <Info label="Start Date" value={agreement.campaign_start_date ?? "-"} />
                 <Info label="End Date" value={agreement.pilot_end_date ?? "-"} />
                 <Info label="Pilot Duration" value={agreement.pilot_duration ?? "-"} />
@@ -339,17 +422,94 @@ export default function AgreementDetailClient({
               </>
             )}
           </dl>
-          {isPilot && (
+          {isPilot && !isPaidPilot && (
             <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] font-semibold text-emerald-800">
-              {COMPLIMENTARY_PILOT_PROGRAM_LABEL} — Pilot Fee: $0 · Setup Fee: $0
+              {pilotProgramLabel(agreement)} — Pilot Fee: $0 · Setup Fee: $0
             </p>
+          )}
+          {isPaidPilot && (
+            <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-[12.5px] font-semibold text-sky-800">
+              {pilotProgramLabel(agreement)} — Total Pilot Cost: ${pilotTotalCost(agreement).toLocaleString()} {agreement.currency}
+            </p>
+          )}
+
+          {isPaidPilot && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-bold text-slate-900">Payment</h3>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <Field label="Payment Status">
+                  <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)} className={inputClass}>
+                    {PAYMENT_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {PAYMENT_STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button
+                  type="button"
+                  disabled={isPending || paymentStatus === agreement.payment_status}
+                  onClick={() => runAction(() => updatePilotPaymentStatusAction(agreement.id, paymentStatus))}
+                  className={buttonClasses}
+                >
+                  {isPending ? "Saving…" : "Save Payment Status"}
+                </button>
+              </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                {linkedPilotInvoice ? (
+                  <p className="text-sm text-slate-700">
+                    Invoice{" "}
+                    <Link href={`/admin/crm/invoices/${linkedPilotInvoice.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
+                      {linkedPilotInvoice.invoice_number}
+                    </Link>{" "}
+                    — {linkedPilotInvoice.status} · ${linkedPilotInvoice.total.toLocaleString()} {linkedPilotInvoice.currency}
+                  </p>
+                ) : agreement.status === "signed" ? (
+                  <div className="flex flex-wrap items-end gap-3">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => runAction(() => generatePilotInvoiceAction(agreement.id))}
+                      className={buttonClasses}
+                    >
+                      {isPending ? "Generating…" : "Generate Invoice"}
+                    </button>
+                    {linkableInvoices.length > 0 && (
+                      <>
+                        <Field label="Or link an existing invoice">
+                          <select value={selectedLinkInvoiceId} onChange={(e) => setSelectedLinkInvoiceId(e.target.value)} className={inputClass}>
+                            <option value="">Select…</option>
+                            {linkableInvoices.map((inv) => (
+                              <option key={inv.id} value={inv.id}>
+                                {inv.invoice_number} — {inv.status} · ${inv.total.toLocaleString()} {inv.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <button
+                          type="button"
+                          disabled={isPending || !selectedLinkInvoiceId}
+                          onClick={() => runAction(() => linkPilotInvoiceAction(agreement.id, selectedLinkInvoiceId))}
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Link Invoice
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">An invoice can be generated once this pilot agreement is signed.</p>
+                )}
+              </div>
+            </div>
           )}
 
           <div className="mt-6 space-y-4">
             {sections.map((section) => (
               <div key={section.key}>
                 <h3 className="text-[14px] font-bold text-slate-900">{section.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-700">{section.body}</p>
+                <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">{section.body}</p>
               </div>
             ))}
           </div>

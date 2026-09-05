@@ -9,10 +9,13 @@ import {
   CAMPAIGN_TYPES,
   CAMPAIGN_TYPE_LABELS,
   CLIENT_MANUAL_STATUSES,
+  PILOT_TYPES,
+  PILOT_TYPE_LABELS,
   type AgreementServiceType,
   type AgreementCurrency,
   type CampaignType,
   type ClientManualStatus,
+  type PilotType,
 } from "@/lib/crm-agreement-types";
 import type { ManageFields } from "./OnboardingDashboardClient";
 
@@ -48,6 +51,7 @@ export default function ManageOnboardingRecordModal({
     currency: manage.currency,
     campaignStartDate: manage.campaignStartDate ?? "",
     pilotEndDate: manage.pilotEndDate ?? "",
+    pilotType: manage.pilotType,
   });
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -72,6 +76,7 @@ export default function ManageOnboardingRecordModal({
         currency: form.currency as AgreementCurrency,
         campaignStartDate: form.campaignStartDate || null,
         pilotEndDate: form.pilotEndDate || null,
+        pilotType: form.pilotType as PilotType,
       };
       const result = await updateOnboardingRecordAction(agreementId, input);
       if (result.error) {
@@ -174,9 +179,24 @@ export default function ManageOnboardingRecordModal({
                 )}
               </Field>
             )}
-            {!isPilot && (
+            {isPilot && (
+              <Field label="Pilot Type">
+                {manage.isLocked ? (
+                  <ReadOnly value={PILOT_TYPE_LABELS[form.pilotType]} />
+                ) : (
+                  <select value={form.pilotType} onChange={(e) => set("pilotType", e.target.value as PilotType)} className={inputClass}>
+                    {PILOT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {PILOT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            )}
+            {(!isPilot || form.pilotType === "paid") && (
               <>
-                <Field label="Monthly Price">
+                <Field label={isPilot ? "Pilot Fee" : "Monthly Price"}>
                   {manage.isLocked ? <ReadOnly value={`$${form.monthlyFee}`} /> : <input type="number" min={0} step="0.01" value={form.monthlyFee} onChange={(e) => set("monthlyFee", e.target.value)} className={inputClass} />}
                 </Field>
                 <Field label="Currency">

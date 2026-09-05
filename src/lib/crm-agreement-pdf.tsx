@@ -4,7 +4,9 @@ import { WINSALOT_LOGO_DATA_URI } from "./winsalot-logo-base64";
 import {
   renderAgreementTemplate,
   AGREEMENT_SERVICE_TYPE_LABELS,
-  COMPLIMENTARY_PILOT_PROGRAM_LABEL,
+  PAYMENT_STATUS_LABELS,
+  pilotProgramLabel,
+  pilotTotalCost,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "./crm-agreement-types";
@@ -59,9 +61,11 @@ export type AgreementPdfProps = {
 export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps) {
   const sections = renderAgreementTemplate(template, agreement);
   const isPilot = agreement.campaign_type === "free_pilot";
+  const isPaid = isPilot && agreement.pilot_type === "paid";
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Client Service Agreement";
 
   return (
-    <Document title={`${isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL : "Client Service Agreement"} - ${agreement.legal_business_name}`}>
+    <Document title={`${docLabel} - ${agreement.legal_business_name}`}>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
           <View>
@@ -74,7 +78,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
           </View>
           <View>
-            <Text style={styles.docTitle}>{isPilot ? COMPLIMENTARY_PILOT_PROGRAM_LABEL.toUpperCase() : "CLIENT SERVICE AGREEMENT"}</Text>
+            <Text style={styles.docTitle}>{isPilot ? docLabel.toUpperCase() : "CLIENT SERVICE AGREEMENT"}</Text>
             <Text style={styles.docMeta}>Version {agreement.version}</Text>
             <Text style={styles.docMeta}>Status: {agreement.status}</Text>
           </View>
@@ -98,20 +102,38 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
         </View>
 
         {isPilot ? (
-          <View style={styles.sectionRow}>
-            <View>
-              <Text style={styles.label}>Pilot Fee</Text>
-              <Text style={styles.value}>$0.00</Text>
+          <>
+            <View style={styles.sectionRow}>
+              <View>
+                <Text style={styles.label}>Pilot Fee</Text>
+                <Text style={styles.value}>{isPaid ? formatCurrency(agreement.monthly_fee, agreement.currency) : "$0.00"}</Text>
+              </View>
+              <View>
+                <Text style={styles.label}>Setup Fee</Text>
+                <Text style={styles.value}>{agreement.setup_fee ? formatCurrency(agreement.setup_fee, agreement.currency) : "$0.00"}</Text>
+              </View>
+              <View>
+                <Text style={styles.label}>End Date</Text>
+                <Text style={styles.value}>{formatDate(agreement.pilot_end_date)}</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.label}>Setup Fee</Text>
-              <Text style={styles.value}>$0.00</Text>
-            </View>
-            <View>
-              <Text style={styles.label}>End Date</Text>
-              <Text style={styles.value}>{formatDate(agreement.pilot_end_date)}</Text>
-            </View>
-          </View>
+            {isPaid && (
+              <View style={styles.sectionRow}>
+                <View>
+                  <Text style={styles.label}>Total Pilot Cost</Text>
+                  <Text style={styles.value}>{formatCurrency(pilotTotalCost(agreement), agreement.currency)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Payment Status</Text>
+                  <Text style={styles.value}>{PAYMENT_STATUS_LABELS[agreement.payment_status]}</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Payment Due Date</Text>
+                  <Text style={styles.value}>{formatDate(agreement.payment_due_date)}</Text>
+                </View>
+              </View>
+            )}
+          </>
         ) : (
           <View style={styles.sectionRow}>
             <View>

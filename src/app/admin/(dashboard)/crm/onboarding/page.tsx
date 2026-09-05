@@ -9,6 +9,7 @@ import {
   AGREEMENT_SERVICE_TYPE_LABELS,
   INVOICE_TRACKER_STATUS_LABELS,
   CAMPAIGN_TYPE_LABELS,
+  PAYMENT_STATUS_LABELS,
   type CrmClientAgreementRow,
   type CrmIntakeConfigRow,
   type CrmAgreementInvoiceRow,
@@ -83,11 +84,19 @@ export default async function AdminCrmOnboardingPage() {
       nextAction: isPilot ? nextRequiredPilotAction(stage as Parameters<typeof nextRequiredPilotAction>[0]) : nextRequiredAction(stage as Parameters<typeof nextRequiredAction>[0]),
       agreementStatus: agreement.status,
       isPilot,
+      pilotType: agreement.pilot_type,
+      paymentStatus: agreement.payment_status,
       pilotStatus: agreement.pilot_status,
       intakeConfigId: intakeConfig?.id ?? null,
       intakeStatus: intakeConfig ? (hasSubmission ? "Received" : intakeConfig.status === "sent" ? "Sent" : "Draft") : "Not started",
       invoiceId: invoice?.id ?? null,
-      invoiceStatusLabel: isPilot ? "Not Applicable (Free Pilot)" : invoice ? INVOICE_TRACKER_STATUS_LABELS[invoice.status] : "Not started",
+      invoiceStatusLabel: isPilot
+        ? agreement.pilot_type === "paid"
+          ? PAYMENT_STATUS_LABELS[agreement.payment_status]
+          : "Not Applicable (Free Pilot)"
+        : invoice
+          ? INVOICE_TRACKER_STATUS_LABELS[invoice.status]
+          : "Not started",
       paymentReceived: invoice?.status === "payment_received",
       campaignStatus: clientStatus,
       canRecordInvoice: !isPilot && agreement.status === "signed" && hasSubmission && !invoice,
@@ -107,6 +116,7 @@ export default async function AdminCrmOnboardingPage() {
         currency: agreement.currency,
         campaignStartDate: agreement.campaign_start_date,
         pilotEndDate: agreement.pilot_end_date,
+        pilotType: agreement.pilot_type,
         isLocked: isAgreementLocked(agreement),
       },
     };
