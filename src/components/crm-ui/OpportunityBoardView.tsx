@@ -87,7 +87,10 @@ export default function OpportunityBoardView({
                     onClick={() => openCard(card)}
                     className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
                   >
-                    <div className="font-semibold text-slate-900">{card.businessName}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-slate-900">{card.businessName}</div>
+                      <span className="shrink-0 text-[11.5px] font-extrabold text-slate-900">{card.score}</span>
+                    </div>
                     <div className="mt-1 text-[11.5px] text-slate-500">{card.assignedAgentName || "Unassigned"}</div>
                     <dl className="mt-2 space-y-1 text-[11.5px] text-slate-600">
                       <div className="flex justify-between gap-2">
@@ -132,9 +135,11 @@ export default function OpportunityBoardView({
                 ×
               </button>
             </div>
-            <span className={`mt-2 inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-bold ${selected.stageStyle}`}>
-              {selected.stageLabel}
-            </span>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-lg font-extrabold text-slate-900">{selected.score}</span>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${selected.scoreCategoryStyle}`}>{selected.scoreCategoryLabel}</span>
+              <span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-bold ${selected.stageStyle}`}>{selected.stageLabel}</span>
+            </div>
 
             <dl className="mt-4 space-y-2.5 text-[13px] text-slate-700">
               <Row label="Client / Current Business" value={selected.clientOrBusiness} />

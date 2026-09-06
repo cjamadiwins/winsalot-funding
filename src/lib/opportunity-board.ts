@@ -26,6 +26,12 @@ export type OpportunityBoardCard = {
   clientOrBusiness: string;
   assignedAgentName: string | null;
   phone: string | null;
+  // Opportunity Finder's own 0-100 score plus its category label
+  // ("High Opportunity", etc.) - the same score/category List View and
+  // the score row itself already carry, just surfaced in the panel too.
+  score: number;
+  scoreCategoryLabel: string;
+  scoreCategoryStyle: string;
   stageKey: string;
   stageLabel: string;
   stageStyle: string;
