@@ -8,6 +8,8 @@ import { buildInvoiceSentEmail, buildInvoiceReminderEmail, buildInvoiceReceiptEm
 import { getDefaultProspectEmailTemplate, buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email-templates";
 import { buildMarketingEmail } from "./crm-marketing-email";
 import type { CrmMarketingTemplateRow } from "./crm-marketing-types";
+import { buildRetentionEmail } from "./crm-retention-email";
+import type { CrmRetentionTemplateRow } from "./crm-retention-types";
 import { renderLeadgenTemplate, LEADGEN_BOOKING_BUTTON_LABEL, LEADGEN_CONSULTATION_CTA_LABEL, type LeadgenAppointmentRow, type LeadgenEmailTemplateRow } from "./leadgen-types";
 
 // Admin-only "Send Test Email" function (brief item 8): lets an admin see
@@ -167,6 +169,43 @@ export async function sendCrmMarketingTestEmail(
   const resend = getResendClient();
   const { error } = await resend.emails.send({
     from: senderForOpportunityType(template.campaign_type),
+    to: toEmail,
+    replyTo: getEmailReplyTo(),
+    subject: testSubject(email.subject),
+    text: email.text,
+    html: email.html,
+  });
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+// Admin-only "Send Test Email" for the Client Loyalty & Retention module
+// (brief section 8) - same pattern as sendCrmMarketingTestEmail: takes an
+// already-fetched crm_retention_templates row, re-read fresh by the
+// caller rather than trusted from the browser, and renders it with the
+// exact same buildRetentionEmail() the real jobs use, with obviously fake
+// sample data. Never writes to crm_retention_enrollments,
+// crm_retention_emails, crm_retention_followups, or crm_retention_events -
+// a test send has nothing real to track or advance.
+const SAMPLE_RETENTION_BUSINESS_NAME = "Acme Test Co.";
+const SAMPLE_RETENTION_FIRST_NAME = "Jordan";
+
+export async function sendCrmRetentionTestEmail(
+  template: Pick<CrmRetentionTemplateRow, "campaign_type" | "subject" | "body">,
+  toEmail: string
+): Promise<{ error?: string }> {
+  const email = buildRetentionEmail({
+    campaignType: template.campaign_type,
+    bodyTemplate: template.body,
+    subjectTemplate: template.subject,
+    firstName: SAMPLE_RETENTION_FIRST_NAME,
+    businessName: SAMPLE_RETENTION_BUSINESS_NAME,
+  });
+
+  const resend = getResendClient();
+  const { error } = await resend.emails.send({
+    from: getEmailSender("growth"),
     to: toEmail,
     replyTo: getEmailReplyTo(),
     subject: testSubject(email.subject),

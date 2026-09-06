@@ -10,6 +10,7 @@ import type {
 } from "./crm-clients-types";
 import type { CrmInvoiceRow } from "./crm-invoices-types";
 import type { CrmActivityRow } from "./crm-types";
+import type { CrmRetentionEnrollmentRow, CrmRetentionEventRow } from "./crm-retention-types";
 
 type SupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -97,6 +98,8 @@ export type ClientDetail = {
   invoices: CrmInvoiceRow[];
   payments: CrmPaymentRow[];
   activities: CrmActivityRow[];
+  retentionEnrollment: CrmRetentionEnrollmentRow | null;
+  retentionEvents: CrmRetentionEventRow[];
 };
 
 // Everything the client-profile page needs, in parallel - "connect
@@ -107,7 +110,7 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
   if (clientError) return { data: null, error: clientError.message };
   if (!client) return { data: null, error: "Client not found." };
 
-  const [{ data: assignedAgents }, { data: appointments }, { data: invoices }, { data: payments }, { data: activities }] = await Promise.all([
+  const [{ data: assignedAgents }, { data: appointments }, { data: invoices }, { data: payments }, { data: activities }, { data: retentionEnrollment }, { data: retentionEvents }] = await Promise.all([
     supabase.from("crm_client_agents").select("*, crm_users(id, full_name, email)").eq("client_id", clientId),
     supabase
       .from("crm_client_appointments")
@@ -117,6 +120,13 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
     supabase.from("crm_invoices").select("*").eq("client_id", clientId).order("issue_date", { ascending: false }),
     supabase.from("crm_payments").select("*").eq("client_id", clientId).order("payment_date", { ascending: false }),
     supabase.from("crm_activities").select("*").eq("client_id", clientId).order("occurred_at", { ascending: false }),
+    // Client Loyalty & Retention (migration 0148) - powers the client
+    // profile's "Retention & Follow-Up History" section. Kept as its own
+    // read here rather than folded into `activities` above, since it's a
+    // dedicated internal-staff-only feed (crm_retention_events), separate
+    // from this client's general crm_activities Activity History.
+    supabase.from("crm_retention_enrollments").select("*").eq("client_id", clientId).is("removed_at", null).maybeSingle(),
+    supabase.from("crm_retention_events").select("*").eq("client_id", clientId).order("occurred_at", { ascending: false }),
   ]);
 
   return {
@@ -127,6 +137,8 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
       invoices: (invoices ?? []) as CrmInvoiceRow[],
       payments: (payments ?? []) as CrmPaymentRow[],
       activities: (activities ?? []) as CrmActivityRow[],
+      retentionEnrollment: (retentionEnrollment ?? null) as CrmRetentionEnrollmentRow | null,
+      retentionEvents: (retentionEvents ?? []) as CrmRetentionEventRow[],
     },
     error: null,
   };

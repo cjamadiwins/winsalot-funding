@@ -17,6 +17,7 @@ import {
   type ClientRelatedCounts,
 } from "@/lib/crm-clients-types";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus } from "@/lib/crm-invoices-types";
+import { RETENTION_CAMPAIGN_LABELS, RETENTION_STATUS_LABELS, RETENTION_STATUS_STYLES } from "@/lib/crm-retention-types";
 
 type ActionResult = { error?: string; clientId?: string };
 type AgentOption = { id: string; full_name: string; email: string };
@@ -55,7 +56,7 @@ export default function ClientProfileClient({
   deleteAppointmentAction: (clientId: string, appointmentId: string) => Promise<ActionResult>;
   recordPaymentAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
 }) {
-  const { client, assignedAgents, appointments, invoices, payments, activities } = detail;
+  const { client, assignedAgents, appointments, invoices, payments, activities, retentionEnrollment, retentionEvents } = detail;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -495,6 +496,34 @@ export default function ClientProfileClient({
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Retention & Follow-Up History (Client Loyalty & Retention module,
+          migration 0148) - internal staff history only, deliberately kept
+          separate from the general Activity History section below. */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900">Retention &amp; Follow-Up History</h2>
+          <Link href={`/admin/crm/retention?client=${client.id}`} className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+            Open in Retention →
+          </Link>
+        </div>
+        {retentionEnrollment && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${RETENTION_STATUS_STYLES[retentionEnrollment.retention_status]}`}>
+              {RETENTION_STATUS_LABELS[retentionEnrollment.retention_status]}
+            </span>
+            <span className="text-[12.5px] text-[var(--color-text-muted)]">{RETENTION_CAMPAIGN_LABELS[retentionEnrollment.campaign_type]} campaign</span>
+          </div>
+        )}
+        <div className="mt-3 space-y-2">
+          {!retentionEnrollment && retentionEvents.length === 0 && <p className="text-sm text-[var(--color-text-muted)]">Not currently enrolled in Client Loyalty &amp; Retention.</p>}
+          {retentionEvents.map((event) => (
+            <div key={event.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--crm-surface)] px-4 py-2.5 text-sm">
+              <span className="text-[var(--color-text-muted)]">{new Date(event.occurred_at).toLocaleString()}</span> — {event.notes}
+            </div>
+          ))}
         </div>
       </section>
 
