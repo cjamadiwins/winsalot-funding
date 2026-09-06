@@ -42,5 +42,17 @@ export default function RateInput({ value, onChange, className }: { value: numbe
     setText(formatRateForInput(value));
   }
 
-  return <input type="text" inputMode="decimal" value={text} onChange={handleChange} onBlur={handleBlur} className={className} />;
+  function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
+    // Select the whole current value on focus so the very first digit
+    // typed replaces it outright instead of being inserted next to it -
+    // without this, clicking into a field showing the default "0" can
+    // land the cursor before or after that "0" (browsers don't guarantee
+    // which), and whatever gets typed ends up stuck alongside it (e.g.
+    // "0" + typing "75" landing as "750" or "075" depending on cursor
+    // position) since sanitizing only strips *leading* zeros, not a
+    // stray one wherever the click happened to place the caret.
+    e.target.select();
+  }
+
+  return <input type="text" inputMode="decimal" value={text} onChange={handleChange} onFocus={handleFocus} onBlur={handleBlur} className={className} />;
 }
