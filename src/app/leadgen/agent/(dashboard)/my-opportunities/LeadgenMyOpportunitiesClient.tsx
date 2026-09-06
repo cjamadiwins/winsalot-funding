@@ -131,7 +131,14 @@ export default function LeadgenMyOpportunitiesClient({
         </div>
       </div>
 
-      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} />}
+      {view === "board" && (
+        <OpportunityBoardView
+          columns={boardColumns}
+          cards={boardCards}
+          onAddNote={onAddNote}
+          scopeNotice="Showing only opportunities assigned to you."
+        />
+      )}
 
       {view === "list" && (
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

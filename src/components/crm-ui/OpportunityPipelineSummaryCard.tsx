@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KanbanSquare } from "lucide-react";
 
 // Compact "Opportunity Pipeline" summary card shared by all four
 // dashboards (Growth CRM admin/agent, Lead Gen CRM admin/agent) - stage
@@ -18,9 +19,10 @@ export default function OpportunityPipelineSummaryCard({
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Opportunity Pipeline</h2>
         <Link
           href={boardHref}
-          className="rounded-full border border-sky-300 bg-sky-50 px-3.5 py-1.5 text-[12px] font-semibold text-sky-700 hover:border-sky-400"
+          className="flex items-center gap-1.5 rounded-full bg-sky-600 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
         >
-          View Board →
+          <KanbanSquare className="h-3.5 w-3.5" strokeWidth={2.3} />
+          View Board
         </Link>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">

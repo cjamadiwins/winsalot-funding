@@ -1,9 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { OpportunityBoardCard, OpportunityBoardColumn } from "@/lib/opportunity-board";
+
+// How far one click of the left/right nav arrow scrolls the board -
+// roughly one column's width plus its gap.
+const SCROLL_STEP_PX = 290;
 
 function fmt(iso: string | null): string {
   if (!iso) return "—";
@@ -23,16 +28,27 @@ export default function OpportunityBoardView({
   columns,
   cards,
   onAddNote,
+  scopeNotice,
 }: {
   columns: OpportunityBoardColumn[];
   cards: OpportunityBoardCard[];
   onAddNote: (cardId: string, note: string) => Promise<{ error?: string }>;
+  // Agent views pass a short, explicit label (e.g. "Showing only
+  // opportunities assigned to you") so it's visually obvious the board
+  // is scoped - purely a text hint, never changes which cards RLS/the
+  // caller's own query already returned.
+  scopeNotice?: string;
 }) {
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function scrollByStep(direction: -1 | 1) {
+    scrollRef.current?.scrollBy({ left: direction * SCROLL_STEP_PX, behavior: "smooth" });
+  }
 
   const cardsByColumn = useMemo(() => {
     const map = new Map<string, OpportunityBoardCard[]>();
@@ -69,58 +85,87 @@ export default function OpportunityBoardView({
 
   return (
     <div className="mt-4">
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {columns.map((column) => {
-          const columnCards = cardsByColumn.get(column.key) ?? [];
-          return (
-            <div key={column.key} className="flex w-[270px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50">
-              <div className="flex items-center justify-between rounded-t-2xl border-b border-slate-200 bg-white px-3 py-2.5">
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${column.styleClass}`}>{column.label}</span>
-                <span className="text-[12px] font-semibold text-slate-400">{columnCards.length}</span>
-              </div>
-              <div className="flex max-h-[560px] flex-col gap-2 overflow-y-auto p-2.5">
-                {columnCards.length === 0 && <p className="px-1 py-3 text-center text-[12px] text-slate-400">No opportunities</p>}
-                {columnCards.map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    onClick={() => openCard(card)}
-                    className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="font-semibold text-slate-900">{card.businessName}</div>
-                      <span className="shrink-0 text-[11.5px] font-extrabold text-slate-900">{card.score}</span>
-                    </div>
-                    <div className="mt-1 text-[11.5px] text-slate-500">{card.assignedAgentName || "Unassigned"}</div>
-                    <dl className="mt-2 space-y-1 text-[11.5px] text-slate-600">
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-slate-400">Last call</dt>
-                        <dd className="text-right">{fmt(card.lastCallAt)}</dd>
-                      </div>
-                      {card.lastCallOutcome && (
-                        <div className="flex justify-between gap-2">
-                          <dt className="text-slate-400">Outcome</dt>
-                          <dd className="text-right">{card.lastCallOutcome}</dd>
+      {scopeNotice && (
+        <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-slate-500">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+          {scopeNotice}
+        </p>
+      )}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => scrollByStep(-1)}
+          aria-label="Scroll pipeline left"
+          className="absolute left-0 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm transition hover:border-sky-300 hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:flex"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => scrollByStep(1)}
+          aria-label="Scroll pipeline right"
+          className="absolute right-0 top-1/2 z-10 hidden translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm transition hover:border-sky-300 hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:flex"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        <div ref={scrollRef} className="opportunity-board-scroll flex gap-3 overflow-x-auto px-1 pb-3 sm:px-6">
+          {columns.map((column) => {
+            const columnCards = cardsByColumn.get(column.key) ?? [];
+            return (
+              <div key={column.key} className="flex w-[270px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between gap-2 rounded-t-2xl border-b border-slate-200 bg-white px-3 py-2.5">
+                  <span className={`min-w-0 truncate rounded-full px-2.5 py-1 text-[11px] font-bold ${column.styleClass}`} title={column.label}>
+                    {column.label}
+                  </span>
+                  <span className="shrink-0 text-[12px] font-semibold text-slate-400">{columnCards.length}</span>
+                </div>
+                <div className="flex max-h-[560px] flex-col gap-2 overflow-y-auto p-2">
+                  {columnCards.length === 0 && <p className="px-1 py-3 text-center text-[12px] text-slate-400">No opportunities</p>}
+                  {columnCards.map((card) => (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => openCard(card)}
+                      className="rounded-xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 truncate font-semibold text-slate-900" title={card.businessName}>
+                          {card.businessName}
                         </div>
-                      )}
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-slate-400">Follow-up</dt>
-                        <dd className="text-right">{fmt(card.nextFollowUpAt)}</dd>
+                        <span className="shrink-0 text-[11.5px] font-extrabold text-slate-900">{card.score}</span>
                       </div>
-                    </dl>
-                    {card.notes[0] && <p className="mt-2 line-clamp-2 text-[11.5px] text-slate-600">{card.notes[0]}</p>}
-                    {card.appointmentStatus && (
-                      <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${card.appointmentStatusStyle}`}>
-                        {card.appointmentStatus}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                      <div className="mt-0.5 truncate text-[11.5px] text-slate-500">{card.assignedAgentName || "Unassigned"}</div>
+                      <dl className="mt-1.5 space-y-0.5 text-[11.5px] text-slate-600">
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-slate-400">Last call</dt>
+                          <dd className="text-right">{fmt(card.lastCallAt)}</dd>
+                        </div>
+                        {card.lastCallOutcome && (
+                          <div className="flex justify-between gap-2">
+                            <dt className="shrink-0 text-slate-400">Outcome</dt>
+                            <dd className="truncate text-right">{card.lastCallOutcome}</dd>
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-slate-400">Follow-up</dt>
+                          <dd className="text-right">{fmt(card.nextFollowUpAt)}</dd>
+                        </div>
+                      </dl>
+                      {card.notes[0] && <p className="mt-1.5 line-clamp-2 break-words text-[11.5px] text-slate-600">{card.notes[0]}</p>}
+                      {card.appointmentStatus && (
+                        <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${card.appointmentStatusStyle}`}>
+                          {card.appointmentStatus}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        {cards.length === 0 && <p className="py-10 text-center text-slate-400">No opportunities match these filters.</p>}
+            );
+          })}
+          {cards.length === 0 && <p className="py-10 text-center text-slate-400">No opportunities match these filters.</p>}
+        </div>
       </div>
 
       {selected && (
@@ -131,7 +176,12 @@ export default function OpportunityBoardView({
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-lg font-bold text-slate-900">{selected.businessName}</h3>
-              <button type="button" onClick={() => setSelectedId(null)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close"
+                className="rounded-full p-1 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
                 ×
               </button>
             </div>
