@@ -8,6 +8,7 @@ import {
   CLIENT_STATUSES,
   clientHasRelatedRecords,
   describeClientRelatedRecords,
+  canPermanentlyDeleteTestClient,
   DEFAULT_CLIENT_CURRENCY,
   isClientCurrency,
   type ClientStatus,
@@ -225,6 +226,56 @@ export async function deleteClientAction(clientId: string): Promise<ActionResult
 
   const { error } = await supabase.from("crm_clients").delete().eq("id", clientId);
   if (error) return { error: `Failed to delete this client: ${error.message}` };
+
+  revalidatePath("/admin/crm/clients");
+  return {};
+}
+
+// "For obvious test clients, an admin should be able to permanently
+// delete the client and its associated test records after confirmation"
+// - a deliberately separate, narrower path from deleteClientAction above:
+// only ever usable on a client explicitly flagged is_test_data (never a
+// real client, no matter how much related history it has), and requires
+// the caller to have already typed "DELETE" to confirm. Everything
+// hanging off the client - its activities, appointments, and agent
+// assignments (all ON DELETE CASCADE, migration 0091) - is removed along
+// with it; any test invoices/payments are deleted explicitly first since
+// those two are ON DELETE RESTRICT. One private crm_test_data_audit row
+// is left behind (mirrors deleteTestInvoiceAction's own audit trail) -
+// never read by the client list, dashboard, or any financial-totals
+// query.
+export async function deleteTestClientAction(clientId: string, confirmationText: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase.from("crm_clients").select("*").eq("id", clientId).maybeSingle();
+  if (!existing) return { error: "Client not found." };
+  if (!canPermanentlyDeleteTestClient(existing)) {
+    return { error: "This client is not identified as test data and cannot be deleted regardless of related records. Use the standard Delete action instead." };
+  }
+  if (confirmationText.trim() !== "DELETE") {
+    return { error: 'Type "DELETE" to confirm permanent deletion.' };
+  }
+
+  const { error: paymentsDeleteError } = await supabase.from("crm_payments").delete().eq("client_id", clientId);
+  if (paymentsDeleteError) return { error: `Failed to delete this test client's payments: ${paymentsDeleteError.message}` };
+
+  const { error: invoicesDeleteError } = await supabase.from("crm_invoices").delete().eq("client_id", clientId);
+  if (invoicesDeleteError) return { error: `Failed to delete this test client's invoices: ${invoicesDeleteError.message}` };
+
+  await supabase.from("crm_test_data_audit").insert({
+    record_type: "client",
+    record_number: existing.company_name,
+    client_id: existing.id,
+    client_name: existing.company_name,
+    amount: existing.monthly_price ?? 0,
+    currency: existing.currency,
+    deleted_by: admin.id,
+    deleted_by_name: performedByName(admin),
+  });
+
+  const { error } = await supabase.from("crm_clients").delete().eq("id", clientId);
+  if (error) return { error: `Failed to delete this test client: ${error.message}` };
 
   revalidatePath("/admin/crm/clients");
   return {};

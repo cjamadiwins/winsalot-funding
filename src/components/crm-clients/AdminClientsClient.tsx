@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { ClientListRow } from "@/lib/crm-clients-data";
 import {
@@ -10,8 +11,10 @@ import {
   CLIENT_STATUS_LABELS,
   CLIENT_STATUS_STYLES,
   DEFAULT_CLIENT_CURRENCY,
+  canPermanentlyDeleteTestClient,
   formatCurrency,
 } from "@/lib/crm-clients-types";
+import ConfirmDeleteModal from "@/components/crm-invoices/ConfirmDeleteModal";
 
 type ActionResult = { error?: string; clientId?: string };
 type AgentOption = { id: string; full_name: string; email: string };
@@ -25,6 +28,7 @@ export default function AdminClientsClient({
   archiveAction,
   reactivateAction,
   deleteAction,
+  deleteTestClientAction,
   initialFilters,
 }: {
   clients: ClientListRow[];
@@ -33,11 +37,15 @@ export default function AdminClientsClient({
   archiveAction: (clientId: string) => Promise<ActionResult>;
   reactivateAction: (clientId: string) => Promise<ActionResult>;
   deleteAction: (clientId: string) => Promise<ActionResult>;
+  deleteTestClientAction: (clientId: string, confirmationText: string) => Promise<ActionResult>;
   initialFilters: { search: string; status: string; service: string; agent: string };
 }) {
+  const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; company: string; contact: string } | null>(null);
+  const [showTestDeletedBanner, setShowTestDeletedBanner] = useState(false);
 
   function runAction(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
@@ -63,6 +71,22 @@ export default function AdminClientsClient({
   function handleDelete(c: ClientListRow) {
     if (!window.confirm(`Permanently delete ${c.company_name}? This cannot be undone. This is only allowed when the client has no related appointments, invoices, payments, or agent assignments - if any exist, archive instead.`)) return;
     runAction(() => deleteAction(c.id));
+  }
+
+  function confirmTestDelete() {
+    if (!deleteTarget) return;
+    setError(null);
+    setShowTestDeletedBanner(false);
+    startTransition(async () => {
+      const result = await deleteTestClientAction(deleteTarget.id, "DELETE");
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setDeleteTarget(null);
+      setShowTestDeletedBanner(true);
+      router.refresh();
+    });
   }
 
   return (
@@ -116,6 +140,15 @@ export default function AdminClientsClient({
       </form>
 
       {error && <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+
+      {showTestDeletedBanner && (
+        <p className="mt-4 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          Test client and related records deleted successfully.
+          <button type="button" onClick={() => setShowTestDeletedBanner(false)} className="text-emerald-700 hover:text-emerald-900">
+            &times;
+          </button>
+        </p>
+      )}
 
       {showCreate && (
         <form
@@ -228,6 +261,9 @@ export default function AdminClientsClient({
                   <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${CLIENT_STATUS_STYLES[c.status]}`}>
                     {CLIENT_STATUS_LABELS[c.status]}
                   </span>
+                  {c.is_test_data && (
+                    <span className="ml-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10.5px] font-semibold text-amber-800">Test Data</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">{c.assignedAgentNames.length > 0 ? c.assignedAgentNames.join(", ") : "-"}</td>
                 <td className="px-4 py-3">{c.invoiceCount}</td>
@@ -246,9 +282,20 @@ export default function AdminClientsClient({
                         Archive
                       </button>
                     )}
-                    <button type="button" disabled={isPending} onClick={() => handleDelete(c)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
-                      Delete
-                    </button>
+                    {canPermanentlyDeleteTestClient(c) ? (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => setDeleteTarget({ id: c.id, company: c.company_name, contact: c.primary_contact_name || "-" })}
+                        className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+                      >
+                        Delete Test Client
+                      </button>
+                    ) : (
+                      <button type="button" disabled={isPending} onClick={() => handleDelete(c)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50">
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -256,6 +303,22 @@ export default function AdminClientsClient({
           </tbody>
         </table>
       </div>
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title="Delete Test Client"
+          recordLabel="Company"
+          recordNumber={deleteTarget.company}
+          secondaryLabel="Contact"
+          clientName={deleteTarget.contact}
+          amountFieldLabel="Related Records"
+          amountLabel="Activity history (removed with the client)"
+          warning="Permanently delete this test client and its related test records? This action cannot be undone."
+          isPending={isPending}
+          onConfirm={confirmTestDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
