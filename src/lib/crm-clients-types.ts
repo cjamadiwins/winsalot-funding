@@ -99,6 +99,11 @@ export type CrmClientRow = {
   // the client profile's "Client Portal Access" section - see
   // src/lib/client-portal-shared.ts/-data.ts.
   leadgen_client_id: string | null;
+
+  // Mirrors is_test_data on crm_invoices/crm_payments (migration 0103) -
+  // never settable through the normal create/edit client forms, only via
+  // direct admin/database action, same as those two.
+  is_test_data: boolean;
 };
 
 export type CrmClientAgentRow = {
@@ -202,6 +207,16 @@ export type ClientRelatedCounts = {
 
 export function clientHasRelatedRecords(counts: ClientRelatedCounts): boolean {
   return counts.appointments > 0 || counts.invoices > 0 || counts.payments > 0 || counts.assignedAgents > 0 || counts.activities > 0;
+}
+
+// A separate, narrower escape hatch from deleteClientAction's normal
+// related-records guard above - mirrors canPermanentlyDeleteTestInvoice()
+// in crm-invoices-types.ts. Only ever true for a client explicitly
+// flagged is_test_data (never a real client, regardless of how much or
+// little related history it has), so a genuine client's history can
+// never be permanently deleted this way.
+export function canPermanentlyDeleteTestClient(client: Pick<CrmClientRow, "is_test_data">): boolean {
+  return client.is_test_data === true;
 }
 
 export function describeClientRelatedRecords(counts: ClientRelatedCounts): string {

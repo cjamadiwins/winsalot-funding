@@ -11,7 +11,9 @@ export default function ConfirmDeleteModal({
   title,
   recordLabel,
   recordNumber,
+  secondaryLabel = "Client",
   clientName,
+  amountFieldLabel = "Amount",
   amountLabel,
   warning,
   isPending,
@@ -21,7 +23,9 @@ export default function ConfirmDeleteModal({
   title: string;
   recordLabel: string;
   recordNumber: string;
+  secondaryLabel?: string;
   clientName: string;
+  amountFieldLabel?: string;
   amountLabel: string;
   warning?: string;
   isPending: boolean;
@@ -43,11 +47,11 @@ export default function ConfirmDeleteModal({
             <span className="font-semibold">{recordNumber}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Client</span>
+            <span className="text-slate-500">{secondaryLabel}</span>
             <span className="font-semibold">{clientName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Amount</span>
+            <span className="text-slate-500">{amountFieldLabel}</span>
             <span className="font-semibold">{amountLabel}</span>
           </div>
         </div>

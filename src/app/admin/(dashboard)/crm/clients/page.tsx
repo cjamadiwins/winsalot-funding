@@ -3,7 +3,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchClientList } from "@/lib/crm-clients-data";
 import type { CrmUserRow } from "@/lib/crm-types";
 import AdminClientsClient from "@/components/crm-clients/AdminClientsClient";
-import { createClientAction, archiveClientAction, reactivateClientAction, deleteClientAction } from "./actions";
+import { createClientAction, archiveClientAction, reactivateClientAction, deleteClientAction, deleteTestClientAction } from "./actions";
 
 export default async function AdminClientsPage({
   searchParams,
@@ -41,6 +41,7 @@ export default async function AdminClientsPage({
             archiveAction={archiveClientAction}
             reactivateAction={reactivateClientAction}
             deleteAction={deleteClientAction}
+            deleteTestClientAction={deleteTestClientAction}
             initialFilters={{ search: search ?? "", status: status ?? "", service: service ?? "", agent: agent ?? "" }}
           />
         </div>

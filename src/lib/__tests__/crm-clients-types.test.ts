@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLIENT_CURRENCIES,
+  canPermanentlyDeleteTestClient,
   canPermanentlyDeleteTestPayment,
   clientHasRelatedRecords,
   DEFAULT_CLIENT_CURRENCY,
@@ -63,6 +64,16 @@ describe("canPermanentlyDeleteTestPayment", () => {
 
   it("never allows deleting a real (non-test) payment through this path", () => {
     expect(canPermanentlyDeleteTestPayment({ is_test_data: false })).toBe(false);
+  });
+});
+
+describe("canPermanentlyDeleteTestClient", () => {
+  it("allows deleting a client flagged as test data, regardless of related history", () => {
+    expect(canPermanentlyDeleteTestClient({ is_test_data: true })).toBe(true);
+  });
+
+  it("never allows deleting a real (non-test) client through this path", () => {
+    expect(canPermanentlyDeleteTestClient({ is_test_data: false })).toBe(false);
   });
 });
 
