@@ -220,6 +220,33 @@ body {
   color: var(--color-ink);
 }
 
+/* Opportunity Pipeline Board View's horizontal column scroller - a
+   subtle, always-visible scrollbar (default browser scrollbars are
+   nearly invisible on some OS/browser combinations, especially macOS
+   overlay scrollbars) so it's obvious the board scrolls sideways.
+   Scoped to this one class, not a global scrollbar override. */
+.opportunity-board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--crm-border, #cbd5e1) transparent;
+}
+
+.opportunity-board-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.opportunity-board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.opportunity-board-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--crm-border, #cbd5e1);
+  border-radius: 9999px;
+}
+
+.opportunity-board-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--crm-text-muted, #94a3b8);
+}
+
 /* Provider Invoices & Payments "Print / Download" action - isolates the
    #printable-invoice element (rendered inside the invoice detail modal)
    from the rest of the page, so a browser's print-to-PDF only captures
