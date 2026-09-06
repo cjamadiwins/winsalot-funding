@@ -2,7 +2,15 @@ import Link from "next/link";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
-import { LEADGEN_STAT_CARD_STYLES, isLeadgenAppointmentCountable, isLeadgenNextFollowUpDueToday, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
+import {
+  LEADGEN_LEAD_STATUSES,
+  LEADGEN_LEAD_STATUS_STYLES,
+  LEADGEN_STAT_CARD_STYLES,
+  isLeadgenAppointmentCountable,
+  isLeadgenNextFollowUpDueToday,
+  isLeadgenNextFollowUpOverdue,
+} from "@/lib/leadgen-types";
+import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { computeLeadgenDashboardTrends } from "@/lib/leadgen-dashboard-trends";
 import { leadgenDateKey } from "@/lib/leadgen-performance";
 import KpiCard from "@/components/crm-ui/KpiCard";
@@ -69,6 +77,14 @@ export default async function LeadgenAdminDashboardPage() {
   const overdueFollowUps = allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length;
 
   const trends = computeLeadgenDashboardTrends(allLeads, now);
+
+  // Opportunity Pipeline summary card (below) - stage counts from the
+  // same allLeads array already fetched above, no new query.
+  const pipelineStageCounts = LEADGEN_LEAD_STATUSES.map((status) => ({
+    label: status,
+    count: allLeads.filter((l) => l.status === status).length,
+    styleClass: LEADGEN_LEAD_STATUS_STYLES[status],
+  }));
 
   // Opportunity Finder counters.
   const leadNextFollowUpById = new Map(allLeads.map((l) => [l.id, l.next_follow_up_at] as const));
@@ -243,6 +259,8 @@ export default async function LeadgenAdminDashboardPage() {
         <KpiCard label="Follow-Ups Due" value={opportunityScoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/leadgen/admin/opportunity-finder?followup=due" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/leadgen/admin/opportunity-finder?category=closed" />
       </div>
+
+      <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/admin/opportunity-finder?view=board" />
 
       <DialpadDashboardPreview
         audience="admin"

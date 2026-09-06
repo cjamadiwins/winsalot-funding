@@ -4,6 +4,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
+  LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
   LEADGEN_STAT_CARD_STYLES,
   isLeadgenAppointmentCountable,
@@ -13,6 +14,7 @@ import {
   type LeadgenFollowUpWithLead,
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
+import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
@@ -116,6 +118,13 @@ export default async function LeadgenAgentDashboardPage() {
   const statusCounts = new Map<string, number>();
   for (const lead of myLeads) statusCounts.set(lead.status, (statusCounts.get(lead.status) ?? 0) + 1);
 
+  // Opportunity Pipeline summary card (below) - reuses statusCounts above.
+  const pipelineStageCounts = LEADGEN_LEAD_STATUSES.map((status) => ({
+    label: status,
+    count: statusCounts.get(status) ?? 0,
+    styleClass: LEADGEN_LEAD_STATUS_STYLES[status],
+  }));
+
   // "My Results by Client" - same shape as the admin dashboard's Results
   // by Client table, but scoped to only this agent's own leads/
   // appointments (already RLS-limited above), and only clients that are
@@ -191,6 +200,8 @@ export default async function LeadgenAgentDashboardPage() {
           icon={<UserCheck />}
         />
       </div>
+
+      <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/agent/my-opportunities?view=board" />
 
       <DialpadDashboardPreview
         audience="agent"

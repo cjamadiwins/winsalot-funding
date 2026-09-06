@@ -11,8 +11,15 @@ import {
   type CrmOpportunityScoreRow,
   type OpportunityCategory,
 } from "@/lib/opportunity-finder";
-import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityStage, type OpportunityType } from "@/lib/crm-types";
+import type { OpportunityBoardCard } from "@/lib/opportunity-board";
+import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
 import { assignOpportunityAgentAction, dismissOpportunityAction, reopenOpportunityAction, setOpportunityPriorityOverrideAction } from "./actions";
+
+const APPOINTMENT_STATUS_STYLES: Record<string, string> = {
+  booked: "bg-emerald-100 text-emerald-800",
+  cancelled: "bg-rose-100 text-rose-800",
+};
 
 export type OpportunityFinderRow = {
   score: CrmOpportunityScoreRow;
@@ -30,6 +37,10 @@ export type OpportunityFinderRow = {
   // crm_marketing_campaigns already uses.
   clientId: string | null;
   clientName: string | null;
+  // "Client / Current Business" for Board View's detail panel - the
+  // resolved client name once one exists, else the opportunity's own
+  // business name.
+  clientOrBusiness: string;
   campaignType: OpportunityType;
   campaignName: string;
   nextFollowUpAt: string | null;
@@ -38,6 +49,12 @@ export type OpportunityFinderRow = {
   lastEmailAt: string | null;
   lastNote: string | null;
   lastNoteAt: string | null;
+  // Board View only, below - latest 1-2 notes (newest first), the most
+  // recent call activity's own logged text, and the most recent
+  // consultation appointment's status, if any.
+  notes: string[];
+  lastCallOutcome: string | null;
+  appointmentStatus: string | null;
   detailHref: string;
 };
 
@@ -67,6 +84,8 @@ export default function OpportunityFinderClient({
   initialAgentFilter,
   initialClientFilter,
   initialFollowUpFilter,
+  initialView,
+  onAddNote,
 }: {
   rows: OpportunityFinderRow[];
   agents: { id: string; name: string }[];
@@ -75,16 +94,20 @@ export default function OpportunityFinderClient({
   initialAgentFilter?: string;
   initialClientFilter?: string;
   initialFollowUpFilter?: string;
+  initialView?: "list" | "board";
+  onAddNote: (opportunityId: string, note: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "board">(initialView ?? "list");
   const [categoryFilter, setCategoryFilter] = useState<OpportunityCategory | "all">(
     initialCategory && OPPORTUNITY_CATEGORIES.includes(initialCategory as OpportunityCategory) ? (initialCategory as OpportunityCategory) : "all"
   );
   const [agentFilter, setAgentFilter] = useState(initialAgentFilter && agents.some((a) => a.id === initialAgentFilter) ? initialAgentFilter : "all");
   const [clientFilter, setClientFilter] = useState(initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all");
   const [campaignFilter, setCampaignFilter] = useState<OpportunityType | "all">("all");
+  const [stageFilter, setStageFilter] = useState<OpportunityStage | "all">("all");
   const [followUpFilter, setFollowUpFilter] = useState(initialFollowUpFilter === "due" ? "due" : "all");
   const [search, setSearch] = useState("");
   const [dismissingId, setDismissingId] = useState<string | null>(null);
@@ -107,17 +130,62 @@ export default function OpportunityFinderClient({
       if (agentFilter !== "all" && row.assignedAgentId !== agentFilter) return false;
       if (clientFilter !== "all" && row.clientId !== clientFilter) return false;
       if (campaignFilter !== "all" && row.campaignType !== campaignFilter) return false;
+      if (stageFilter !== "all" && row.stageOrStatus !== stageFilter) return false;
       if (followUpFilter === "due" && !row.nextFollowUpAt) return false;
       if (query && !(row.businessName.toLowerCase().includes(query) || (row.contactName ?? "").toLowerCase().includes(query))) return false;
       return true;
     });
-  }, [rows, categoryFilter, agentFilter, clientFilter, campaignFilter, followUpFilter, search]);
+  }, [rows, categoryFilter, agentFilter, clientFilter, campaignFilter, stageFilter, followUpFilter, search]);
+
+  const boardCards: OpportunityBoardCard[] = useMemo(
+    () =>
+      filtered.map((row) => ({
+        id: row.score.opportunity_id,
+        businessName: row.businessName,
+        clientOrBusiness: row.clientOrBusiness,
+        assignedAgentName: row.assignedAgentName,
+        phone: row.phone,
+        score: row.score.score,
+        scoreCategoryLabel: OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(row.score)],
+        scoreCategoryStyle: OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(row.score)],
+        stageKey: row.stageOrStatus,
+        stageLabel: row.stageOrStatus,
+        stageStyle: OPPORTUNITY_STAGE_STYLES[row.stageOrStatus as OpportunityStage] ?? "bg-slate-100 text-slate-700",
+        lastCallAt: row.lastCallAt,
+        lastCallOutcome: row.lastCallOutcome,
+        notes: row.notes,
+        nextFollowUpAt: row.nextFollowUpAt,
+        appointmentStatus: row.appointmentStatus,
+        appointmentStatusStyle: row.appointmentStatus ? APPOINTMENT_STATUS_STYLES[row.appointmentStatus] ?? "bg-slate-100 text-slate-700" : null,
+        viewHref: `${row.detailHref}?from=opportunity-finder`,
+        editHref: `${row.detailHref}?from=opportunity-finder`,
+      })),
+    [filtered]
+  );
+
+  const boardColumns = OPPORTUNITY_STAGES.map((stage) => ({ key: stage, label: stage, styleClass: OPPORTUNITY_STAGE_STYLES[stage] }));
 
   return (
     <div className="mt-6">
       {error && <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-full border border-slate-300 p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            List View
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("board")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            Board View
+          </button>
+        </div>
         {(["all", ...OPPORTUNITY_CATEGORIES] as const).map((cat) => (
           <button
             key={cat}
@@ -158,6 +226,14 @@ export default function OpportunityFinderClient({
             </option>
           ))}
         </select>
+        <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value as OpportunityStage | "all")} className={inputClass}>
+          <option value="all">All Stages</option>
+          {OPPORTUNITY_STAGES.map((stage) => (
+            <option key={stage} value={stage}>
+              {stage}
+            </option>
+          ))}
+        </select>
         <select value={followUpFilter} onChange={(e) => setFollowUpFilter(e.target.value as "all" | "due")} className={inputClass}>
           <option value="all">Any Follow-Up</option>
           <option value="due">Has a Follow-Up Scheduled</option>
@@ -170,6 +246,9 @@ export default function OpportunityFinderClient({
         />
       </div>
 
+      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} />}
+
+      {view === "list" && (
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="table-fixed border-collapse text-left text-[12.5px]" style={{ width: 1280 }}>
           <colgroup>
@@ -343,6 +422,7 @@ export default function OpportunityFinderClient({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

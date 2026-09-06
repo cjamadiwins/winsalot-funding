@@ -11,6 +11,15 @@ import {
   OPPORTUNITY_CATEGORY_STYLES,
   type LeadgenOpportunityScoreRow,
 } from "@/lib/opportunity-finder";
+import {
+  LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_LEAD_STATUSES,
+  LEADGEN_LEAD_STATUS_STYLES,
+  type LeadgenAppointmentStatus,
+  type LeadgenLeadStatus,
+} from "@/lib/leadgen-types";
+import type { OpportunityBoardCard } from "@/lib/opportunity-board";
+import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
 import { setMyLeadgenOpportunityStatusAction } from "./actions";
 
 export type LeadgenMyOpportunityRow = {
@@ -20,10 +29,15 @@ export type LeadgenMyOpportunityRow = {
   phone: string | null;
   email: string | null;
   status: string;
+  assignedAgentName: string;
+  clientOrBusiness: string;
   nextFollowUpAt: string | null;
   lastCallAt: string | null;
   lastEmailAt: string | null;
   lastNote: string | null;
+  notes: string[];
+  lastCallOutcome: string | null;
+  appointmentStatus: string | null;
   detailHref: string;
 };
 
@@ -32,15 +46,53 @@ function fmt(iso: string | null): string {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export default function LeadgenMyOpportunitiesClient({ rows }: { rows: LeadgenMyOpportunityRow[] }) {
+export default function LeadgenMyOpportunitiesClient({
+  rows,
+  initialView,
+  onAddNote,
+}: {
+  rows: LeadgenMyOpportunityRow[];
+  initialView?: "list" | "board";
+  onAddNote: (leadId: string, note: string) => Promise<{ error?: string }>;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [view, setView] = useState<"list" | "board">(initialView ?? "list");
 
   const visible = useMemo(
     () => rows.filter((row) => showClosed || (effectiveOpportunityCategory(row.score) !== "closed" && row.score.agent_status !== "closed")),
     [rows, showClosed]
+  );
+
+  const boardColumns = LEADGEN_LEAD_STATUSES.map((status) => ({ key: status, label: status, styleClass: LEADGEN_LEAD_STATUS_STYLES[status] }));
+  const boardCards: OpportunityBoardCard[] = useMemo(
+    () =>
+      visible.map((row) => ({
+        id: row.score.lead_id,
+        businessName: row.businessName,
+        clientOrBusiness: row.clientOrBusiness,
+        assignedAgentName: row.assignedAgentName,
+        phone: row.phone,
+        score: row.score.score,
+        scoreCategoryLabel: OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(row.score)],
+        scoreCategoryStyle: OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(row.score)],
+        stageKey: row.status,
+        stageLabel: row.status,
+        stageStyle: LEADGEN_LEAD_STATUS_STYLES[row.status as LeadgenLeadStatus] ?? "bg-slate-100 text-slate-700",
+        lastCallAt: row.lastCallAt,
+        lastCallOutcome: row.lastCallOutcome,
+        notes: row.notes,
+        nextFollowUpAt: row.nextFollowUpAt,
+        appointmentStatus: row.appointmentStatus,
+        appointmentStatusStyle: row.appointmentStatus
+          ? LEADGEN_APPOINTMENT_STATUS_STYLES[row.appointmentStatus as LeadgenAppointmentStatus] ?? "bg-slate-100 text-slate-700"
+          : null,
+        viewHref: row.detailHref,
+        editHref: row.detailHref,
+      })),
+    [visible]
   );
 
   function updateStatus(scoreId: string, status: (typeof OPPORTUNITY_AGENT_STATUSES)[number]) {
@@ -56,11 +108,32 @@ export default function LeadgenMyOpportunitiesClient({ rows }: { rows: LeadgenMy
     <div className="mt-6">
       {error && <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
-      <label className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
-        <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
-        Show closed / not-opportunity leads too
-      </label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
+          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+          Show closed / not-opportunity leads too
+        </label>
+        <div className="flex rounded-full border border-slate-300 p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            List View
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("board")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            Board View
+          </button>
+        </div>
+      </div>
 
+      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} />}
+
+      {view === "list" && (
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((row) => {
           const effective = effectiveOpportunityCategory(row.score);
@@ -137,6 +210,7 @@ export default function LeadgenMyOpportunitiesClient({ rows }: { rows: LeadgenMy
         })}
         {visible.length === 0 && <div className="col-span-full py-10 text-center text-slate-400">No opportunities to show right now.</div>}
       </div>
+      )}
     </div>
   );
 }

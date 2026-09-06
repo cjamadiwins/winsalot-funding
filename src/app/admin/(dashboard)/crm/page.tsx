@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { isDueToday, isOverdue, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
+import { isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
+import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import AdminCrmClient from "./AdminCrmClient";
 import AdminFollowUps from "./AdminFollowUps";
@@ -88,6 +89,14 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
   const followUpsDue = allOpportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
   const convertedCount = allOpportunities.filter((o) => o.stage === "Client Won").length;
 
+  // Opportunity Pipeline summary card (below) - stage counts from the
+  // same allOpportunities array already fetched above, no new query.
+  const pipelineStageCounts = OPPORTUNITY_STAGES.map((stage) => ({
+    label: stage,
+    count: allOpportunities.filter((o) => o.stage === stage).length,
+    styleClass: OPPORTUNITY_STAGE_STYLES[stage],
+  }));
+
   const mainStats = [
     { label: "Total Opportunities", value: totalOpportunities, icon: Users, tone: "blue" as const, href: "/admin/crm?card=total#all-opportunities" },
     { label: "Interested Opportunities", value: interestedOpportunities, icon: UserCheck, tone: "indigo" as const, href: "/admin/crm?card=interested#all-opportunities" },
@@ -159,6 +168,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         <KpiCard label="Follow-Ups Due" value={scoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/admin/crm/opportunity-finder?followup=due" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/admin/crm/opportunity-finder?category=closed" />
       </div>
+
+      <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/admin/crm/opportunity-finder?view=board" />
 
       <DialpadDashboardPreview
         audience="admin"
