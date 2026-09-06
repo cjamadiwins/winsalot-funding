@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCurrency } from "@/lib/crm-clients-types";
+import RateInput from "./RateInput";
 
 export type LineItemDraft = { description: string; quantity: number; unit_price: number };
 
@@ -63,14 +64,7 @@ export default function LineItemsEditor({
                 />
               </td>
               <td className="px-3 py-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={item.unit_price}
-                  onChange={(e) => update(index, { unit_price: Number(e.target.value) || 0 })}
-                  className={inputClass}
-                />
+                <RateInput value={item.unit_price} onChange={(unit_price) => update(index, { unit_price })} className={inputClass} />
               </td>
               <td className="px-3 py-2 text-slate-700">{formatCurrency(item.quantity * item.unit_price, currency)}</td>
               <td className="px-3 py-2 text-right">

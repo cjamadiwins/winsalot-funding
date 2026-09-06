@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchInvoiceDetail } from "@/lib/crm-invoices-data";
 import { canPermanentlyDeleteInvoice, canPermanentlyDeleteTestInvoice, invoiceNeedsFreeConfirmation, type CrmInvoiceRow, type InvoiceAuditAction } from "@/lib/crm-invoices-types";
+import { normalizeRateValue } from "@/lib/rate-input";
 import {
   buildDefaultInvoiceReceiptMessage,
   buildDefaultInvoiceReminderMessage,
@@ -78,7 +79,7 @@ function parseLineItems(raw: FormDataEntryValue | null): { items: LineItemInput[
     const item = raw as Record<string, unknown>;
     const description = String(item.description ?? "").trim();
     const quantity = Number(item.quantity);
-    const unitPrice = Number(item.unit_price);
+    const unitPrice = normalizeRateValue(item.unit_price as number | string);
     if (!description) return { items: [], error: "Every line item needs a description." };
     if (!Number.isFinite(quantity) || quantity < 0) return { items: [], error: "Line item quantity must be zero or greater." };
     if (!Number.isFinite(unitPrice) || unitPrice < 0) return { items: [], error: "Line item rate must be zero or greater." };
