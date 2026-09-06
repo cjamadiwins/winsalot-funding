@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { InvoiceDetail } from "@/lib/crm-invoices-data";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus, canPermanentlyDeleteInvoice, canPermanentlyDeleteTestInvoice } from "@/lib/crm-invoices-types";
+import { normalizeRateValue } from "@/lib/rate-input";
 import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, formatCurrency, PAYMENT_METHOD_LABELS, canPermanentlyDeleteTestPayment } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
@@ -61,7 +62,7 @@ export default function InvoiceDetailClient({
   // "Edit Invoice" item) so this page opens straight into the editor -
   // read once on mount, not re-synced on every searchParams change.
   const [editing, setEditing] = useState(() => canEdit && searchParams.get("edit") === "1");
-  const [draftItems, setDraftItems] = useState<LineItemDraft[]>(lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unit_price: li.unit_price })));
+  const [draftItems, setDraftItems] = useState<LineItemDraft[]>(lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unit_price: normalizeRateValue(li.unit_price) })));
   const [previewModal, setPreviewModal] = useState<{ emailType: CrmInvoiceEmailType; to: string; subject: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
