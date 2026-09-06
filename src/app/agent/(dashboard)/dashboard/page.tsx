@@ -3,7 +3,8 @@ import { UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import type { AgentAttendanceRow, CrmFollowUpWithOpportunity, CrmOpportunityRow } from "@/lib/crm-types";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
+import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
@@ -60,6 +61,15 @@ export default async function AgentDashboardPage() {
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
   const followUps = (followUpsData ?? []) as CrmFollowUpWithOpportunity[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
+
+  // Opportunity Pipeline summary card (below) - stage counts from the
+  // same opportunities array already fetched above (RLS-scoped to this
+  // agent's own opportunities), no new query.
+  const pipelineStageCounts = OPPORTUNITY_STAGES.map((stage) => ({
+    label: stage,
+    count: opportunities.filter((o) => o.stage === stage).length,
+    styleClass: OPPORTUNITY_STAGE_STYLES[stage],
+  }));
 
   // Same helpers /agent/performance uses (getCrmPerformanceRecords +
   // computeCrmAgentPerformance) - reused here purely to surface a
@@ -174,6 +184,8 @@ export default async function AgentDashboardPage() {
           View full report →
         </Link>
       </section>
+
+      <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/agent/my-opportunities?view=board" />
 
       <DialpadDashboardPreview
         audience="agent"

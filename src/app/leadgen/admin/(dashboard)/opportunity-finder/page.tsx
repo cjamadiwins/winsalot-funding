@@ -4,19 +4,22 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isHiddenLeadgenCampaignName, type LeadgenLeadRow } from "@/lib/leadgen-types";
 import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import LeadgenOpportunityFinderClient, { type LeadgenOpportunityFinderRow } from "./LeadgenOpportunityFinderClient";
+import { addBoardLeadNoteAction } from "./actions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
 export default async function LeadgenAdminOpportunityFinderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string }>;
+  // view=board is set by the dashboard's Opportunity Pipeline summary
+  // card's "View Board" button.
+  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string; view?: string }>;
 }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
-  const { category, agent, client, followup } = await searchParams;
+  const { category, agent, client, followup, view } = await searchParams;
 
-  const [{ data: scores }, { data: leads }, { data: agents }, { data: clients }, { data: campaigns }, { data: notes }] = await Promise.all([
+  const [{ data: scores }, { data: leads }, { data: agents }, { data: clients }, { data: campaigns }, { data: activities }, { data: appointments }] = await Promise.all([
     admin.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
     admin.from("leadgen_leads").select("*"),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
@@ -24,18 +27,33 @@ export default async function LeadgenAdminOpportunityFinderPage({
     admin.from("leadgen_campaigns").select("id, name, client_id").order("name"),
     admin
       .from("leadgen_lead_activities")
-      .select("lead_id, notes, occurred_at")
-      .not("notes", "is", null)
+      .select("lead_id, activity_type, notes, occurred_at, call_outcome")
       .order("occurred_at", { ascending: true }),
+    // Board View's "Appointment Status" - most recent appointment per
+    // lead, oldest-first so the reduce below keeps the latest one (same
+    // pattern the Leads page already uses for its own Appointment Status
+    // column).
+    admin.from("leadgen_appointments").select("lead_id, status, created_at").order("created_at", { ascending: true }),
   ]);
 
   const leadById = new Map((leads ?? []).map((l) => [l.id, l as LeadgenLeadRow]));
   const agentById = new Map((agents ?? []).map((a) => [a.id, a]));
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const campaignById = new Map((campaigns ?? []).map((c) => [c.id, c]));
-  const lastNoteByLead = new Map<string, { notes: string; occurred_at: string }>();
-  for (const row of notes ?? []) {
-    if (row.lead_id && row.notes) lastNoteByLead.set(row.lead_id, { notes: row.notes, occurred_at: row.occurred_at });
+  const notesByLead = new Map<string, { notes: string; occurred_at: string }[]>();
+  const lastCallOutcomeByLead = new Map<string, string | null>();
+  for (const row of activities ?? []) {
+    if (!row.lead_id) continue;
+    if (row.notes) {
+      const list = notesByLead.get(row.lead_id) ?? [];
+      list.push({ notes: row.notes, occurred_at: row.occurred_at });
+      notesByLead.set(row.lead_id, list);
+    }
+    if (row.activity_type === "call") lastCallOutcomeByLead.set(row.lead_id, row.call_outcome ?? null);
+  }
+  const appointmentStatusByLead = new Map<string, string>();
+  for (const appt of appointments ?? []) {
+    if (appt.lead_id) appointmentStatusByLead.set(appt.lead_id, appt.status);
   }
 
   const rows: LeadgenOpportunityFinderRow[] = (scores ?? [])
@@ -43,9 +61,11 @@ export default async function LeadgenAdminOpportunityFinderPage({
       const score = s as LeadgenOpportunityScoreRow;
       const lead = leadById.get(score.lead_id);
       if (!lead) return null;
-      const lastNote = lastNoteByLead.get(score.lead_id) ?? null;
+      const noteHistory = notesByLead.get(score.lead_id) ?? [];
+      const lastNote = noteHistory.length > 0 ? noteHistory[noteHistory.length - 1] : null;
       const agentRow = lead.assigned_agent_id ? agentById.get(lead.assigned_agent_id) ?? null : null;
       const signals = score.signals as { last_call_at?: string | null; last_email_activity_at?: string | null };
+      const clientName = clientById.get(lead.client_id)?.name ?? null;
       return {
         score,
         businessName: lead.business_name,
@@ -56,13 +76,17 @@ export default async function LeadgenAdminOpportunityFinderPage({
         assignedAgentId: lead.assigned_agent_id,
         assignedAgentName: agentRow?.full_name || agentRow?.email || null,
         clientId: lead.client_id,
-        clientName: clientById.get(lead.client_id)?.name ?? null,
+        clientName,
+        clientOrBusiness: clientName || lead.business_name,
         campaignId: lead.campaign_id,
         campaignName: lead.campaign_id ? campaignById.get(lead.campaign_id)?.name ?? null : null,
         nextFollowUpAt: lead.next_follow_up_at,
         lastCallAt: signals.last_call_at ?? null,
         lastEmailAt: signals.last_email_activity_at ?? null,
         lastNote: lastNote?.notes ?? null,
+        notes: noteHistory.slice(-2).reverse().map((n) => n.notes),
+        lastCallOutcome: lastCallOutcomeByLead.get(lead.id) ?? null,
+        appointmentStatus: appointmentStatusByLead.get(lead.id) ?? null,
         detailHref: `/leadgen/admin/leads/${lead.id}`,
       };
     })
@@ -91,6 +115,8 @@ export default async function LeadgenAdminOpportunityFinderPage({
         initialAgentFilter={agent}
         initialClientFilter={client}
         initialFollowUpFilter={followup}
+        initialView={view === "board" ? "board" : "list"}
+        onAddNote={addBoardLeadNoteAction}
       />
     </div>
   );

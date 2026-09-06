@@ -3,8 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { addActivityAction } from "../opportunities/[id]/actions";
 
 type ActionResult = { error?: string };
+
+// Board View's compact "Add Note" quick-form - a thin wrapper around the
+// exact same addActivityAction the full opportunity detail page's own
+// "Log Activity" form already calls (activity_type fixed to "note" so a
+// quick note never implies a call/email happened). No new note-taking
+// path is introduced; this only exposes the existing one from the Board
+// View's detail panel. addActivityAction throws on failure rather than
+// returning a result, so that's translated into this module's
+// { error? } shape here.
+export async function addBoardOpportunityNoteAction(opportunityId: string, note: string): Promise<ActionResult> {
+  const formData = new FormData();
+  formData.set("activity_type", "note");
+  formData.set("notes", note);
+  try {
+    await addActivityAction(opportunityId, formData);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save the note." };
+  }
+  revalidateFinder();
+  return {};
+}
 
 function revalidateFinder() {
   revalidatePath("/admin/crm/opportunity-finder");

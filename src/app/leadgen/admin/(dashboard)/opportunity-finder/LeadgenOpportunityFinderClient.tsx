@@ -12,6 +12,15 @@ import {
   type OpportunityCategory,
 } from "@/lib/opportunity-finder";
 import {
+  LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_LEAD_STATUSES,
+  LEADGEN_LEAD_STATUS_STYLES,
+  type LeadgenAppointmentStatus,
+  type LeadgenLeadStatus,
+} from "@/lib/leadgen-types";
+import type { OpportunityBoardCard } from "@/lib/opportunity-board";
+import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
+import {
   assignFinderLeadAgentAction,
   dismissFinderOpportunityAction,
   reopenFinderOpportunityAction,
@@ -29,12 +38,16 @@ export type LeadgenOpportunityFinderRow = {
   assignedAgentName: string | null;
   clientId: string;
   clientName: string | null;
+  clientOrBusiness: string;
   campaignId: string | null;
   campaignName: string | null;
   nextFollowUpAt: string | null;
   lastCallAt: string | null;
   lastEmailAt: string | null;
   lastNote: string | null;
+  notes: string[];
+  lastCallOutcome: string | null;
+  appointmentStatus: string | null;
   detailHref: string;
 };
 
@@ -58,6 +71,8 @@ export default function LeadgenOpportunityFinderClient({
   initialAgentFilter,
   initialClientFilter,
   initialFollowUpFilter,
+  initialView,
+  onAddNote,
 }: {
   rows: LeadgenOpportunityFinderRow[];
   agents: { id: string; name: string }[];
@@ -67,16 +82,20 @@ export default function LeadgenOpportunityFinderClient({
   initialAgentFilter?: string;
   initialClientFilter?: string;
   initialFollowUpFilter?: string;
+  initialView?: "list" | "board";
+  onAddNote: (leadId: string, note: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "board">(initialView ?? "list");
   const [categoryFilter, setCategoryFilter] = useState<OpportunityCategory | "all">(
     initialCategory && OPPORTUNITY_CATEGORIES.includes(initialCategory as OpportunityCategory) ? (initialCategory as OpportunityCategory) : "all"
   );
   const [agentFilter, setAgentFilter] = useState(initialAgentFilter && agents.some((a) => a.id === initialAgentFilter) ? initialAgentFilter : "all");
   const [clientFilter, setClientFilter] = useState(initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all");
   const [campaignFilter, setCampaignFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState<LeadgenLeadStatus | "all">("all");
   const [followUpFilter, setFollowUpFilter] = useState(initialFollowUpFilter === "due" ? "due" : "all");
   const [search, setSearch] = useState("");
   const [dismissingId, setDismissingId] = useState<string | null>(null);
@@ -101,17 +120,61 @@ export default function LeadgenOpportunityFinderClient({
       if (agentFilter !== "all" && row.assignedAgentId !== agentFilter) return false;
       if (clientFilter !== "all" && row.clientId !== clientFilter) return false;
       if (campaignFilter !== "all" && row.campaignId !== campaignFilter) return false;
+      if (stageFilter !== "all" && row.status !== stageFilter) return false;
       if (followUpFilter === "due" && !row.nextFollowUpAt) return false;
       if (query && !(row.businessName.toLowerCase().includes(query) || (row.contactName ?? "").toLowerCase().includes(query))) return false;
       return true;
     });
-  }, [rows, categoryFilter, agentFilter, clientFilter, campaignFilter, followUpFilter, search]);
+  }, [rows, categoryFilter, agentFilter, clientFilter, campaignFilter, stageFilter, followUpFilter, search]);
+
+  const boardCards: OpportunityBoardCard[] = useMemo(
+    () =>
+      filtered.map((row) => ({
+        id: row.score.lead_id,
+        businessName: row.businessName,
+        clientOrBusiness: row.clientOrBusiness,
+        assignedAgentName: row.assignedAgentName,
+        phone: row.phone,
+        stageKey: row.status,
+        stageLabel: row.status,
+        stageStyle: LEADGEN_LEAD_STATUS_STYLES[row.status as LeadgenLeadStatus] ?? "bg-slate-100 text-slate-700",
+        lastCallAt: row.lastCallAt,
+        lastCallOutcome: row.lastCallOutcome,
+        notes: row.notes,
+        nextFollowUpAt: row.nextFollowUpAt,
+        appointmentStatus: row.appointmentStatus,
+        appointmentStatusStyle: row.appointmentStatus
+          ? LEADGEN_APPOINTMENT_STATUS_STYLES[row.appointmentStatus as LeadgenAppointmentStatus] ?? "bg-slate-100 text-slate-700"
+          : null,
+        viewHref: `${row.detailHref}?from=opportunity-finder`,
+        editHref: `${row.detailHref}?from=opportunity-finder`,
+      })),
+    [filtered]
+  );
+
+  const boardColumns = LEADGEN_LEAD_STATUSES.map((status) => ({ key: status, label: status, styleClass: LEADGEN_LEAD_STATUS_STYLES[status] }));
 
   return (
     <div className="mt-6">
       {error && <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-full border border-slate-300 p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            List View
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("board")}
+            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+          >
+            Board View
+          </button>
+        </div>
         {(["all", ...OPPORTUNITY_CATEGORIES] as const).map((cat) => (
           <button
             key={cat}
@@ -155,6 +218,14 @@ export default function LeadgenOpportunityFinderClient({
             </option>
           ))}
         </select>
+        <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value as LeadgenLeadStatus | "all")} className={inputClass}>
+          <option value="all">All Stages</option>
+          {LEADGEN_LEAD_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
         <select value={followUpFilter} onChange={(e) => setFollowUpFilter(e.target.value as "all" | "due")} className={inputClass}>
           <option value="all">Any Follow-Up</option>
           <option value="due">Has a Follow-Up Scheduled</option>
@@ -167,6 +238,9 @@ export default function LeadgenOpportunityFinderClient({
         />
       </div>
 
+      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} />}
+
+      {view === "list" && (
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[1300px] text-left text-[13px]">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
@@ -330,6 +404,7 @@ export default function LeadgenOpportunityFinderClient({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

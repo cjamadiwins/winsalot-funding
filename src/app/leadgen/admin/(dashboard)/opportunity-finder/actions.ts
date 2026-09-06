@@ -3,12 +3,34 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { recordCallOutcomeAction } from "../leads/[id]/actions";
 
 type ActionResult = { error?: string };
 
 function revalidateFinder() {
   revalidatePath("/leadgen/admin/opportunity-finder");
   revalidatePath("/leadgen/admin");
+}
+
+// Board View's compact "Add Note" quick-form. Lead Gen CRM has no
+// standalone "just add a note" action - notes are only ever recorded
+// alongside a call outcome (recordCallOutcomeAction, the exact same
+// action the lead detail page's own "Record Call Outcome" form already
+// calls). Reusing it here with call_outcome defaulted to the lead's
+// current status leaves the pipeline stage unchanged while still using
+// this CRM's real note/call-log write path - no new one is introduced.
+export async function addBoardLeadNoteAction(leadId: string, note: string): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const { data: lead } = await supabase.from("leadgen_leads").select("status").eq("id", leadId).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  const formData = new FormData();
+  formData.set("call_outcome", lead.status);
+  formData.set("notes", note);
+  const result = await recordCallOutcomeAction(leadId, formData);
+  if (result.error) return result;
+  revalidateFinder();
+  return {};
 }
 
 // Reassigns the underlying lead itself (leadgen_leads.assigned_agent_id) -
