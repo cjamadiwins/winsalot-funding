@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getResendClient } from "@/lib/resend";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { EMAIL_STATUS_LABELS, type EmailEventStatus } from "@/lib/crm-types";
+import { notifyAdmins } from "@/lib/crm-retention-notifications";
 
 export const runtime = "nodejs";
 
@@ -299,6 +300,89 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true, tracked: true, category: "crm_marketing" });
+  }
+
+  // Client Loyalty & Retention delivery tracking (crm_retention_emails,
+  // migration 0148) - entirely separate module from crm_marketing above
+  // (client relationship retention vs. prospect marketing), same
+  // occurrence-keyed idempotency design.
+  const { data: retentionEmail } = await admin
+    .from("crm_retention_emails")
+    .select("id, enrollment_id, client_id, to_email, status_at")
+    .eq("resend_email_id", emailId)
+    .maybeSingle();
+
+  if (retentionEmail) {
+    const isNewer = new Date(eventAt) >= new Date(retentionEmail.status_at);
+    const retentionUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+    if (isNewer) {
+      retentionUpdates.status = status;
+      retentionUpdates.status_at = eventAt;
+    }
+    if (event.type === "email.bounced") retentionUpdates.error_detail = event.data.bounce.message;
+    if (event.type === "email.failed") retentionUpdates.error_detail = event.data.failed.reason;
+
+    const { error: retentionUpdateError } = await admin.from("crm_retention_emails").update(retentionUpdates).eq("id", retentionEmail.id);
+    if (retentionUpdateError) {
+      console.error(`[resend-webhook] failed to update crm_retention_emails ${retentionEmail.id}:`, retentionUpdateError);
+    }
+
+    // A hard bounce/complaint is an explicit do-not-contact signal, same
+    // as the marketing branch above - pause this client's retention
+    // campaign immediately so the next cron run cannot keep retrying a bad
+    // address, and suppress the address using the same shared suppression
+    // list runCrmRetentionCadenceJob already checks before every send.
+    // Only failure-worthy transitions get their own "Retention & Follow-Up
+    // History" line and admin notification - routine sent/delivered/
+    // opened/clicked updates are already visible on the crm_retention_emails
+    // row itself (Email History) without adding noise, matching the
+    // brief's example history entries (all state transitions, never
+    // per-open/click events). Exactly one history entry per incident here
+    // (not one for the pause and a separate one for the bounce/complaint),
+    // since both describe the same event.
+    if (!isDuplicateDelivery && (event.type === "email.bounced" || event.type === "email.complained" || event.type === "email.failed")) {
+      const toEmail = Array.isArray(event.data.to) ? event.data.to.join(", ") : String(event.data.to);
+
+      if (event.type === "email.bounced" || event.type === "email.complained") {
+        const suppressionReason = event.type === "email.complained" ? "spam_complaint" : "hard_bounce";
+        await admin.from("crm_email_suppressions").upsert(
+          { email: retentionEmail.to_email.trim().toLowerCase(), opportunity_id: null, reason: suppressionReason, suppressed_at: eventAt },
+          { onConflict: "email" }
+        );
+        await admin
+          .from("crm_retention_enrollments")
+          .update({
+            retention_status: "paused",
+            paused_at: eventAt,
+            claim_token: null,
+            claimed_at: null,
+            last_error: event.type === "email.complained" ? "Recipient reported the email as spam." : "Recipient email address hard-bounced.",
+            updated_at: eventAt,
+          })
+          .eq("id", retentionEmail.enrollment_id);
+
+        const notes =
+          event.type === "email.bounced"
+            ? `Retention email bounced (to ${toEmail}) — ${event.data.bounce.message}. The campaign was automatically paused.`
+            : `Recipient marked the retention email as spam (to ${toEmail}). The campaign was automatically paused.`;
+        await admin.from("crm_retention_events").insert({ client_id: retentionEmail.client_id, enrollment_id: retentionEmail.enrollment_id, event_type: "paused", notes });
+        await notifyAdmins(admin, {
+          title: "Client campaign paused",
+          body: `A retention campaign was automatically paused after ${event.type === "email.bounced" ? "a bounce" : "a spam complaint"} (to ${toEmail}).`,
+          linkPath: `/admin/crm/retention?client=${retentionEmail.client_id}`,
+        });
+      } else {
+        await admin.from("crm_retention_events").insert({
+          client_id: retentionEmail.client_id,
+          enrollment_id: retentionEmail.enrollment_id,
+          event_type: "delivery_failed",
+          notes: `Retention email failed (to ${toEmail}) — ${event.data.failed.reason}.`,
+        });
+        await notifyAdmins(admin, { title: "Email failed", body: `A retention email to ${toEmail} failed to send.`, linkPath: `/admin/crm/retention?client=${retentionEmail.client_id}` });
+      }
+    }
+
+    return NextResponse.json({ received: true, tracked: true, category: "crm_retention" });
   }
 
   const { data: tracked } = await admin

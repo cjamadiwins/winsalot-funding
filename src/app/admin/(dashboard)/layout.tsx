@@ -28,6 +28,7 @@ import {
   Target,
   Megaphone,
   Briefcase,
+  Heart,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -41,6 +42,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Subcontractors", href: "/admin/crm/subcontractors", icon: <Briefcase /> },
   { label: "Clients", href: "/admin/crm/clients", icon: <Building2 /> },
   { label: "Email Marketing", href: "/admin/crm/marketing", icon: <Megaphone /> },
+  { label: "Client Loyalty & Retention", href: "/admin/crm/retention", icon: <Heart /> },
   { label: "Invoices", href: "/admin/crm/invoices", icon: <Receipt /> },
   { label: "Client Onboarding", href: "/admin/crm/onboarding", icon: <Workflow /> },
   { label: "Client Agreements", href: "/admin/crm/agreements", icon: <FileSignature /> },
@@ -66,7 +68,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }, { count: unreadOnboardingCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }, { count: unreadOnboardingCount }, { count: unreadRetentionCount }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadCrmChatUnreadCount(supabase, user.id),
@@ -80,6 +82,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // filter the onboarding dashboard itself uses, restricted to rows the
     // admin hasn't opened from that dashboard yet.
     supabase.from("crm_client_agreements").select("id", { count: "exact", head: true }).neq("status", "superseded").is("onboarding_reviewed_at", null),
+    // Client Loyalty & Retention badge (migration 0148) - same
+    // "unread crm_notifications under this feature's own link_path
+    // prefix" convention as Agreements/Intake above: follow-up due/
+    // overdue, re-engagement completed, email failed, campaign paused,
+    // and manual-review notifications all link here.
+    supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/retention%"),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -91,6 +99,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     if (item.href === "/admin/crm/agreements") return { ...item, badgeCount: unreadAgreementCount ?? 0 };
     if (item.href === "/admin/crm/intake") return { ...item, badgeCount: unreadIntakeCount ?? 0 };
     if (item.href === "/admin/crm/onboarding") return { ...item, badgeCount: unreadOnboardingCount ?? 0 };
+    if (item.href === "/admin/crm/retention") return { ...item, badgeCount: unreadRetentionCount ?? 0 };
     return item;
   });
 
