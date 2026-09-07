@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import type { CrmTrainingMaterialRow } from "@/lib/crm-types";
 import ConnectProposeCloseCourse from "@/components/ConnectProposeCloseCourse";
+import WebDesignProspectingTrainingContent from "@/components/WebDesignProspectingTrainingContent";
 import TrainingList from "./TrainingList";
 
 export default async function AgentTrainingPage() {
@@ -40,6 +41,10 @@ export default async function AgentTrainingPage() {
 
       <div className="mt-10">
         <ConnectProposeCloseCourse crm="growth" />
+      </div>
+
+      <div className="mt-10">
+        <WebDesignProspectingTrainingContent />
       </div>
     </div>
   );
