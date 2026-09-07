@@ -15,7 +15,7 @@ import {
 import type { InvoiceDashboardSummary } from "@/lib/crm-invoices-data";
 import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency, canPermanentlyDeleteTestPayment, type CrmPaymentRow } from "@/lib/crm-clients-types";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
-import ManageMenu from "./ManageMenu";
+import ManageMenu from "@/components/crm-ui/ManageMenu";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import PaymentDetailModal from "./PaymentDetailModal";
 

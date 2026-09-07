@@ -18,6 +18,7 @@ import {
 } from "@/lib/crm-retention-types";
 import { EMAIL_STATUS_LABELS, EMAIL_STATUS_STYLES } from "@/lib/crm-types";
 import type { RetentionJobSummary } from "@/lib/crm-retention-job";
+import ManageMenu, { type ManageMenuItem } from "@/components/crm-ui/ManageMenu";
 
 type ActionResult = { error?: string; success?: string };
 type RunJobResult = ActionResult & { cadence?: RetentionJobSummary; followups?: RetentionJobSummary };
@@ -55,6 +56,14 @@ function formatDateTime(value: string | null): string {
 function formatDate(value: string | null): string {
   if (!value) return "—";
   return new Date(value + (value.length === 10 ? "T00:00:00" : "")).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+// A shorter rendering of the same timestamp for the compact campaign
+// table/cards - the full value (with year) is still available via the
+// `title` tooltip and inside the Email History view.
+function formatCompactDateTime(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function startOfMonthIso(): string {
@@ -134,6 +143,32 @@ export default function AdminRetentionClient({
 
   const unenrolledClients = clients.filter((c) => !enrollments.some((e) => e.client_id === c.id));
 
+  const enrollmentRows = useMemo(
+    () =>
+      enrollments.map((enrollment) => ({
+        enrollment,
+        client: clientById.get(enrollment.client_id),
+        lastEmail: emails.filter((e) => e.enrollment_id === enrollment.id)[0] ?? null,
+      })),
+    [enrollments, clientById, emails]
+  );
+
+  function handlersFor(enrollment: CrmRetentionEnrollmentRow, client: RetentionClientSummary | undefined) {
+    return {
+      onView: () => setHistoryForEnrollment(enrollment.id),
+      onPause: () => runAction(() => actions.pause(enrollment.id)),
+      onResume: () => runAction(() => actions.resume(enrollment.id)),
+      onStop: () => {
+        if (window.confirm(`Stop the retention campaign for ${client?.company_name ?? "this client"}? No further emails will be sent.`)) runAction(() => actions.stop(enrollment.id));
+      },
+      onRemove: () => {
+        if (window.confirm(`Remove ${client?.company_name ?? "this client"} from Retention? Email history is preserved.`)) runAction(() => actions.remove(enrollment.id));
+      },
+      onSendNow: () => runAction(() => actions.sendNow(enrollment.id)),
+      onChangeCampaignType: (fd: FormData) => runAction(() => actions.changeCampaignType(enrollment.id, fd)),
+    };
+  }
+
   return (
     <div>
       {message && (
@@ -202,55 +237,43 @@ export default function AdminRetentionClient({
       {/* Campaign table */}
       <section className="mt-8">
         <h2 className="text-base font-bold text-slate-900">Client Retention Campaigns</h2>
-        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
+
+        {/* Desktop/laptop: compact table, Manage column pinned to the right so it never scrolls out of view */}
+        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 bg-white lg:block">
+          <table className="min-w-full divide-y divide-slate-200 text-[13px]">
             <thead>
-              <tr className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Business / Client</th>
-                <th className="px-4 py-3">Client Status</th>
-                <th className="px-4 py-3">Retention Status</th>
-                <th className="px-4 py-3">Campaign Type</th>
-                <th className="px-4 py-3">Last Email Sent</th>
-                <th className="px-4 py-3">Next Email</th>
-                <th className="px-4 py-3">Delivery Status</th>
-                <th className="px-4 py-3">Actions</th>
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2.5">Business / Client</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5">Campaign Type</th>
+                <th className="px-3 py-2.5">Current Stage</th>
+                <th className="px-3 py-2.5">Last/Current Send</th>
+                <th className="px-3 py-2.5">Next Send</th>
+                <th className="px-3 py-2.5">Delivery Status</th>
+                <th className="sticky right-0 border-l border-slate-200 bg-white px-3 py-2.5">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {enrollments.length === 0 && (
+              {enrollmentRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
                     No clients enrolled yet.
                   </td>
                 </tr>
               )}
-              {enrollments.map((enrollment) => {
-                const client = clientById.get(enrollment.client_id);
-                const enrollmentEmails = emails.filter((e) => e.enrollment_id === enrollment.id);
-                const lastEmail = enrollmentEmails[0] ?? null;
-                return (
-                  <EnrollmentRow
-                    key={enrollment.id}
-                    enrollment={enrollment}
-                    client={client}
-                    lastEmail={lastEmail}
-                    isPending={isPending}
-                    onView={() => setHistoryForEnrollment(enrollment.id)}
-                    onPause={() => runAction(() => actions.pause(enrollment.id))}
-                    onResume={() => runAction(() => actions.resume(enrollment.id))}
-                    onStop={() => {
-                      if (window.confirm(`Stop the retention campaign for ${client?.company_name ?? "this client"}? No further emails will be sent.`)) runAction(() => actions.stop(enrollment.id));
-                    }}
-                    onRemove={() => {
-                      if (window.confirm(`Remove ${client?.company_name ?? "this client"} from Retention? Email history is preserved.`)) runAction(() => actions.remove(enrollment.id));
-                    }}
-                    onSendNow={() => runAction(() => actions.sendNow(enrollment.id))}
-                    onChangeCampaignType={(fd) => runAction(() => actions.changeCampaignType(enrollment.id, fd))}
-                  />
-                );
-              })}
+              {enrollmentRows.map(({ enrollment, client, lastEmail }) => (
+                <EnrollmentRow key={enrollment.id} enrollment={enrollment} client={client} lastEmail={lastEmail} isPending={isPending} {...handlersFor(enrollment, client)} />
+              ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Smaller screens: one compact card per campaign instead of a wide table */}
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:hidden">
+          {enrollmentRows.length === 0 && <p className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">No clients enrolled yet.</p>}
+          {enrollmentRows.map(({ enrollment, client, lastEmail }) => (
+            <EnrollmentCard key={enrollment.id} enrollment={enrollment} client={client} lastEmail={lastEmail} isPending={isPending} {...handlersFor(enrollment, client)} />
+          ))}
         </div>
       </section>
 
@@ -321,23 +344,7 @@ export default function AdminRetentionClient({
   );
 }
 
-function EnrollmentRow({
-  enrollment,
-  client,
-  lastEmail,
-  isPending,
-  onView,
-  onPause,
-  onResume,
-  onStop,
-  onRemove,
-  onSendNow,
-  onChangeCampaignType,
-}: {
-  enrollment: CrmRetentionEnrollmentRow;
-  client: RetentionClientSummary | undefined;
-  lastEmail: CrmRetentionEmailRow | null;
-  isPending: boolean;
+type EnrollmentRowHandlers = {
   onView: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -345,93 +352,150 @@ function EnrollmentRow({
   onRemove: () => void;
   onSendNow: () => void;
   onChangeCampaignType: (formData: FormData) => void;
-}) {
-  const [editingType, setEditingType] = useState(false);
+};
+
+// Same "applicable actions" the row previously rendered as six stacked
+// buttons, now the contents of a single Manage ▾ menu. Nothing here
+// changes what an action does - only how it is reached.
+export function buildManageItems(enrollment: CrmRetentionEnrollmentRow, isPending: boolean, handlers: EnrollmentRowHandlers): ManageMenuItem[] {
   const canSendNow = enrollment.campaign_type !== "follow_up" && ["active", "re_engagement"].includes(enrollment.retention_status);
   const canPause = ["active", "re_engagement"].includes(enrollment.retention_status);
   const canActivate = enrollment.retention_status === "inactive";
   const canResume = enrollment.retention_status === "paused";
 
+  return [
+    { key: "view", label: "View", onSelect: handlers.onView },
+    { key: "email-history", label: "Email History", onSelect: handlers.onView },
+    { key: "send-now", label: "Send Now", hidden: !canSendNow, disabled: isPending, onSelect: handlers.onSendNow },
+    { key: "activate", label: "Activate", hidden: !canActivate, disabled: isPending, onSelect: handlers.onResume },
+    { key: "pause", label: "Pause", hidden: !canPause, disabled: isPending, onSelect: handlers.onPause },
+    { key: "resume", label: "Resume", hidden: !canResume, disabled: isPending, onSelect: handlers.onResume },
+    { key: "stop", label: "Stop", danger: true, disabled: isPending, onSelect: handlers.onStop },
+    { key: "remove", label: "Remove", danger: true, disabled: isPending, onSelect: handlers.onRemove },
+  ];
+}
+
+function CampaignTypeEditor({ enrollment, onChangeCampaignType }: { enrollment: CrmRetentionEnrollmentRow; onChangeCampaignType: (formData: FormData) => void }) {
+  const [editingType, setEditingType] = useState(false);
+
+  if (editingType) {
+    return (
+      <form
+        action={(fd) => {
+          onChangeCampaignType(fd);
+          setEditingType(false);
+        }}
+        className="flex items-center gap-1.5"
+      >
+        <select name="campaign_type" defaultValue={enrollment.campaign_type} className="rounded-lg border border-slate-300 px-2 py-1 text-[12.5px]">
+          <option value="client_success">Client Success</option>
+          <option value="follow_up">Follow-Up</option>
+          <option value="re_engagement">Re-Engagement</option>
+        </select>
+        <button type="submit" className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
+          Save
+        </button>
+        <button type="button" onClick={() => setEditingType(false)} className="text-[12px] text-slate-400 hover:text-slate-600">
+          ×
+        </button>
+      </form>
+    );
+  }
+  return (
+    <button type="button" onClick={() => setEditingType(true)} className="text-slate-700 hover:underline">
+      {RETENTION_CAMPAIGN_LABELS[enrollment.campaign_type]}
+    </button>
+  );
+}
+
+function EnrollmentRow({
+  enrollment,
+  client,
+  lastEmail,
+  isPending,
+  ...handlers
+}: {
+  enrollment: CrmRetentionEnrollmentRow;
+  client: RetentionClientSummary | undefined;
+  lastEmail: CrmRetentionEmailRow | null;
+  isPending: boolean;
+} & EnrollmentRowHandlers) {
   return (
     <tr>
-      <td className="px-4 py-3 font-medium text-slate-900">{client?.company_name ?? "Unknown client"}</td>
-      <td className="px-4 py-3 text-slate-600">{client?.status ?? "—"}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5 font-medium text-slate-900">{client?.company_name ?? "Unknown client"}</td>
+      <td className="px-3 py-2.5 text-slate-600">{client?.status ?? "—"}</td>
+      <td className="px-3 py-2.5">
+        <CampaignTypeEditor enrollment={enrollment} onChangeCampaignType={handlers.onChangeCampaignType} />
+      </td>
+      <td className="px-3 py-2.5">
         <StatusBadge label={RETENTION_STATUS_LABELS[enrollment.retention_status]} className={RETENTION_STATUS_STYLES[enrollment.retention_status]} />
       </td>
-      <td className="px-4 py-3">
-        {editingType ? (
-          <form
-            action={(fd) => {
-              onChangeCampaignType(fd);
-              setEditingType(false);
-            }}
-            className="flex items-center gap-1.5"
-          >
-            <select name="campaign_type" defaultValue={enrollment.campaign_type} className="rounded-lg border border-slate-300 px-2 py-1 text-[12.5px]">
-              <option value="client_success">Client Success</option>
-              <option value="follow_up">Follow-Up</option>
-              <option value="re_engagement">Re-Engagement</option>
-            </select>
-            <button type="submit" className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
-              Save
-            </button>
-            <button type="button" onClick={() => setEditingType(false)} className="text-[12px] text-slate-400 hover:text-slate-600">
-              ×
-            </button>
-          </form>
-        ) : (
-          <button type="button" onClick={() => setEditingType(true)} className="text-slate-700 hover:underline">
-            {RETENTION_CAMPAIGN_LABELS[enrollment.campaign_type]}
-          </button>
-        )}
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-600" title={formatDateTime(enrollment.last_sent_at)}>
+        {formatCompactDateTime(enrollment.last_sent_at)}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{formatDateTime(enrollment.last_sent_at)}</td>
-      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{enrollment.campaign_type === "follow_up" ? "—" : formatDateTime(enrollment.next_send_at)}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5 whitespace-nowrap text-slate-600" title={enrollment.campaign_type === "follow_up" ? undefined : formatDateTime(enrollment.next_send_at)}>
+        {enrollment.campaign_type === "follow_up" ? "—" : formatCompactDateTime(enrollment.next_send_at)}
+      </td>
+      <td className="px-3 py-2.5">
         {lastEmail ? (
           <StatusBadge label={EMAIL_STATUS_LABELS[lastEmail.status as keyof typeof EMAIL_STATUS_LABELS] ?? lastEmail.status} className={EMAIL_STATUS_STYLES[lastEmail.status as keyof typeof EMAIL_STATUS_STYLES] ?? "bg-slate-100 text-slate-600"} />
         ) : (
           <span className="text-slate-400">—</span>
         )}
       </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={onView} className={buttonSubtle}>
-            View
-          </button>
-          {canActivate && (
-            <button type="button" disabled={isPending} onClick={onResume} className={buttonSubtle}>
-              Activate
-            </button>
-          )}
-          {canPause && (
-            <button type="button" disabled={isPending} onClick={onPause} className={buttonSubtle}>
-              Pause
-            </button>
-          )}
-          {canResume && (
-            <button type="button" disabled={isPending} onClick={onResume} className={buttonSubtle}>
-              Resume
-            </button>
-          )}
-          {canSendNow && (
-            <button type="button" disabled={isPending} onClick={onSendNow} className={buttonSubtle}>
-              Send Now
-            </button>
-          )}
-          <button type="button" onClick={onView} className={buttonSubtle}>
-            Email History
-          </button>
-          <button type="button" disabled={isPending} onClick={onStop} className={buttonDanger}>
-            Stop
-          </button>
-          <button type="button" disabled={isPending} onClick={onRemove} className={buttonDanger}>
-            Remove
-          </button>
-        </div>
+      <td className="sticky right-0 border-l border-slate-200 bg-white px-3 py-2.5">
+        <ManageMenu items={buildManageItems(enrollment, isPending, handlers)} />
       </td>
     </tr>
+  );
+}
+
+function EnrollmentCard({
+  enrollment,
+  client,
+  lastEmail,
+  isPending,
+  ...handlers
+}: {
+  enrollment: CrmRetentionEnrollmentRow;
+  client: RetentionClientSummary | undefined;
+  lastEmail: CrmRetentionEmailRow | null;
+  isPending: boolean;
+} & EnrollmentRowHandlers) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-semibold text-slate-900">{client?.company_name ?? "Unknown client"}</p>
+          <div className="mt-1 text-[12.5px]">
+            <CampaignTypeEditor enrollment={enrollment} onChangeCampaignType={handlers.onChangeCampaignType} />
+          </div>
+        </div>
+        <ManageMenu items={buildManageItems(enrollment, isPending, handlers)} />
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <StatusBadge label={RETENTION_STATUS_LABELS[enrollment.retention_status]} className={RETENTION_STATUS_STYLES[enrollment.retention_status]} />
+        {lastEmail ? (
+          <StatusBadge label={EMAIL_STATUS_LABELS[lastEmail.status as keyof typeof EMAIL_STATUS_LABELS] ?? lastEmail.status} className={EMAIL_STATUS_STYLES[lastEmail.status as keyof typeof EMAIL_STATUS_STYLES] ?? "bg-slate-100 text-slate-600"} />
+        ) : (
+          <span className="text-[11.5px] text-slate-400">No emails yet</span>
+        )}
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11.5px] text-slate-500">
+        <div>
+          <span className="font-medium text-slate-600">Status: </span>
+          {client?.status ?? "—"}
+        </div>
+        <div title={formatDateTime(enrollment.last_sent_at)}>
+          <span className="font-medium text-slate-600">Last Send: </span>
+          {formatCompactDateTime(enrollment.last_sent_at)}
+        </div>
+        <div className="col-span-2" title={enrollment.campaign_type === "follow_up" ? undefined : formatDateTime(enrollment.next_send_at)}>
+          <span className="font-medium text-slate-600">Next Send: </span>
+          {enrollment.campaign_type === "follow_up" ? "—" : formatCompactDateTime(enrollment.next_send_at)}
+        </div>
+      </div>
+    </div>
   );
 }
 
