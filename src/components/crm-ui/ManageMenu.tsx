@@ -11,11 +11,9 @@ export type ManageMenuItem = {
   danger?: boolean;
 };
 
-// A small "Manage" button + dropdown, used beside every invoice in the
-// invoice list and every entry under Recent Payments. Only ever rendered
-// from within the admin-only Growth CRM Invoices pages (requireCrmAdmin
-// gates the whole route) - a regular agent can never reach the page this
-// menu lives on, let alone see it.
+// A small "Manage" button + dropdown shared across the Growth CRM admin
+// tables (Invoices, Retention, …) so a row's actions collapse into one
+// control instead of a run of stacked buttons.
 export default function ManageMenu({ items }: { items: ManageMenuItem[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
