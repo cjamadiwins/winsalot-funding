@@ -5,6 +5,7 @@ import { OPPORTUNITY_TYPE_LABELS, type CrmOpportunityRow, type CrmUserRow } from
 import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import OpportunityFinderClient, { type OpportunityFinderRow } from "./OpportunityFinderClient";
 import { addBoardOpportunityNoteAction } from "./actions";
+import { completeFollowUpAction, scheduleFollowUpAction } from "../followup-actions";
 
 export default async function AdminOpportunityFinderPage({
   searchParams,
@@ -12,13 +13,13 @@ export default async function AdminOpportunityFinderPage({
   // Set by the CRM dashboard's clickable KPI cards (see /admin/crm/page.tsx)
   // to land here pre-filtered - view=board is set by the dashboard's
   // Opportunity Pipeline summary card's "View Board" button.
-  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string; view?: string }>;
+  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string; industry?: string; view?: string }>;
 }) {
   await requireCrmAdmin();
   const admin = getSupabaseAdmin();
-  const { category, agent, client, followup, view } = await searchParams;
+  const { category, agent, client, followup, industry, view } = await searchParams;
 
-  const [{ data: scores }, { data: opportunities }, { data: agents }, { data: activities }, { data: agreements }, { data: clients }, { data: appointments }] =
+  const [{ data: scores }, { data: opportunities }, { data: agents }, { data: activities }, { data: agreements }, { data: clients }, { data: appointments }, { data: pendingFollowUps }] =
     await Promise.all([
       admin.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
       admin.from("crm_opportunities").select("*"),
@@ -49,6 +50,10 @@ export default async function AdminOpportunityFinderPage({
       // keeps the latest one (same pattern as the Lead Gen CRM's leads
       // list page's own most-recent-appointment lookup).
       admin.from("winsalot_appointments").select("opportunity_id, status, created_at").not("opportunity_id", "is", null).order("created_at", { ascending: true }),
+      // "Mark Complete" quick action needs the specific pending callback to
+      // complete - the earliest one per opportunity, same row the Overdue
+      // panel's own "Completed" button already targets (migration 0011).
+      admin.from("crm_followups").select("id, opportunity_id, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
     ]);
 
   const opportunityById = new Map((opportunities ?? []).map((o) => [o.id, o as CrmOpportunityRow]));
@@ -77,6 +82,16 @@ export default async function AdminOpportunityFinderPage({
   for (const appt of appointments ?? []) {
     if (appt.opportunity_id) appointmentStatusByOpportunity.set(appt.opportunity_id, appt.status);
   }
+  // Earliest pending callback per opportunity - pendingFollowUps is already
+  // ordered ascending by scheduled_at, so the first one seen per
+  // opportunity is the earliest.
+  const earliestFollowUpIdByOpportunity = new Map<string, string>();
+  for (const followUp of pendingFollowUps ?? []) {
+    if (followUp.opportunity_id && !earliestFollowUpIdByOpportunity.has(followUp.opportunity_id)) {
+      earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
+    }
+  }
+  const industries = Array.from(new Set((opportunities ?? []).map((o) => o.industry).filter((v): v is string => !!v))).sort();
 
   const rows: OpportunityFinderRow[] = (scores ?? [])
     .map((s): OpportunityFinderRow | null => {
@@ -103,6 +118,7 @@ export default async function AdminOpportunityFinderPage({
         clientOrBusiness: clientName || opp.business_name,
         campaignType: opp.opportunity_type,
         campaignName: OPPORTUNITY_TYPE_LABELS[opp.opportunity_type],
+        industry: opp.industry ?? null,
         nextFollowUpAt: opp.next_follow_up_at,
         lastContactedAt: opp.last_contacted_at,
         lastCallAt: signals.last_call_at ?? null,
@@ -112,6 +128,7 @@ export default async function AdminOpportunityFinderPage({
         notes: noteHistory.slice(-2).reverse().map((n) => n.notes),
         lastCallOutcome: lastCallOutcomeByOpportunity.get(opp.id) ?? null,
         appointmentStatus: appointmentStatusByOpportunity.get(opp.id) ?? null,
+        followUpId: earliestFollowUpIdByOpportunity.get(opp.id) ?? null,
         detailHref: `/admin/crm/opportunities/${opp.id}`,
       };
     })
@@ -135,12 +152,16 @@ export default async function AdminOpportunityFinderPage({
         rows={rows}
         agents={(agents ?? []).map((a) => ({ id: a.id, name: a.full_name || a.email }))}
         clients={(clients ?? []).map((c) => ({ id: c.id, name: c.company_name }))}
+        industries={industries}
         initialCategory={category}
         initialAgentFilter={agent}
         initialClientFilter={client}
         initialFollowUpFilter={followup}
+        initialIndustryFilter={industry}
         initialView={view === "board" ? "board" : "list"}
         onAddNote={addBoardOpportunityNoteAction}
+        onScheduleCallback={scheduleFollowUpAction}
+        onCompleteFollowUp={completeFollowUpAction}
       />
     </div>
   );

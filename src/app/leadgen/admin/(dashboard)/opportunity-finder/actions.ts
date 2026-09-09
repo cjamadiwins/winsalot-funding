@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import type { OpportunityPriorityOverride } from "@/lib/opportunity-finder";
 import { recordCallOutcomeAction } from "../leads/[id]/actions";
 
 type ActionResult = { error?: string };
@@ -64,7 +65,7 @@ export async function assignFinderLeadAgentAction(leadId: string, agentId: strin
 
 export async function setFinderPriorityOverrideAction(
   scoreId: string,
-  priorityOverride: "high" | "medium" | "low" | null
+  priorityOverride: OpportunityPriorityOverride | null
 ): Promise<ActionResult> {
   await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();

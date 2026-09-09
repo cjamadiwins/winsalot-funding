@@ -65,16 +65,13 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
 
-  const nowMs = new Date().getTime();
-  const opportunityById = new Map(((opportunities ?? []) as CrmOpportunityRow[]).map((o) => [o.id, o]));
-  const scoreCounts = { high: 0, medium: 0, low: 0, followUpsDue: 0 };
+  const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
   for (const raw of (opportunityScores ?? []) as Pick<CrmOpportunityScoreRow, "opportunity_id" | "category" | "priority_override" | "finder_state">[]) {
     const effective = effectiveOpportunityCategory(raw);
-    if (effective === "high") scoreCounts.high += 1;
-    else if (effective === "medium") scoreCounts.medium += 1;
-    else if (effective === "low") scoreCounts.low += 1;
-    const nextFollowUpAt = opportunityById.get(raw.opportunity_id)?.next_follow_up_at;
-    if (nextFollowUpAt && new Date(nextFollowUpAt).getTime() <= nowMs) scoreCounts.followUpsDue += 1;
+    if (effective === "hot") scoreCounts.hot += 1;
+    else if (effective === "warm") scoreCounts.warm += 1;
+    else if (effective === "follow_up") scoreCounts.followUp += 1;
+    else if (effective === "retry") scoreCounts.retry += 1;
   }
   // Main KPI row below - the same crm_opportunities rows already fetched
   // above, just five of the most-used counts surfaced at the top of the
@@ -162,10 +159,10 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
 
       <h2 className="mt-8 text-lg font-bold text-slate-900">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <KpiCard label="High Opportunities" value={scoreCounts.high} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.high} href="/admin/crm/opportunity-finder?category=high" />
-        <KpiCard label="Medium Opportunities" value={scoreCounts.medium} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.medium} href="/admin/crm/opportunity-finder?category=medium" />
-        <KpiCard label="Low Opportunities" value={scoreCounts.low} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.low} href="/admin/crm/opportunity-finder?category=low" />
-        <KpiCard label="Follow-Ups Due" value={scoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/admin/crm/opportunity-finder?followup=due" />
+        <KpiCard label="Hot" value={scoreCounts.hot} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.hot} href="/admin/crm/opportunity-finder?category=hot" />
+        <KpiCard label="Warm" value={scoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/admin/crm/opportunity-finder?category=warm" />
+        <KpiCard label="Follow-Up" value={scoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/admin/crm/opportunity-finder?category=follow_up" />
+        <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/admin/crm/opportunity-finder?category=retry" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/admin/crm/opportunity-finder?category=closed" />
       </div>
 
