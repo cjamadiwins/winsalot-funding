@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import type { OpportunityPriorityOverride } from "@/lib/opportunity-finder";
 import { addActivityAction } from "../opportunities/[id]/actions";
 
 type ActionResult = { error?: string };
@@ -66,7 +67,7 @@ export async function assignOpportunityAgentAction(opportunityId: string, agentI
 
 export async function setOpportunityPriorityOverrideAction(
   scoreId: string,
-  priorityOverride: "high" | "medium" | "low" | null
+  priorityOverride: OpportunityPriorityOverride | null
 ): Promise<ActionResult> {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();

@@ -87,15 +87,15 @@ export default async function LeadgenAdminDashboardPage() {
   }));
 
   // Opportunity Finder counters.
-  const leadNextFollowUpById = new Map(allLeads.map((l) => [l.id, l.next_follow_up_at] as const));
-  const opportunityScoreCounts = { high: 0, medium: 0, low: 0, followUpsDue: 0 };
+  const opportunityScoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
   for (const raw of opportunityScores ?? []) {
-    const effective = effectiveOpportunityCategory(raw as { category: "high" | "medium" | "low" | "closed"; priority_override: "high" | "medium" | "low" | null; finder_state: "active" | "dismissed" });
-    if (effective === "high") opportunityScoreCounts.high += 1;
-    else if (effective === "medium") opportunityScoreCounts.medium += 1;
-    else if (effective === "low") opportunityScoreCounts.low += 1;
-    const nextFollowUpAt = leadNextFollowUpById.get(raw.lead_id);
-    if (nextFollowUpAt && new Date(nextFollowUpAt).getTime() <= now.getTime()) opportunityScoreCounts.followUpsDue += 1;
+    const effective = effectiveOpportunityCategory(
+      raw as { category: "hot" | "warm" | "follow_up" | "retry" | "closed"; priority_override: "hot" | "warm" | "follow_up" | "retry" | null; finder_state: "active" | "dismissed" }
+    );
+    if (effective === "hot") opportunityScoreCounts.hot += 1;
+    else if (effective === "warm") opportunityScoreCounts.warm += 1;
+    else if (effective === "follow_up") opportunityScoreCounts.followUp += 1;
+    else if (effective === "retry") opportunityScoreCounts.retry += 1;
   }
   const convertedLeadIds = new Set((allAppointments as { status: string; lead_id?: string | null }[]).filter((a) => a.status === "Completed" && a.lead_id).map((a) => a.lead_id as string));
   const convertedCount = convertedLeadIds.size;
@@ -253,10 +253,10 @@ export default async function LeadgenAdminDashboardPage() {
 
       <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <KpiCard label="High Opportunities" value={opportunityScoreCounts.high} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.high} href="/leadgen/admin/opportunity-finder?category=high" />
-        <KpiCard label="Medium Opportunities" value={opportunityScoreCounts.medium} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.medium} href="/leadgen/admin/opportunity-finder?category=medium" />
-        <KpiCard label="Low Opportunities" value={opportunityScoreCounts.low} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.low} href="/leadgen/admin/opportunity-finder?category=low" />
-        <KpiCard label="Follow-Ups Due" value={opportunityScoreCounts.followUpsDue} icon={<CalendarClock />} tone="orange" href="/leadgen/admin/opportunity-finder?followup=due" />
+        <KpiCard label="Hot" value={opportunityScoreCounts.hot} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.hot} href="/leadgen/admin/opportunity-finder?category=hot" />
+        <KpiCard label="Warm" value={opportunityScoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/leadgen/admin/opportunity-finder?category=warm" />
+        <KpiCard label="Follow-Up" value={opportunityScoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/leadgen/admin/opportunity-finder?category=follow_up" />
+        <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/admin/opportunity-finder?category=retry" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/leadgen/admin/opportunity-finder?category=closed" />
       </div>
 

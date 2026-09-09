@@ -5,6 +5,7 @@ import { isHiddenLeadgenCampaignName, type LeadgenLeadRow } from "@/lib/leadgen-
 import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import LeadgenOpportunityFinderClient, { type LeadgenOpportunityFinderRow } from "./LeadgenOpportunityFinderClient";
 import { addBoardLeadNoteAction } from "./actions";
+import { completeFollowUpAction, scheduleFollowUpAction } from "../leads/[id]/actions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -13,13 +14,13 @@ export default async function LeadgenAdminOpportunityFinderPage({
 }: {
   // view=board is set by the dashboard's Opportunity Pipeline summary
   // card's "View Board" button.
-  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string; view?: string }>;
+  searchParams: Promise<{ category?: string; agent?: string; client?: string; followup?: string; industry?: string; view?: string }>;
 }) {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
-  const { category, agent, client, followup, view } = await searchParams;
+  const { category, agent, client, followup, industry, view } = await searchParams;
 
-  const [{ data: scores }, { data: leads }, { data: agents }, { data: clients }, { data: campaigns }, { data: activities }, { data: appointments }] = await Promise.all([
+  const [{ data: scores }, { data: leads }, { data: agents }, { data: clients }, { data: campaigns }, { data: activities }, { data: appointments }, { data: pendingFollowUps }] = await Promise.all([
     admin.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
     admin.from("leadgen_leads").select("*"),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
@@ -34,6 +35,9 @@ export default async function LeadgenAdminOpportunityFinderPage({
     // pattern the Leads page already uses for its own Appointment Status
     // column).
     admin.from("leadgen_appointments").select("lead_id, status, created_at").order("created_at", { ascending: true }),
+    // "Mark Complete" quick action needs the specific pending callback to
+    // complete - the earliest one per lead.
+    admin.from("leadgen_followups").select("id, lead_id, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
   ]);
 
   const leadById = new Map((leads ?? []).map((l) => [l.id, l as LeadgenLeadRow]));
@@ -55,6 +59,13 @@ export default async function LeadgenAdminOpportunityFinderPage({
   for (const appt of appointments ?? []) {
     if (appt.lead_id) appointmentStatusByLead.set(appt.lead_id, appt.status);
   }
+  const earliestFollowUpIdByLead = new Map<string, string>();
+  for (const followUp of pendingFollowUps ?? []) {
+    if (followUp.lead_id && !earliestFollowUpIdByLead.has(followUp.lead_id)) {
+      earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
+    }
+  }
+  const industries = Array.from(new Set((leads ?? []).map((l) => l.industry).filter((v): v is string => !!v))).sort();
 
   const rows: LeadgenOpportunityFinderRow[] = (scores ?? [])
     .map((s): LeadgenOpportunityFinderRow | null => {
@@ -80,6 +91,7 @@ export default async function LeadgenAdminOpportunityFinderPage({
         clientOrBusiness: clientName || lead.business_name,
         campaignId: lead.campaign_id,
         campaignName: lead.campaign_id ? campaignById.get(lead.campaign_id)?.name ?? null : null,
+        industry: lead.industry ?? null,
         nextFollowUpAt: lead.next_follow_up_at,
         lastCallAt: signals.last_call_at ?? null,
         lastEmailAt: signals.last_email_activity_at ?? null,
@@ -87,6 +99,7 @@ export default async function LeadgenAdminOpportunityFinderPage({
         notes: noteHistory.slice(-2).reverse().map((n) => n.notes),
         lastCallOutcome: lastCallOutcomeByLead.get(lead.id) ?? null,
         appointmentStatus: appointmentStatusByLead.get(lead.id) ?? null,
+        followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
         detailHref: `/leadgen/admin/leads/${lead.id}`,
       };
     })
@@ -111,12 +124,16 @@ export default async function LeadgenAdminOpportunityFinderPage({
         agents={(agents ?? []).map((a) => ({ id: a.id, name: a.full_name || a.email }))}
         clients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))}
         campaigns={(campaigns ?? []).filter((c) => !isHiddenLeadgenCampaignName(c.name)).map((c) => ({ id: c.id, name: c.name, clientId: c.client_id }))}
+        industries={industries}
         initialCategory={category}
         initialAgentFilter={agent}
         initialClientFilter={client}
         initialFollowUpFilter={followup}
+        initialIndustryFilter={industry}
         initialView={view === "board" ? "board" : "list"}
         onAddNote={addBoardLeadNoteAction}
+        onScheduleCallback={scheduleFollowUpAction}
+        onCompleteFollowUp={completeFollowUpAction}
       />
     </div>
   );

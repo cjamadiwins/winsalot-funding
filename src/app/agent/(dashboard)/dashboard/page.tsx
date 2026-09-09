@@ -5,6 +5,9 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
+import KpiCard from "@/components/crm-ui/KpiCard";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
@@ -40,6 +43,7 @@ export default async function AgentDashboardPage() {
     { data: opportunitiesData, error: opportunitiesError },
     { data: followUpsData, error: followUpsError },
     { data: attendanceData, error: attendanceError },
+    { data: opportunityScores },
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase
@@ -56,11 +60,23 @@ export default async function AgentDashboardPage() {
       .order("clock_in", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Opportunity Finder counters, below - RLS (crm_opportunity_scores_agent_select_own)
+    // already scopes this to the signed-in agent's own opportunities.
+    supabase.from("crm_opportunity_scores").select("category, priority_override, finder_state"),
   ]);
 
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
   const followUps = (followUpsData ?? []) as CrmFollowUpWithOpportunity[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
+
+  const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
+  for (const raw of (opportunityScores ?? []) as Pick<CrmOpportunityScoreRow, "category" | "priority_override" | "finder_state">[]) {
+    const effective = effectiveOpportunityCategory(raw);
+    if (effective === "hot") scoreCounts.hot += 1;
+    else if (effective === "warm") scoreCounts.warm += 1;
+    else if (effective === "follow_up") scoreCounts.followUp += 1;
+    else if (effective === "retry") scoreCounts.retry += 1;
+  }
 
   // Opportunity Pipeline summary card (below) - stage counts from the
   // same opportunities array already fetched above (RLS-scoped to this
@@ -184,6 +200,14 @@ export default async function AgentDashboardPage() {
           View full report →
         </Link>
       </section>
+
+      <h2 className="mt-8 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">Opportunity Finder</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard label="Hot" value={scoreCounts.hot} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.hot} href="/agent/my-opportunities?category=hot" />
+        <KpiCard label="Warm" value={scoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/agent/my-opportunities?category=warm" />
+        <KpiCard label="Follow-Up" value={scoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/agent/my-opportunities?category=follow_up" />
+        <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/agent/my-opportunities?category=retry" />
+      </div>
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/agent/my-opportunities?view=board" />
 

@@ -4,21 +4,24 @@ import type { LeadgenLeadRow } from "@/lib/leadgen-types";
 import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import LeadgenMyOpportunitiesClient, { type LeadgenMyOpportunityRow } from "./LeadgenMyOpportunitiesClient";
 import { addBoardLeadNoteAction } from "./actions";
+import { completeFollowUpAction, scheduleFollowUpAction } from "../leads/[id]/actions";
 
 export default async function LeadgenAgentMyOpportunitiesPage({
   searchParams,
 }: {
   // view=board is set by the agent dashboard's Opportunity Pipeline
-  // summary card's "View Board" button.
-  searchParams: Promise<{ view?: string }>;
+  // summary card's "View Board" button; category is set by the agent
+  // dashboard's own Opportunity Finder summary card (Hot/Warm/Follow-Up/
+  // Retry).
+  searchParams: Promise<{ view?: string; category?: string }>;
 }) {
-  const { view } = await searchParams;
+  const { view, category } = await searchParams;
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
   // RLS (leadgen_opportunity_scores_agent_select_own, migration 0113)
   // already restricts this to leads assigned to this agent.
-  const [{ data: scores }, { data: activities }, { data: appointments }, { data: clients }] = await Promise.all([
+  const [{ data: scores }, { data: activities }, { data: appointments }, { data: clients }, { data: pendingFollowUps }] = await Promise.all([
     supabase.from("leadgen_opportunity_scores").select("*, leadgen_leads(*)").order("score", { ascending: false }),
     supabase
       .from("leadgen_lead_activities")
@@ -31,6 +34,10 @@ export default async function LeadgenAgentMyOpportunitiesPage({
     // every client's name (see leads/new/page.tsx); only their own leads
     // are actually RLS-scoped.
     supabase.from("leadgen_clients").select("id, name"),
+    // "Mark Complete" quick action needs the specific pending callback to
+    // complete - the earliest one per lead. RLS already scopes this to the
+    // signed-in agent's own leads.
+    supabase.from("leadgen_followups").select("id, lead_id, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
   ]);
 
   const notesByLead = new Map<string, { notes: string; occurred_at: string }[]>();
@@ -49,6 +56,12 @@ export default async function LeadgenAgentMyOpportunitiesPage({
     if (appt.lead_id) appointmentStatusByLead.set(appt.lead_id, appt.status);
   }
   const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
+  const earliestFollowUpIdByLead = new Map<string, string>();
+  for (const followUp of pendingFollowUps ?? []) {
+    if (followUp.lead_id && !earliestFollowUpIdByLead.has(followUp.lead_id)) {
+      earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
+    }
+  }
 
   const agentDisplayName = agent.full_name || agent.email;
   const rows: LeadgenMyOpportunityRow[] = (scores ?? [])
@@ -76,6 +89,7 @@ export default async function LeadgenAgentMyOpportunitiesPage({
         notes: noteHistory.slice(-2).reverse().map((n) => n.notes),
         lastCallOutcome: lastCallOutcomeByLead.get(lead.id) ?? null,
         appointmentStatus: appointmentStatusByLead.get(lead.id) ?? null,
+        followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
         detailHref: `/leadgen/agent/leads/${lead.id}`,
       };
     })
@@ -89,7 +103,14 @@ export default async function LeadgenAgentMyOpportunitiesPage({
           {agent.full_name || agent.email}, here are your leads ranked by score, with why the CRM flagged each one and what to do next.
         </p>
       </div>
-      <LeadgenMyOpportunitiesClient rows={rows} initialView={view === "board" ? "board" : "list"} onAddNote={addBoardLeadNoteAction} />
+      <LeadgenMyOpportunitiesClient
+        rows={rows}
+        initialView={view === "board" ? "board" : "list"}
+        initialCategory={category}
+        onAddNote={addBoardLeadNoteAction}
+        onScheduleCallback={scheduleFollowUpAction}
+        onCompleteFollowUp={completeFollowUpAction}
+      />
     </div>
   );
 }

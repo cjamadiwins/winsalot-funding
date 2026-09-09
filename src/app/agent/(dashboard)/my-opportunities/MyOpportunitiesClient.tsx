@@ -7,9 +7,12 @@ import {
   effectiveOpportunityCategory,
   OPPORTUNITY_AGENT_STATUS_LABELS,
   OPPORTUNITY_AGENT_STATUSES,
+  OPPORTUNITY_CATEGORIES,
+  OPPORTUNITY_CATEGORY_DESCRIPTIONS,
   OPPORTUNITY_CATEGORY_LABELS,
   OPPORTUNITY_CATEGORY_STYLES,
   type CrmOpportunityScoreRow,
+  type OpportunityCategory,
 } from "@/lib/opportunity-finder";
 import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type OpportunityStage } from "@/lib/crm-types";
 import type { OpportunityBoardCard } from "@/lib/opportunity-board";
@@ -36,6 +39,9 @@ export type MyOpportunityRow = {
   notes: string[];
   lastCallOutcome: string | null;
   appointmentStatus: string | null;
+  // The earliest pending callback for this opportunity, if any - what
+  // "Mark Complete" completes.
+  followUpId: string | null;
   detailHref: string;
 };
 
@@ -47,21 +53,56 @@ function fmt(iso: string | null): string {
 export default function MyOpportunitiesClient({
   rows,
   initialView,
+  initialCategory,
   onAddNote,
+  onScheduleCallback,
+  onCompleteFollowUp,
 }: {
   rows: MyOpportunityRow[];
   initialView?: "list" | "board";
+  initialCategory?: string;
   onAddNote: (opportunityId: string, note: string) => Promise<{ error?: string }>;
+  onScheduleCallback: (opportunityId: string, formData: FormData) => Promise<void>;
+  onCompleteFollowUp: (followUpId: string, opportunityId: string) => Promise<void>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<"list" | "board">(initialView ?? "list");
+  const [categoryFilter, setCategoryFilter] = useState<OpportunityCategory | "all">(
+    initialCategory && OPPORTUNITY_CATEGORIES.includes(initialCategory as OpportunityCategory) ? (initialCategory as OpportunityCategory) : "all"
+  );
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [callbackDraft, setCallbackDraft] = useState("");
+  const [notingId, setNotingId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+
+  function runAction(fn: () => Promise<{ error?: string } | void>, onDone?: () => void) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await fn();
+        if (result && "error" in result && result.error) setError(result.error);
+        else {
+          onDone?.();
+          router.refresh();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    });
+  }
 
   const visible = useMemo(
-    () => rows.filter((row) => showClosed || (effectiveOpportunityCategory(row.score) !== "closed" && row.score.agent_status !== "closed")),
-    [rows, showClosed]
+    () =>
+      rows.filter((row) => {
+        const effective = effectiveOpportunityCategory(row.score);
+        if (!showClosed && (effective === "closed" || row.score.agent_status === "closed")) return false;
+        if (categoryFilter !== "all" && effective !== categoryFilter) return false;
+        return true;
+      }),
+    [rows, showClosed, categoryFilter]
   );
 
   const boardColumns = OPPORTUNITY_STAGES.map((stage) => ({ key: stage, label: stage, styleClass: OPPORTUNITY_STAGE_STYLES[stage] }));
@@ -104,7 +145,23 @@ export default function MyOpportunitiesClient({
     <div className="mt-6">
       {error && <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {(["all", ...OPPORTUNITY_CATEGORIES.filter((c) => c !== "closed")] as const).map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setCategoryFilter(cat)}
+            title={cat === "all" ? undefined : OPPORTUNITY_CATEGORY_DESCRIPTIONS[cat]}
+            className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold ${
+              categoryFilter === cat ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700 hover:border-slate-400"
+            }`}
+          >
+            {cat === "all" ? "All" : OPPORTUNITY_CATEGORY_LABELS[cat]}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
           Show closed / not-opportunity leads too
@@ -186,13 +243,86 @@ export default function MyOpportunitiesClient({
                     Email
                   </a>
                 )}
-                <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
-                  Add Follow-Up
-                </Link>
                 <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
-                  View Lead
+                  View Opportunity
                 </Link>
+                <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                  Book Appointment
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotingId(notingId === row.score.id ? null : row.score.id);
+                    setNoteDraft("");
+                  }}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                >
+                  Add Note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSchedulingId(schedulingId === row.score.id ? null : row.score.id);
+                    setCallbackDraft("");
+                  }}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                >
+                  Set Callback
+                </button>
+                <button
+                  type="button"
+                  disabled={isPending || !row.followUpId}
+                  title={row.followUpId ? undefined : "No pending callback to complete"}
+                  onClick={() => row.followUpId && runAction(() => onCompleteFollowUp(row.followUpId!, row.score.opportunity_id))}
+                  className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Mark Complete
+                </button>
               </div>
+
+              {notingId === row.score.id && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <input
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    placeholder="Quick note..."
+                    className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                  />
+                  <button
+                    type="button"
+                    disabled={isPending || !noteDraft.trim()}
+                    onClick={() => {
+                      const note = noteDraft.trim();
+                      runAction(() => onAddNote(row.score.opportunity_id, note), () => setNotingId(null));
+                    }}
+                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+              {schedulingId === row.score.id && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <input
+                    type="datetime-local"
+                    value={callbackDraft}
+                    onChange={(e) => setCallbackDraft(e.target.value)}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                  />
+                  <button
+                    type="button"
+                    disabled={isPending || !callbackDraft}
+                    onClick={() => {
+                      const formData = new FormData();
+                      formData.set("scheduled_at", callbackDraft);
+                      runAction(() => onScheduleCallback(row.score.opportunity_id, formData), () => setSchedulingId(null));
+                    }}
+                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
 
               <select
                 value={row.score.agent_status}

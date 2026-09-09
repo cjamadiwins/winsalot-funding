@@ -2,35 +2,55 @@ import type { KpiTone } from "@/components/crm-ui/KpiCard";
 
 // Opportunity Finder: shared, pure types/helpers used by both CRMs'
 // scoring tables (crm_opportunity_scores / leadgen_opportunity_scores -
-// see supabase/migrations/0112 and 0113). Deliberately a shared, DB-agnostic
-// module rather than duplicated per CRM, the same pattern src/lib/leave-
-// requests.ts already uses for the two CRMs' identically-shaped leave
-// request tables - the row shape and scoring rules are conceptually
-// identical, only the underlying lead table (crm_opportunities vs
-// leadgen_leads) differs, and that difference is captured by each CRM's
-// own extended row type below rather than by duplicating this file.
+// see supabase/migrations/0112 and 0113, priority categories reworked by
+// 0149). Deliberately a shared, DB-agnostic module rather than duplicated
+// per CRM, the same pattern src/lib/leave-requests.ts already uses for the
+// two CRMs' identically-shaped leave request tables - the row shape and
+// scoring rules are conceptually identical, only the underlying lead table
+// (crm_opportunities vs leadgen_leads) differs, and that difference is
+// captured by each CRM's own extended row type below rather than by
+// duplicating this file.
 
-export const OPPORTUNITY_CATEGORIES = ["high", "medium", "low", "closed"] as const;
+// Four rule-based priority buckets (migration 0149) - Hot/Warm/Follow-Up/
+// Retry, ordered highest-priority first, plus Closed for anything that's
+// no longer an active opportunity (won, not interested, or an appointment
+// already booked with nothing else outstanding). A prospect only ever
+// lands in Hot from an explicit interest/buying signal, never from call
+// volume alone - see the scoring engine's own comments (migration 0149).
+export const OPPORTUNITY_CATEGORIES = ["hot", "warm", "follow_up", "retry", "closed"] as const;
 export type OpportunityCategory = (typeof OPPORTUNITY_CATEGORIES)[number];
 
 export const OPPORTUNITY_CATEGORY_LABELS: Record<OpportunityCategory, string> = {
-  high: "High Opportunity",
-  medium: "Medium Opportunity",
-  low: "Low Opportunity",
+  hot: "Hot",
+  warm: "Warm",
+  follow_up: "Follow-Up",
+  retry: "Retry",
   closed: "Closed / Not Opportunity",
 };
 
+// Short "why this bucket" copy, shown alongside the label wherever there's
+// room (e.g. filter tooltips) - mirrors the brief's own bucket definitions.
+export const OPPORTUNITY_CATEGORY_DESCRIPTIONS: Record<OpportunityCategory, string> = {
+  hot: "Shown interest, asked for information, or a positive conversation - may be ready to convert.",
+  warm: "Requested a callback, asked to speak with the owner, or a meaningful conversation not yet ready to book.",
+  follow_up: "A scheduled follow-up is due today or overdue.",
+  retry: "No answer, voicemail, or gatekeeper - still worth another attempt.",
+  closed: "Won, not interested, or an appointment is already booked with nothing else outstanding.",
+};
+
 export const OPPORTUNITY_CATEGORY_STYLES: Record<OpportunityCategory, string> = {
-  high: "bg-emerald-100 text-emerald-800",
-  medium: "bg-amber-100 text-amber-800",
-  low: "bg-slate-100 text-slate-700",
-  closed: "bg-rose-100 text-rose-800",
+  hot: "bg-red-100 text-red-800",
+  warm: "bg-orange-100 text-orange-800",
+  follow_up: "bg-sky-100 text-sky-800",
+  retry: "bg-slate-100 text-slate-700",
+  closed: "bg-gray-200 text-gray-600",
 };
 
 export const OPPORTUNITY_CATEGORY_KPI_TONE: Record<OpportunityCategory, KpiTone> = {
-  high: "green",
-  medium: "amber",
-  low: "slate",
+  hot: "red",
+  warm: "orange",
+  follow_up: "cyan",
+  retry: "slate",
   closed: "rose",
 };
 
@@ -64,6 +84,14 @@ export const OPPORTUNITY_AGENT_STATUS_STYLES: Record<OpportunityAgentStatus, str
 
 export type OpportunityFinderState = "active" | "dismissed";
 
+export type OpportunityPriorityOverride = "hot" | "warm" | "follow_up" | "retry";
+
+// The admin priority-override dropdown's own options, in the same
+// highest-first order as OPPORTUNITY_CATEGORIES minus "closed" (dismissing
+// is its own separate action, not a priority override) - one list shared
+// by both CRMs' admin Opportunity Finder so the option set can't drift.
+export const PRIORITY_OVERRIDE_OPTIONS: OpportunityPriorityOverride[] = ["hot", "warm", "follow_up", "retry"];
+
 // Common shape of one row in either scoring table, minus the FK column
 // (opportunity_id vs lead_id) - each CRM's own type file extends this with
 // that one field (see CrmOpportunityScoreRow / LeadgenOpportunityScoreRow
@@ -74,7 +102,7 @@ export type OpportunityScoreRow = {
   updated_at: string;
   score: number;
   category: OpportunityCategory;
-  priority_override: "high" | "medium" | "low" | null;
+  priority_override: "hot" | "warm" | "follow_up" | "retry" | null;
   reasons: string[];
   recommended_action: string;
   signals: Record<string, unknown>;

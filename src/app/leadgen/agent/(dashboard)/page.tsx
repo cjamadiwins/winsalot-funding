@@ -15,6 +15,8 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
@@ -49,6 +51,7 @@ export default async function LeadgenAgentDashboardPage() {
     settings,
     ledgerRow,
     monthToDateApproved,
+    { data: opportunityScores },
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -83,6 +86,10 @@ export default async function LeadgenAgentDashboardPage() {
     // email - see the header comment on fetchAgentMonthToDateApproved
     // for why RLS alone can't serve a cross-CRM total.
     fetchAgentMonthToDateApproved(admin, agent.email, monthStart),
+    // Opportunity Finder counters, below - RLS
+    // (leadgen_opportunity_scores_agent_select_own) already scopes this to
+    // the signed-in agent's own leads.
+    supabase.from("leadgen_opportunity_scores").select("category, priority_override, finder_state"),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -117,6 +124,15 @@ export default async function LeadgenAgentDashboardPage() {
 
   const statusCounts = new Map<string, number>();
   for (const lead of myLeads) statusCounts.set(lead.status, (statusCounts.get(lead.status) ?? 0) + 1);
+
+  const opportunityScoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
+  for (const raw of (opportunityScores ?? []) as Pick<LeadgenOpportunityScoreRow, "category" | "priority_override" | "finder_state">[]) {
+    const effective = effectiveOpportunityCategory(raw);
+    if (effective === "hot") opportunityScoreCounts.hot += 1;
+    else if (effective === "warm") opportunityScoreCounts.warm += 1;
+    else if (effective === "follow_up") opportunityScoreCounts.followUp += 1;
+    else if (effective === "retry") opportunityScoreCounts.retry += 1;
+  }
 
   // Opportunity Pipeline summary card (below) - reuses statusCounts above.
   const pipelineStageCounts = LEADGEN_LEAD_STATUSES.map((status) => ({
@@ -199,6 +215,14 @@ export default async function LeadgenAgentDashboardPage() {
           tone={LEADGEN_STAT_CARD_STYLES.interested}
           icon={<UserCheck />}
         />
+      </div>
+
+      <h2 className="mt-8 text-lg font-bold text-slate-900">Opportunity Finder</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard label="Hot" value={opportunityScoreCounts.hot} icon={<Flame />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.hot} href="/leadgen/agent/my-opportunities?category=hot" />
+        <KpiCard label="Warm" value={opportunityScoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/leadgen/agent/my-opportunities?category=warm" />
+        <KpiCard label="Follow-Up" value={opportunityScoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/leadgen/agent/my-opportunities?category=follow_up" />
+        <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/agent/my-opportunities?category=retry" />
       </div>
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/agent/my-opportunities?view=board" />
