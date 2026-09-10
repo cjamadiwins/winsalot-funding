@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
+import { isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import AdminCrmClient from "./AdminCrmClient";
@@ -13,6 +13,9 @@ import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, CalendarCheck, Clock, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
+import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
+import { addBoardOpportunityNoteAction } from "./opportunity-finder/actions";
+import { completeFollowUpAction } from "./followup-actions";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -60,13 +63,14 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // Opportunity Finder counters, below - one lightweight read of the
     // scoring table (supabase/migrations/0112), joined against the
     // opportunities already fetched above rather than re-fetching them.
-    supabase.from("crm_opportunity_scores").select("opportunity_id, category, priority_override, finder_state"),
+    supabase.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
 
   const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
-  for (const raw of (opportunityScores ?? []) as Pick<CrmOpportunityScoreRow, "opportunity_id" | "category" | "priority_override" | "finder_state">[]) {
+  const scoredOpportunities = (opportunityScores ?? []) as CrmOpportunityScoreRow[];
+  for (const raw of scoredOpportunities) {
     const effective = effectiveOpportunityCategory(raw);
     if (effective === "hot") scoreCounts.hot += 1;
     else if (effective === "warm") scoreCounts.warm += 1;
@@ -85,6 +89,45 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
   const consultationsBooked = allOpportunities.filter((o) => o.stage === "Consultation Booked").length;
   const followUpsDue = allOpportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
   const convertedCount = allOpportunities.filter((o) => o.stage === "Client Won").length;
+
+  const opportunityById = new Map(allOpportunities.map((opportunity) => [opportunity.id, opportunity]));
+  const agentNameById = new Map(activeAgents.map((agent) => [agent.id, agent.full_name || agent.email] as const));
+  const earliestFollowUpIdByOpportunity = new Map<string, string>();
+  for (const followUp of (followUps ?? []) as CrmFollowUpWithOpportunity[]) {
+    if (followUp.opportunity_id && !earliestFollowUpIdByOpportunity.has(followUp.opportunity_id)) {
+      earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
+    }
+  }
+  const smartOpportunities: SmartOpportunityRow[] = scoredOpportunities
+    .filter((score) => score.finder_state === "active" && score.category !== "closed")
+    .map((score): SmartOpportunityRow | null => {
+      const opportunity = opportunityById.get(score.opportunity_id);
+      if (!opportunity) return null;
+      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      return {
+        scoreId: score.id,
+        prospectId: opportunity.id,
+        businessName: opportunity.business_name,
+        clientOrBusiness: "Winsalot Corp.",
+        clientId: "winsalot",
+        campaignName: `${OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}${opportunity.industry ? ` · ${opportunity.industry}` : ""}`,
+        campaignId: opportunity.industry ? `niche:${opportunity.industry}` : `type:${opportunity.opportunity_type}`,
+        agentName: opportunity.assigned_agent_id ? agentNameById.get(opportunity.assigned_agent_id) ?? "Unassigned" : "Unassigned",
+        agentId: opportunity.assigned_agent_id,
+        score: score.score,
+        lastContactAt: opportunity.last_contacted_at ?? signals.last_call_at ?? null,
+        lastCallOutcome: signals.last_call_outcome ?? null,
+        followUpAt: opportunity.next_follow_up_at,
+        followUpId: earliestFollowUpIdByOpportunity.get(opportunity.id) ?? null,
+        latestNote: signals.last_note_summary ?? opportunity.notes,
+        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
+        recommendedAction: score.recommended_action,
+        detailHref: `/admin/crm/opportunities/${opportunity.id}`,
+        logCallHref: `/admin/crm/opportunities/${opportunity.id}`,
+        bookAppointmentHref: `/admin/crm/opportunities/${opportunity.id}`,
+      };
+    })
+    .filter((row): row is SmartOpportunityRow => row !== null);
 
   // Opportunity Pipeline summary card (below) - stage counts from the
   // same allOpportunities array already fetched above, no new query.
@@ -165,6 +208,16 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/admin/crm/opportunity-finder?category=retry" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/admin/crm/opportunity-finder?category=closed" />
       </div>
+
+      <SmartOpportunitiesModal
+        rows={smartOpportunities}
+        agents={activeAgents.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
+        clients={[{ id: "winsalot", name: "Winsalot Corp." }]}
+        campaigns={Array.from(new Map(smartOpportunities.map((row) => [row.campaignId, { id: row.campaignId!, name: row.campaignName }])).values())}
+        adminMode
+        onAddNote={addBoardOpportunityNoteAction}
+        onCompleteFollowUp={completeFollowUpAction}
+      />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/admin/crm/opportunity-finder?view=board" />
 

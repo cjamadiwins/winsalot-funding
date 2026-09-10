@@ -19,6 +19,10 @@ import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppoi
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/lib/opportunity-finder";
+import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
+import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
+import { addBoardLeadNoteAction } from "./opportunity-finder/actions";
+import { completeFollowUpAction } from "./leads/[id]/actions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -28,9 +32,9 @@ export default async function LeadgenAdminDashboardPage() {
   const now = new Date();
   const todayKey = leadgenDateKey(now);
 
-  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }] =
+  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }, { data: pendingFollowUps }] =
     await Promise.all([
-      admin.from("leadgen_leads").select("id, business_name, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, created_at"),
+      admin.from("leadgen_leads").select("id, business_name, phone, email, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, last_contacted_at, created_at"),
       admin.from("leadgen_appointments").select("status, client_id, lead_id"),
       admin.from("leadgen_clients").select("id, name"),
       admin
@@ -49,7 +53,8 @@ export default async function LeadgenAdminDashboardPage() {
         .order("appointment_time", { ascending: true }),
       // Opportunity Finder counters, below - one lightweight read of the
       // scoring table (supabase/migrations/0113).
-      admin.from("leadgen_opportunity_scores").select("lead_id, category, priority_override, finder_state"),
+      admin.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
+      admin.from("leadgen_followups").select("id, lead_id, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
     ]);
 
   const allLeads = leads ?? [];
@@ -88,10 +93,9 @@ export default async function LeadgenAdminDashboardPage() {
 
   // Opportunity Finder counters.
   const opportunityScoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
-  for (const raw of opportunityScores ?? []) {
-    const effective = effectiveOpportunityCategory(
-      raw as { category: "hot" | "warm" | "follow_up" | "retry" | "closed"; priority_override: "hot" | "warm" | "follow_up" | "retry" | null; finder_state: "active" | "dismissed" }
-    );
+  const scoredLeads = (opportunityScores ?? []) as LeadgenOpportunityScoreRow[];
+  for (const raw of scoredLeads) {
+    const effective = effectiveOpportunityCategory(raw);
     if (effective === "hot") opportunityScoreCounts.hot += 1;
     else if (effective === "warm") opportunityScoreCounts.warm += 1;
     else if (effective === "follow_up") opportunityScoreCounts.followUp += 1;
@@ -112,6 +116,42 @@ export default async function LeadgenAdminDashboardPage() {
   }
 
   const agentNameById = new Map(agents.map((agent) => [agent.id, agent.full_name] as const));
+  const campaignNameById = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.name] as const));
+  const leadById = new Map(allLeads.map((lead) => [lead.id, lead] as const));
+  const earliestFollowUpIdByLead = new Map<string, string>();
+  for (const followUp of pendingFollowUps ?? []) {
+    if (!earliestFollowUpIdByLead.has(followUp.lead_id)) earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
+  }
+  const smartOpportunities: SmartOpportunityRow[] = scoredLeads
+    .filter((score) => score.finder_state === "active" && score.category !== "closed")
+    .map((score): SmartOpportunityRow | null => {
+      const lead = leadById.get(score.lead_id);
+      if (!lead) return null;
+      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      return {
+        scoreId: score.id,
+        prospectId: lead.id,
+        businessName: lead.business_name,
+        clientOrBusiness: clientNameById.get(lead.client_id) ?? "Assigned Client",
+        clientId: lead.client_id,
+        campaignName: lead.campaign_id ? campaignNameById.get(lead.campaign_id) ?? "Campaign" : "No campaign",
+        campaignId: lead.campaign_id,
+        agentName: lead.assigned_agent_id ? agentNameById.get(lead.assigned_agent_id) ?? "Unassigned" : "Unassigned",
+        agentId: lead.assigned_agent_id,
+        score: score.score,
+        lastContactAt: lead.last_contacted_at ?? signals.last_call_at ?? null,
+        lastCallOutcome: signals.last_call_outcome ?? null,
+        followUpAt: lead.next_follow_up_at,
+        followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
+        latestNote: signals.last_note_summary ?? null,
+        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
+        recommendedAction: score.recommended_action,
+        detailHref: `/leadgen/admin/leads/${lead.id}`,
+        logCallHref: `/leadgen/admin/leads/${lead.id}`,
+        bookAppointmentHref: `/leadgen/admin/leads/${lead.id}`,
+      };
+    })
+    .filter((row): row is SmartOpportunityRow => row !== null);
   const todaysAppointmentRows: TodaysAppointmentRow[] = (todaysAppointments ?? [])
     .filter((appt) => isLeadgenAppointmentCountable(appt.status))
     .map((appt) => ({
@@ -259,6 +299,16 @@ export default async function LeadgenAdminDashboardPage() {
         <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/admin/opportunity-finder?category=retry" />
         <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/leadgen/admin/opportunity-finder?category=closed" />
       </div>
+
+      <SmartOpportunitiesModal
+        rows={smartOpportunities}
+        agents={agents.map((agent) => ({ id: agent.id, name: agent.full_name }))}
+        clients={allClients.map((client) => ({ id: client.id, name: client.name }))}
+        campaigns={(campaigns ?? []).map((campaign) => ({ id: campaign.id, name: campaign.name }))}
+        adminMode
+        onAddNote={addBoardLeadNoteAction}
+        onCompleteFollowUp={completeFollowUpAction}
+      />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/admin/opportunity-finder?view=board" />
 

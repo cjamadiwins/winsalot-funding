@@ -15,7 +15,7 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
-import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
@@ -31,6 +31,9 @@ import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPrevie
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
+import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
+import { markLeadgenOpportunityHandledTodayAction } from "./actions";
+import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -89,7 +92,7 @@ export default async function LeadgenAgentDashboardPage() {
     // Opportunity Finder counters, below - RLS
     // (leadgen_opportunity_scores_agent_select_own) already scopes this to
     // the signed-in agent's own leads.
-    supabase.from("leadgen_opportunity_scores").select("category, priority_override, finder_state"),
+    supabase.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -126,7 +129,8 @@ export default async function LeadgenAgentDashboardPage() {
   for (const lead of myLeads) statusCounts.set(lead.status, (statusCounts.get(lead.status) ?? 0) + 1);
 
   const opportunityScoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
-  for (const raw of (opportunityScores ?? []) as Pick<LeadgenOpportunityScoreRow, "category" | "priority_override" | "finder_state">[]) {
+  const scoredLeads = (opportunityScores ?? []) as LeadgenOpportunityScoreRow[];
+  for (const raw of scoredLeads) {
     const effective = effectiveOpportunityCategory(raw);
     if (effective === "hot") opportunityScoreCounts.hot += 1;
     else if (effective === "warm") opportunityScoreCounts.warm += 1;
@@ -174,6 +178,44 @@ export default async function LeadgenAgentDashboardPage() {
   const agentCampaignOptions = (campaigns ?? [])
     .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS)
     .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
+
+  const leadById = new Map(myLeads.map((lead) => [lead.id, lead] as const));
+  const campaignNameById = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.name] as const));
+  const earliestFollowUpIdByLead = new Map<string, string>();
+  for (const followUp of allFollowUps) {
+    if (!earliestFollowUpIdByLead.has(followUp.lead_id)) earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
+  }
+  const todayKey = opportunityTodayKey();
+  const smartOpportunities: SmartOpportunityRow[] = scoredLeads
+    .filter((score) => score.finder_state === "active" && score.category !== "closed" && score.handled_on !== todayKey)
+    .map((score): SmartOpportunityRow | null => {
+      const lead = leadById.get(score.lead_id);
+      if (!lead) return null;
+      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      return {
+        scoreId: score.id,
+        prospectId: lead.id,
+        businessName: lead.business_name,
+        clientOrBusiness: clientNameById.get(lead.client_id) ?? "Assigned Client",
+        clientId: lead.client_id,
+        campaignName: lead.campaign_id ? campaignNameById.get(lead.campaign_id) ?? "Campaign" : "No campaign",
+        campaignId: lead.campaign_id,
+        agentName: agentDisplayName,
+        agentId: agent.id,
+        score: score.score,
+        lastContactAt: lead.last_contacted_at ?? signals.last_call_at ?? null,
+        lastCallOutcome: signals.last_call_outcome ?? null,
+        followUpAt: lead.next_follow_up_at,
+        followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
+        latestNote: signals.last_note_summary ?? null,
+        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
+        recommendedAction: score.recommended_action,
+        detailHref: `/leadgen/agent/leads/${lead.id}`,
+        logCallHref: `/leadgen/agent/leads/${lead.id}`,
+        bookAppointmentHref: `/leadgen/agent/leads/${lead.id}`,
+      };
+    })
+    .filter((row): row is SmartOpportunityRow => row !== null);
 
   return (
     <div>
@@ -224,6 +266,13 @@ export default async function LeadgenAgentDashboardPage() {
         <KpiCard label="Follow-Up" value={opportunityScoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/leadgen/agent/my-opportunities?category=follow_up" />
         <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/agent/my-opportunities?category=retry" />
       </div>
+
+      <SmartOpportunitiesModal
+        rows={smartOpportunities}
+        onAddNote={addBoardLeadNoteAction}
+        onCompleteFollowUp={completeFollowUpAction}
+        onMarkHandled={markLeadgenOpportunityHandledTodayAction}
+      />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/agent/my-opportunities?view=board" />
 

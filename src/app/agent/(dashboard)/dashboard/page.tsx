@@ -3,10 +3,10 @@ import { UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import KpiCard from "@/components/crm-ui/KpiCard";
-import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
@@ -24,6 +24,10 @@ import OverdueOpportunitiesPanel from "./OverdueOpportunitiesPanel";
 import AttendanceCard from "./AttendanceCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
+import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
+import { markOpportunityHandledTodayAction } from "../actions";
+import { addBoardOpportunityNoteAction } from "../my-opportunities/actions";
+import { completeOpportunityFollowUpAction } from "../opportunities/[id]/actions";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -62,7 +66,7 @@ export default async function AgentDashboardPage() {
       .maybeSingle(),
     // Opportunity Finder counters, below - RLS (crm_opportunity_scores_agent_select_own)
     // already scopes this to the signed-in agent's own opportunities.
-    supabase.from("crm_opportunity_scores").select("category, priority_override, finder_state"),
+    supabase.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
   ]);
 
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
@@ -70,13 +74,53 @@ export default async function AgentDashboardPage() {
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
 
   const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
-  for (const raw of (opportunityScores ?? []) as Pick<CrmOpportunityScoreRow, "category" | "priority_override" | "finder_state">[]) {
+  const scoredOpportunities = (opportunityScores ?? []) as CrmOpportunityScoreRow[];
+  for (const raw of scoredOpportunities) {
     const effective = effectiveOpportunityCategory(raw);
     if (effective === "hot") scoreCounts.hot += 1;
     else if (effective === "warm") scoreCounts.warm += 1;
     else if (effective === "follow_up") scoreCounts.followUp += 1;
     else if (effective === "retry") scoreCounts.retry += 1;
   }
+
+  const opportunityById = new Map(opportunities.map((opportunity) => [opportunity.id, opportunity]));
+  const earliestFollowUpIdByOpportunity = new Map<string, string>();
+  for (const followUp of followUps) {
+    if (followUp.opportunity_id && !earliestFollowUpIdByOpportunity.has(followUp.opportunity_id)) {
+      earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
+    }
+  }
+  const todayKey = opportunityTodayKey();
+  const smartOpportunities: SmartOpportunityRow[] = scoredOpportunities
+    .filter((score) => score.finder_state === "active" && score.category !== "closed" && score.handled_on !== todayKey)
+    .map((score): SmartOpportunityRow | null => {
+      const opportunity = opportunityById.get(score.opportunity_id);
+      if (!opportunity) return null;
+      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      return {
+        scoreId: score.id,
+        prospectId: opportunity.id,
+        businessName: opportunity.business_name,
+        clientOrBusiness: "Winsalot Corp.",
+        clientId: "winsalot",
+        campaignName: `${OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}${opportunity.industry ? ` · ${opportunity.industry}` : ""}`,
+        campaignId: opportunity.industry ? `niche:${opportunity.industry}` : `type:${opportunity.opportunity_type}`,
+        agentName: agentDisplayName,
+        agentId: crmUser.id,
+        score: score.score,
+        lastContactAt: opportunity.last_contacted_at ?? signals.last_call_at ?? null,
+        lastCallOutcome: signals.last_call_outcome ?? null,
+        followUpAt: opportunity.next_follow_up_at,
+        followUpId: earliestFollowUpIdByOpportunity.get(opportunity.id) ?? null,
+        latestNote: signals.last_note_summary ?? opportunity.notes,
+        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
+        recommendedAction: score.recommended_action,
+        detailHref: `/agent/opportunities/${opportunity.id}`,
+        logCallHref: `/agent/opportunities/${opportunity.id}`,
+        bookAppointmentHref: `/agent/opportunities/${opportunity.id}`,
+      };
+    })
+    .filter((row): row is SmartOpportunityRow => row !== null);
 
   // Opportunity Pipeline summary card (below) - stage counts from the
   // same opportunities array already fetched above (RLS-scoped to this
@@ -208,6 +252,13 @@ export default async function AgentDashboardPage() {
         <KpiCard label="Follow-Up" value={scoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/agent/my-opportunities?category=follow_up" />
         <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/agent/my-opportunities?category=retry" />
       </div>
+
+      <SmartOpportunitiesModal
+        rows={smartOpportunities}
+        onAddNote={addBoardOpportunityNoteAction}
+        onCompleteFollowUp={completeOpportunityFollowUpAction}
+        onMarkHandled={markOpportunityHandledTodayAction}
+      />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/agent/my-opportunities?view=board" />
 

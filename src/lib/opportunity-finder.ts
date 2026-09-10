@@ -112,6 +112,7 @@ export type OpportunityScoreRow = {
   dismissed_by: string | null;
   dismissed_reason: string | null;
   reopened_at: string | null;
+  handled_on: string | null;
   last_scored_at: string;
 };
 
@@ -133,4 +134,48 @@ export function opportunityScoreRingColor(score: number): string {
   if (score >= 70) return "#22C55E";
   if (score >= 40) return "#F5A623";
   return "#94A3B8";
+}
+
+// The customer-facing priority level is deliberately derived from the
+// numeric 0-100 score. The older outreach categories (Hot/Warm/Follow-Up/
+// Retry) remain stored for backward compatibility and for their distinct
+// "what kind of signal did we see?" meaning, while this answers the newer
+// "how likely is this prospect to convert?" question without duplicating
+// another value in the database.
+export const OPPORTUNITY_PRIORITY_LEVELS = ["hot", "warm", "monitor"] as const;
+export type OpportunityPriorityLevel = (typeof OPPORTUNITY_PRIORITY_LEVELS)[number];
+
+export const OPPORTUNITY_PRIORITY_LABELS: Record<OpportunityPriorityLevel, string> = {
+  hot: "Hot",
+  warm: "Warm",
+  monitor: "Monitor",
+};
+
+export const OPPORTUNITY_PRIORITY_STYLES: Record<OpportunityPriorityLevel, string> = {
+  hot: "bg-red-100 text-red-800",
+  warm: "bg-orange-100 text-orange-800",
+  monitor: "bg-slate-100 text-slate-700",
+};
+
+export function opportunityPriorityLevel(score: number): OpportunityPriorityLevel {
+  if (score >= 80) return "hot";
+  if (score >= 60) return "warm";
+  return "monitor";
+}
+
+export const OPPORTUNITY_TIME_ZONE = "America/Toronto";
+
+export function opportunityTodayKey(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: OPPORTUNITY_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+export function wasOpportunityHandledToday(handledOn: string | null, todayKey = opportunityTodayKey()): boolean {
+  return handledOn === todayKey;
 }

@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { isLeadgenAgentDashboardCampaignId } from "@/lib/leadgen-agent-campaigns";
+import { opportunityTodayKey } from "@/lib/opportunity-finder";
 
 export async function signOutLeadgenAgentAction() {
   const supabase = await createSupabaseServerClient();
@@ -104,4 +105,21 @@ export async function markAllNotificationsReadAction() {
     .eq("user_id", leadgenUser.id)
     .eq("is_read", false);
   revalidatePath("/leadgen/agent", "layout");
+}
+
+// Uses the authenticated Lead CRM client and its existing score-table RLS;
+// only a score attached to this agent's assigned lead can be updated.
+export async function markLeadgenOpportunityHandledTodayAction(scoreId: string): Promise<{ error?: string }> {
+  await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("leadgen_opportunity_scores")
+    .update({ handled_on: opportunityTodayKey() })
+    .eq("id", scoreId)
+    .select("id");
+
+  if (error || !data?.length) return { error: "Could not mark this opportunity handled." };
+  revalidatePath("/leadgen/agent");
+  revalidatePath("/leadgen/agent/my-opportunities");
+  return {};
 }

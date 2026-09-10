@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
+import { opportunityTodayKey } from "@/lib/opportunity-finder";
 
 export async function agentSignOutAction() {
   const supabase = await createSupabaseServerClient();
@@ -36,4 +37,23 @@ export async function markAllNotificationsReadAction() {
     .eq("user_id", crmUser.id)
     .eq("is_read", false);
   revalidatePath("/agent", "layout");
+}
+
+// Daily Opportunity Finder queue action. Authentication is rechecked here
+// and the session client keeps RLS in force, so an agent cannot mark another
+// agent's score row handled even if they submit a different id directly.
+export async function markOpportunityHandledTodayAction(scoreId: string): Promise<{ error?: string }> {
+  const crmUser = await requireCrmUser();
+  if (crmUser.role !== "agent") return { error: "Only agents can mark an opportunity handled." };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("crm_opportunity_scores")
+    .update({ handled_on: opportunityTodayKey() })
+    .eq("id", scoreId)
+    .select("id");
+
+  if (error || !data?.length) return { error: "Could not mark this opportunity handled." };
+  revalidatePath("/agent/dashboard");
+  revalidatePath("/agent/my-opportunities");
+  return {};
 }
