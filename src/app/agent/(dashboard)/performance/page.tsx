@@ -17,8 +17,8 @@ export default async function AgentPerformancePage() {
     <div>
       <h1 className="font-heading text-2xl font-bold text-[var(--color-ink-strong)]">My Performance</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-        Your biweekly performance against five verified actions: opportunities added, consultations booked, delivered emails,
-        funding applications submitted, and clients won.
+        Your weekly (Monday-Friday) performance against three verified actions: opportunity leads added, emails
+        delivered, and consultations booked.
       </p>
 
       <div className="mt-6">

@@ -5,17 +5,15 @@ import { getResendClient } from "./resend";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getCrmPerformanceRecords } from "./crm-performance-data";
 import {
-  CRM_BIWEEKLY_APPLICATIONS_TARGET,
-  CRM_BIWEEKLY_CONSULTATIONS_TARGET,
-  CRM_BIWEEKLY_PROPOSALS_TARGET,
-  CRM_BIWEEKLY_QUALIFIED_TARGET,
-  CRM_BIWEEKLY_WON_TARGET,
+  CRM_WEEKLY_CONSULTATIONS_TARGET,
+  CRM_WEEKLY_LEADS_ADDED_TARGET,
+  CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
   CRM_PERFORMANCE_TIER_LABEL,
   computeCrmPeriodPerformance,
   crmDateKey,
   crmPerformanceTier,
 } from "./crm-performance";
-import { crmPeriodStartsInMonth } from "./crm-performance-history";
+import { crmWeekStartsInMonth } from "./crm-performance-history";
 import {
   LEADGEN_WEEKLY_APPOINTMENT_TARGET,
   leadgenCreditedAppointments,
@@ -96,7 +94,7 @@ function section(title: string, rows: string, summary: string, link: string): st
 function buildEmail(input: {
   recipient: Recipient;
   monthLabel: string;
-  growth?: { consultations: number; qualified: number; applications: number; proposals: number; won: number; periodCount: number };
+  growth?: { consultations: number; leadsAdded: number; emailsDelivered: number; periodCount: number };
   leadgen?: { booked: number; weekCount: number };
 }): { subject: string; html: string; text: string } {
   const greetingName = input.recipient.name.trim().split(/\s+/)[0] || "Agent";
@@ -106,16 +104,14 @@ function buildEmail(input: {
   if (input.growth) {
     const g = input.growth;
     const goals = {
-      consultations: CRM_BIWEEKLY_CONSULTATIONS_TARGET * g.periodCount,
-      qualified: CRM_BIWEEKLY_QUALIFIED_TARGET * g.periodCount,
-      applications: CRM_BIWEEKLY_APPLICATIONS_TARGET * g.periodCount,
-      proposals: CRM_BIWEEKLY_PROPOSALS_TARGET * g.periodCount,
-      won: CRM_BIWEEKLY_WON_TARGET * g.periodCount,
+      consultations: CRM_WEEKLY_CONSULTATIONS_TARGET * g.periodCount,
+      leadsAdded: CRM_WEEKLY_LEADS_ADDED_TARGET * g.periodCount,
+      emailsDelivered: CRM_WEEKLY_EMAILS_DELIVERED_TARGET * g.periodCount,
     };
     const overall = Math.round(
-      [pct(g.consultations, goals.consultations), pct(g.qualified, goals.qualified), pct(g.applications, goals.applications), pct(g.proposals, goals.proposals), pct(g.won, goals.won)]
+      [pct(g.consultations, goals.consultations), pct(g.leadsAdded, goals.leadsAdded), pct(g.emailsDelivered, goals.emailsDelivered)]
         .map((value) => Math.min(100, value))
-        .reduce((sum, value) => sum + value, 0) / 5
+        .reduce((sum, value) => sum + value, 0) / 3
     );
     // Same gauge bands as the Growth CRM's Agent Performance Score
     // (crmPerformanceTier: 0-39 Needs Improvement, 40-59 Fair, 60-79 Good,
@@ -125,14 +121,12 @@ function buildEmail(input: {
     sections += section(
       "Growth CRM",
       metricRow("Consultations booked", g.consultations, goals.consultations) +
-        metricRow("Opportunities added", g.qualified, goals.qualified) +
-        metricRow("Funding applications submitted", g.applications, goals.applications) +
-        metricRow("Emails delivered", g.proposals, goals.proposals) +
-        metricRow("Clients won", g.won, goals.won),
+        metricRow("Opportunity leads added", g.leadsAdded, goals.leadsAdded) +
+        metricRow("Emails delivered", g.emailsDelivered, goals.emailsDelivered),
       `Overall: ${overall}% — ${growthStatus}`,
       "https://growth.winsalotcorp.com/agent/performance/monthly"
     );
-    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunities added: ${g.qualified}/${goals.qualified}`, `Funding applications: ${g.applications}/${goals.applications}`, `Emails delivered: ${g.proposals}/${goals.proposals}`, `Clients won: ${g.won}/${goals.won}`, `Overall: ${overall}% — ${growthStatus}`, "");
+    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunity leads added: ${g.leadsAdded}/${goals.leadsAdded}`, `Emails delivered: ${g.emailsDelivered}/${goals.emailsDelivered}`, `Overall: ${overall}% — ${growthStatus}`, "");
   }
 
   if (input.leadgen) {
@@ -159,7 +153,7 @@ function buildEmail(input: {
 
 type AgentReportSnapshot = {
   recipient: Recipient;
-  growth?: { consultations: number; qualified: number; applications: number; proposals: number; won: number; periodCount: number };
+  growth?: { consultations: number; leadsAdded: number; emailsDelivered: number; periodCount: number };
   leadgen?: { booked: number; weekCount: number };
 };
 
@@ -168,21 +162,17 @@ function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): 
     .map((summary) => {
       const growthGoals = summary.growth
         ? {
-            consultations: CRM_BIWEEKLY_CONSULTATIONS_TARGET * summary.growth.periodCount,
-            qualified: CRM_BIWEEKLY_QUALIFIED_TARGET * summary.growth.periodCount,
-            applications: CRM_BIWEEKLY_APPLICATIONS_TARGET * summary.growth.periodCount,
-            proposals: CRM_BIWEEKLY_PROPOSALS_TARGET * summary.growth.periodCount,
-            won: CRM_BIWEEKLY_WON_TARGET * summary.growth.periodCount,
+            consultations: CRM_WEEKLY_CONSULTATIONS_TARGET * summary.growth.periodCount,
+            leadsAdded: CRM_WEEKLY_LEADS_ADDED_TARGET * summary.growth.periodCount,
+            emailsDelivered: CRM_WEEKLY_EMAILS_DELIVERED_TARGET * summary.growth.periodCount,
           }
         : undefined;
       const leadgenGoal = summary.leadgen ? LEADGEN_WEEKLY_APPOINTMENT_TARGET * summary.leadgen.weekCount : undefined;
       const growthRows =
         summary.growth && growthGoals
           ? metricRow("Growth consultations", summary.growth.consultations, growthGoals.consultations) +
-            metricRow("Growth opportunities added", summary.growth.qualified, growthGoals.qualified) +
-            metricRow("Growth funding applications", summary.growth.applications, growthGoals.applications) +
-            metricRow("Growth emails delivered", summary.growth.proposals, growthGoals.proposals) +
-            metricRow("Growth clients won", summary.growth.won, growthGoals.won)
+            metricRow("Growth opportunity leads added", summary.growth.leadsAdded, growthGoals.leadsAdded) +
+            metricRow("Growth emails delivered", summary.growth.emailsDelivered, growthGoals.emailsDelivered)
           : "";
       const leadgenRows =
         summary.leadgen && leadgenGoal !== undefined
@@ -199,7 +189,7 @@ function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): 
       const lines = [summary.recipient.name, summary.recipient.email];
       if (summary.growth) {
         lines.push(
-          `Growth: ${summary.growth.consultations} consultations, ${summary.growth.qualified} opportunities added, ${summary.growth.applications} funding applications, ${summary.growth.proposals} emails delivered, ${summary.growth.won} clients won`
+          `Growth: ${summary.growth.consultations} consultations, ${summary.growth.leadsAdded} opportunity leads added, ${summary.growth.emailsDelivered} emails delivered`
         );
       }
       if (summary.leadgen) lines.push(`Lead Generation: ${summary.leadgen.booked} appointments booked`);
@@ -241,7 +231,7 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
 
   const records = recordsResult;
   const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
-  const growthPeriodCount = crmPeriodStartsInMonth(reportMonth.year, reportMonth.month).length;
+  const growthPeriodCount = crmWeekStartsInMonth(reportMonth.year, reportMonth.month).length;
   const leadgenWeekCount = leadgenWeekStartsInMonth(reportMonth.year, reportMonth.month).length;
   const results: Array<{ email: string; outcome: "sent" | "dry-run" | "failed"; resendId?: string; error?: string }> = [];
   const adminSummaries: AgentReportSnapshot[] = [];
@@ -262,10 +252,8 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
       growth: growthPeriod
         ? {
             consultations: growthPeriod.consultationsBooked,
-            qualified: growthPeriod.qualifiedOpportunities,
-            applications: growthPeriod.applicationsSubmitted,
-            proposals: growthPeriod.proposalsSent,
-            won: growthPeriod.clientsWon,
+            leadsAdded: growthPeriod.leadsAdded,
+            emailsDelivered: growthPeriod.emailsDelivered,
             periodCount: growthPeriodCount,
           }
         : undefined,

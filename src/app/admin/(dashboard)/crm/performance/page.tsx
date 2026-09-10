@@ -2,20 +2,19 @@ import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { biweeklyPeriodStartOf, computeCrmAgentPerformance, crmDateKey } from "@/lib/crm-performance";
-import { syncCrmBiweeklyPerformanceHistory } from "@/lib/crm-performance-history-sync";
-import type { CrmBiweeklyHistoryRow } from "@/lib/crm-performance-history";
+import { crmWeekStartOf, computeCrmAgentPerformance, crmDateKey } from "@/lib/crm-performance";
+import { syncCrmWeeklyPerformanceHistory } from "@/lib/crm-performance-history-sync";
+import type { CrmWeeklyHistoryRow } from "@/lib/crm-performance-history";
 import type { CrmUserRow } from "@/lib/crm-types";
 import CrmPerformanceCard from "@/components/CrmPerformanceCard";
 import CrmMonthlyPerformanceSection from "@/components/CrmMonthlyPerformanceSection";
 
 // Admin view of the Winsalot Growth CRM's Agent Performance Report -
-// every active agent, each with their own biweekly-target card (see
+// every active agent, each with their own weekly-target card (see
 // CrmPerformanceCard). Agents only ever see their own card -
-// /agent/performance. Below the unchanged biweekly cards,
-// CrmMonthlyPerformanceSection adds the Monthly Performance history
-// view, reading the permanent biweekly ledger this page keeps in sync
-// (see crm-performance-history-sync.ts).
+// /agent/performance. Below the weekly cards, CrmMonthlyPerformanceSection
+// adds the Monthly Performance history view, reading the permanent weekly
+// ledger this page keeps in sync (see crm-performance-history-sync.ts).
 export default async function AdminCrmPerformancePage() {
   await requireCrmAdmin();
   const admin = getSupabaseAdmin();
@@ -28,18 +27,18 @@ export default async function AdminCrmPerformancePage() {
   const allAgents = (agents ?? []) as Pick<CrmUserRow, "id" | "full_name" | "email">[];
 
   const now = new Date();
-  await syncCrmBiweeklyPerformanceHistory(admin, allAgents, records, now);
+  await syncCrmWeeklyPerformanceHistory(admin, allAgents, records, now);
 
   const { data: historyRows } = await admin
-    .from("crm_agent_biweekly_performance")
+    .from("crm_agent_weekly_performance")
     .select(
-      "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, qualified_opportunities, qualified_opportunities_target, qualified_opportunities_percentage, applications_submitted, applications_submitted_target, applications_submitted_percentage, proposals_sent, proposals_sent_target, proposals_sent_percentage, clients_won, clients_won_target, clients_won_percentage, overall_percentage, status"
+      "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, leads_added, leads_added_target, leads_added_percentage, emails_delivered, emails_delivered_target, emails_delivered_percentage, overall_percentage, status"
     )
-    .eq("definition_version", 2)
+    .eq("definition_version", 3)
     .in("agent_id", allAgents.map((agent) => agent.id));
 
   const todayKey = crmDateKey(now);
-  const currentPeriodStart = biweeklyPeriodStartOf(todayKey);
+  const currentPeriodStart = crmWeekStartOf(todayKey);
   const [currentYear, currentMonth] = todayKey.split("-").map(Number);
 
   return (
@@ -48,8 +47,8 @@ export default async function AdminCrmPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Biweekly performance against five verified actions per agent: opportunities added, consultations booked, delivered emails,
-            funding applications submitted, and clients won.
+            Weekly (Monday-Friday) performance against three verified actions per agent: opportunity leads added,
+            emails delivered, and consultations booked.
           </p>
         </div>
         <Link
@@ -73,7 +72,7 @@ export default async function AdminCrmPerformancePage() {
       <CrmMonthlyPerformanceSection
         agents={allAgents.map((agent) => ({ id: agent.id, name: agent.full_name || agent.email }))}
         records={records}
-        historyRows={(historyRows ?? []) as CrmBiweeklyHistoryRow[]}
+        historyRows={(historyRows ?? []) as CrmWeeklyHistoryRow[]}
         currentPeriodStart={currentPeriodStart}
         currentYear={currentYear}
         currentMonth={currentMonth}

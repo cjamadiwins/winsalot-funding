@@ -5,13 +5,13 @@ import {
   buildCrmPeriodRecords,
   computeCrmMonthlyPerformance,
   crmMonthsInRange,
-  crmPeriodStartsInMonth,
-  type CrmBiweeklyHistoryRow,
+  crmWeekStartsInMonth,
+  type CrmWeeklyHistoryRow,
   type CrmMonthlyMetricTotal,
 } from "@/lib/crm-performance-history";
 import { CRM_PERFORMANCE_TIER_LABEL, crmPerformanceTier, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
 
-// Same color system as the existing biweekly Agent Performance Report
+// Same color system as the existing weekly Agent Performance Report
 // (CrmPerformanceCard.tsx) - red/yellow/green/blue on every percentage
 // badge and progress bar agree with the gauge's own bands.
 const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text: string }> = {
@@ -22,7 +22,7 @@ const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text
 };
 
 // The gauge's own band labels - imported rather than redefined so this
-// card can never drift from the biweekly gauge's status wording for the
+// card can never drift from the weekly gauge's status wording for the
 // same score.
 const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
@@ -66,7 +66,7 @@ export default function CrmAgentMonthlyPerformanceCard({
   agentId: string;
   agentName: string;
   records: CrmPerformanceOpportunityRecord[];
-  historyRows: CrmBiweeklyHistoryRow[];
+  historyRows: CrmWeeklyHistoryRow[];
   currentPeriodStart: string;
   currentYear: number;
   currentMonth: number;
@@ -86,11 +86,8 @@ export default function CrmAgentMonthlyPerformanceCard({
       const deliveredEmailTimestamps = record.deliveredEmails
         .filter((email) => email.agentId === agentId)
         .map((email) => email.deliveredAt);
-      const opportunityTimestamps = record.assignedAgentId === agentId
-        ? [record.createdAt, record.closedAt]
-        : [];
-      const applicationTimestamps = record.applicationSubmittedByAgentId === agentId ? [record.applicationSubmittedAt] : [];
-      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps, ...applicationTimestamps]) {
+      const opportunityTimestamps = record.assignedAgentId === agentId ? [record.createdAt] : [];
+      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -110,7 +107,7 @@ export default function CrmAgentMonthlyPerformanceCard({
   const [selectedYear, selectedMonthNum] = selectedMonthKey.split("-").map(Number);
 
   const monthly = useMemo(() => {
-    const periodStarts = crmPeriodStartsInMonth(selectedYear, selectedMonthNum);
+    const periodStarts = crmWeekStartsInMonth(selectedYear, selectedMonthNum);
     const periodBreakdown = buildCrmPeriodRecords(periodStarts, historyRows, records, agentId, currentPeriodStart);
     return computeCrmMonthlyPerformance(selectedYear, selectedMonthNum, periodBreakdown);
   }, [selectedYear, selectedMonthNum, historyRows, records, agentId, currentPeriodStart]);
@@ -118,7 +115,7 @@ export default function CrmAgentMonthlyPerformanceCard({
   const historyRowsForTable = useMemo(
     () =>
       monthOptions.map(({ year, month }) => {
-        const periodStarts = crmPeriodStartsInMonth(year, month);
+        const periodStarts = crmWeekStartsInMonth(year, month);
         const periodBreakdown = buildCrmPeriodRecords(periodStarts, historyRows, records, agentId, currentPeriodStart);
         return computeCrmMonthlyPerformance(year, month, periodBreakdown);
       }),
@@ -141,10 +138,8 @@ export default function CrmAgentMonthlyPerformanceCard({
       </div>
 
       <GoalSection title="Consultations Booked" metric={monthly.consultationsBooked} />
-      <GoalSection title="Opportunities Added" metric={monthly.qualifiedOpportunities} />
-      <GoalSection title="Funding Applications Submitted" metric={monthly.applicationsSubmitted} />
-      <GoalSection title="Emails Delivered" metric={monthly.proposalsSent} />
-      <GoalSection title="Clients Won" metric={monthly.clientsWon} />
+      <GoalSection title="Opportunity Leads Added" metric={monthly.leadsAdded} />
+      <GoalSection title="Emails Delivered" metric={monthly.emailsDelivered} />
 
       <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overall Monthly Performance</span>
@@ -160,7 +155,7 @@ export default function CrmAgentMonthlyPerformanceCard({
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Month</th>
-                <th className="p-2.5">Clients Won</th>
+                <th className="p-2.5">Leads Added</th>
                 <th className="p-2.5">Consultations</th>
                 <th className="p-2.5">Overall</th>
               </tr>
@@ -177,7 +172,7 @@ export default function CrmAgentMonthlyPerformanceCard({
                   >
                     <td className="p-2.5 font-medium text-slate-900">{row.monthLabel}</td>
                     <td className="p-2.5 text-slate-600">
-                      {row.clientsWon.total}/{row.clientsWon.goal}
+                      {row.leadsAdded.total}/{row.leadsAdded.goal}
                     </td>
                     <td className="p-2.5 text-slate-600">
                       {row.consultationsBooked.total}/{row.consultationsBooked.goal}

@@ -5,68 +5,59 @@
 // date-bucketing logic self-contained rather than bloating the shared
 // types module.
 //
-// Tracks five goals against every two-week period, all credited to
-// crm_opportunities.assigned_agent_id:
+// Tracks three goals against every Monday-Friday work week, all credited
+// to crm_opportunities.assigned_agent_id:
 //   - Consultations booked: an actual active winsalot_appointments row
 //     created in the period. An opportunity's optional consultation_date
 //     field is planning context only and never proves a booking occurred.
-//   - Opportunities added: opportunities created in the period. Adding a
-//     lead is the event, so later stage changes do not move or manufacture
-//     this credit.
-//   - Applications submitted: application_submitted_at falling in the
-//     period, with application_submitted_by identifying the credited agent
-//     (Business Financing / Both Services opportunities only).
-//   - Emails delivered: the first manually sent CRM prospect email that
-//     Resend confirms delivered for an opportunity. Automated appointment
-//     reminders are excluded, and repeat emails cannot inflate the score.
-//   - Clients won: closed_at falling in the period, stage = Client Won.
+//   - Opportunity leads added: opportunities created in the period. Adding
+//     a lead is the event, so later stage changes do not move or
+//     manufacture this credit.
+//   - Emails delivered: every manually sent CRM prospect email that Resend
+//     confirms delivered for an opportunity, credited to whichever agent
+//     sent it. Automated appointment reminders are excluded. Draft,
+//     scheduled, pending, bounced, and failed emails are never counted -
+//     only a confirmed delivered_at reaches this file at all (see
+//     crm-performance-data.ts).
 //
-// application_submitted_at / application_submitted_by are set once by the
-// explicit "Mark Application Submitted" action. Merely changing a pipeline
-// stage never awards an application or delivered-email point.
+// Each metric is computed independently from its own source data, so one
+// activity (e.g. adding an opportunity) can never also credit another
+// metric (e.g. emails delivered).
+//
+// The reporting week is Monday through Friday only - a fixed 5-day window
+// that starts fresh every Monday. Weekend activity (Saturday/Sunday) falls
+// outside every period and is never credited toward any week's targets.
 
-export const CRM_BIWEEKLY_CONSULTATIONS_TARGET = 4;
-export const CRM_BIWEEKLY_QUALIFIED_TARGET = 6;
-export const CRM_BIWEEKLY_APPLICATIONS_TARGET = 2;
-export const CRM_BIWEEKLY_PROPOSALS_TARGET = 4;
-export const CRM_BIWEEKLY_WON_TARGET = 2;
+export const CRM_WEEKLY_CONSULTATIONS_TARGET = 4;
+export const CRM_WEEKLY_LEADS_ADDED_TARGET = 12;
+export const CRM_WEEKLY_EMAILS_DELIVERED_TARGET = 12;
 
-// Every one of the five scorecard categories carries the same 20% weight
-// (5 x 20% = 100%), so the overall score is just their capped-percentage
+// Every one of the three scorecard categories carries the same 1/3 weight
+// (3 x 1/3 = 100%), so the overall score is just their capped-percentage
 // average - see computeCrmPeriodPerformance's overallPercentage below.
 // Exported so the UI can render each category's "weighted contribution"
 // (its capped percentage x this weight) next to its raw percentage,
 // exactly matching the calculation that produced the gauge's center score.
-export const CRM_CATEGORY_WEIGHT = 0.2;
+export const CRM_CATEGORY_WEIGHT = 1 / 3;
 
-// How many past periods (in addition to the current one) computeCrmAgentPerformance
-// returns as history - about 4 months, generous enough for an admin to spot a
-// trend without the list growing unbounded as opportunities accumulate for years.
-const CRM_PERFORMANCE_HISTORY_PERIODS = 8;
+// How many past weekly periods (in addition to the current one)
+// computeCrmAgentPerformance returns as history - about 4 months, generous
+// enough for an admin to spot a trend without the list growing unbounded
+// as opportunities accumulate for years.
+const CRM_PERFORMANCE_HISTORY_PERIODS = 16;
 
 // Matches LEADGEN_PERFORMANCE_TIMEZONE (lib/leadgen-performance.ts) - "this
 // period" should mean the same calendar dates an agent or admin sees on
 // their own clock, not whatever timezone the server happens to run in.
 export const CRM_PERFORMANCE_TIMEZONE = "America/Toronto";
 
-// A known Monday to anchor two-week periods to, so "period 2" always means
-// the same 14 days no matter when this function runs - without a fixed
-// anchor, "biweekly" is ambiguous (there's no calendar concept of a
-// two-week boundary the way Monday is for a week).
-const BIWEEKLY_EPOCH_MONDAY = "2024-01-01";
-
 export type CrmPerformanceOpportunityRecord = {
   opportunityId: string;
   assignedAgentId: string | null;
   businessName: string;
-  opportunityType: "lead_generation" | "business_financing" | "both_services";
-  stage: string;
   createdAt: string;
   consultationBookings: CrmPerformanceConsultationBooking[];
   deliveredEmails: CrmPerformanceDeliveredEmail[];
-  applicationSubmittedAt: string | null;
-  applicationSubmittedByAgentId: string | null;
-  closedAt: string | null;
 };
 
 export type CrmPerformanceConsultationBooking = {
@@ -81,26 +72,22 @@ export type CrmPerformanceDeliveredEmail = {
   deliveredAt: string;
 };
 
-export type CrmBiweeklyPeriodPerformance = {
+export type CrmWeeklyPeriodPerformance = {
   periodStart: string; // YYYY-MM-DD, Monday
-  periodEnd: string; // YYYY-MM-DD, second Sunday (13 days after periodStart)
+  periodEnd: string; // YYYY-MM-DD, Friday (4 days after periodStart)
   consultationsBooked: number;
-  qualifiedOpportunities: number;
-  applicationsSubmitted: number;
-  proposalsSent: number;
-  clientsWon: number;
+  leadsAdded: number;
+  emailsDelivered: number;
   consultationsPercentage: number; // capped at 100 for display
-  qualifiedPercentage: number;
-  applicationsPercentage: number;
-  proposalsPercentage: number;
-  wonPercentage: number;
-  overallPercentage: number; // capped at 100, average of the five capped percentages
+  leadsAddedPercentage: number;
+  emailsDeliveredPercentage: number;
+  overallPercentage: number; // capped at 100, average of the three capped percentages
 };
 
 export type CrmAgentPerformance = {
   agentId: string;
-  current: CrmBiweeklyPeriodPerformance;
-  history: CrmBiweeklyPeriodPerformance[]; // previous periods, most recent first
+  current: CrmWeeklyPeriodPerformance;
+  history: CrmWeeklyPeriodPerformance[]; // previous periods, most recent first
 };
 
 function pad2(n: number): string {
@@ -126,34 +113,22 @@ export function addDays(dateKey: string, days: number): string {
   return `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`;
 }
 
-// Integer number of days from `fromKey` to `toKey` (Date.UTC so this is
-// never off by one around a DST transition).
-function daysBetween(fromKey: string, toKey: string): number {
-  const [fy, fm, fd] = fromKey.split("-").map(Number);
-  const [ty, tm, td] = toKey.split("-").map(Number);
-  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
-}
-
-// Monday of the calendar week containing dateKey.
-function mondayOf(dateKey: string): string {
+// Monday of the calendar week containing dateKey - the start of the
+// Monday-through-Friday reporting week. A Saturday/Sunday date resolves to
+// the Monday of the week already in progress (the just-finished work
+// week), not the following one, so "today" on a weekend still shows that
+// week's results rather than jumping ahead to a period that hasn't
+// started. Every Monday this rolls forward automatically, so the weekly
+// metrics reset the moment a new Monday begins - no separate reset step
+// is needed, and no historical data is ever touched by the rollover.
+export function crmWeekStartOf(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday .. 6 = Saturday
   const diffToMonday = dow === 0 ? -6 : 1 - dow;
   return addDays(dateKey, diffToMonday);
 }
 
-// The Monday that starts the two-week period containing dateKey, aligned to
-// BIWEEKLY_EPOCH_MONDAY so periods never drift depending on when this runs.
-// Exported so the Monthly Performance history module
-// (crm-performance-history.ts) can find "which period does this month's
-// 1st fall in" the same way this file already does internally.
-export function biweeklyPeriodStartOf(dateKey: string): string {
-  const monday = mondayOf(dateKey);
-  const weeksSinceEpoch = Math.floor(daysBetween(BIWEEKLY_EPOCH_MONDAY, monday) / 7);
-  return weeksSinceEpoch % 2 === 0 ? monday : addDays(monday, -7);
-}
-
-export function crmBiweeklyRangeLabel(periodStart: string, periodEnd: string): string {
+export function crmWeeklyRangeLabel(periodStart: string, periodEnd: string): string {
   const [sy, sm, sd] = periodStart.split("-").map(Number);
   const [ey, em, ed] = periodEnd.split("-").map(Number);
   const start = new Date(sy, sm - 1, sd).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -195,12 +170,10 @@ export function computeCrmPeriodPerformance(
   agentId: string,
   periodStart: string,
   periodEnd: string
-): CrmBiweeklyPeriodPerformance {
+): CrmWeeklyPeriodPerformance {
   let consultationsBooked = 0;
-  let qualifiedOpportunities = 0;
-  let applicationsSubmitted = 0;
-  let proposalsSent = 0;
-  let clientsWon = 0;
+  let leadsAdded = 0;
+  let emailsDelivered = 0;
 
   const inRange = (iso: string) => {
     const key = crmDateKey(iso);
@@ -215,55 +188,34 @@ export function computeCrmPeriodPerformance(
       if (booking.assignedAgentId === agentId && inRange(booking.bookedAt)) consultationsBooked++;
     }
 
-    if (record.assignedAgentId === agentId && inRange(record.createdAt)) qualifiedOpportunities++;
-    if (
-      record.applicationSubmittedByAgentId === agentId &&
-      record.applicationSubmittedAt &&
-      record.opportunityType !== "lead_generation" &&
-      inRange(record.applicationSubmittedAt)
-    ) {
-      applicationsSubmitted++;
-    }
+    if (record.assignedAgentId === agentId && inRange(record.createdAt)) leadsAdded++;
 
-    // Only the first confirmed delivery for an opportunity represents the
-    // proposal/email milestone. Later follow-ups must not score repeatedly.
-    const firstDeliveredEmail = record.deliveredEmails.reduce<CrmPerformanceDeliveredEmail | null>(
-      (earliest, email) => (!earliest || email.deliveredAt < earliest.deliveredAt ? email : earliest),
-      null
-    );
-    if (firstDeliveredEmail?.agentId === agentId && inRange(firstDeliveredEmail.deliveredAt)) proposalsSent++;
-
-    if (record.assignedAgentId === agentId && record.stage === "Client Won" && record.closedAt && inRange(record.closedAt)) {
-      clientsWon++;
+    // Every confirmed delivery counts, not only the first for an
+    // opportunity - a real follow-up email the agent actually sent and
+    // Resend actually delivered is a genuine, separate outreach action.
+    for (const email of record.deliveredEmails) {
+      if (email.agentId === agentId && inRange(email.deliveredAt)) emailsDelivered++;
     }
   }
 
-  const consultationsPercentage = pct(consultationsBooked, CRM_BIWEEKLY_CONSULTATIONS_TARGET);
-  const qualifiedPercentage = pct(qualifiedOpportunities, CRM_BIWEEKLY_QUALIFIED_TARGET);
-  const applicationsPercentage = pct(applicationsSubmitted, CRM_BIWEEKLY_APPLICATIONS_TARGET);
-  const proposalsPercentage = pct(proposalsSent, CRM_BIWEEKLY_PROPOSALS_TARGET);
-  const wonPercentage = pct(clientsWon, CRM_BIWEEKLY_WON_TARGET);
+  const consultationsPercentage = pct(consultationsBooked, CRM_WEEKLY_CONSULTATIONS_TARGET);
+  const leadsAddedPercentage = pct(leadsAdded, CRM_WEEKLY_LEADS_ADDED_TARGET);
+  const emailsDeliveredPercentage = pct(emailsDelivered, CRM_WEEKLY_EMAILS_DELIVERED_TARGET);
 
   return {
     periodStart,
     periodEnd,
     consultationsBooked,
-    qualifiedOpportunities,
-    applicationsSubmitted,
-    proposalsSent,
-    clientsWon,
+    leadsAdded,
+    emailsDelivered,
     consultationsPercentage,
-    qualifiedPercentage,
-    applicationsPercentage,
-    proposalsPercentage,
-    wonPercentage,
-    overallPercentage: Math.round(
-      (consultationsPercentage + qualifiedPercentage + applicationsPercentage + proposalsPercentage + wonPercentage) / 5
-    ),
+    leadsAddedPercentage,
+    emailsDeliveredPercentage,
+    overallPercentage: Math.round((consultationsPercentage + leadsAddedPercentage + emailsDeliveredPercentage) / 3),
   };
 }
 
-// Computes one agent's current biweekly snapshot plus history from a shared
+// Computes one agent's current weekly snapshot plus history from a shared
 // batch of per-opportunity records (the caller fetches once and calls this
 // per agent, rather than one query per agent). `now` is only ever
 // overridden by tests - production callers always use the default (real
@@ -273,12 +225,12 @@ export function computeCrmAgentPerformance(
   agentId: string,
   now: Date = new Date()
 ): CrmAgentPerformance {
-  const currentPeriodStart = biweeklyPeriodStartOf(crmDateKey(now));
+  const currentPeriodStart = crmWeekStartOf(crmDateKey(now));
 
-  const periods: CrmBiweeklyPeriodPerformance[] = [];
+  const periods: CrmWeeklyPeriodPerformance[] = [];
   for (let i = 0; i <= CRM_PERFORMANCE_HISTORY_PERIODS; i++) {
-    const periodStart = addDays(currentPeriodStart, -14 * i);
-    const periodEnd = addDays(periodStart, 13);
+    const periodStart = addDays(currentPeriodStart, -7 * i);
+    const periodEnd = addDays(periodStart, 4);
     periods.push(computeCrmPeriodPerformance(records, agentId, periodStart, periodEnd));
   }
 
