@@ -84,8 +84,13 @@ export default function CrmMonthlyPerformanceSection({
       if (key < earliest) earliest = key;
     }
     for (const record of records) {
-      if (record.assignedAgentId !== agent.id) continue;
-      for (const timestamp of [record.consultationDate, record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]) {
+      const bookingTimestamps = record.consultationBookings
+        .filter((booking) => booking.assignedAgentId === agent.id)
+        .map((booking) => booking.bookedAt);
+      const opportunityTimestamps = record.assignedAgentId === agent.id
+        ? [record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]
+        : [];
+      for (const timestamp of [...bookingTimestamps, ...opportunityTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;

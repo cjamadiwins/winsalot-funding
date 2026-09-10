@@ -7,8 +7,9 @@
 //
 // Tracks five goals against every two-week period, all credited to
 // crm_opportunities.assigned_agent_id:
-//   - Consultations booked: consultation_date falling in the period
-//     (Lead Generation / Both Services opportunities).
+//   - Consultations booked: an actual active winsalot_appointments row
+//     created in the period. An opportunity's optional consultation_date
+//     field is planning context only and never proves a booking occurred.
 //   - Qualified opportunities: opportunities *created* in the period that
 //     have progressed past initial contact (stage is Interested,
 //     Consultation Booked, Proposal or Application Sent, or Client Won).
@@ -51,10 +52,16 @@ export type CrmPerformanceOpportunityRecord = {
   opportunityType: "lead_generation" | "business_financing" | "both_services";
   stage: string;
   createdAt: string;
-  consultationDate: string | null;
+  consultationBookings: CrmPerformanceConsultationBooking[];
   proposalSentAt: string | null;
   applicationSubmittedAt: string | null;
   closedAt: string | null;
+};
+
+export type CrmPerformanceConsultationBooking = {
+  appointmentId: string;
+  assignedAgentId: string | null;
+  bookedAt: string;
 };
 
 const QUALIFIED_STAGES = new Set(["Interested", "Consultation Booked", "Proposal or Application Sent", "Client Won"]);
@@ -176,9 +183,15 @@ export function computeCrmPeriodPerformance(
   };
 
   for (const record of records) {
+    // Consultation credit belongs to the agent stored on the real
+    // appointment at booking time. It must not move if the opportunity is
+    // later reassigned, and consultation_date alone must never create it.
+    for (const booking of record.consultationBookings) {
+      if (booking.assignedAgentId === agentId && inRange(booking.bookedAt)) consultationsBooked++;
+    }
+
     if (record.assignedAgentId !== agentId) continue;
 
-    if (record.consultationDate && inRange(record.consultationDate)) consultationsBooked++;
     if (QUALIFIED_STAGES.has(record.stage) && inRange(record.createdAt)) qualifiedOpportunities++;
     if (record.applicationSubmittedAt && inRange(record.applicationSubmittedAt)) applicationsSubmitted++;
     if (record.proposalSentAt && inRange(record.proposalSentAt)) proposalsSent++;
