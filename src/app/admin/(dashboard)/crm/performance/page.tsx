@@ -35,6 +35,7 @@ export default async function AdminCrmPerformancePage() {
     .select(
       "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, qualified_opportunities, qualified_opportunities_target, qualified_opportunities_percentage, applications_submitted, applications_submitted_target, applications_submitted_percentage, proposals_sent, proposals_sent_target, proposals_sent_percentage, clients_won, clients_won_target, clients_won_percentage, overall_percentage, status"
     )
+    .eq("definition_version", 2)
     .in("agent_id", allAgents.map((agent) => agent.id));
 
   const todayKey = crmDateKey(now);
@@ -47,8 +48,8 @@ export default async function AdminCrmPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Biweekly performance against five targets per agent, reset every two weeks: consultations booked, qualified opportunities,
-            applications submitted, proposals sent, and clients won.
+            Biweekly performance against five verified actions per agent: opportunities added, consultations booked, delivered emails,
+            funding applications submitted, and clients won.
           </p>
         </div>
         <Link
