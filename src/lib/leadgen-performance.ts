@@ -44,10 +44,10 @@ export type LeadgenAgentPerformance = {
   agentId: string;
   bookedThisWeek: number;
   target: number;
-  percentage: number;
+  percentage: number; // capped at 100 for display; bookedThisWeek itself is never capped
   remainingToTarget: number;
   weekStart: string; // YYYY-MM-DD, Monday
-  weekEnd: string; // YYYY-MM-DD, Sunday
+  weekEnd: string; // YYYY-MM-DD, Friday (4 days after weekStart)
   dailyBreakdown: LeadgenPerformanceDay[];
   previousWeekTotal: number;
   monthlyTotal: number;
@@ -122,6 +122,11 @@ export function leadgenWeekRangeLabel(weekStart: string, weekEnd: string): strin
 // appointments (the caller fetches once and calls this per agent, rather
 // than one query per agent). `now` is only ever overridden by tests -
 // production callers always use the default (real "now").
+//
+// The reporting period is Monday through Friday only - a fixed 5-day
+// window that starts fresh every Monday. Weekend bookings (Saturday/Sunday)
+// fall outside every period and are never credited toward any week's
+// target.
 export function computeLeadgenAgentPerformance(
   appointments: LeadgenPerformanceAppointment[],
   agentId: string,
@@ -129,13 +134,13 @@ export function computeLeadgenAgentPerformance(
 ): LeadgenAgentPerformance {
   const todayKey = leadgenDateKey(now);
   const weekStart = leadgenMondayOf(todayKey);
-  const weekEnd = addDays(weekStart, 6);
+  const weekEnd = addDays(weekStart, 4);
   const previousWeekStart = addDays(weekStart, -7);
-  const previousWeekEnd = addDays(weekStart, -1);
+  const previousWeekEnd = addDays(previousWeekStart, 4);
   const monthPrefix = todayKey.slice(0, 7); // YYYY-MM
 
   const dailyCounts = new Map<string, number>();
-  for (let i = 0; i < 7; i++) dailyCounts.set(addDays(weekStart, i), 0);
+  for (let i = 0; i < 5; i++) dailyCounts.set(addDays(weekStart, i), 0);
 
   let bookedThisWeek = 0;
   let previousWeekTotal = 0;
@@ -172,7 +177,10 @@ export function computeLeadgenAgentPerformance(
     agentId,
     bookedThisWeek,
     target: LEADGEN_WEEKLY_APPOINTMENT_TARGET,
-    percentage: Math.round((bookedThisWeek / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100),
+    // The gauge score is capped at 100% once the target is met or
+    // exceeded - bookedThisWeek above is never capped, so the agent's
+    // actual count still shows correctly past the target.
+    percentage: Math.min(100, Math.round((bookedThisWeek / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100)),
     remainingToTarget: Math.max(0, LEADGEN_WEEKLY_APPOINTMENT_TARGET - bookedThisWeek),
     weekStart,
     weekEnd,
@@ -186,7 +194,7 @@ export function computeLeadgenAgentPerformance(
 // Same "credited to this agent" rule as computeLeadgenAgentPerformance
 // above (booking_agent_id match, isLeadgenAppointmentCountable) - pulled out so
 // the Monthly Performance history (leadgen-performance-history.ts) can
-// count an arbitrary Monday-Sunday week the same way the live weekly
+// count an arbitrary Monday-Friday week the same way the live weekly
 // report does, without duplicating or drifting from this filter.
 export function leadgenCreditedAppointments(
   appointments: LeadgenPerformanceAppointment[],

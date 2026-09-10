@@ -138,7 +138,7 @@ export default function MonthlyPerformanceSection({
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
           <p className="mt-1 text-[13px] text-slate-500">
             Permanently saved weekly results rolled up by month. The monthly goal is 4 appointments times the number of
-            Monday-Sunday weeks in the selected month that have begun - weeks that haven&apos;t started yet don&apos;t
+            Monday-Friday weeks in the selected month that have begun - weeks that haven&apos;t started yet don&apos;t
             count against it yet.
           </p>
         </div>

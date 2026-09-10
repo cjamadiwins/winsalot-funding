@@ -23,7 +23,8 @@ export default async function LeadgenAgentPerformancePage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">My Performance</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Your weekly booked-appointment performance against a target of 4, reset every Monday. Cancelled appointments never count.
+        Your weekly (Monday-Friday) booked-appointment performance against a target of 4, reset every Monday. Cancelled
+        and duplicate (replaced) appointments never count.
       </p>
 
       <div className="mt-6">

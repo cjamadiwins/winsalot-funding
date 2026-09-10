@@ -1,14 +1,19 @@
 // Monthly Performance (Lead Gen CRM): reads the permanent weekly ledger
-// (leadgen_agent_weekly_performance, migration 0051) plus the current,
-// still-open week (computed live, the same way the existing Agent
-// Performance Report does in leadgen-performance.ts) to build a month's
-// worth of history. Pure, client-safe - MonthlyPerformanceSection
+// (leadgen_agent_weekly_performance, migration 0051/0153) plus the
+// current, still-open week (computed live, the same way the existing
+// Agent Performance Report does in leadgen-performance.ts) to build a
+// month's worth of history. Pure, client-safe - MonthlyPerformanceSection
 // renders straight from this file's exports, the same way
 // AgentPerformanceCard renders from leadgen-performance.ts. The write
 // side (freezing a completed week into that table) is a separate,
 // server-only module - leadgen-performance-history-sync.ts - so this
 // file can be imported from a "use client" component without pulling in
 // service-role code.
+//
+// The reporting week is Monday through Friday (definition_version 2 on
+// the ledger table); callers must query the ledger scoped to that
+// version so a legacy Monday-Sunday row (definition_version 1) is never
+// mistaken for one of these Monday-Friday weeks - see migration 0153.
 
 import {
   LEADGEN_WEEKLY_APPOINTMENT_TARGET,
@@ -41,7 +46,7 @@ export type LeadgenWeekPeriod = "completed" | "current" | "future";
 
 export type LeadgenWeeklyRecord = {
   weekStart: string; // YYYY-MM-DD, Monday
-  weekEnd: string; // YYYY-MM-DD, Sunday
+  weekEnd: string; // YYYY-MM-DD, Friday (4 days after weekStart)
   bookedCount: number;
   target: number;
   percentage: number;
@@ -91,9 +96,9 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-// Every Monday-Sunday week belongs to exactly one month: whichever
+// Every Monday-Friday week belongs to exactly one month: whichever
 // month contains its Monday. That's what the brief's monthly goal
-// calculation implies ("...based on the number of Monday-to-Sunday
+// calculation implies ("...based on the number of Monday-to-Friday
 // reporting weeks included in the selected month") - it partitions all
 // weeks with no overlap and no gaps, so a week's total is never counted
 // toward two different months.
@@ -129,7 +134,7 @@ export function buildLeadgenWeeklyRecords(
   );
 
   return weekStarts.map((weekStart) => {
-    const weekEnd = addDays(weekStart, 6);
+    const weekEnd = addDays(weekStart, 4);
     const period: LeadgenWeekPeriod = weekStart < currentWeekStart ? "completed" : weekStart === currentWeekStart ? "current" : "future";
     const frozenRow = period === "completed" ? historyByWeek.get(weekStart) : undefined;
 
@@ -151,7 +156,7 @@ export function buildLeadgenWeeklyRecords(
     // can never be in the future, but this keeps the "not started" state
     // unambiguous rather than depending on that).
     const bookedCount = period === "future" ? 0 : computeLeadgenWeekBookedCount(appointments, agentId, weekStart, weekEnd);
-    const percentage = Math.round((bookedCount / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100);
+    const percentage = Math.min(100, Math.round((bookedCount / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100));
     return {
       weekStart,
       weekEnd,
@@ -165,7 +170,7 @@ export function buildLeadgenWeeklyRecords(
   });
 }
 
-// weeklyBreakdown covers every Mon-Sun week in the month, including any
+// weeklyBreakdown covers every Mon-Fri week in the month, including any
 // that haven't started yet (period "future") - kept as-is on the
 // returned object so the UI can still list/label them. But a week that
 // hasn't begun has no result to weigh the month's numbers down with

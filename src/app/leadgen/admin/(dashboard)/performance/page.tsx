@@ -43,6 +43,7 @@ export default async function LeadgenAdminPerformancePage() {
   const { data: historyRows } = await admin
     .from("leadgen_agent_weekly_performance")
     .select("agent_id, agent_name, week_start, week_end, booked_count, target, percentage, status")
+    .eq("definition_version", 2)
     .in("agent_id", allAgents.map((agent) => agent.id));
 
   const todayKey = leadgenDateKey(now);
@@ -55,7 +56,8 @@ export default async function LeadgenAdminPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Agent Performance Report</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Weekly booked-appointment performance against a target of 4 per agent, reset every Monday. Cancelled appointments never count.
+            Weekly (Monday-Friday) booked-appointment performance against a target of 4 per agent, reset every Monday.
+            Cancelled and duplicate (replaced) appointments never count.
           </p>
         </div>
         <Link

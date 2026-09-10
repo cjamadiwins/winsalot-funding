@@ -18,19 +18,26 @@ import {
 // means the cap will not realistically bind.
 const MAX_WEEKS_PER_SYNC = 260;
 
+// definition_version 1 rows (migration 0051) are legacy Monday-Sunday
+// weeks; version 2 (migration 0153) is the current Monday-Friday
+// definition. Bumping this lets every previously frozen Mon-Sun row stay
+// exactly as it was computed while every week frozen from here on is
+// scored under the new Mon-Fri rule - see migration 0153's header comment.
+const LEADGEN_WEEKLY_DEFINITION_VERSION = 2;
+
 // Freezes every completed (Monday strictly before the current week's
-// Monday) Mon-Sun week that doesn't have a leadgen_agent_weekly_performance
-// row yet, for every agent passed in - reusing the same "credited,
-// not cancelled" appointments batch the caller already fetched for the
-// live weekly report, so this issues no appointments query of its own.
-// Insert-only (ON CONFLICT DO NOTHING via ignoreDuplicates): a week
-// that's already frozen is never recomputed or overwritten, so its
-// permanently saved result survives a lead - and its appointments -
-// being deleted later (brief section 10, "admin ability to delete
-// leads" must keep working without quietly rewriting closed history).
-// Safe to call on every admin Performance page load - once a week is
-// frozen there is nothing left to write, so a normal call is a cheap
-// no-op read plus (usually) no insert.
+// Monday) Mon-Fri week that doesn't have a leadgen_agent_weekly_performance
+// row yet (for this definition_version), for every agent passed in -
+// reusing the same "credited, not cancelled" appointments batch the
+// caller already fetched for the live weekly report, so this issues no
+// appointments query of its own. Insert-only (ON CONFLICT DO NOTHING via
+// ignoreDuplicates): a week that's already frozen is never recomputed or
+// overwritten, so its permanently saved result survives a lead - and its
+// appointments - being deleted later (brief section 10, "admin ability to
+// delete leads" must keep working without quietly rewriting closed
+// history). Safe to call on every admin Performance page load - once a
+// week is frozen there is nothing left to write, so a normal call is a
+// cheap no-op read plus (usually) no insert.
 export async function syncLeadgenWeeklyPerformanceHistory(
   admin: SupabaseClient,
   agents: Array<{ id: string; full_name: string | null; email: string }>,
@@ -61,6 +68,7 @@ export async function syncLeadgenWeeklyPerformanceHistory(
   const { data: existing } = await admin
     .from("leadgen_agent_weekly_performance")
     .select("agent_id, week_start")
+    .eq("definition_version", LEADGEN_WEEKLY_DEFINITION_VERSION)
     .gte("week_start", earliestWeekStart)
     .lt("week_start", currentWeekStart);
 
@@ -75,15 +83,16 @@ export async function syncLeadgenWeeklyPerformanceHistory(
     target: number;
     percentage: number;
     status: string;
+    definition_version: number;
   }> = [];
 
   for (const agent of agents) {
     const agentName = agent.full_name || agent.email;
     for (const weekStart of weekStarts) {
       if (existingKeys.has(`${agent.id}|${weekStart}`)) continue;
-      const weekEnd = addDays(weekStart, 6);
+      const weekEnd = addDays(weekStart, 4);
       const bookedCount = computeLeadgenWeekBookedCount(appointments, agent.id, weekStart, weekEnd);
-      const percentage = Math.round((bookedCount / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100);
+      const percentage = Math.min(100, Math.round((bookedCount / LEADGEN_WEEKLY_APPOINTMENT_TARGET) * 100));
       rows.push({
         agent_id: agent.id,
         agent_name: agentName,
@@ -93,11 +102,14 @@ export async function syncLeadgenWeeklyPerformanceHistory(
         target: LEADGEN_WEEKLY_APPOINTMENT_TARGET,
         percentage,
         status: leadgenPerformanceTier(percentage),
+        definition_version: LEADGEN_WEEKLY_DEFINITION_VERSION,
       });
     }
   }
 
   if (rows.length === 0) return;
 
-  await admin.from("leadgen_agent_weekly_performance").upsert(rows, { onConflict: "agent_id,week_start", ignoreDuplicates: true });
+  await admin
+    .from("leadgen_agent_weekly_performance")
+    .upsert(rows, { onConflict: "agent_id,week_start,definition_version", ignoreDuplicates: true });
 }
