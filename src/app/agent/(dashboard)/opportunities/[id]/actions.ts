@@ -54,13 +54,6 @@ function revalidateOpportunity(id: string) {
 // independently at the database level; this check just gives a clear
 // message instead of a raw Postgres exception if the dropdown is somehow
 // bypassed.
-//
-// Whenever the stage changes *to* "Proposal or Application Sent", also
-// stamps proposal_sent_at (Lead Generation/Both Services) and/or
-// application_submitted_at (Business Financing/Both Services) the first
-// time it's reached - the performance dashboard's Proposals Sent/
-// Applications Submitted metrics bucket by these timestamps, not just the
-// opportunity's current stage (see crm-performance.ts).
 export async function updateOpportunityStageAction(id: string, stage: string): Promise<ActionResult> {
   await requireCrmUser();
   if (!AGENT_SETTABLE_STAGES.includes(stage as OpportunityStage)) {
@@ -69,29 +62,41 @@ export async function updateOpportunityStageAction(id: string, stage: string): P
 
   const supabase = await createSupabaseServerClient();
 
-  const { data: current } = await supabase
-    .from("crm_opportunities")
-    .select("opportunity_type, proposal_sent_at, application_submitted_at")
-    .eq("id", id)
-    .maybeSingle();
-  if (!current) return { error: "Opportunity not found." };
-
-  const update: Record<string, unknown> = { stage };
-  if (stage === "Proposal or Application Sent") {
-    const type = current.opportunity_type as OpportunityType;
-    const now = new Date().toISOString();
-    if ((type === "lead_generation" || type === "both_services") && !current.proposal_sent_at) {
-      update.proposal_sent_at = now;
-    }
-    if ((type === "business_financing" || type === "both_services") && !current.application_submitted_at) {
-      update.application_submitted_at = now;
-    }
-  }
-
-  const { error } = await supabase.from("crm_opportunities").update(update).eq("id", id);
+  const { error } = await supabase.from("crm_opportunities").update({ stage }).eq("id", id);
   if (error) return { error: "Failed to update the stage." };
 
   revalidateOpportunity(id);
+  return {};
+}
+
+export async function markApplicationSubmittedAction(id: string): Promise<ActionResult> {
+  const crmUser = await requireCrmUser();
+  const supabase = await createSupabaseServerClient();
+  const { data: opportunity } = await supabase
+    .from("crm_opportunities")
+    .select("opportunity_type, application_submitted_by")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!opportunity) return { error: "Opportunity not found." };
+  if (opportunity.opportunity_type === "lead_generation") {
+    return { error: "Only Business Financing applications can be marked submitted." };
+  }
+  if (opportunity.application_submitted_by) return { error: "This application is already marked submitted." };
+
+  const { error } = await supabase
+    .from("crm_opportunities")
+    .update({
+      application_submitted_at: new Date().toISOString(),
+      application_submitted_by: crmUser.id,
+      application_status: "Submitted",
+    })
+    .eq("id", id)
+    .is("application_submitted_by", null);
+
+  if (error) return { error: "Failed to mark the application submitted." };
+  revalidateOpportunity(id);
+  revalidatePath("/agent/performance");
   return {};
 }
 
