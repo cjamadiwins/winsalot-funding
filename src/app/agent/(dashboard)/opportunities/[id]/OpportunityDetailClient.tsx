@@ -25,6 +25,7 @@ import {
   closeOpportunityAction,
   completeOpportunityFollowUpAction,
   getConsultationOfferedSlotsAction,
+  markApplicationSubmittedAction,
   rescheduleOpportunityFollowUpAction,
   scheduleOpportunityFollowUpAction,
   sendProspectEmailAction,
@@ -134,6 +135,20 @@ export default function OpportunityDetailClient({
                 Details
               </h2>
               <div className="flex items-center gap-4">
+                {opportunity.opportunity_type !== "lead_generation" && (
+                  <button
+                    type="button"
+                    disabled={isPending || Boolean(opportunity.application_submitted_by)}
+                    onClick={() => {
+                      if (confirm("Confirm that this funding application was actually submitted?")) {
+                        runAction(() => markApplicationSubmittedAction(opportunity.id));
+                      }
+                    }}
+                    className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {opportunity.application_submitted_by ? "Application Submitted" : "Mark Application Submitted"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setEditing((v) => !v)}

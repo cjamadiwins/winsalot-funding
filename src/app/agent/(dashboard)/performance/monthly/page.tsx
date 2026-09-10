@@ -38,6 +38,7 @@ export default async function AgentCrmMonthlyPerformancePage() {
     .select(
       "agent_id, agent_name, period_start, period_end, consultations_booked, consultations_booked_target, consultations_booked_percentage, qualified_opportunities, qualified_opportunities_target, qualified_opportunities_percentage, applications_submitted, applications_submitted_target, applications_submitted_percentage, proposals_sent, proposals_sent_target, proposals_sent_percentage, clients_won, clients_won_target, clients_won_percentage, overall_percentage, status"
     )
+    .eq("definition_version", 2)
     .eq("agent_id", crmUser.id);
 
   const todayKey = crmDateKey(now);
@@ -50,7 +51,7 @@ export default async function AgentCrmMonthlyPerformancePage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-[var(--color-ink-strong)]">Monthly Performance</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Your consultations booked, qualified opportunities, applications submitted, proposals sent, and clients won for the selected
+            Your opportunities added, consultations booked, delivered emails, funding applications submitted, and clients won for the selected
             month, against goals based on the biweekly targets that fall within it. Previous months stay available after the month
             changes.
           </p>

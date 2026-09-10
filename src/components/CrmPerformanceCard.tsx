@@ -50,9 +50,9 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
                 <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                   <th className="p-2.5">Period</th>
                   <th className="p-2.5">Consultations</th>
-                  <th className="p-2.5">Qualified</th>
+                  <th className="p-2.5">Added</th>
                   <th className="p-2.5">Applications</th>
-                  <th className="p-2.5">Proposals</th>
+                  <th className="p-2.5">Emails Delivered</th>
                   <th className="p-2.5">Clients Won</th>
                   <th className="p-2.5">Overall</th>
                 </tr>
@@ -109,9 +109,9 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
         <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" size={180} strokeWidth={14} />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <Stat label="Consultations Booked" value={`${period.consultationsBooked}/${CRM_BIWEEKLY_CONSULTATIONS_TARGET}`} />
-          <Stat label="Qualified Opportunities" value={`${period.qualifiedOpportunities}/${CRM_BIWEEKLY_QUALIFIED_TARGET}`} />
-          <Stat label="Applications Submitted" value={`${period.applicationsSubmitted}/${CRM_BIWEEKLY_APPLICATIONS_TARGET}`} />
-          <Stat label="Proposals Sent" value={`${period.proposalsSent}/${CRM_BIWEEKLY_PROPOSALS_TARGET}`} />
+          <Stat label="Opportunities Added" value={`${period.qualifiedOpportunities}/${CRM_BIWEEKLY_QUALIFIED_TARGET}`} />
+          <Stat label="Funding Applications Submitted" value={`${period.applicationsSubmitted}/${CRM_BIWEEKLY_APPLICATIONS_TARGET}`} />
+          <Stat label="Emails Delivered" value={`${period.proposalsSent}/${CRM_BIWEEKLY_PROPOSALS_TARGET}`} />
           <Stat label="Clients Won" value={`${period.clientsWon}/${CRM_BIWEEKLY_WON_TARGET}`} />
           <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
         </div>
@@ -119,9 +119,9 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
 
       <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Progress</div>
       <ProgressGoal label="Consultations Booked Progress" percentage={period.consultationsPercentage} tier={consultationsTier} />
-      <ProgressGoal label="Qualified Opportunities Progress" percentage={period.qualifiedPercentage} tier={qualifiedTier} />
-      <ProgressGoal label="Applications Submitted Progress" percentage={period.applicationsPercentage} tier={applicationsTier} />
-      <ProgressGoal label="Proposals Sent Progress" percentage={period.proposalsPercentage} tier={proposalsTier} />
+      <ProgressGoal label="Opportunities Added Progress" percentage={period.qualifiedPercentage} tier={qualifiedTier} />
+      <ProgressGoal label="Funding Applications Submitted Progress" percentage={period.applicationsPercentage} tier={applicationsTier} />
+      <ProgressGoal label="Emails Delivered Progress" percentage={period.proposalsPercentage} tier={proposalsTier} />
       <ProgressGoal label="Clients Won Progress" percentage={period.wonPercentage} tier={wonTier} />
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">

@@ -1,12 +1,14 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import type { CrmPerformanceConsultationBooking, CrmPerformanceOpportunityRecord } from "./crm-performance";
+import type {
+  CrmPerformanceConsultationBooking,
+  CrmPerformanceDeliveredEmail,
+  CrmPerformanceOpportunityRecord,
+} from "./crm-performance";
 
 // Fetches every crm_opportunities row shaped for computeCrmAgentPerformance.
 // Unlike the old quote-linked version, this reads crm_opportunities
-// directly - no join to a separate fulfillment table, since
-// proposal_sent_at/application_submitted_at/closed_at live on the
-// opportunity itself. Consultation performance deliberately comes from
+// directly. Consultation performance deliberately comes from
 // winsalot_appointments instead: consultation_date is an optional planning
 // field on the opportunity form and is not evidence of a real booking.
 //
@@ -14,38 +16,69 @@ import type { CrmPerformanceConsultationBooking, CrmPerformanceOpportunityRecord
 // the admin's "every agent" view (/admin/crm/performance) without an
 // extra round trip per agent. When agentId is supplied, the opportunity
 // query includes both opportunities currently assigned to that agent and
-// opportunities tied to one of their historical bookings. That preserves
-// booking-time credit even if the opportunity is later reassigned while
-// still excluding unrelated agents' records from the returned dataset.
+// opportunities tied to one of their historical bookings or delivered
+// emails. That preserves event-time credit even if the opportunity is
+// later reassigned while still excluding unrelated agents' records.
 export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPerformanceOpportunityRecord[]> {
   const admin = getSupabaseAdmin();
 
   const opportunityQuery = admin
     .from("crm_opportunities")
     .select(
-      "id, business_name, assigned_agent_id, opportunity_type, stage, created_at, proposal_sent_at, application_submitted_at, closed_at"
+      "id, business_name, assigned_agent_id, opportunity_type, stage, created_at, application_submitted_at, application_submitted_by, closed_at"
     );
   const appointmentQuery = admin
     .from("winsalot_appointments")
     .select("id, opportunity_id, assigned_agent_id, created_at")
     .eq("status", "booked")
     .not("opportunity_id", "is", null);
+  const deliveredEmailQuery = admin
+    .from("crm_lead_emails")
+    .select("id, opportunity_id, agent_id, delivered_at")
+    .in("email_type", ["follow_up", "consultation_invite"])
+    .not("opportunity_id", "is", null)
+    .not("delivered_at", "is", null);
   let opportunities;
   let appointments;
+  let deliveredEmails;
   if (agentId) {
-    const appointmentResult = await appointmentQuery.eq("assigned_agent_id", agentId);
+    const [appointmentResult, deliveredEmailResult] = await Promise.all([
+      appointmentQuery.eq("assigned_agent_id", agentId),
+      // Fetch every delivery so "first delivered" remains true even when
+      // a different agent sent an earlier email for the same opportunity.
+      deliveredEmailQuery,
+    ]);
     appointments = appointmentResult.data;
-    const bookedOpportunityIds = Array.from(
-      new Set((appointments ?? []).map((appointment) => appointment.opportunity_id).filter((id): id is string => Boolean(id)))
-    );
+    deliveredEmails = deliveredEmailResult.data;
+    const eventOpportunityIds = Array.from(new Set([
+      ...(appointments ?? []).map((appointment) => appointment.opportunity_id),
+      ...(deliveredEmails ?? []).filter((email) => email.agent_id === agentId).map((email) => email.opportunity_id),
+    ].filter((id): id is string => Boolean(id))));
     const scope = [`assigned_agent_id.eq.${agentId}`];
-    if (bookedOpportunityIds.length > 0) scope.push(`id.in.(${bookedOpportunityIds.join(",")})`);
+    if (eventOpportunityIds.length > 0) scope.push(`id.in.(${eventOpportunityIds.join(",")})`);
     const opportunityResult = await opportunityQuery.or(scope.join(","));
     opportunities = opportunityResult.data;
   } else {
-    const [opportunityResult, appointmentResult] = await Promise.all([opportunityQuery, appointmentQuery]);
+    const [opportunityResult, appointmentResult, deliveredEmailResult] = await Promise.all([
+      opportunityQuery,
+      appointmentQuery,
+      deliveredEmailQuery,
+    ]);
     opportunities = opportunityResult.data;
     appointments = appointmentResult.data;
+    deliveredEmails = deliveredEmailResult.data;
+  }
+
+  const deliveredEmailsByOpportunity = new Map<string, CrmPerformanceDeliveredEmail[]>();
+  for (const email of deliveredEmails ?? []) {
+    if (!email.opportunity_id || !email.delivered_at) continue;
+    const entries = deliveredEmailsByOpportunity.get(email.opportunity_id) ?? [];
+    entries.push({
+      emailId: email.id as string,
+      agentId: (email.agent_id as string | null) ?? null,
+      deliveredAt: email.delivered_at as string,
+    });
+    deliveredEmailsByOpportunity.set(email.opportunity_id, entries);
   }
   if (!opportunities || opportunities.length === 0) return [];
 
@@ -69,8 +102,9 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
     stage: o.stage as string,
     createdAt: o.created_at as string,
     consultationBookings: bookingsByOpportunity.get(o.id as string) ?? [],
-    proposalSentAt: (o.proposal_sent_at as string | null) ?? null,
+    deliveredEmails: deliveredEmailsByOpportunity.get(o.id as string) ?? [],
     applicationSubmittedAt: (o.application_submitted_at as string | null) ?? null,
+    applicationSubmittedByAgentId: (o.application_submitted_by as string | null) ?? null,
     closedAt: (o.closed_at as string | null) ?? null,
   }));
 }

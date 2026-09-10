@@ -118,14 +118,14 @@ function buildEmail(input: {
     sections += section(
       "Growth CRM",
       metricRow("Consultations booked", g.consultations, goals.consultations) +
-        metricRow("Qualified opportunities", g.qualified, goals.qualified) +
-        metricRow("Applications submitted", g.applications, goals.applications) +
-        metricRow("Proposals sent", g.proposals, goals.proposals) +
+        metricRow("Opportunities added", g.qualified, goals.qualified) +
+        metricRow("Funding applications submitted", g.applications, goals.applications) +
+        metricRow("Emails delivered", g.proposals, goals.proposals) +
         metricRow("Clients won", g.won, goals.won),
       `Overall: ${overall}% — ${statusLabel(overall)}`,
       "https://growth.winsalotcorp.com/agent/performance/monthly"
     );
-    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Qualified opportunities: ${g.qualified}/${goals.qualified}`, `Applications: ${g.applications}/${goals.applications}`, `Proposals: ${g.proposals}/${goals.proposals}`, `Clients won: ${g.won}/${goals.won}`, `Overall: ${overall}% — ${statusLabel(overall)}`, "");
+    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunities added: ${g.qualified}/${goals.qualified}`, `Funding applications: ${g.applications}/${goals.applications}`, `Emails delivered: ${g.proposals}/${goals.proposals}`, `Clients won: ${g.won}/${goals.won}`, `Overall: ${overall}% — ${statusLabel(overall)}`, "");
   }
 
   if (input.leadgen) {
@@ -172,9 +172,9 @@ function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): 
       const growthRows =
         summary.growth && growthGoals
           ? metricRow("Growth consultations", summary.growth.consultations, growthGoals.consultations) +
-            metricRow("Growth qualified", summary.growth.qualified, growthGoals.qualified) +
-            metricRow("Growth applications", summary.growth.applications, growthGoals.applications) +
-            metricRow("Growth proposals", summary.growth.proposals, growthGoals.proposals) +
+            metricRow("Growth opportunities added", summary.growth.qualified, growthGoals.qualified) +
+            metricRow("Growth funding applications", summary.growth.applications, growthGoals.applications) +
+            metricRow("Growth emails delivered", summary.growth.proposals, growthGoals.proposals) +
             metricRow("Growth clients won", summary.growth.won, growthGoals.won)
           : "";
       const leadgenRows =
@@ -192,7 +192,7 @@ function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): 
       const lines = [summary.recipient.name, summary.recipient.email];
       if (summary.growth) {
         lines.push(
-          `Growth: ${summary.growth.consultations} consultations, ${summary.growth.qualified} qualified, ${summary.growth.applications} applications, ${summary.growth.proposals} proposals, ${summary.growth.won} clients won`
+          `Growth: ${summary.growth.consultations} consultations, ${summary.growth.qualified} opportunities added, ${summary.growth.applications} funding applications, ${summary.growth.proposals} emails delivered, ${summary.growth.won} clients won`
         );
       }
       if (summary.leadgen) lines.push(`Lead Generation: ${summary.leadgen.booked} appointments booked`);

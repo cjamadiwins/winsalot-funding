@@ -87,10 +87,14 @@ export default function CrmMonthlyPerformanceSection({
       const bookingTimestamps = record.consultationBookings
         .filter((booking) => booking.assignedAgentId === agent.id)
         .map((booking) => booking.bookedAt);
+      const deliveredEmailTimestamps = record.deliveredEmails
+        .filter((email) => email.agentId === agent.id)
+        .map((email) => email.deliveredAt);
       const opportunityTimestamps = record.assignedAgentId === agent.id
-        ? [record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]
+        ? [record.createdAt, record.closedAt]
         : [];
-      for (const timestamp of [...bookingTimestamps, ...opportunityTimestamps]) {
+      const applicationTimestamps = record.applicationSubmittedByAgentId === agent.id ? [record.applicationSubmittedAt] : [];
+      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps, ...applicationTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -141,8 +145,8 @@ export default function CrmMonthlyPerformanceSection({
         <div>
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
           <p className="mt-1 text-[13px] text-slate-500">
-            Permanently saved biweekly results rolled up by month across consultations booked, qualified opportunities,
-            applications submitted, proposals sent, and clients won. Goals only count periods that have started - a period
+            Permanently saved biweekly results rolled up by month across consultations booked, opportunities added,
+            funding applications submitted, emails delivered, and clients won. Goals only count periods that have started - a period
             that hasn&apos;t begun yet doesn&apos;t count against them.
           </p>
         </div>
@@ -174,9 +178,9 @@ export default function CrmMonthlyPerformanceSection({
           badgeClassName={monthlyTierStyle.badge}
         />
         <Stat label="Consultations Booked" value={`${monthly.consultationsBooked.total}/${monthly.consultationsBooked.goal}`} />
-        <Stat label="Qualified Opportunities" value={`${monthly.qualifiedOpportunities.total}/${monthly.qualifiedOpportunities.goal}`} />
-        <Stat label="Applications Submitted" value={`${monthly.applicationsSubmitted.total}/${monthly.applicationsSubmitted.goal}`} />
-        <Stat label="Proposals Sent" value={`${monthly.proposalsSent.total}/${monthly.proposalsSent.goal}`} />
+        <Stat label="Opportunities Added" value={`${monthly.qualifiedOpportunities.total}/${monthly.qualifiedOpportunities.goal}`} />
+        <Stat label="Funding Applications Submitted" value={`${monthly.applicationsSubmitted.total}/${monthly.applicationsSubmitted.goal}`} />
+        <Stat label="Emails Delivered" value={`${monthly.proposalsSent.total}/${monthly.proposalsSent.goal}`} />
         <Stat label="Clients Won" value={`${monthly.clientsWon.total}/${monthly.clientsWon.goal}`} />
         <Stat label="Average Won / Period" value={String(monthly.averageWonPerPeriod)} />
       </div>
@@ -189,9 +193,9 @@ export default function CrmMonthlyPerformanceSection({
               <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Period</th>
                 <th className="p-2.5">Consultations</th>
-                <th className="p-2.5">Qualified</th>
+                <th className="p-2.5">Added</th>
                 <th className="p-2.5">Applications</th>
-                <th className="p-2.5">Proposals</th>
+                <th className="p-2.5">Emails Delivered</th>
                 <th className="p-2.5">Clients Won</th>
                 <th className="p-2.5">Overall</th>
                 <th className="p-2.5">Status</th>

@@ -83,10 +83,14 @@ export default function CrmAgentMonthlyPerformanceCard({
       const bookingTimestamps = record.consultationBookings
         .filter((booking) => booking.assignedAgentId === agentId)
         .map((booking) => booking.bookedAt);
+      const deliveredEmailTimestamps = record.deliveredEmails
+        .filter((email) => email.agentId === agentId)
+        .map((email) => email.deliveredAt);
       const opportunityTimestamps = record.assignedAgentId === agentId
-        ? [record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]
+        ? [record.createdAt, record.closedAt]
         : [];
-      for (const timestamp of [...bookingTimestamps, ...opportunityTimestamps]) {
+      const applicationTimestamps = record.applicationSubmittedByAgentId === agentId ? [record.applicationSubmittedAt] : [];
+      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps, ...applicationTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -137,9 +141,9 @@ export default function CrmAgentMonthlyPerformanceCard({
       </div>
 
       <GoalSection title="Consultations Booked" metric={monthly.consultationsBooked} />
-      <GoalSection title="Qualified Opportunities" metric={monthly.qualifiedOpportunities} />
-      <GoalSection title="Applications Submitted" metric={monthly.applicationsSubmitted} />
-      <GoalSection title="Proposals Sent" metric={monthly.proposalsSent} />
+      <GoalSection title="Opportunities Added" metric={monthly.qualifiedOpportunities} />
+      <GoalSection title="Funding Applications Submitted" metric={monthly.applicationsSubmitted} />
+      <GoalSection title="Emails Delivered" metric={monthly.proposalsSent} />
       <GoalSection title="Clients Won" metric={monthly.clientsWon} />
 
       <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">

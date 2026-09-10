@@ -20,6 +20,7 @@ import {
 // again, see migration 0052's header comment). ~130 periods is roughly
 // 5 years of headroom at 14 days each.
 const MAX_PERIODS_PER_SYNC = 130;
+const VERIFIED_DEFINITION_VERSION = 2;
 
 // Freezes every completed (period_start strictly before the current
 // period's start) two-week period that doesn't have a
@@ -49,8 +50,9 @@ export async function syncCrmBiweeklyPerformanceHistory(
   let earliestPeriodStart: string | null = null;
   for (const record of records) {
     for (const timestamp of [
+      record.createdAt,
       ...record.consultationBookings.map((booking) => booking.bookedAt),
-      record.proposalSentAt,
+      ...record.deliveredEmails.map((email) => email.deliveredAt),
       record.applicationSubmittedAt,
       record.closedAt,
     ]) {
@@ -73,6 +75,7 @@ export async function syncCrmBiweeklyPerformanceHistory(
   const { data: existing } = await admin
     .from("crm_agent_biweekly_performance")
     .select("agent_id, period_start")
+    .eq("definition_version", VERIFIED_DEFINITION_VERSION)
     .gte("period_start", earliestPeriodStart)
     .lt("period_start", currentPeriodStart);
 
@@ -100,6 +103,7 @@ export async function syncCrmBiweeklyPerformanceHistory(
     clients_won_percentage: number;
     overall_percentage: number;
     status: string;
+    definition_version: number;
   }> = [];
 
   for (const agent of agents) {
@@ -130,11 +134,14 @@ export async function syncCrmBiweeklyPerformanceHistory(
         clients_won_percentage: period.wonPercentage,
         overall_percentage: period.overallPercentage,
         status: crmPerformanceTier(period.overallPercentage),
+        definition_version: VERIFIED_DEFINITION_VERSION,
       });
     }
   }
 
   if (rows.length === 0) return;
 
-  await admin.from("crm_agent_biweekly_performance").upsert(rows, { onConflict: "agent_id,period_start", ignoreDuplicates: true });
+  await admin
+    .from("crm_agent_biweekly_performance")
+    .upsert(rows, { onConflict: "agent_id,period_start,definition_version", ignoreDuplicates: true });
 }
