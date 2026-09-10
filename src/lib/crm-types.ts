@@ -222,10 +222,11 @@ export type CrmOpportunityRow = {
   bank_statements_available: boolean | null;
   application_status: string | null;
 
-  // Stage-reached timestamps, set once by the server action the first
-  // time an opportunity enters that stage (see crm-performance.ts).
+  // Verified performance milestones. proposal_sent_at is legacy-only;
+  // delivered CRM email records are the proposal/email source of truth.
   proposal_sent_at: string | null;
   application_submitted_at: string | null;
+  application_submitted_by: string | null;
 
   last_email_status: EmailEventStatus | null;
   last_email_status_at: string | null;
