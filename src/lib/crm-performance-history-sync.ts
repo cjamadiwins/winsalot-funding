@@ -49,7 +49,7 @@ export async function syncCrmBiweeklyPerformanceHistory(
   let earliestPeriodStart: string | null = null;
   for (const record of records) {
     for (const timestamp of [
-      record.consultationDate,
+      ...record.consultationBookings.map((booking) => booking.bookedAt),
       record.proposalSentAt,
       record.applicationSubmittedAt,
       record.closedAt,
