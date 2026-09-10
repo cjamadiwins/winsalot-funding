@@ -75,14 +75,6 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
 
   const supabase = await createSupabaseServerClient();
 
-  const { data: current, error: currentError } = await supabase
-    .from("crm_opportunities")
-    .select("opportunity_type, proposal_sent_at, application_submitted_at")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (currentError || !current) throw new Error("Opportunity not found.");
-
   const update: Record<string, unknown> = {
     business_name: businessName,
     contact_name: textOrNull(formData, "contact_name"),
@@ -112,28 +104,46 @@ export async function updateOpportunityAction(opportunityId: string, formData: F
     application_status: textOrNull(formData, "application_status"),
   };
 
-  // The performance dashboard's "Proposals sent" / "Applications
-  // submitted" metrics read these timestamps, set once, the first time an
-  // opportunity enters this stage - never overwritten on a later save (see
-  // crm-performance.ts, migration 0080's column comment).
-  if (stage === "Proposal or Application Sent") {
-    if ((opportunityType === "lead_generation" || opportunityType === "both_services") && !current.proposal_sent_at) {
-      update.proposal_sent_at = new Date().toISOString();
-    }
-    if (
-      (opportunityType === "business_financing" || opportunityType === "both_services") &&
-      !current.application_submitted_at
-    ) {
-      update.application_submitted_at = new Date().toISOString();
-    }
-  }
-
   const { error } = await supabase.from("crm_opportunities").update(update).eq("id", opportunityId);
 
   if (error) throw new Error("Failed to save the opportunity.");
 
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   revalidatePath("/admin/crm");
+}
+
+// A funding application is a real operational event, not a pipeline label.
+// The explicit action records it once and credits the opportunity's assigned
+// agent; legacy stage-derived timestamps remain uncredited.
+export async function markApplicationSubmittedAction(opportunityId: string) {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data: opportunity, error: fetchError } = await supabase
+    .from("crm_opportunities")
+    .select("opportunity_type, assigned_agent_id, application_submitted_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (fetchError || !opportunity) throw new Error("Opportunity not found.");
+  if (opportunity.opportunity_type === "lead_generation") {
+    throw new Error("Only Business Financing applications can be marked submitted.");
+  }
+  if (!opportunity.assigned_agent_id) throw new Error("Assign an agent before marking the application submitted.");
+  if (opportunity.application_submitted_by) throw new Error("This application is already marked submitted.");
+
+  const { error } = await supabase
+    .from("crm_opportunities")
+    .update({
+      application_submitted_at: new Date().toISOString(),
+      application_submitted_by: opportunity.assigned_agent_id,
+      application_status: "Submitted",
+    })
+    .eq("id", opportunityId)
+    .is("application_submitted_by", null);
+
+  if (error) throw new Error("Failed to mark the application submitted.");
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  revalidatePath("/admin/crm/performance");
 }
 
 // Administrators may permanently delete an opportunity regardless of its
