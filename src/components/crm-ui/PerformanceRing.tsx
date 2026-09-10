@@ -1,19 +1,38 @@
-"use client";
-
-import { CheckCircle2 } from "lucide-react";
-
-// Circular "percentage of target" indicator shared by both CRMs' Agent
-// Performance Report cards. Purely presentational - it renders whatever
-// percentage/tier the existing performance calculations
-// (computeCrmAgentPerformance / computeLeadgenAgentPerformance) already
-// produce; it does not compute or alter any target/threshold itself.
+// Semicircular 0-100 performance gauge shared by both CRMs. The public
+// component name is retained so every existing Admin/Agent report and
+// dashboard receives the upgrade without duplicating presentation logic.
 export type PerformanceTier = "green" | "yellow" | "red";
 
-const TIER_COLOR: Record<PerformanceTier, string> = {
-  green: "#34D399",
-  yellow: "#FBBF24",
-  red: "#FB7185",
+const CENTER_X = 120;
+const CENTER_Y = 116;
+const ARC_RADIUS = 84;
+
+const SEGMENTS = [
+  { start: 0, end: 40, color: "#df7f82", label: "Needs improvement" },
+  { start: 40, end: 70, color: "#efc76f", label: "Fair" },
+  { start: 70, end: 90, color: "#78bd72", label: "Good" },
+  { start: 90, end: 100, color: "#63b9c7", label: "Excellent" },
+] as const;
+
+const SCORE_COLOR: Record<PerformanceTier, string> = {
+  green: "#58a966",
+  yellow: "#d7a43c",
+  red: "#ce676b",
 };
+
+function pointForScore(score: number, radius: number) {
+  const angle = Math.PI - (Math.PI * score) / 100;
+  return {
+    x: CENTER_X + radius * Math.cos(angle),
+    y: CENTER_Y - radius * Math.sin(angle),
+  };
+}
+
+function arcPath(startScore: number, endScore: number) {
+  const start = pointForScore(startScore, ARC_RADIUS);
+  const end = pointForScore(endScore, ARC_RADIUS);
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
 
 export default function PerformanceRing({
   percentage,
@@ -28,53 +47,72 @@ export default function PerformanceRing({
   strokeWidth?: number;
   label?: string;
 }) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, percentage));
-  const offset = circumference * (1 - clamped / 100);
-  const color = TIER_COLOR[tier];
-  const achieved = percentage >= 100;
+  const score = Math.max(0, Math.min(100, Math.round(percentage)));
+  const needleTip = pointForScore(score, 67);
+  const color = SCORE_COLOR[tier];
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90" role="img" aria-label={`${percentage}% of target`}>
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
+    <figure className="m-0 flex shrink-0 flex-col items-center" style={{ width: size }}>
+      <svg
+        viewBox="0 0 240 148"
+        className="block h-auto w-full overflow-visible"
+        role="img"
+        aria-label={`Performance score ${score} out of 100${label ? `, ${label}` : ""}`}
+      >
+        {SEGMENTS.map((segment) => (
+          <path
+            key={segment.label}
+            d={arcPath(segment.start, segment.end)}
             fill="none"
-            stroke="var(--crm-border, #dce4ec)"
-            strokeWidth={strokeWidth}
+            stroke={segment.color}
+            strokeWidth={strokeWidth * 1.7}
+            strokeLinecap="butt"
           />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 0.6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[26px] font-extrabold leading-none text-[var(--crm-text,#17283b)]">{percentage}%</span>
-          {label && (
-            <span className="mt-1 max-w-[80px] text-center text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-[var(--crm-text-muted,#6b7c90)]">
-              {label}
-            </span>
-          )}
-        </div>
-      </div>
-      {achieved && (
-        <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800">
-          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} />
-          Target Achieved
-        </span>
-      )}
-    </div>
+        ))}
+
+        {[0, 20, 40, 60, 80, 100].map((tick) => {
+          const position = pointForScore(tick, 108);
+          return (
+            <text key={tick} x={position.x} y={position.y + 4} textAnchor="middle" className="fill-slate-500 text-[10px] font-semibold">
+              {tick}
+            </text>
+          );
+        })}
+
+        {SEGMENTS.map((segment) => {
+          const midpoint = (segment.start + segment.end) / 2;
+          const position = pointForScore(midpoint, 84);
+          const rotation = 180 - midpoint * 1.8;
+          return (
+            <text
+              key={`${segment.label}-label`}
+              x={position.x}
+              y={position.y + 3}
+              textAnchor="middle"
+              transform={`rotate(${rotation} ${position.x} ${position.y})`}
+              className="fill-white text-[7px] font-bold"
+            >
+              {segment.label}
+            </text>
+          );
+        })}
+
+        <line
+          x1={CENTER_X}
+          y1={CENTER_Y}
+          x2={needleTip.x}
+          y2={needleTip.y}
+          stroke={color}
+          strokeWidth="8"
+          strokeLinecap="round"
+          aria-hidden="true"
+        />
+        <circle cx={CENTER_X} cy={CENTER_Y} r="25" fill={color} />
+        <text x={CENTER_X} y={CENTER_Y + 8} textAnchor="middle" className="fill-white text-[25px] font-bold">
+          {score}
+        </text>
+      </svg>
+      {label ? <figcaption className="-mt-1 text-center text-[10.5px] font-medium text-slate-500">{label}</figcaption> : null}
+    </figure>
   );
 }
