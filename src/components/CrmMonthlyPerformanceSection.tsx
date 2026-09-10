@@ -5,11 +5,11 @@ import {
   buildCrmPeriodRecords,
   computeCrmMonthlyPerformance,
   crmMonthsInRange,
-  crmPeriodStartsInMonth,
-  type CrmBiweeklyHistoryRow,
+  crmWeekStartsInMonth,
+  type CrmWeeklyHistoryRow,
   type CrmPeriodRecord,
 } from "@/lib/crm-performance-history";
-import { CRM_PERFORMANCE_TIER_LABEL, crmBiweeklyRangeLabel, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
+import { CRM_PERFORMANCE_TIER_LABEL, crmWeeklyRangeLabel, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
 
 const TIER_STYLES: Record<CrmPerformanceTier, { badge: string; text: string }> = {
   blue: { badge: "bg-sky-100 text-sky-800", text: "text-sky-700" },
@@ -20,7 +20,7 @@ const TIER_STYLES: Record<CrmPerformanceTier, { badge: string; text: string }> =
 
 // The gauge's own band labels (Needs Improvement / Fair / Good /
 // Excellent) - imported rather than redefined so this table can never
-// drift from the biweekly gauge's status wording for the same score.
+// drift from the weekly gauge's status wording for the same score.
 const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
 // A period that's still in progress or hasn't started yet has no
@@ -62,7 +62,7 @@ export default function CrmMonthlyPerformanceSection({
 }: {
   agents: Agent[];
   records: CrmPerformanceOpportunityRecord[];
-  historyRows: CrmBiweeklyHistoryRow[];
+  historyRows: CrmWeeklyHistoryRow[];
   currentPeriodStart: string;
   currentYear: number;
   currentMonth: number;
@@ -72,7 +72,7 @@ export default function CrmMonthlyPerformanceSection({
 
   const agent = agents.find((candidate) => candidate.id === agentId) ?? null;
 
-  // Earliest month with any record (frozen biweekly history or a live
+  // Earliest month with any record (frozen weekly history or a live
   // opportunity event) for this agent, capped so the picker/table can't
   // grow unbounded for a very old dataset.
   const earliestMonth = useMemo(() => {
@@ -90,11 +90,8 @@ export default function CrmMonthlyPerformanceSection({
       const deliveredEmailTimestamps = record.deliveredEmails
         .filter((email) => email.agentId === agent.id)
         .map((email) => email.deliveredAt);
-      const opportunityTimestamps = record.assignedAgentId === agent.id
-        ? [record.createdAt, record.closedAt]
-        : [];
-      const applicationTimestamps = record.applicationSubmittedByAgentId === agent.id ? [record.applicationSubmittedAt] : [];
-      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps, ...applicationTimestamps]) {
+      const opportunityTimestamps = record.assignedAgentId === agent.id ? [record.createdAt] : [];
+      for (const timestamp of [...bookingTimestamps, ...deliveredEmailTimestamps, ...opportunityTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -115,7 +112,7 @@ export default function CrmMonthlyPerformanceSection({
 
   const periodBreakdown: CrmPeriodRecord[] = useMemo(() => {
     if (!agent) return [];
-    const periodStarts = crmPeriodStartsInMonth(selectedYear, selectedMonthNum);
+    const periodStarts = crmWeekStartsInMonth(selectedYear, selectedMonthNum);
     return buildCrmPeriodRecords(periodStarts, historyRows, records, agent.id, currentPeriodStart);
   }, [agent, selectedYear, selectedMonthNum, historyRows, records, currentPeriodStart]);
 
@@ -127,7 +124,7 @@ export default function CrmMonthlyPerformanceSection({
   const historyTableRows = useMemo(() => {
     if (!agent) return [];
     return monthOptions.map(({ year, month }) => {
-      const periodStarts = crmPeriodStartsInMonth(year, month);
+      const periodStarts = crmWeekStartsInMonth(year, month);
       const periods = buildCrmPeriodRecords(periodStarts, historyRows, records, agent.id, currentPeriodStart);
       return computeCrmMonthlyPerformance(year, month, periods);
     });
@@ -145,9 +142,9 @@ export default function CrmMonthlyPerformanceSection({
         <div>
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
           <p className="mt-1 text-[13px] text-slate-500">
-            Permanently saved biweekly results rolled up by month across consultations booked, opportunities added,
-            funding applications submitted, emails delivered, and clients won. Goals only count periods that have started - a period
-            that hasn&apos;t begun yet doesn&apos;t count against them.
+            Permanently saved weekly results rolled up by month across consultations booked, opportunity leads added, and
+            emails delivered. Goals only count periods that have started - a period that hasn&apos;t begun yet doesn&apos;t
+            count against them.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -170,33 +167,28 @@ export default function CrmMonthlyPerformanceSection({
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Selected Month" value={monthly.monthLabel} />
-        <Stat label="Completed Periods" value={String(monthly.completedPeriodsCount)} />
-        <Stat label="Best Biweekly Period" value={monthly.bestPeriod ? crmBiweeklyRangeLabel(monthly.bestPeriod.periodStart, monthly.bestPeriod.periodEnd) : "—"} />
+        <Stat label="Completed Weeks" value={String(monthly.completedPeriodsCount)} />
+        <Stat label="Best Week" value={monthly.bestPeriod ? crmWeeklyRangeLabel(monthly.bestPeriod.periodStart, monthly.bestPeriod.periodEnd) : "—"} />
         <Stat
           label="Monthly Status"
           value={`${TIER_STATUS_LABEL[monthly.monthlyTier]} — ${monthly.monthlyOverallPercentage}%`}
           badgeClassName={monthlyTierStyle.badge}
         />
         <Stat label="Consultations Booked" value={`${monthly.consultationsBooked.total}/${monthly.consultationsBooked.goal}`} />
-        <Stat label="Opportunities Added" value={`${monthly.qualifiedOpportunities.total}/${monthly.qualifiedOpportunities.goal}`} />
-        <Stat label="Funding Applications Submitted" value={`${monthly.applicationsSubmitted.total}/${monthly.applicationsSubmitted.goal}`} />
-        <Stat label="Emails Delivered" value={`${monthly.proposalsSent.total}/${monthly.proposalsSent.goal}`} />
-        <Stat label="Clients Won" value={`${monthly.clientsWon.total}/${monthly.clientsWon.goal}`} />
-        <Stat label="Average Won / Period" value={String(monthly.averageWonPerPeriod)} />
+        <Stat label="Opportunity Leads Added" value={`${monthly.leadsAdded.total}/${monthly.leadsAdded.goal}`} />
+        <Stat label="Emails Delivered" value={`${monthly.emailsDelivered.total}/${monthly.emailsDelivered.goal}`} />
       </div>
 
       <div className="mt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Period Breakdown</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Period Breakdown</div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full min-w-[720px] text-left text-[12.5px]">
+          <table className="w-full min-w-[640px] text-left text-[12.5px]">
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
-                <th className="p-2.5">Period</th>
+                <th className="p-2.5">Week</th>
                 <th className="p-2.5">Consultations</th>
-                <th className="p-2.5">Added</th>
-                <th className="p-2.5">Applications</th>
+                <th className="p-2.5">Leads Added</th>
                 <th className="p-2.5">Emails Delivered</th>
-                <th className="p-2.5">Clients Won</th>
                 <th className="p-2.5">Overall</th>
                 <th className="p-2.5">Status</th>
               </tr>
@@ -204,8 +196,8 @@ export default function CrmMonthlyPerformanceSection({
             <tbody>
               {monthly.periodBreakdown.length === 0 ? (
                 <tr>
-                  <td className="p-3 text-slate-500" colSpan={8}>
-                    No reporting periods start in this month.
+                  <td className="p-3 text-slate-500" colSpan={6}>
+                    No reporting weeks start in this month.
                   </td>
                 </tr>
               ) : (
@@ -215,12 +207,10 @@ export default function CrmMonthlyPerformanceSection({
                   const statusLabel = period.status === "completed" ? TIER_STATUS_LABEL[period.tier] : PERIOD_LABEL[period.status];
                   return (
                     <tr key={period.periodStart} className="border-b border-slate-100">
-                      <td className="p-2.5 font-medium text-slate-900">{crmBiweeklyRangeLabel(period.periodStart, period.periodEnd)}</td>
+                      <td className="p-2.5 font-medium text-slate-900">{crmWeeklyRangeLabel(period.periodStart, period.periodEnd)}</td>
                       <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.consultationsBooked}</td>
-                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.qualifiedOpportunities}</td>
-                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.applicationsSubmitted}</td>
-                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.proposalsSent}</td>
-                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.clientsWon}</td>
+                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.leadsAdded}</td>
+                      <td className="p-2.5 text-slate-600">{isFuture ? "—" : period.emailsDelivered}</td>
                       <td className="p-2.5 text-slate-600">{isFuture ? "—" : `${period.overallPercentage}%`}</td>
                       <td className="p-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${statusBadgeClass}`}>{statusLabel}</span>
@@ -241,7 +231,7 @@ export default function CrmMonthlyPerformanceSection({
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Month</th>
-                <th className="p-2.5">Clients Won</th>
+                <th className="p-2.5">Leads Added</th>
                 <th className="p-2.5">Consultations</th>
                 <th className="p-2.5">Status</th>
               </tr>
@@ -259,7 +249,7 @@ export default function CrmMonthlyPerformanceSection({
                   >
                     <td className="p-2.5 font-medium text-slate-900">{row.monthLabel}</td>
                     <td className="p-2.5 text-slate-600">
-                      {row.clientsWon.total}/{row.clientsWon.goal} ({row.clientsWon.percentage}%)
+                      {row.leadsAdded.total}/{row.leadsAdded.goal} ({row.leadsAdded.percentage}%)
                     </td>
                     <td className="p-2.5 text-slate-600">
                       {row.consultationsBooked.total}/{row.consultationsBooked.goal} ({row.consultationsBooked.percentage}%)

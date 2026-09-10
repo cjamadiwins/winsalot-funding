@@ -22,11 +22,7 @@ import type {
 export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPerformanceOpportunityRecord[]> {
   const admin = getSupabaseAdmin();
 
-  const opportunityQuery = admin
-    .from("crm_opportunities")
-    .select(
-      "id, business_name, assigned_agent_id, opportunity_type, stage, created_at, application_submitted_at, application_submitted_by, closed_at"
-    );
+  const opportunityQuery = admin.from("crm_opportunities").select("id, business_name, assigned_agent_id, created_at");
   const appointmentQuery = admin
     .from("winsalot_appointments")
     .select("id, opportunity_id, assigned_agent_id, created_at")
@@ -44,15 +40,16 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
   if (agentId) {
     const [appointmentResult, deliveredEmailResult] = await Promise.all([
       appointmentQuery.eq("assigned_agent_id", agentId),
-      // Fetch every delivery so "first delivered" remains true even when
-      // a different agent sent an earlier email for the same opportunity.
-      deliveredEmailQuery,
+      // Fetch every delivery credited to this agent directly - each
+      // confirmed delivery is scored independently, so there is no need
+      // to see other agents' deliveries for the same opportunity.
+      deliveredEmailQuery.eq("agent_id", agentId),
     ]);
     appointments = appointmentResult.data;
     deliveredEmails = deliveredEmailResult.data;
     const eventOpportunityIds = Array.from(new Set([
       ...(appointments ?? []).map((appointment) => appointment.opportunity_id),
-      ...(deliveredEmails ?? []).filter((email) => email.agent_id === agentId).map((email) => email.opportunity_id),
+      ...(deliveredEmails ?? []).map((email) => email.opportunity_id),
     ].filter((id): id is string => Boolean(id))));
     const scope = [`assigned_agent_id.eq.${agentId}`];
     if (eventOpportunityIds.length > 0) scope.push(`id.in.(${eventOpportunityIds.join(",")})`);
@@ -98,13 +95,8 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
     opportunityId: o.id as string,
     assignedAgentId: (o.assigned_agent_id as string | null) ?? null,
     businessName: o.business_name as string,
-    opportunityType: o.opportunity_type as CrmPerformanceOpportunityRecord["opportunityType"],
-    stage: o.stage as string,
     createdAt: o.created_at as string,
     consultationBookings: bookingsByOpportunity.get(o.id as string) ?? [],
     deliveredEmails: deliveredEmailsByOpportunity.get(o.id as string) ?? [],
-    applicationSubmittedAt: (o.application_submitted_at as string | null) ?? null,
-    applicationSubmittedByAgentId: (o.application_submitted_by as string | null) ?? null,
-    closedAt: (o.closed_at as string | null) ?? null,
   }));
 }

@@ -11,7 +11,7 @@ import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
-import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
+import { computeCrmAgentPerformance, crmPerformanceTier, crmWeeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
@@ -232,7 +232,7 @@ export default async function AgentDashboardPage() {
           <PerformanceRing
             percentage={performance.current.overallPercentage}
             tier={performanceTier}
-            label="of biweekly target"
+            label="of weekly target"
             size={112}
             strokeWidth={10}
             segments={GROWTH_CRM_GAUGE_SEGMENTS}
@@ -240,10 +240,10 @@ export default async function AgentDashboardPage() {
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
             <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
-              {performance.current.consultationsBooked} consultations · {performance.current.clientsWon} won
+              {performance.current.consultationsBooked} consultations · {performance.current.leadsAdded} leads added
             </div>
             <div className="mt-0.5 text-[12.5px] text-[var(--crm-text-muted)]">
-              Period: {crmBiweeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}
+              Week: {crmWeeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}
             </div>
           </div>
         </div>

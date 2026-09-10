@@ -17,7 +17,7 @@ import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/
 import { addBoardOpportunityNoteAction } from "./opportunity-finder/actions";
 import { completeFollowUpAction } from "./followup-actions";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { computeCrmAgentPerformance, crmBiweeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
+import { computeCrmAgentPerformance, crmWeeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
 
@@ -61,7 +61,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       .order("scheduled_at", { ascending: true }),
     // Prospect-to-Client Rate KPI (Results by Agent, below) - a separate
     // service-role read since it needs every agent's opportunities in one
-    // shot regardless of RLS scoping, same as the existing biweekly Agent
+    // shot regardless of RLS scoping, same as the existing weekly Agent
     // Performance Report's getCrmPerformanceRecords().
     getCrmOpportunityConversionRecords(),
     loadDialpadDashboardData(supabase),
@@ -158,8 +158,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       agentName: agent.full_name || agent.email,
       score: performance.overallPercentage,
       tier: crmPerformanceTier(performance.overallPercentage),
-      summary: `${performance.consultationsBooked} consultations · ${performance.clientsWon} won`,
-      periodLabel: crmBiweeklyRangeLabel(performance.periodStart, performance.periodEnd),
+      summary: `${performance.consultationsBooked} consultations · ${performance.leadsAdded} leads added`,
+      periodLabel: crmWeeklyRangeLabel(performance.periodStart, performance.periodEnd),
     };
   });
 

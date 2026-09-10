@@ -1,13 +1,11 @@
-import type { CrmAgentPerformance, CrmBiweeklyPeriodPerformance, CrmPerformanceTier } from "@/lib/crm-performance";
+import type { CrmAgentPerformance, CrmWeeklyPeriodPerformance, CrmPerformanceTier } from "@/lib/crm-performance";
 import {
-  CRM_BIWEEKLY_CONSULTATIONS_TARGET,
-  CRM_BIWEEKLY_QUALIFIED_TARGET,
-  CRM_BIWEEKLY_APPLICATIONS_TARGET,
-  CRM_BIWEEKLY_PROPOSALS_TARGET,
-  CRM_BIWEEKLY_WON_TARGET,
+  CRM_WEEKLY_CONSULTATIONS_TARGET,
+  CRM_WEEKLY_LEADS_ADDED_TARGET,
+  CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
   CRM_CATEGORY_WEIGHT,
   CRM_PERFORMANCE_TIER_LABEL,
-  crmBiweeklyRangeLabel,
+  crmWeeklyRangeLabel,
   crmPerformanceTier,
 } from "@/lib/crm-performance";
 import PerformanceRing, { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
@@ -28,7 +26,7 @@ const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text
 // never drift from the gauge's centre score and colour band.
 const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
-// Renders one agent's biweekly Agent Performance Report card - shared by
+// Renders one agent's weekly Agent Performance Report card - shared by
 // the admin's "every agent" view (/admin/crm/performance) and an agent's
 // own "just me" view (/agent/performance), so the two can never drift out
 // of sync with each other.
@@ -39,24 +37,22 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6 sm:p-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{agentName}</h2>
-        <span className="text-[12px] text-slate-500">Period: {crmBiweeklyRangeLabel(current.periodStart, current.periodEnd)}</span>
+        <span className="text-[12px] text-slate-500">Week: {crmWeeklyRangeLabel(current.periodStart, current.periodEnd)}</span>
       </div>
 
       <PeriodDetails period={current} />
 
       {history.length > 0 && (
         <div className="mt-5">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Previous Periods</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Previous Weeks</div>
           <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full min-w-[640px] text-left text-[12.5px]">
+            <table className="w-full min-w-[520px] text-left text-[12.5px]">
               <thead className="bg-slate-50">
                 <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
-                  <th className="p-2.5">Period</th>
+                  <th className="p-2.5">Week</th>
                   <th className="p-2.5">Consultations</th>
-                  <th className="p-2.5">Added</th>
-                  <th className="p-2.5">Applications</th>
+                  <th className="p-2.5">Leads Added</th>
                   <th className="p-2.5">Emails Delivered</th>
-                  <th className="p-2.5">Clients Won</th>
                   <th className="p-2.5">Overall</th>
                 </tr>
               </thead>
@@ -65,21 +61,15 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
                   const tier = crmPerformanceTier(period.overallPercentage);
                   return (
                     <tr key={period.periodStart} className="border-b border-slate-100 last:border-0">
-                      <td className="p-2.5 text-slate-600">{crmBiweeklyRangeLabel(period.periodStart, period.periodEnd)}</td>
+                      <td className="p-2.5 text-slate-600">{crmWeeklyRangeLabel(period.periodStart, period.periodEnd)}</td>
                       <td className="p-2.5 font-medium text-slate-900">
-                        {period.consultationsBooked}/{CRM_BIWEEKLY_CONSULTATIONS_TARGET}
+                        {period.consultationsBooked}/{CRM_WEEKLY_CONSULTATIONS_TARGET}
                       </td>
                       <td className="p-2.5 font-medium text-slate-900">
-                        {period.qualifiedOpportunities}/{CRM_BIWEEKLY_QUALIFIED_TARGET}
+                        {period.leadsAdded}/{CRM_WEEKLY_LEADS_ADDED_TARGET}
                       </td>
                       <td className="p-2.5 font-medium text-slate-900">
-                        {period.applicationsSubmitted}/{CRM_BIWEEKLY_APPLICATIONS_TARGET}
-                      </td>
-                      <td className="p-2.5 font-medium text-slate-900">
-                        {period.proposalsSent}/{CRM_BIWEEKLY_PROPOSALS_TARGET}
-                      </td>
-                      <td className="p-2.5 font-medium text-slate-900">
-                        {period.clientsWon}/{CRM_BIWEEKLY_WON_TARGET}
+                        {period.emailsDelivered}/{CRM_WEEKLY_EMAILS_DELIVERED_TARGET}
                       </td>
                       <td className="p-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TIER_STYLES[tier].badge}`}>
@@ -98,12 +88,10 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
   );
 }
 
-function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
+function PeriodDetails({ period }: { period: CrmWeeklyPeriodPerformance }) {
   const consultationsTier = crmPerformanceTier(period.consultationsPercentage);
-  const qualifiedTier = crmPerformanceTier(period.qualifiedPercentage);
-  const applicationsTier = crmPerformanceTier(period.applicationsPercentage);
-  const proposalsTier = crmPerformanceTier(period.proposalsPercentage);
-  const wonTier = crmPerformanceTier(period.wonPercentage);
+  const leadsAddedTier = crmPerformanceTier(period.leadsAddedPercentage);
+  const emailsDeliveredTier = crmPerformanceTier(period.emailsDeliveredPercentage);
   const overallTier = crmPerformanceTier(period.overallPercentage);
 
   return (
@@ -112,32 +100,28 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
         <PerformanceRing
           percentage={period.overallPercentage}
           tier={overallTier}
-          label="of biweekly target"
+          label="of weekly target"
           size={180}
           strokeWidth={14}
           segments={GROWTH_CRM_GAUGE_SEGMENTS}
         />
-        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-          <Stat label="Consultations Booked" value={`${period.consultationsBooked}/${CRM_BIWEEKLY_CONSULTATIONS_TARGET}`} />
-          <Stat label="Opportunities Added" value={`${period.qualifiedOpportunities}/${CRM_BIWEEKLY_QUALIFIED_TARGET}`} />
-          <Stat label="Funding Applications Submitted" value={`${period.applicationsSubmitted}/${CRM_BIWEEKLY_APPLICATIONS_TARGET}`} />
-          <Stat label="Emails Delivered" value={`${period.proposalsSent}/${CRM_BIWEEKLY_PROPOSALS_TARGET}`} />
-          <Stat label="Clients Won" value={`${period.clientsWon}/${CRM_BIWEEKLY_WON_TARGET}`} />
+        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-2">
+          <Stat label="Consultations Booked" value={`${period.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}`} />
+          <Stat label="Opportunity Leads Added" value={`${period.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}`} />
+          <Stat label="Emails Delivered" value={`${period.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`} />
           <Stat label="Overall Performance" value={`${period.overallPercentage}%`} badgeClassName={TIER_STYLES[overallTier].badge} />
         </div>
       </div>
 
-      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Progress</div>
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Progress</div>
       <ProgressGoal label="Consultations Booked Progress" percentage={period.consultationsPercentage} tier={consultationsTier} />
-      <ProgressGoal label="Opportunities Added Progress" percentage={period.qualifiedPercentage} tier={qualifiedTier} />
-      <ProgressGoal label="Funding Applications Submitted Progress" percentage={period.applicationsPercentage} tier={applicationsTier} />
-      <ProgressGoal label="Emails Delivered Progress" percentage={period.proposalsPercentage} tier={proposalsTier} />
-      <ProgressGoal label="Clients Won Progress" percentage={period.wonPercentage} tier={wonTier} />
+      <ProgressGoal label="Opportunity Leads Added Progress" percentage={period.leadsAddedPercentage} tier={leadsAddedTier} />
+      <ProgressGoal label="Emails Delivered Progress" percentage={period.emailsDeliveredPercentage} tier={emailsDeliveredTier} />
 
       <ScorecardTable period={period} />
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Performance Status</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Performance Status</span>
         <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${TIER_STYLES[overallTier].badge}`}>
           {TIER_STATUS_LABEL[overallTier]} — {period.overallPercentage}%
         </span>
@@ -147,23 +131,18 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
 }
 
 // The scorecard behind the gauge's centre score: each category's actual
-// result, target, achievement percentage (capped at 100%), fixed 20%
-// weight, and weighted contribution (percentage x weight) - the five
+// result, target, achievement percentage (capped at 100%), fixed 1/3
+// weight, and weighted contribution (percentage x weight) - the three
 // weighted contributions are exactly what sum to the gauge's overall
 // score, so this table is the arithmetic the gauge is showing, made
-// visible.
-function ScorecardTable({ period }: { period: CrmBiweeklyPeriodPerformance }) {
+// visible. The actual count is never capped (so an agent who exceeds a
+// target still sees their real number) - only the achievement percentage
+// and progress bar width are capped at 100%.
+function ScorecardTable({ period }: { period: CrmWeeklyPeriodPerformance }) {
   const rows: Array<{ label: string; actual: number; target: number; percentage: number }> = [
-    { label: "Opportunities Added", actual: period.qualifiedOpportunities, target: CRM_BIWEEKLY_QUALIFIED_TARGET, percentage: period.qualifiedPercentage },
-    { label: "Consultations Booked", actual: period.consultationsBooked, target: CRM_BIWEEKLY_CONSULTATIONS_TARGET, percentage: period.consultationsPercentage },
-    { label: "Emails Delivered", actual: period.proposalsSent, target: CRM_BIWEEKLY_PROPOSALS_TARGET, percentage: period.proposalsPercentage },
-    {
-      label: "Funding Applications Submitted",
-      actual: period.applicationsSubmitted,
-      target: CRM_BIWEEKLY_APPLICATIONS_TARGET,
-      percentage: period.applicationsPercentage,
-    },
-    { label: "Clients Won", actual: period.clientsWon, target: CRM_BIWEEKLY_WON_TARGET, percentage: period.wonPercentage },
+    { label: "Opportunity Leads Added", actual: period.leadsAdded, target: CRM_WEEKLY_LEADS_ADDED_TARGET, percentage: period.leadsAddedPercentage },
+    { label: "Emails Delivered", actual: period.emailsDelivered, target: CRM_WEEKLY_EMAILS_DELIVERED_TARGET, percentage: period.emailsDeliveredPercentage },
+    { label: "Consultations Booked", actual: period.consultationsBooked, target: CRM_WEEKLY_CONSULTATIONS_TARGET, percentage: period.consultationsPercentage },
   ];
 
   return (

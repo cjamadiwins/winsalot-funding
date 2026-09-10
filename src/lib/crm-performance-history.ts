@@ -1,5 +1,5 @@
-// Monthly Performance (Winsalot Growth CRM): reads the permanent biweekly
-// ledger (crm_agent_biweekly_performance, migration 0052/0086) plus the
+// Monthly Performance (Winsalot Growth CRM): reads the permanent weekly
+// ledger (crm_agent_weekly_performance, migration 0052/0086/0152) plus the
 // current, still-open period (computed live, the same way the existing
 // Agent Performance Report does in crm-performance.ts) to build a
 // month's worth of history. Pure, client-safe - CrmMonthlyPerformanceSection
@@ -14,13 +14,11 @@
 // CRMs' report logic must never accidentally couple to each other.
 
 import {
-  CRM_BIWEEKLY_CONSULTATIONS_TARGET,
-  CRM_BIWEEKLY_QUALIFIED_TARGET,
-  CRM_BIWEEKLY_APPLICATIONS_TARGET,
-  CRM_BIWEEKLY_PROPOSALS_TARGET,
-  CRM_BIWEEKLY_WON_TARGET,
+  CRM_WEEKLY_CONSULTATIONS_TARGET,
+  CRM_WEEKLY_LEADS_ADDED_TARGET,
+  CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
   addDays,
-  biweeklyPeriodStartOf,
+  crmWeekStartOf,
   computeCrmPeriodPerformance,
   crmPerformanceTier,
   type CrmPerformanceOpportunityRecord,
@@ -34,7 +32,7 @@ import {
 // periods are. "current" is the one still-open period in progress.
 export type CrmPeriodStatus = "completed" | "current" | "future";
 
-export type CrmBiweeklyHistoryRow = {
+export type CrmWeeklyHistoryRow = {
   agent_id: string | null;
   agent_name: string;
   period_start: string;
@@ -42,35 +40,27 @@ export type CrmBiweeklyHistoryRow = {
   consultations_booked: number | null;
   consultations_booked_target: number | null;
   consultations_booked_percentage: number | null;
-  qualified_opportunities: number | null;
-  qualified_opportunities_target: number | null;
-  qualified_opportunities_percentage: number | null;
-  applications_submitted: number | null;
-  applications_submitted_target: number | null;
-  applications_submitted_percentage: number | null;
-  proposals_sent: number | null;
-  proposals_sent_target: number | null;
-  proposals_sent_percentage: number | null;
-  clients_won: number | null;
-  clients_won_target: number | null;
-  clients_won_percentage: number | null;
+  leads_added: number | null;
+  leads_added_target: number | null;
+  leads_added_percentage: number | null;
+  emails_delivered: number | null;
+  emails_delivered_target: number | null;
+  emails_delivered_percentage: number | null;
   overall_percentage: number;
   status: CrmPerformanceTier;
 };
 
 export type CrmPeriodRecord = {
-  periodStart: string; // YYYY-MM-DD
-  periodEnd: string; // YYYY-MM-DD, 13 days after periodStart
+  periodStart: string; // YYYY-MM-DD, Monday
+  periodEnd: string; // YYYY-MM-DD, Friday (4 days after periodStart)
   consultationsBooked: number;
-  qualifiedOpportunities: number;
-  applicationsSubmitted: number;
-  proposalsSent: number;
-  clientsWon: number;
+  leadsAdded: number;
+  emailsDelivered: number;
   overallPercentage: number;
   tier: CrmPerformanceTier;
   status: CrmPeriodStatus;
   // true = a closed period's permanently saved result (from
-  // crm_agent_biweekly_performance); false = computed live from the
+  // crm_agent_weekly_performance); false = computed live from the
   // currently-visible opportunity records (the still-open current
   // period, or any completed period that hasn't been frozen yet).
   frozen: boolean;
@@ -90,11 +80,8 @@ export type CrmMonthlyPerformance = {
   periodsStarted: number; // completed + current - what goals/percentages/average are based on
   completedPeriodsCount: number; // strictly completed (excludes the current in-progress period)
   consultationsBooked: CrmMonthlyMetricTotal;
-  qualifiedOpportunities: CrmMonthlyMetricTotal;
-  applicationsSubmitted: CrmMonthlyMetricTotal;
-  proposalsSent: CrmMonthlyMetricTotal;
-  clientsWon: CrmMonthlyMetricTotal;
-  averageWonPerPeriod: number;
+  leadsAdded: CrmMonthlyMetricTotal;
+  emailsDelivered: CrmMonthlyMetricTotal;
   bestPeriod: CrmPeriodRecord | null;
   monthlyTier: CrmPerformanceTier;
   monthlyOverallPercentage: number;
@@ -124,24 +111,23 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-// Every two-week period belongs to exactly one month: whichever month
-// contains its start date. Periods are fixed 14-day blocks anchored to
-// a global epoch (BIWEEKLY_EPOCH_MONDAY in crm-performance.ts), not
-// month-relative, so unlike calendar weeks a period can span a month
-// boundary - it's still counted toward the month its start date falls
-// in, the same "own the month of its start" partition rule the Lead Gen
-// CRM's weekly report uses for weeks.
-export function crmPeriodStartsInMonth(year: number, month: number): string[] {
+// Every Monday-Friday period belongs to exactly one month: whichever month
+// contains its Monday start date. Weeks are anchored to the calendar (every
+// Monday is a period start), so unlike a biweekly cadence a period can
+// still span a month boundary near the end of a month - it's counted
+// toward the month its start date falls in, the same "own the month of its
+// start" partition rule the Lead Gen CRM's weekly report uses for weeks.
+export function crmWeekStartsInMonth(year: number, month: number): string[] {
   const firstOfMonth = `${year}-${pad2(month)}-01`;
-  let periodStart = biweeklyPeriodStartOf(firstOfMonth);
-  if (periodStart < firstOfMonth) periodStart = addDays(periodStart, 14);
+  let periodStart = crmWeekStartOf(firstOfMonth);
+  if (periodStart < firstOfMonth) periodStart = addDays(periodStart, 7);
 
   const starts: string[] = [];
   while (true) {
     const [periodYear, periodMonth] = periodStart.split("-").map(Number);
     if (periodYear !== year || periodMonth !== month) break;
     starts.push(periodStart);
-    periodStart = addDays(periodStart, 14);
+    periodStart = addDays(periodStart, 7);
   }
   return starts;
 }
@@ -155,7 +141,7 @@ export function crmPeriodStartsInMonth(year: number, month: number): string[] {
 // than a misleading 0%.
 export function buildCrmPeriodRecords(
   periodStarts: string[],
-  historyRows: CrmBiweeklyHistoryRow[],
+  historyRows: CrmWeeklyHistoryRow[],
   records: CrmPerformanceOpportunityRecord[],
   agentId: string,
   currentPeriodStart: string
@@ -165,23 +151,18 @@ export function buildCrmPeriodRecords(
   );
 
   return periodStarts.map((periodStart) => {
-    const periodEnd = addDays(periodStart, 13);
+    const periodEnd = addDays(periodStart, 4);
     const status: CrmPeriodStatus =
       periodStart < currentPeriodStart ? "completed" : periodStart === currentPeriodStart ? "current" : "future";
     const frozenRow = status === "completed" ? historyByPeriod.get(periodStart) : undefined;
 
-    // A frozen row from before this table's 0086 repoint has null new-metric
-    // columns - treat it the same as "not yet frozen" so it falls through to
-    // a live recomputation instead of showing misleading zeros.
-    if (frozenRow && frozenRow.clients_won !== null) {
+    if (frozenRow && frozenRow.leads_added !== null) {
       return {
         periodStart,
         periodEnd,
         consultationsBooked: frozenRow.consultations_booked ?? 0,
-        qualifiedOpportunities: frozenRow.qualified_opportunities ?? 0,
-        applicationsSubmitted: frozenRow.applications_submitted ?? 0,
-        proposalsSent: frozenRow.proposals_sent ?? 0,
-        clientsWon: frozenRow.clients_won ?? 0,
+        leadsAdded: frozenRow.leads_added ?? 0,
+        emailsDelivered: frozenRow.emails_delivered ?? 0,
         overallPercentage: frozenRow.overall_percentage,
         tier: frozenRow.status,
         status,
@@ -194,10 +175,8 @@ export function buildCrmPeriodRecords(
         periodStart,
         periodEnd,
         consultationsBooked: 0,
-        qualifiedOpportunities: 0,
-        applicationsSubmitted: 0,
-        proposalsSent: 0,
-        clientsWon: 0,
+        leadsAdded: 0,
+        emailsDelivered: 0,
         overallPercentage: 0,
         tier: crmPerformanceTier(0),
         status,
@@ -210,10 +189,8 @@ export function buildCrmPeriodRecords(
       periodStart,
       periodEnd,
       consultationsBooked: period.consultationsBooked,
-      qualifiedOpportunities: period.qualifiedOpportunities,
-      applicationsSubmitted: period.applicationsSubmitted,
-      proposalsSent: period.proposalsSent,
-      clientsWon: period.clientsWon,
+      leadsAdded: period.leadsAdded,
+      emailsDelivered: period.emailsDelivered,
       overallPercentage: period.overallPercentage,
       tier: crmPerformanceTier(period.overallPercentage),
       status,
@@ -222,14 +199,14 @@ export function buildCrmPeriodRecords(
   });
 }
 
-// periodBreakdown covers every two-week period whose start falls in the
-// month, including any that haven't started yet ("future") - kept as-is
-// on the returned object so the UI can still list/label them. But a
+// periodBreakdown covers every Monday-Friday period whose start falls in
+// the month, including any that haven't started yet ("future") - kept
+// as-is on the returned object so the UI can still list/label them. But a
 // period that hasn't begun has no result to weigh the month's numbers
-// down with, so every goal/percentage/average below is computed only
-// over periods that have started (completed or the current in-progress
-// one) - otherwise picking a month on day one would show a misleadingly
-// low percentage purely because most of its periods hadn't started.
+// down with, so every goal/percentage below is computed only over periods
+// that have started (completed or the current in-progress one) -
+// otherwise picking a month on day one would show a misleadingly low
+// percentage purely because most of its periods hadn't started.
 // "completedPeriodsCount" is reported separately, strictly completed
 // periods only.
 function metricTotal(total: number, target: number, periodsStarted: number): CrmMonthlyMetricTotal {
@@ -248,28 +225,21 @@ export function computeCrmMonthlyPerformance(
 
   const periodsStarted = startedPeriods.length;
   const totalConsultationsBooked = startedPeriods.reduce((sum, period) => sum + period.consultationsBooked, 0);
-  const totalQualifiedOpportunities = startedPeriods.reduce((sum, period) => sum + period.qualifiedOpportunities, 0);
-  const totalApplicationsSubmitted = startedPeriods.reduce((sum, period) => sum + period.applicationsSubmitted, 0);
-  const totalProposalsSent = startedPeriods.reduce((sum, period) => sum + period.proposalsSent, 0);
-  const totalClientsWon = startedPeriods.reduce((sum, period) => sum + period.clientsWon, 0);
-  const averageWonPerPeriod = periodsStarted > 0 ? Math.round((totalClientsWon / periodsStarted) * 10) / 10 : 0;
+  const totalLeadsAdded = startedPeriods.reduce((sum, period) => sum + period.leadsAdded, 0);
+  const totalEmailsDelivered = startedPeriods.reduce((sum, period) => sum + period.emailsDelivered, 0);
   const bestPeriod = startedPeriods.reduce<CrmPeriodRecord | null>(
     (best, period) => (!best || period.overallPercentage > best.overallPercentage ? period : best),
     null
   );
 
-  const consultationsBooked = metricTotal(totalConsultationsBooked, CRM_BIWEEKLY_CONSULTATIONS_TARGET, periodsStarted);
-  const qualifiedOpportunities = metricTotal(totalQualifiedOpportunities, CRM_BIWEEKLY_QUALIFIED_TARGET, periodsStarted);
-  const applicationsSubmitted = metricTotal(totalApplicationsSubmitted, CRM_BIWEEKLY_APPLICATIONS_TARGET, periodsStarted);
-  const proposalsSent = metricTotal(totalProposalsSent, CRM_BIWEEKLY_PROPOSALS_TARGET, periodsStarted);
-  const clientsWon = metricTotal(totalClientsWon, CRM_BIWEEKLY_WON_TARGET, periodsStarted);
+  const consultationsBooked = metricTotal(totalConsultationsBooked, CRM_WEEKLY_CONSULTATIONS_TARGET, periodsStarted);
+  const leadsAdded = metricTotal(totalLeadsAdded, CRM_WEEKLY_LEADS_ADDED_TARGET, periodsStarted);
+  const emailsDelivered = metricTotal(totalEmailsDelivered, CRM_WEEKLY_EMAILS_DELIVERED_TARGET, periodsStarted);
 
   const cappedPercentages = [
     Math.min(100, consultationsBooked.percentage),
-    Math.min(100, qualifiedOpportunities.percentage),
-    Math.min(100, applicationsSubmitted.percentage),
-    Math.min(100, proposalsSent.percentage),
-    Math.min(100, clientsWon.percentage),
+    Math.min(100, leadsAdded.percentage),
+    Math.min(100, emailsDelivered.percentage),
   ];
   const monthlyOverallPercentage = Math.round(cappedPercentages.reduce((sum, p) => sum + p, 0) / cappedPercentages.length);
   const monthlyTier = crmPerformanceTier(monthlyOverallPercentage);
@@ -281,11 +251,8 @@ export function computeCrmMonthlyPerformance(
     periodsStarted,
     completedPeriodsCount,
     consultationsBooked,
-    qualifiedOpportunities,
-    applicationsSubmitted,
-    proposalsSent,
-    clientsWon,
-    averageWonPerPeriod,
+    leadsAdded,
+    emailsDelivered,
     bestPeriod,
     monthlyTier,
     monthlyOverallPercentage,

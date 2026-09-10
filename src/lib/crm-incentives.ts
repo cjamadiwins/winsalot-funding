@@ -52,12 +52,11 @@ export type CrmWeeklyIncentive = {
 };
 
 // Monday of the calendar week containing dateKey - same algorithm as
-// leadgenMondayOf (lib/leadgen-performance.ts), duplicated here rather
-// than imported since crm-performance.ts intentionally has no plain
-// Monday-Sunday week concept of its own (it anchors 14-day biweekly
-// periods to a fixed epoch instead - see BIWEEKLY_EPOCH_MONDAY there).
-// The Weekly Incentive brief is explicitly Monday-Sunday, a different
-// cadence from that existing biweekly report.
+// leadgenMondayOf (lib/leadgen-performance.ts) and crmWeekStartOf
+// (crm-performance.ts), duplicated here rather than imported since this
+// file's week is explicitly Monday-Sunday (a full 7-day incentive week),
+// while crm-performance.ts's Agent Performance Score week is Monday-Friday
+// only - two different cadences that must not accidentally share a helper.
 export function crmMondayOf(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday .. 6 = Saturday
