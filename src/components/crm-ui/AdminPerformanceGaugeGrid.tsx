@@ -1,5 +1,5 @@
 import Link from "next/link";
-import PerformanceRing, { type PerformanceTier } from "@/components/crm-ui/PerformanceRing";
+import PerformanceRing, { type PerformanceGaugeSegment, type PerformanceTier } from "@/components/crm-ui/PerformanceRing";
 
 export type AdminPerformanceGaugeRow = {
   id: string;
@@ -10,7 +10,15 @@ export type AdminPerformanceGaugeRow = {
   periodLabel: string;
 };
 
-export default function AdminPerformanceGaugeGrid({ rows, reportHref }: { rows: AdminPerformanceGaugeRow[]; reportHref: string }) {
+export default function AdminPerformanceGaugeGrid({
+  rows,
+  reportHref,
+  segments,
+}: {
+  rows: AdminPerformanceGaugeRow[];
+  reportHref: string;
+  segments?: readonly PerformanceGaugeSegment[];
+}) {
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -29,7 +37,7 @@ export default function AdminPerformanceGaugeGrid({ rows, reportHref }: { rows: 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => (
             <article key={row.id} className="flex min-w-0 flex-col items-center rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:gap-4">
-              <PerformanceRing percentage={row.score} tier={row.tier} label="performance score" size={150} strokeWidth={12} />
+              <PerformanceRing percentage={row.score} tier={row.tier} label="performance score" size={150} strokeWidth={12} segments={segments} />
               <div className="min-w-0 text-center sm:text-left">
                 <h3 className="truncate text-[14px] font-bold text-slate-900">{row.agentName}</h3>
                 <p className="mt-1 text-[12px] font-medium text-slate-600">{row.summary}</p>

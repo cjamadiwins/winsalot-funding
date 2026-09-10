@@ -1,20 +1,39 @@
 // Semicircular 0-100 performance gauge shared by both CRMs. The public
 // component name is retained so every existing Admin/Agent report and
 // dashboard receives the upgrade without duplicating presentation logic.
-export type PerformanceTier = "green" | "yellow" | "red";
+export type PerformanceTier = "green" | "yellow" | "red" | "blue";
+
+export type PerformanceGaugeSegment = { start: number; end: number; color: string; label: string };
 
 const CENTER_X = 120;
 const CENTER_Y = 116;
 const ARC_RADIUS = 84;
 
-const SEGMENTS = [
+// Default bands, unchanged since this component's introduction - still
+// used wherever a caller doesn't pass its own `segments` (the Lead Gen
+// CRM's gauges and the Weekly Incentive card), so their presentation is
+// untouched by the Growth CRM's corrected scorecard bands below.
+const DEFAULT_SEGMENTS: readonly PerformanceGaugeSegment[] = [
   { start: 0, end: 40, color: "#df7f82", label: "Needs improvement" },
   { start: 40, end: 70, color: "#efc76f", label: "Fair" },
   { start: 70, end: 90, color: "#78bd72", label: "Good" },
   { start: 90, end: 100, color: "#63b9c7", label: "Excellent" },
-] as const;
+];
+
+// Verified Growth CRM Agent Performance Score bands: 0-39 Needs
+// Improvement (red), 40-59 Fair (amber), 60-79 Good (green), 80-100
+// Excellent (blue) - matches crmPerformanceTier's thresholds exactly so
+// the band the needle lands in always agrees with the centre score's
+// colour and status label.
+export const GROWTH_CRM_GAUGE_SEGMENTS: readonly PerformanceGaugeSegment[] = [
+  { start: 0, end: 40, color: "#df7f82", label: "Needs Improvement" },
+  { start: 40, end: 60, color: "#efc76f", label: "Fair" },
+  { start: 60, end: 80, color: "#78bd72", label: "Good" },
+  { start: 80, end: 100, color: "#63b9c7", label: "Excellent" },
+];
 
 const SCORE_COLOR: Record<PerformanceTier, string> = {
+  blue: "#3f8fc4",
   green: "#58a966",
   yellow: "#d7a43c",
   red: "#ce676b",
@@ -40,12 +59,14 @@ export default function PerformanceRing({
   size = 136,
   strokeWidth = 12,
   label,
+  segments = DEFAULT_SEGMENTS,
 }: {
   percentage: number;
   tier: PerformanceTier;
   size?: number;
   strokeWidth?: number;
   label?: string;
+  segments?: readonly PerformanceGaugeSegment[];
 }) {
   const score = Math.max(0, Math.min(100, Math.round(percentage)));
   const needleTip = pointForScore(score, 67);
@@ -59,7 +80,7 @@ export default function PerformanceRing({
         role="img"
         aria-label={`Performance score ${score} out of 100${label ? `, ${label}` : ""}`}
       >
-        {SEGMENTS.map((segment) => (
+        {segments.map((segment) => (
           <path
             key={segment.label}
             d={arcPath(segment.start, segment.end)}
@@ -79,7 +100,7 @@ export default function PerformanceRing({
           );
         })}
 
-        {SEGMENTS.map((segment) => {
+        {segments.map((segment) => {
           const midpoint = (segment.start + segment.end) / 2;
           const position = pointForScore(midpoint, 84);
           const rotation = 180 - midpoint * 1.8;

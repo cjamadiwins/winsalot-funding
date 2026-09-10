@@ -10,8 +10,10 @@ import {
   CRM_BIWEEKLY_PROPOSALS_TARGET,
   CRM_BIWEEKLY_QUALIFIED_TARGET,
   CRM_BIWEEKLY_WON_TARGET,
+  CRM_PERFORMANCE_TIER_LABEL,
   computeCrmPeriodPerformance,
   crmDateKey,
+  crmPerformanceTier,
 } from "./crm-performance";
 import { crmPeriodStartsInMonth } from "./crm-performance-history";
 import {
@@ -115,6 +117,11 @@ function buildEmail(input: {
         .map((value) => Math.min(100, value))
         .reduce((sum, value) => sum + value, 0) / 5
     );
+    // Same gauge bands as the Growth CRM's Agent Performance Score
+    // (crmPerformanceTier: 0-39 Needs Improvement, 40-59 Fair, 60-79 Good,
+    // 80-100 Excellent) so this email's status word can never disagree
+    // with what the agent sees on the dashboard gauge for the same score.
+    const growthStatus = CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(overall)];
     sections += section(
       "Growth CRM",
       metricRow("Consultations booked", g.consultations, goals.consultations) +
@@ -122,10 +129,10 @@ function buildEmail(input: {
         metricRow("Funding applications submitted", g.applications, goals.applications) +
         metricRow("Emails delivered", g.proposals, goals.proposals) +
         metricRow("Clients won", g.won, goals.won),
-      `Overall: ${overall}% — ${statusLabel(overall)}`,
+      `Overall: ${overall}% — ${growthStatus}`,
       "https://growth.winsalotcorp.com/agent/performance/monthly"
     );
-    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunities added: ${g.qualified}/${goals.qualified}`, `Funding applications: ${g.applications}/${goals.applications}`, `Emails delivered: ${g.proposals}/${goals.proposals}`, `Clients won: ${g.won}/${goals.won}`, `Overall: ${overall}% — ${statusLabel(overall)}`, "");
+    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunities added: ${g.qualified}/${goals.qualified}`, `Funding applications: ${g.applications}/${goals.applications}`, `Emails delivered: ${g.proposals}/${goals.proposals}`, `Clients won: ${g.won}/${goals.won}`, `Overall: ${overall}% — ${growthStatus}`, "");
   }
 
   if (input.leadgen) {
