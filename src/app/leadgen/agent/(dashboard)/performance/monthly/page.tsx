@@ -42,6 +42,7 @@ export default async function LeadgenAgentMonthlyPerformancePage() {
   const { data: historyRows } = await admin
     .from("leadgen_agent_weekly_performance")
     .select("agent_id, agent_name, week_start, week_end, booked_count, target, percentage, status")
+    .eq("definition_version", 2)
     .eq("agent_id", agent.id);
 
   const todayKey = leadgenDateKey(now);
@@ -54,7 +55,7 @@ export default async function LeadgenAgentMonthlyPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Monthly Performance</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Your booked-appointment performance for the selected month, against a goal of 4 appointments per Monday-Sunday week that has
+            Your booked-appointment performance for the selected month, against a goal of 4 appointments per Monday-Friday week that has
             started. Previous months stay available after the month changes.
           </p>
         </div>

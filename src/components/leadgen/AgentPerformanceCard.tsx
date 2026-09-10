@@ -34,8 +34,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
         <PerformanceRing percentage={percentage} tier={tier} label="of weekly target" />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
-          <Stat label="Booked This Week" value={String(bookedThisWeek)} />
-          <Stat label="Weekly Target" value={String(target)} />
+          <Stat label="Appointments Booked" value={`${bookedThisWeek}/${target} appointments booked`} />
           <Stat label="Performance" value={`${percentage}%`} badgeClassName={tierStyle.badge} />
           <Stat label="Remaining to 100%" value={String(remainingToTarget)} />
           <Stat label="Previous Week" value={String(previousWeekTotal)} />
@@ -60,7 +59,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
 
       <div className="mt-4">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Daily Breakdown</div>
-        <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+        <div className="mt-1.5 grid grid-cols-5 gap-1.5">
           {dailyBreakdown.map((day) => (
             <div key={day.date} className="rounded-lg border border-slate-100 bg-slate-50 px-1.5 py-2 text-center">
               <div className="text-[10px] font-medium text-slate-500">{day.label.split(",")[0]}</div>
