@@ -80,7 +80,13 @@ export default function CrmAgentMonthlyPerformanceCard({
       if (key < earliest) earliest = key;
     }
     for (const record of records) {
-      for (const timestamp of [record.consultationDate, record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]) {
+      const bookingTimestamps = record.consultationBookings
+        .filter((booking) => booking.assignedAgentId === agentId)
+        .map((booking) => booking.bookedAt);
+      const opportunityTimestamps = record.assignedAgentId === agentId
+        ? [record.proposalSentAt, record.applicationSubmittedAt, record.closedAt]
+        : [];
+      for (const timestamp of [...bookingTimestamps, ...opportunityTimestamps]) {
         if (!timestamp) continue;
         const key = timestamp.slice(0, 7);
         if (key < earliest) earliest = key;
@@ -90,7 +96,7 @@ export default function CrmAgentMonthlyPerformanceCard({
     const fullRange = crmMonthsInRange(earliestYear, earliestMonthNum, currentYear, currentMonth);
     const capped = fullRange.length > MAX_HISTORY_MONTHS ? fullRange[fullRange.length - MAX_HISTORY_MONTHS] : fullRange[0];
     return capped ?? { year: currentYear, month: currentMonth };
-  }, [historyRows, records, currentYear, currentMonth]);
+  }, [agentId, historyRows, records, currentYear, currentMonth]);
 
   const monthOptions = useMemo(
     () => crmMonthsInRange(earliestMonth.year, earliestMonth.month, currentYear, currentMonth).reverse(),
