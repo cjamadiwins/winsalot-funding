@@ -16,6 +16,9 @@ import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, Calen
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
 import { addBoardOpportunityNoteAction } from "./opportunity-finder/actions";
 import { completeFollowUpAction } from "./followup-actions";
+import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
+import { computeCrmAgentPerformance, crmBiweeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
+import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -41,6 +44,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     conversionRecords,
     dialpadData,
     { data: opportunityScores },
+    performanceRecords,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -64,6 +68,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // scoring table (supabase/migrations/0112), joined against the
     // opportunities already fetched above rather than re-fetching them.
     supabase.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
+    getCrmPerformanceRecords(),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -145,6 +150,18 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     { label: "Clients Won", value: convertedCount, icon: Trophy, tone: "purple" as const, href: "/admin/crm?card=won#all-opportunities" },
   ];
 
+  const performanceGaugeRows = activeAgents.map((agent) => {
+    const performance = computeCrmAgentPerformance(performanceRecords, agent.id).current;
+    return {
+      id: agent.id,
+      agentName: agent.full_name || agent.email,
+      score: performance.overallPercentage,
+      tier: crmPerformanceTier(performance.overallPercentage),
+      summary: `${performance.consultationsBooked} consultations · ${performance.clientsWon} won`,
+      periodLabel: crmBiweeklyRangeLabel(performance.periodStart, performance.periodEnd),
+    };
+  });
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -220,6 +237,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/admin/crm/opportunity-finder?view=board" />
+
+      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/admin/crm/performance" />
 
       <DialpadDashboardPreview
         audience="admin"
