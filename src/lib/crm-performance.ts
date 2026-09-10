@@ -10,18 +10,20 @@
 //   - Consultations booked: an actual active winsalot_appointments row
 //     created in the period. An opportunity's optional consultation_date
 //     field is planning context only and never proves a booking occurred.
-//   - Qualified opportunities: opportunities *created* in the period that
-//     have progressed past initial contact (stage is Interested,
-//     Consultation Booked, Proposal or Application Sent, or Client Won).
+//   - Opportunities added: opportunities created in the period. Adding a
+//     lead is the event, so later stage changes do not move or manufacture
+//     this credit.
 //   - Applications submitted: application_submitted_at falling in the
-//     period (Business Financing / Both Services opportunities).
-//   - Proposals sent: proposal_sent_at falling in the period.
+//     period, with application_submitted_by identifying the credited agent
+//     (Business Financing / Both Services opportunities only).
+//   - Emails delivered: the first manually sent CRM prospect email that
+//     Resend confirms delivered for an opportunity. Automated appointment
+//     reminders are excluded, and repeat emails cannot inflate the score.
 //   - Clients won: closed_at falling in the period, stage = Client Won.
 //
-// proposal_sent_at / application_submitted_at are set once by the
-// stage-change server action the first time an opportunity enters that
-// stage - not by a trigger - mirroring how closed_at is already set by
-// closeOpportunityAction.
+// application_submitted_at / application_submitted_by are set once by the
+// explicit "Mark Application Submitted" action. Merely changing a pipeline
+// stage never awards an application or delivered-email point.
 
 export const CRM_BIWEEKLY_CONSULTATIONS_TARGET = 4;
 export const CRM_BIWEEKLY_QUALIFIED_TARGET = 6;
@@ -53,8 +55,9 @@ export type CrmPerformanceOpportunityRecord = {
   stage: string;
   createdAt: string;
   consultationBookings: CrmPerformanceConsultationBooking[];
-  proposalSentAt: string | null;
+  deliveredEmails: CrmPerformanceDeliveredEmail[];
   applicationSubmittedAt: string | null;
+  applicationSubmittedByAgentId: string | null;
   closedAt: string | null;
 };
 
@@ -64,7 +67,11 @@ export type CrmPerformanceConsultationBooking = {
   bookedAt: string;
 };
 
-const QUALIFIED_STAGES = new Set(["Interested", "Consultation Booked", "Proposal or Application Sent", "Client Won"]);
+export type CrmPerformanceDeliveredEmail = {
+  emailId: string;
+  agentId: string | null;
+  deliveredAt: string;
+};
 
 export type CrmBiweeklyPeriodPerformance = {
   periodStart: string; // YYYY-MM-DD, Monday
@@ -190,12 +197,27 @@ export function computeCrmPeriodPerformance(
       if (booking.assignedAgentId === agentId && inRange(booking.bookedAt)) consultationsBooked++;
     }
 
-    if (record.assignedAgentId !== agentId) continue;
+    if (record.assignedAgentId === agentId && inRange(record.createdAt)) qualifiedOpportunities++;
+    if (
+      record.applicationSubmittedByAgentId === agentId &&
+      record.applicationSubmittedAt &&
+      record.opportunityType !== "lead_generation" &&
+      inRange(record.applicationSubmittedAt)
+    ) {
+      applicationsSubmitted++;
+    }
 
-    if (QUALIFIED_STAGES.has(record.stage) && inRange(record.createdAt)) qualifiedOpportunities++;
-    if (record.applicationSubmittedAt && inRange(record.applicationSubmittedAt)) applicationsSubmitted++;
-    if (record.proposalSentAt && inRange(record.proposalSentAt)) proposalsSent++;
-    if (record.stage === "Client Won" && record.closedAt && inRange(record.closedAt)) clientsWon++;
+    // Only the first confirmed delivery for an opportunity represents the
+    // proposal/email milestone. Later follow-ups must not score repeatedly.
+    const firstDeliveredEmail = record.deliveredEmails.reduce<CrmPerformanceDeliveredEmail | null>(
+      (earliest, email) => (!earliest || email.deliveredAt < earliest.deliveredAt ? email : earliest),
+      null
+    );
+    if (firstDeliveredEmail?.agentId === agentId && inRange(firstDeliveredEmail.deliveredAt)) proposalsSent++;
+
+    if (record.assignedAgentId === agentId && record.stage === "Client Won" && record.closedAt && inRange(record.closedAt)) {
+      clientsWon++;
+    }
   }
 
   const consultationsPercentage = pct(consultationsBooked, CRM_BIWEEKLY_CONSULTATIONS_TARGET);
