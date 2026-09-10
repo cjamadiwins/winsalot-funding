@@ -19,6 +19,7 @@ import { completeFollowUpAction } from "./followup-actions";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { computeCrmAgentPerformance, crmBiweeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -238,7 +239,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/admin/crm/opportunity-finder?view=board" />
 
-      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/admin/crm/performance" />
+      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/admin/crm/performance" segments={GROWTH_CRM_GAUGE_SEGMENTS} />
 
       <DialpadDashboardPreview
         audience="admin"

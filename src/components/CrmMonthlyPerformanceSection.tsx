@@ -9,19 +9,19 @@ import {
   type CrmBiweeklyHistoryRow,
   type CrmPeriodRecord,
 } from "@/lib/crm-performance-history";
-import { crmBiweeklyRangeLabel, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
+import { CRM_PERFORMANCE_TIER_LABEL, crmBiweeklyRangeLabel, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
 
 const TIER_STYLES: Record<CrmPerformanceTier, { badge: string; text: string }> = {
+  blue: { badge: "bg-sky-100 text-sky-800", text: "text-sky-700" },
   green: { badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
   yellow: { badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
   red: { badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
-const TIER_STATUS_LABEL: Record<CrmPerformanceTier, string> = {
-  green: "On Track",
-  yellow: "Needs Improvement",
-  red: "Behind Target",
-};
+// The gauge's own band labels (Needs Improvement / Fair / Good /
+// Excellent) - imported rather than redefined so this table can never
+// drift from the biweekly gauge's status wording for the same score.
+const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
 // A period that's still in progress or hasn't started yet has no
 // green/yellow/red result to show - it gets a neutral label instead.

@@ -31,6 +31,14 @@ export const CRM_BIWEEKLY_APPLICATIONS_TARGET = 2;
 export const CRM_BIWEEKLY_PROPOSALS_TARGET = 4;
 export const CRM_BIWEEKLY_WON_TARGET = 2;
 
+// Every one of the five scorecard categories carries the same 20% weight
+// (5 x 20% = 100%), so the overall score is just their capped-percentage
+// average - see computeCrmPeriodPerformance's overallPercentage below.
+// Exported so the UI can render each category's "weighted contribution"
+// (its capped percentage x this weight) next to its raw percentage,
+// exactly matching the calculation that produced the gauge's center score.
+export const CRM_CATEGORY_WEIGHT = 0.2;
+
 // How many past periods (in addition to the current one) computeCrmAgentPerformance
 // returns as history - about 4 months, generous enough for an admin to spot a
 // trend without the list growing unbounded as opportunities accumulate for years.
@@ -153,16 +161,26 @@ export function crmBiweeklyRangeLabel(periodStart: string, periodEnd: string): s
   return `${start} – ${end}`;
 }
 
-export type CrmPerformanceTier = "green" | "yellow" | "red";
+export type CrmPerformanceTier = "red" | "yellow" | "green" | "blue";
 
-// 70-100% green, 40-69% yellow, 0-39% red - drives the percentage badges,
-// progress bars, and performance status together so they never disagree
-// for the same metric.
+// Gauge bands: 0-39 red (Needs Improvement), 40-59 yellow (Fair), 60-79
+// green (Good), 80-100 blue (Excellent) - drives the gauge's needle,
+// centre score, colour band, status label, progress bars, and detailed
+// scorecard together so none of them can ever disagree for the same
+// percentage.
 export function crmPerformanceTier(percentage: number): CrmPerformanceTier {
-  if (percentage >= 70) return "green";
+  if (percentage >= 80) return "blue";
+  if (percentage >= 60) return "green";
   if (percentage >= 40) return "yellow";
   return "red";
 }
+
+export const CRM_PERFORMANCE_TIER_LABEL: Record<CrmPerformanceTier, string> = {
+  red: "Needs Improvement",
+  yellow: "Fair",
+  green: "Good",
+  blue: "Excellent",
+};
 
 function pct(count: number, target: number): number {
   return Math.min(100, Math.round((count / target) * 100));

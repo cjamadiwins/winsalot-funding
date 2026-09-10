@@ -9,22 +9,22 @@ import {
   type CrmBiweeklyHistoryRow,
   type CrmMonthlyMetricTotal,
 } from "@/lib/crm-performance-history";
-import { crmPerformanceTier, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
+import { CRM_PERFORMANCE_TIER_LABEL, crmPerformanceTier, type CrmPerformanceOpportunityRecord, type CrmPerformanceTier } from "@/lib/crm-performance";
 
 // Same color system as the existing biweekly Agent Performance Report
-// (CrmPerformanceCard.tsx) - green/yellow/red on every percentage badge
-// and progress bar agree.
+// (CrmPerformanceCard.tsx) - red/yellow/green/blue on every percentage
+// badge and progress bar agree with the gauge's own bands.
 const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text: string }> = {
+  blue: { bar: "bg-sky-500", badge: "bg-sky-100 text-sky-800", text: "text-sky-700" },
   green: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
   yellow: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
   red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
-const TIER_STATUS_LABEL: Record<CrmPerformanceTier, string> = {
-  green: "On Track",
-  yellow: "Needs Improvement",
-  red: "Behind Target",
-};
+// The gauge's own band labels - imported rather than redefined so this
+// card can never drift from the biweekly gauge's status wording for the
+// same score.
+const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
 const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-[13.5px] text-slate-900";
 

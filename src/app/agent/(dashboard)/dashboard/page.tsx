@@ -15,7 +15,7 @@ import { computeCrmAgentPerformance, crmPerformanceTier, crmBiweeklyRangeLabel, 
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
-import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import PerformanceRing, { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import AgentDashboardClient from "./AgentDashboardClient";
@@ -229,7 +229,14 @@ export default async function AgentDashboardPage() {
 
       <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col items-center gap-5 sm:flex-row">
-          <PerformanceRing percentage={performance.current.overallPercentage} tier={performanceTier} label="of biweekly target" size={112} strokeWidth={10} />
+          <PerformanceRing
+            percentage={performance.current.overallPercentage}
+            tier={performanceTier}
+            label="of biweekly target"
+            size={112}
+            strokeWidth={10}
+            segments={GROWTH_CRM_GAUGE_SEGMENTS}
+          />
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
             <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">

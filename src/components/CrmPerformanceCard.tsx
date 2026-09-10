@@ -5,25 +5,28 @@ import {
   CRM_BIWEEKLY_APPLICATIONS_TARGET,
   CRM_BIWEEKLY_PROPOSALS_TARGET,
   CRM_BIWEEKLY_WON_TARGET,
+  CRM_CATEGORY_WEIGHT,
+  CRM_PERFORMANCE_TIER_LABEL,
   crmBiweeklyRangeLabel,
   crmPerformanceTier,
 } from "@/lib/crm-performance";
-import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import PerformanceRing, { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
 
 // One color per tier, shared by every percentage badge, progress bar, and
-// status pill for a given metric so they never disagree (70-100% green,
-// 40-69% yellow, 0-39% red).
+// status pill for a given metric so they never disagree with the gauge's
+// own bands (0-39 red, 40-59 yellow/amber, 60-79 green, 80-100 blue - see
+// crmPerformanceTier).
 const TIER_STYLES: Record<CrmPerformanceTier, { bar: string; badge: string; text: string }> = {
+  blue: { bar: "bg-sky-500", badge: "bg-sky-100 text-sky-800", text: "text-sky-700" },
   green: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
   yellow: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
   red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
-const TIER_STATUS_LABEL: Record<CrmPerformanceTier, string> = {
-  green: "On Track",
-  yellow: "Needs Improvement",
-  red: "Behind Target",
-};
+// The gauge's own band labels (Needs Improvement / Fair / Good /
+// Excellent) - imported rather than redefined so this status pill can
+// never drift from the gauge's centre score and colour band.
+const TIER_STATUS_LABEL = CRM_PERFORMANCE_TIER_LABEL;
 
 // Renders one agent's biweekly Agent Performance Report card - shared by
 // the admin's "every agent" view (/admin/crm/performance) and an agent's
@@ -106,7 +109,14 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
   return (
     <>
       <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
-        <PerformanceRing percentage={period.overallPercentage} tier={overallTier} label="of biweekly target" size={180} strokeWidth={14} />
+        <PerformanceRing
+          percentage={period.overallPercentage}
+          tier={overallTier}
+          label="of biweekly target"
+          size={180}
+          strokeWidth={14}
+          segments={GROWTH_CRM_GAUGE_SEGMENTS}
+        />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <Stat label="Consultations Booked" value={`${period.consultationsBooked}/${CRM_BIWEEKLY_CONSULTATIONS_TARGET}`} />
           <Stat label="Opportunities Added" value={`${period.qualifiedOpportunities}/${CRM_BIWEEKLY_QUALIFIED_TARGET}`} />
@@ -124,6 +134,8 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
       <ProgressGoal label="Emails Delivered Progress" percentage={period.proposalsPercentage} tier={proposalsTier} />
       <ProgressGoal label="Clients Won Progress" percentage={period.wonPercentage} tier={wonTier} />
 
+      <ScorecardTable period={period} />
+
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Biweekly Performance Status</span>
         <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${TIER_STYLES[overallTier].badge}`}>
@@ -131,6 +143,65 @@ function PeriodDetails({ period }: { period: CrmBiweeklyPeriodPerformance }) {
         </span>
       </div>
     </>
+  );
+}
+
+// The scorecard behind the gauge's centre score: each category's actual
+// result, target, achievement percentage (capped at 100%), fixed 20%
+// weight, and weighted contribution (percentage x weight) - the five
+// weighted contributions are exactly what sum to the gauge's overall
+// score, so this table is the arithmetic the gauge is showing, made
+// visible.
+function ScorecardTable({ period }: { period: CrmBiweeklyPeriodPerformance }) {
+  const rows: Array<{ label: string; actual: number; target: number; percentage: number }> = [
+    { label: "Opportunities Added", actual: period.qualifiedOpportunities, target: CRM_BIWEEKLY_QUALIFIED_TARGET, percentage: period.qualifiedPercentage },
+    { label: "Consultations Booked", actual: period.consultationsBooked, target: CRM_BIWEEKLY_CONSULTATIONS_TARGET, percentage: period.consultationsPercentage },
+    { label: "Emails Delivered", actual: period.proposalsSent, target: CRM_BIWEEKLY_PROPOSALS_TARGET, percentage: period.proposalsPercentage },
+    {
+      label: "Funding Applications Submitted",
+      actual: period.applicationsSubmitted,
+      target: CRM_BIWEEKLY_APPLICATIONS_TARGET,
+      percentage: period.applicationsPercentage,
+    },
+    { label: "Clients Won", actual: period.clientsWon, target: CRM_BIWEEKLY_WON_TARGET, percentage: period.wonPercentage },
+  ];
+
+  return (
+    <div className="mt-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Scorecard</div>
+      <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full min-w-[560px] text-left text-[12.5px]">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+              <th className="p-2.5">Category</th>
+              <th className="p-2.5">Actual</th>
+              <th className="p-2.5">Target</th>
+              <th className="p-2.5">%</th>
+              <th className="p-2.5">Weight</th>
+              <th className="p-2.5">Weighted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const tier = crmPerformanceTier(row.percentage);
+              const weighted = Math.round(row.percentage * CRM_CATEGORY_WEIGHT * 10) / 10;
+              return (
+                <tr key={row.label} className="border-b border-slate-100 last:border-0">
+                  <td className="p-2.5 font-medium text-slate-900">{row.label}</td>
+                  <td className="p-2.5 text-slate-600">{row.actual}</td>
+                  <td className="p-2.5 text-slate-600">{row.target}</td>
+                  <td className="p-2.5">
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TIER_STYLES[tier].badge}`}>{row.percentage}%</span>
+                  </td>
+                  <td className="p-2.5 text-slate-600">{Math.round(CRM_CATEGORY_WEIGHT * 100)}%</td>
+                  <td className="p-2.5 font-semibold text-slate-900">{weighted} pts</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
