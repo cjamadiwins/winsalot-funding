@@ -12,7 +12,7 @@ import {
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { computeLeadgenDashboardTrends } from "@/lib/leadgen-dashboard-trends";
-import { leadgenDateKey } from "@/lib/leadgen-performance";
+import { computeLeadgenAgentPerformance, leadgenDateKey, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
@@ -23,6 +23,7 @@ import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
 import { addBoardLeadNoteAction } from "./opportunity-finder/actions";
 import { completeFollowUpAction } from "./leads/[id]/actions";
+import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -35,7 +36,9 @@ export default async function LeadgenAdminDashboardPage() {
   const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }, { data: pendingFollowUps }] =
     await Promise.all([
       admin.from("leadgen_leads").select("id, business_name, phone, email, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, last_contacted_at, created_at"),
-      admin.from("leadgen_appointments").select("status, client_id, lead_id"),
+      admin
+        .from("leadgen_appointments")
+        .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, client_id, lead_id"),
       admin.from("leadgen_clients").select("id, name"),
       admin
         .from("leadgen_users")
@@ -165,6 +168,18 @@ export default async function LeadgenAdminDashboardPage() {
     }));
 
   const dialpadData = await loadDialpadDashboardData(admin);
+
+  const performanceGaugeRows = agents.map((agent) => {
+    const performance = computeLeadgenAgentPerformance(allAppointments as LeadgenPerformanceAppointment[], agent.id);
+    return {
+      id: agent.id,
+      agentName: agent.full_name,
+      score: performance.percentage,
+      tier: leadgenPerformanceTier(performance.percentage),
+      summary: `${performance.bookedThisWeek}/${performance.target} appointments booked`,
+      periodLabel: leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd),
+    };
+  });
 
   // Each card links straight into the Leads page pre-filtered to that
   // exact slice (see LeadsListClient's initialStatusFilter/
@@ -311,6 +326,8 @@ export default async function LeadgenAdminDashboardPage() {
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/admin/opportunity-finder?view=board" />
+
+      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/leadgen/admin/performance" />
 
       <DialpadDashboardPreview
         audience="admin"
