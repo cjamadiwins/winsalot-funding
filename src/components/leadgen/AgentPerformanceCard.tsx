@@ -32,7 +32,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       </div>
 
       <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-        <PerformanceRing percentage={percentage} tier={tier} label="of weekly target" />
+        <PerformanceRing percentage={percentage} tier={tier} label="Performance Score" size={260} strokeWidth={15} />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
           <Stat label="Appointments Booked" value={`${bookedThisWeek}/${target} appointments booked`} />
           <Stat label="Performance" value={`${percentage}%`} badgeClassName={tierStyle.badge} />
