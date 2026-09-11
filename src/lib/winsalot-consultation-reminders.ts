@@ -5,14 +5,17 @@ import { getResendClient } from "./resend";
 import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { createWinsalotActionToken } from "./winsalot-consultation-tokens";
-import { buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
+import { buildWinsalotConfirmationEmail, buildWinsalotReminderEmail } from "./winsalot-consultation-emails";
 import {
   buildAdminReminderSms,
+  buildAppointmentConfirmationSms,
   buildProspectReminderSms,
   claimAndSendAppointmentSms,
+  formatSmsDateLabel,
   formatSmsTimeLabel,
   isAppointmentToday,
   isValidMobileNumber,
+  type ManualSmsResult,
   type SmsOutcome,
 } from "./appointment-sms";
 import {
@@ -195,13 +198,19 @@ async function markReminderSent(
 // already sent successfully at this point and must still be marked sent,
 // so a tracking hiccup can't turn into a duplicate reminder on the next
 // cron run.
+// emailType/activityNote are the only things that differ between the
+// automatic reminder job's own call (below) and the manual "Resend
+// Appointment Notification" / "Send Appointment Reminder" actions
+// (sendManualWinsalotAppointmentEmail) - same table, same tracking, same
+// Resend webhook pipeline either way.
 async function recordCrmLeadEmail(
   admin: SupabaseClient,
   appt: WinsalotAppointmentRow,
-  reminderType: WinsalotReminderType,
+  emailType: "appointment_reminder" | "appointment_confirmation",
   resendEmailId: string,
   subject: string,
-  sentAt: string
+  sentAt: string,
+  activityNote: string
 ): Promise<string | null> {
   if (!appt.opportunity_id) return null;
 
@@ -211,7 +220,7 @@ async function recordCrmLeadEmail(
       opportunity_id: appt.opportunity_id,
       agent_id: appt.assigned_agent_id,
       resend_email_id: resendEmailId,
-      email_type: "appointment_reminder",
+      email_type: emailType,
       to_email: appt.email,
       subject,
       status: "sent",
@@ -226,12 +235,11 @@ async function recordCrmLeadEmail(
     return null;
   }
 
-  const hoursLabel = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
   await admin.from("crm_activities").insert({
     opportunity_id: appt.opportunity_id,
     agent_id: appt.assigned_agent_id,
     activity_type: "email",
-    notes: `Automatic ${hoursLabel} consultation reminder sent to ${appt.email}.`,
+    notes: activityNote,
     occurred_at: sentAt,
   });
 
@@ -472,7 +480,16 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
               summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "failed", error: errorDetail });
             } else {
               const sentAt = new Date().toISOString();
-              const crmLeadEmailId = await recordCrmLeadEmail(admin, appt, reminderType, sendResult.id, email.subject, sentAt);
+              const hoursLabel = reminderType === "24_hour_reminder" ? "24-hour" : "1-hour";
+              const crmLeadEmailId = await recordCrmLeadEmail(
+                admin,
+                appt,
+                "appointment_reminder",
+                sendResult.id,
+                email.subject,
+                sentAt,
+                `Automatic ${hoursLabel} consultation reminder sent to ${appt.email}.`
+              );
               await markReminderSent(admin, reminderId, appt.email, sendResult.id, crmLeadEmailId);
               summary.sent++;
               summary.results.push({ ...resultBase, recipientEmail: appt.email, outcome: "sent" });
@@ -620,4 +637,127 @@ export async function fetchWinsalotSmsReminderStatusMap(
     };
   }
   return result;
+}
+
+// ---------------------------------------------------------------------
+// Manual "Resend Appointment Notification" / "Send Appointment Reminder"
+// (the same two admin/agent actions Lead Gen CRM already has - see
+// leadgen-appointment-reminders.ts's sendManualLeadgenAppointmentSms /
+// leadgen-appointment-emails.ts's sendLeadgenAppointmentEmail). Reuses
+// the exact same Resend client, sender, and email templates
+// (buildWinsalotConfirmationEmail / buildWinsalotReminderEmail) as every
+// other Growth CRM email, and the same crm_lead_emails delivery-tracking
+// table + Resend webhook pipeline the automatic reminder job above
+// already writes to via recordCrmLeadEmail - never a new table, sender,
+// or template.
+// ---------------------------------------------------------------------
+
+export type WinsalotManualEmailResult = { error?: string; crmLeadEmailId?: string };
+
+export async function sendManualWinsalotAppointmentEmail(
+  admin: SupabaseClient,
+  appointmentId: string,
+  kind: "resend_confirmation" | "reminder",
+  actorName: string
+): Promise<WinsalotManualEmailResult> {
+  const { data: apptRow } = await admin.from("winsalot_appointments").select("*").eq("id", appointmentId).maybeSingle();
+  if (!apptRow) return { error: "Appointment not found." };
+  const appt = apptRow as WinsalotAppointmentRow;
+
+  const rescheduleToken = await createWinsalotActionToken("reschedule", appt.id);
+  const cancelToken = await createWinsalotActionToken("cancel", appt.id);
+  const timezone = appt.prospect_timezone || appt.business_timezone;
+  const shared = {
+    contactName: appt.contact_name,
+    businessName: appt.business_name,
+    serviceType: appt.service_type,
+    appointmentType: appt.appointment_type,
+    startUtcIso: appt.appointment_start_at,
+    timezone,
+    rescheduleUrl: `${getSiteUrl()}/book-consultation/reschedule/${rescheduleToken}`,
+    cancelUrl: `${getSiteUrl()}/book-consultation/cancel/${cancelToken}`,
+  };
+
+  const email = kind === "resend_confirmation" ? buildWinsalotConfirmationEmail(shared) : buildWinsalotReminderEmail({ ...shared, reminderType: "24_hour_reminder" });
+
+  try {
+    const resend = getResendClient();
+    const { data: sendResult, error: sendError } = await resend.emails.send({
+      from: getEmailSender("growth"),
+      to: appt.email,
+      replyTo: getEmailReplyTo(),
+      subject: email.subject,
+      text: email.text,
+      html: email.html,
+    });
+
+    if (sendError || !sendResult) {
+      return { error: sendError?.message ?? "Unknown Resend error." };
+    }
+
+    const sentAt = new Date().toISOString();
+    const activityNote =
+      kind === "resend_confirmation"
+        ? `Appointment confirmation resent to ${appt.email} by ${actorName}.`
+        : `Appointment reminder sent to ${appt.email} by ${actorName}.`;
+    const crmLeadEmailId = await recordCrmLeadEmail(
+      admin,
+      appt,
+      kind === "resend_confirmation" ? "appointment_confirmation" : "appointment_reminder",
+      sendResult.id,
+      email.subject,
+      sentAt,
+      activityNote
+    );
+
+    return { crmLeadEmailId: crmLeadEmailId ?? undefined };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unknown error sending email." };
+  }
+}
+
+// SMS counterpart to sendManualWinsalotAppointmentEmail above - reuses
+// claimAndSendAppointmentSms and the same prospect-facing SMS templates
+// as the automatic job (recordWinsalotAppointmentSms), gated on the same
+// automatic_sms_reminders_enabled toggle, under a fresh, always-unique
+// occurrence key per click so a manual send is never silently deduped
+// against the automatic job's own claim for this occurrence, and never
+// affects the 24h/1h automatic reminder status badges.
+export async function sendManualWinsalotAppointmentSms(
+  admin: SupabaseClient,
+  appointment: WinsalotAppointmentRow,
+  kind: "resend_confirmation" | "reminder"
+): Promise<ManualSmsResult> {
+  const smsSettings = await fetchWinsalotAppointmentReminderSettings(admin);
+  if (!smsSettings.automatic_sms_reminders_enabled) return { outcome: "disabled" };
+
+  const timezone = appointment.prospect_timezone || appointment.business_timezone;
+  const scheduledMs = new Date(appointment.appointment_start_at).getTime();
+  const timeLabel = formatSmsTimeLabel(scheduledMs, timezone);
+  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(appointment.appointment_type);
+
+  const message =
+    kind === "resend_confirmation"
+      ? buildAppointmentConfirmationSms({
+          businessName: appointment.business_name,
+          dateLabel: formatSmsDateLabel(scheduledMs, timezone),
+          timeLabel,
+          appointmentTypeLabel,
+        })
+      : buildProspectReminderSms({ businessName: appointment.business_name, reminderType: "24_hour_reminder", timeLabel, appointmentTypeLabel });
+
+  const result = await claimAndSendAppointmentSms(admin, {
+    table: "winsalot_appointment_sms_reminders",
+    appointmentId: appointment.id,
+    reminderType: kind === "resend_confirmation" ? "24_hour_reminder" : "1_hour_reminder",
+    recipientType: "prospect",
+    occurrenceKey: `manual_${kind}:${Date.now()}`,
+    scheduledAppointmentAtIso: appointment.appointment_start_at,
+    toPhoneRaw: appointment.phone,
+    consentGiven: appointment.sms_consent,
+    message,
+    dryRun: false,
+  });
+
+  return { outcome: result.outcome, error: result.error };
 }

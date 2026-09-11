@@ -554,3 +554,42 @@ export async function sendAppointmentReminderSmsPair(
 
   return { prospect, admin: adminResult };
 }
+
+// ---------------------------------------------------------------------
+// Manual-send outcome formatting - shared by both CRMs' "Resend
+// Appointment Notification" / "Send Appointment Reminder" actions
+// (leadgen-appointment-reminders.ts's sendManualLeadgenAppointmentSms and
+// winsalot-consultation-reminders.ts's sendManualWinsalotAppointmentSms).
+// Generic, CRM-agnostic formatting with no Lead Gen or Growth-specific
+// logic, so it lives here once instead of being duplicated per CRM.
+// ---------------------------------------------------------------------
+
+export type ManualSmsOutcome = SmsOutcome | "disabled";
+export type ManualSmsResult = { outcome: ManualSmsOutcome; error?: string };
+
+// Human-readable one-liner for a manual-send button's own success/failure
+// message. Returns null for "disabled" so the caller can omit any SMS
+// mention entirely when the automatic-SMS-reminders toggle is off.
+export function describeManualSmsOutcome(result: ManualSmsResult): string | null {
+  switch (result.outcome) {
+    case "disabled":
+      return null;
+    case "sent":
+      return "SMS sent.";
+    case "failed":
+      return `SMS failed${result.error ? `: ${result.error}` : "."}`;
+    case "skipped_no_consent":
+      return "SMS not sent (no SMS consent on file).";
+    case "skipped_no_phone":
+      return "SMS not sent (no phone number on file).";
+    case "skipped_invalid_phone":
+      return "SMS not sent (phone number on file is invalid).";
+    case "skipped_opted_out":
+      return "SMS not sent (this number has opted out).";
+    case "skipped_claimed_elsewhere":
+    case "would_send":
+      return "SMS not sent (already in progress).";
+    default:
+      return null;
+  }
+}

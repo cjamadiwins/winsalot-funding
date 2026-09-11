@@ -10,8 +10,12 @@ import {
   formatSmsDateLabel,
   formatSmsTimeLabel,
   sendAppointmentReminderSmsPair,
+  type ManualSmsResult,
   type SmsOutcome,
 } from "./appointment-sms";
+// Re-exported for existing callers/tests that import these from here -
+// the implementation lives in appointment-sms.ts (shared by both CRMs).
+export { describeManualSmsOutcome, type ManualSmsOutcome, type ManualSmsResult } from "./appointment-sms";
 import {
   isValidEmail,
   leadgenAppointmentOccurrenceKey,
@@ -768,9 +772,6 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
 // job's own claims.
 // ---------------------------------------------------------------------
 
-export type ManualSmsOutcome = SmsOutcome | "disabled";
-export type ManualSmsResult = { outcome: ManualSmsOutcome; error?: string };
-
 export async function sendManualLeadgenAppointmentSms(
   admin: SupabaseClient,
   appointment: LeadgenAppointmentRow,
@@ -801,36 +802,6 @@ export async function sendManualLeadgenAppointmentSms(
   });
 
   return { outcome: result.outcome, error: result.error };
-}
-
-// Human-readable one-liner for the button's own success/failure message
-// (brief: "Show a clear success or failure message"). Returns null for
-// "disabled" so the caller can omit any SMS mention entirely when the
-// automatic_sms_reminders_enabled toggle is off - unrelated to
-// isValidMobileNumber, which is only used by callers deciding whether to
-// attempt a send at all elsewhere in this codebase.
-export function describeManualSmsOutcome(result: ManualSmsResult): string | null {
-  switch (result.outcome) {
-    case "disabled":
-      return null;
-    case "sent":
-      return "SMS sent.";
-    case "failed":
-      return `SMS failed${result.error ? `: ${result.error}` : "."}`;
-    case "skipped_no_consent":
-      return "SMS not sent (no SMS consent on file).";
-    case "skipped_no_phone":
-      return "SMS not sent (no phone number on file).";
-    case "skipped_invalid_phone":
-      return "SMS not sent (phone number on file is invalid).";
-    case "skipped_opted_out":
-      return "SMS not sent (this number has opted out).";
-    case "skipped_claimed_elsewhere":
-    case "would_send":
-      return "SMS not sent (already in progress).";
-    default:
-      return null;
-  }
 }
 
 // ---------------------------------------------------------------------

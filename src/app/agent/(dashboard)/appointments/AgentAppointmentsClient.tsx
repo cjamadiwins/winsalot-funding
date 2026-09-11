@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import WinsalotAppointmentsListClient, { type WinsalotAppointmentListRow } from "@/components/WinsalotAppointmentsListClient";
 import BookConsultationModal from "@/components/BookConsultationModal";
 import type { OpportunityType } from "@/lib/crm-types";
-import { cancelAppointmentAction, editAppointmentAction, getOfferedSlotsAction, rescheduleAppointmentAction } from "./actions";
+import {
+  cancelAppointmentAction,
+  editAppointmentAction,
+  getOfferedSlotsAction,
+  rescheduleAppointmentAction,
+  resendAppointmentNotificationAction,
+  sendAppointmentReminderAction,
+} from "./actions";
 import { bookConsultationAction, getConsultationOfferedSlotsAction } from "../opportunities/[id]/actions";
 
 export type BookableOpportunity = {
@@ -105,6 +112,8 @@ export default function AgentAppointmentsClient({
           reschedule: rescheduleAppointmentAction,
           cancel: cancelAppointmentAction,
           edit: editAppointmentAction,
+          resend: resendAppointmentNotificationAction,
+          sendReminder: sendAppointmentReminderAction,
           opportunityHref: (opportunityId) => `/agent/opportunities/${opportunityId}`,
         }}
       />

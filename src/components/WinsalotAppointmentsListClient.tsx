@@ -16,6 +16,11 @@ import {
   type WinsalotReminderDisplayStatus,
 } from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
+// Reused as-is (not a Lead Gen-specific component - no Lead Gen imports)
+// for Growth CRM's own "Resend Appointment Notification" / "Send
+// Appointment Reminder" confirmation window, so the two CRMs never
+// maintain two copies of the same confirm-before-sending modal.
+import AppointmentEmailConfirmModal from "./leadgen/AppointmentEmailConfirmModal";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -58,6 +63,13 @@ export type WinsalotAppointmentActions = {
   // quick actions) - undefined for the agent view, where the incentive
   // badge is still shown read-only but no review controls render.
   reviewIncentive?: (id: string, decision: Extract<WinsalotAppointmentIncentiveStatus, "Qualified" | "Unqualified">, reason: string | null) => Promise<{ error?: string }>;
+  // "Resend Appointment Notification" / "Send Appointment Reminder" -
+  // available to both admin and agent alike (mirrors the Lead Gen CRM's
+  // own two buttons). message carries the SMS-side outcome (e.g. "SMS
+  // sent." / "SMS not sent (no phone number on file).") - the email side
+  // is always implied by a successful result.
+  resend: (id: string) => Promise<{ error?: string; message?: string }>;
+  sendReminder: (id: string) => Promise<{ error?: string; message?: string }>;
   opportunityHref: (opportunityId: string) => string;
 };
 
@@ -104,6 +116,14 @@ export default function WinsalotAppointmentsListClient({
   const [cancelReason, setCancelReason] = useState("");
   const [rejectingIncentiveId, setRejectingIncentiveId] = useState<string | null>(null);
   const [rejectIncentiveReason, setRejectIncentiveReason] = useState("");
+  // "Resend Appointment Notification" / "Send Appointment Reminder" -
+  // which appointment's confirm window is open (if any) and the last
+  // send's own success/failure message, tracked separately from
+  // expandedId/mode above so opening Edit/Reschedule/Cancel on this same
+  // card never clears a still-relevant send result, and vice versa.
+  const [emailActionId, setEmailActionId] = useState<string | null>(null);
+  const [emailMode, setEmailMode] = useState<"resend" | "reminder" | null>(null);
+  const [emailMessage, setEmailMessage] = useState<{ id: string; text: string } | null>(null);
 
   function openRow(appt: WinsalotAppointmentListRow, nextMode: "view" | "edit" | "reschedule" | "cancel") {
     setError(null);
@@ -212,6 +232,17 @@ export default function WinsalotAppointmentsListClient({
     });
   }
 
+  function openEmailAction(appt: WinsalotAppointmentListRow, nextMode: "resend" | "reminder") {
+    setEmailMessage(null);
+    setEmailActionId(appt.id);
+    setEmailMode(nextMode);
+  }
+
+  function closeEmailAction() {
+    setEmailActionId(null);
+    setEmailMode(null);
+  }
+
   if (appointments.length === 0) {
     return <p className="text-sm text-slate-500">No appointments yet.</p>;
   }
@@ -299,6 +330,12 @@ export default function WinsalotAppointmentsListClient({
                     <button type="button" onClick={() => openRow(appt, "cancel")} className="text-xs font-semibold text-rose-600 hover:text-rose-700">
                       Cancel
                     </button>
+                    <button type="button" onClick={() => openEmailAction(appt, "resend")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                      Resend Appointment Notification
+                    </button>
+                    <button type="button" onClick={() => openEmailAction(appt, "reminder")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                      Send Appointment Reminder
+                    </button>
                   </>
                 )}
                 {isAdmin && actions.remove && (
@@ -308,6 +345,8 @@ export default function WinsalotAppointmentsListClient({
                 )}
               </div>
             </div>
+
+            {emailMessage?.id === appt.id && <p className="mt-1.5 text-[11.5px] font-medium text-emerald-700">{emailMessage.text}</p>}
 
             {isAdmin && actions.reviewIncentive && isWinsalotAppointmentCountable(appt.status) && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
@@ -453,6 +492,25 @@ export default function WinsalotAppointmentsListClient({
                   </button>
                 </div>
               </div>
+            )}
+
+            {emailActionId === appt.id && emailMode && (
+              <AppointmentEmailConfirmModal
+                mode={emailMode === "reminder" ? "reminder" : "resend"}
+                businessName={appt.business_name}
+                contactName={appt.contact_name}
+                email={appt.email}
+                appointmentDate={start.toLocaleDateString()}
+                appointmentTime={start.toLocaleTimeString()}
+                timezone={appt.business_timezone}
+                onClose={closeEmailAction}
+                onConfirm={() => (emailMode === "reminder" ? actions.sendReminder(appt.id) : actions.resend(appt.id))}
+                onSent={(result) => {
+                  const emailPart = emailMode === "reminder" ? "Reminder sent." : "Confirmation resent.";
+                  setEmailMessage({ id: appt.id, text: result?.message ? `${emailPart} ${result.message}` : emailPart });
+                  closeEmailAction();
+                }}
+              />
             )}
           </li>
         );

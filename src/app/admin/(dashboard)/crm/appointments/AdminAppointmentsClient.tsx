@@ -11,7 +11,9 @@ import {
   editAppointmentAction,
   getOfferedSlotsAction,
   rescheduleAppointmentAction,
+  resendAppointmentNotificationAction,
   reviewCrmAppointmentIncentiveAction,
+  sendAppointmentReminderAction,
 } from "./actions";
 import { bookConsultationAction, getConsultationOfferedSlotsAction } from "../opportunities/[id]/actions";
 
@@ -111,6 +113,8 @@ export default function AdminAppointmentsClient({
           edit: editAppointmentAction,
           remove: deleteAppointmentAction,
           reviewIncentive: reviewCrmAppointmentIncentiveAction,
+          resend: resendAppointmentNotificationAction,
+          sendReminder: sendAppointmentReminderAction,
           opportunityHref: (opportunityId) => `/admin/crm/opportunities/${opportunityId}`,
         }}
       />

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import {
   getWinsalotOfferedSlots,
@@ -10,7 +11,11 @@ import {
   performWinsalotReschedule,
   type WinsalotAppointmentEditInput,
 } from "@/lib/winsalot-consultation-book";
-import type { WinsalotAppointmentIncentiveStatus } from "@/lib/winsalot-consultation-types";
+import { describeManualSmsOutcome } from "@/lib/appointment-sms";
+import { sendManualWinsalotAppointmentEmail, sendManualWinsalotAppointmentSms } from "@/lib/winsalot-consultation-reminders";
+import type { WinsalotAppointmentIncentiveStatus, WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+
+type ActionResult = { error?: string; message?: string };
 
 export async function getOfferedSlotsAction(excludeAppointmentId: string) {
   await requireCrmAdmin();
@@ -39,6 +44,49 @@ export async function editAppointmentAction(appointmentId: string, input: Winsal
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
   return result;
+}
+
+// Shared by resendAppointmentNotificationAction/sendAppointmentReminderAction
+// below - the SMS half of both buttons, on the service-role client since
+// it writes to winsalot_appointment_sms_reminders directly (same
+// reasoning as every other Growth CRM SMS send in this codebase).
+async function sendManualSmsForAction(appointmentId: string, kind: "resend_confirmation" | "reminder"): Promise<string | null> {
+  const admin = getSupabaseAdmin();
+  const { data: appointment } = await admin.from("winsalot_appointments").select("*").eq("id", appointmentId).maybeSingle();
+  if (!appointment) return null;
+
+  const result = await sendManualWinsalotAppointmentSms(admin, appointment as WinsalotAppointmentRow, kind);
+  return describeManualSmsOutcome(result);
+}
+
+// "Resend Appointment Notification" / "Send Appointment Reminder" - the
+// same two manual actions Lead Gen CRM already has
+// (leadgen/admin/appointments/actions.ts). Every booked/confirmed
+// appointment may use both, admin and agent alike.
+export async function resendAppointmentNotificationAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireCrmAdmin();
+  const admin = getSupabaseAdmin();
+  const result = await sendManualWinsalotAppointmentEmail(admin, appointmentId, "resend_confirmation", adminUser.full_name || adminUser.email);
+  if (result.error) return { error: result.error };
+
+  const smsMessage = await sendManualSmsForAction(appointmentId, "resend_confirmation");
+
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/agent/appointments");
+  return { message: smsMessage ?? undefined };
+}
+
+export async function sendAppointmentReminderAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireCrmAdmin();
+  const admin = getSupabaseAdmin();
+  const result = await sendManualWinsalotAppointmentEmail(admin, appointmentId, "reminder", adminUser.full_name || adminUser.email);
+  if (result.error) return { error: result.error };
+
+  const smsMessage = await sendManualSmsForAction(appointmentId, "reminder");
+
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/agent/appointments");
+  return { message: smsMessage ?? undefined };
 }
 
 // Quick incentive review directly from the Admin Appointments table's
