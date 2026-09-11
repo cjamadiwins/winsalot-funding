@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
 // Semicircular 0-100 performance gauge shared by both CRMs. The public
 // component name is retained so every existing Admin/Agent report and
 // dashboard receives the upgrade without duplicating presentation logic.
@@ -9,15 +13,13 @@ const CENTER_X = 120;
 const CENTER_Y = 116;
 const ARC_RADIUS = 84;
 
-// Default bands, unchanged since this component's introduction - still
-// used wherever a caller doesn't pass its own `segments` (the Lead Gen
-// CRM's gauges and the Weekly Incentive card), so their presentation is
-// untouched by the Growth CRM's corrected scorecard bands below.
+// Clear four-band treatment shared by both CRMs, matching the large
+// reference dial: red, amber, green, then blue.
 const DEFAULT_SEGMENTS: readonly PerformanceGaugeSegment[] = [
   { start: 0, end: 40, color: "#df7f82", label: "Needs improvement" },
-  { start: 40, end: 70, color: "#efc76f", label: "Fair" },
-  { start: 70, end: 90, color: "#78bd72", label: "Good" },
-  { start: 90, end: 100, color: "#63b9c7", label: "Excellent" },
+  { start: 40, end: 60, color: "#efc76f", label: "Fair" },
+  { start: 60, end: 80, color: "#78bd72", label: "Good" },
+  { start: 80, end: 100, color: "#63b9c7", label: "Excellent" },
 ];
 
 // Verified Growth CRM Agent Performance Score bands: 0-39 Needs
@@ -69,8 +71,38 @@ export default function PerformanceRing({
   segments?: readonly PerformanceGaugeSegment[];
 }) {
   const score = Math.max(0, Math.min(100, Math.round(percentage)));
-  const needleTip = pointForScore(score, 67);
-  const color = SCORE_COLOR[tier];
+  const [animatedScore, setAnimatedScore] = useState(0);
+  const animatedScoreRef = useRef(0);
+  const activeSegment = segments.find(
+    (segment, index) => score >= segment.start && (score < segment.end || index === segments.length - 1)
+  );
+  const color = activeSegment?.color ?? SCORE_COLOR[tier];
+
+  useEffect(() => {
+    const from = animatedScoreRef.current;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || from === score) {
+      animatedScoreRef.current = score;
+      setAnimatedScore(score);
+      return;
+    }
+
+    let animationFrame = 0;
+    const startedAt = performance.now();
+    const duration = 950;
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = from + (score - from) * eased;
+      animatedScoreRef.current = next;
+      setAnimatedScore(next);
+      if (progress < 1) animationFrame = requestAnimationFrame(animate);
+    };
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [score]);
+
+  const displayedScore = Math.round(animatedScore);
 
   return (
     <figure className="m-0 flex shrink-0 flex-col items-center" style={{ width: size }}>
@@ -80,13 +112,22 @@ export default function PerformanceRing({
         role="img"
         aria-label={`Performance score ${score} out of 100${label ? `, ${label}` : ""}`}
       >
+        <path
+          d={arcPath(0, 100)}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth={strokeWidth * 2.15}
+          strokeLinecap="round"
+          opacity="0.65"
+        />
+
         {segments.map((segment) => (
           <path
             key={segment.label}
             d={arcPath(segment.start, segment.end)}
             fill="none"
             stroke={segment.color}
-            strokeWidth={strokeWidth * 1.7}
+            strokeWidth={strokeWidth * 1.85}
             strokeLinecap="butt"
           />
         ))}
@@ -97,6 +138,23 @@ export default function PerformanceRing({
             <text key={tick} x={position.x} y={position.y + 4} textAnchor="middle" className="fill-slate-500 text-[10px] font-semibold">
               {tick}
             </text>
+          );
+        })}
+
+        {[0, 20, 40, 60, 80, 100].map((tick) => {
+          const start = pointForScore(tick, 94);
+          const end = pointForScore(tick, 101);
+          return (
+            <line
+              key={`${tick}-mark`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="#475569"
+              strokeWidth="1.5"
+              opacity="0.7"
+            />
           );
         })}
 
@@ -111,29 +169,35 @@ export default function PerformanceRing({
               y={position.y + 3}
               textAnchor="middle"
               transform={`rotate(${rotation} ${position.x} ${position.y})`}
-              className="fill-white text-[7px] font-bold"
+              className="fill-white text-[7.5px] font-bold tracking-tight"
             >
               {segment.label}
             </text>
           );
         })}
 
-        <line
-          x1={CENTER_X}
-          y1={CENTER_Y}
-          x2={needleTip.x}
-          y2={needleTip.y}
-          stroke={color}
-          strokeWidth="8"
-          strokeLinecap="round"
+        <g
           aria-hidden="true"
-        />
-        <circle cx={CENTER_X} cy={CENTER_Y} r="25" fill={color} />
+          style={{
+            transform: `rotate(${animatedScore * 1.8}deg)`,
+            transformBox: "view-box",
+            transformOrigin: `${CENTER_X}px ${CENTER_Y}px`,
+          }}
+        >
+          <path d={`M ${CENTER_X - 70} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y - 6} L ${CENTER_X} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y + 6} Z`} fill={color} />
+        </g>
+        <circle cx={CENTER_X} cy={CENTER_Y} r="29" fill={color} opacity="0.2" />
+        <circle cx={CENTER_X} cy={CENTER_Y} r="24" fill={color} />
         <text x={CENTER_X} y={CENTER_Y + 8} textAnchor="middle" className="fill-white text-[25px] font-bold">
-          {score}
+          {displayedScore}
         </text>
       </svg>
-      {label ? <figcaption className="-mt-1 text-center text-[10.5px] font-medium text-slate-500">{label}</figcaption> : null}
+      <figcaption className="-mt-1 text-center">
+        {label ? <span className="block text-[12px] font-bold text-slate-700">{label}</span> : null}
+        <span className="mt-0.5 block text-[11px] font-semibold" style={{ color }}>
+          {activeSegment?.label}
+        </span>
+      </figcaption>
     </figure>
   );
 }

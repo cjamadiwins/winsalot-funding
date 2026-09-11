@@ -227,14 +227,14 @@ export default async function AgentDashboardPage() {
         </div>
       </div>
 
-      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col items-center gap-5 sm:flex-row">
+      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-center gap-6 sm:flex-row">
           <PerformanceRing
             percentage={performance.current.overallPercentage}
             tier={performanceTier}
             label="of weekly target"
-            size={112}
-            strokeWidth={10}
+            size={230}
+            strokeWidth={14}
             segments={GROWTH_CRM_GAUGE_SEGMENTS}
           />
           <div>
