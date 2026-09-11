@@ -104,7 +104,7 @@ export default function PerformanceRing({
 
   return (
     <figure
-      className="group m-0 flex shrink-0 flex-col items-center"
+      className="group/gauge m-0 flex shrink-0 flex-col items-center"
       style={{ width: size }}
     >
       <svg
@@ -195,7 +195,7 @@ export default function PerformanceRing({
               giving the needle a small, responsive nudge when the user points
               at or presses anywhere around the gauge. */}
           <g
-            className="transition-transform duration-300 ease-out group-hover:rotate-[2deg] group-active:rotate-[-1deg] motion-reduce:transform-none motion-reduce:transition-none"
+            className="transition-transform duration-300 ease-out group-hover/gauge:rotate-[2deg] group-active/gauge:rotate-[-1deg] motion-reduce:transform-none motion-reduce:transition-none"
             style={{
               transformBox: "view-box",
               transformOrigin: `${CENTER_X}px ${CENTER_Y}px`,
