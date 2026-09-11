@@ -209,7 +209,7 @@ export default function WinsalotAppointmentsListClient({
         const isExpanded = expandedId === appt.id;
 
         return (
-          <li key={appt.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <li key={appt.id} id={`appointment-${appt.id}`} className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
