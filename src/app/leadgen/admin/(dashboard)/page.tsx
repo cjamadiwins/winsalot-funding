@@ -22,9 +22,12 @@ import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/l
 import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
 import { addBoardLeadNoteAction } from "./opportunity-finder/actions";
-import { completeFollowUpAction } from "./leads/[id]/actions";
+import { completeFollowUpAction, scheduleFollowUpAction } from "./leads/[id]/actions";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
+import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
+import LeadgenAppointmentRecordsModal from "@/components/leadgen/LeadgenAppointmentRecordsModal";
+import { buildAppointmentCardRecords, buildLeadCardRecords, sortAppointmentsUpcomingFirst, sortLeadsByMostUrgentFollowUp } from "@/lib/leadgen-dashboard-records";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -36,10 +39,16 @@ export default async function LeadgenAdminDashboardPage() {
 
   const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }, { data: pendingFollowUps }] =
     await Promise.all([
-      admin.from("leadgen_leads").select("id, business_name, phone, email, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, last_contacted_at, created_at"),
+      admin
+        .from("leadgen_leads")
+        .select(
+          "id, business_name, contact_name, phone, email, status, client_id, campaign_id, assigned_agent_id, next_follow_up_at, last_contacted_at, notes, created_at"
+        ),
       admin
         .from("leadgen_appointments")
-        .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, client_id, lead_id"),
+        .select(
+          "id, business_name, contact_name, phone, email, appointment_date, appointment_time, timezone, meeting_type, appointment_notes, status, created_at, booking_agent_id, assigned_specialist_id, client_id, lead_id"
+        ),
       admin.from("leadgen_clients").select("id, name"),
       admin
         .from("leadgen_users")
@@ -58,7 +67,7 @@ export default async function LeadgenAdminDashboardPage() {
       // Opportunity Finder counters, below - one lightweight read of the
       // scoring table (supabase/migrations/0113).
       admin.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
-      admin.from("leadgen_followups").select("id, lead_id, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
+      admin.from("leadgen_followups").select("id, lead_id, status, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
     ]);
 
   const allLeads = leads ?? [];
@@ -70,20 +79,14 @@ export default async function LeadgenAdminDashboardPage() {
     (campaigns ?? []).map((campaign) => [campaign.id, clientNameById.get(campaign.client_id) ?? campaign.name] as const)
   );
 
-  const totalLeads = allLeads.length;
-  const interestedLeads = allLeads.filter((l) => l.status === "Interested").length;
   // Cancelled/Replaced appointments (isLeadgenAppointmentCountable,
-  // leadgen-types.ts) never count toward the total - a corrected
-  // duplicate (see the "Cancel/Replace Appointment" admin action) counts
-  // once, via the appointment that replaced it, not twice.
+  // leadgen-types.ts) never count toward "Results by Client"'s
+  // appointment totals - a corrected duplicate (see the "Cancel/Replace
+  // Appointment" admin action) counts once, via the appointment that
+  // replaced it, not twice. (The dashboard's own "Appointments Booked"
+  // card below uses a narrower, exact status === "Booked" definition -
+  // see leadgen-dashboard-records.ts's header comment for why.)
   const countableAppointments = allAppointments.filter((a) => isLeadgenAppointmentCountable(a.status));
-  const appointmentsBooked = countableAppointments.length;
-  // Same source of truth as the Leads page's Due Today/Overdue filters
-  // (LeadsListClient.tsx) - each lead's own next_follow_up_at, not a raw
-  // scan of leadgen_followups rows, so these counts can never drift out
-  // of sync with what clicking through to the Leads page actually shows.
-  const followUpsDueToday = allLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)).length;
-  const overdueFollowUps = allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length;
 
   const trends = computeLeadgenDashboardTrends(allLeads, now);
 
@@ -106,7 +109,6 @@ export default async function LeadgenAdminDashboardPage() {
     else if (effective === "retry") opportunityScoreCounts.retry += 1;
   }
   const convertedLeadIds = new Set((allAppointments as { status: string; lead_id?: string | null }[]).filter((a) => a.status === "Completed" && a.lead_id).map((a) => a.lead_id as string));
-  const convertedCount = convertedLeadIds.size;
 
   const byCampaignClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const client of allClients) byCampaignClient.set(client.id, { name: client.name, leads: 0, appointments: 0 });
@@ -126,6 +128,35 @@ export default async function LeadgenAdminDashboardPage() {
   for (const followUp of pendingFollowUps ?? []) {
     if (!earliestFollowUpIdByLead.has(followUp.lead_id)) earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
   }
+
+  // Dashboard stat cards below - one enriched copy of every lead (agent
+  // name, latest call outcome/note from Opportunity Finder's signals,
+  // earliest pending follow-up id), so each card's own count AND its
+  // drill-down modal's rows are both `.filter()`ed from this exact same
+  // array - a card's number can never disagree with what clicking it
+  // shows (see leadgen-dashboard-records.ts).
+  const enrichedLeads = buildLeadCardRecords(allLeads, { scores: scoredLeads, followUps: pendingFollowUps ?? [], agentNameById });
+  const interestedRecords = enrichedLeads.filter((l) => l.status === "Interested");
+  const followUpsDueTodayRecords = sortLeadsByMostUrgentFollowUp(enrichedLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)));
+  const overdueRecords = sortLeadsByMostUrgentFollowUp(enrichedLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)));
+  // Root-cause fix for "Appointments Booked" (see leadgen-dashboard-
+  // records.ts's header comment) - status === "Booked" exactly, not the
+  // broader isLeadgenAppointmentCountable set the old count used.
+  const bookedAppointmentRecords = sortAppointmentsUpcomingFirst(
+    buildAppointmentCardRecords(
+      allAppointments.filter((a) => a.status === "Booked"),
+      agentNameById
+    )
+  );
+  // "Opportunities Converted" (Opportunity Finder row, below) had the
+  // same class of bug as "Appointments Booked": it linked to Opportunity
+  // Finder's own category=closed filter (a different, broader concept -
+  // won, not interested, OR an appointment booked with nothing else
+  // outstanding), while its count here is leads with a real Completed
+  // appointment. Reusing convertedLeadIds (already computed above)
+  // instead fixes that mismatch the same way the Growth CRM's
+  // "Opportunities Converted" card was fixed.
+  const convertedRecords = enrichedLeads.filter((l) => convertedLeadIds.has(l.id));
   const smartOpportunities: SmartOpportunityRow[] = scoredLeads
     .filter((score) => score.finder_state === "active" && score.category !== "closed")
     .map((score): SmartOpportunityRow | null => {
@@ -182,61 +213,6 @@ export default async function LeadgenAdminDashboardPage() {
     };
   });
 
-  // Each card links straight into the Leads page pre-filtered to that
-  // exact slice (see LeadsListClient's initialStatusFilter/
-  // initialFollowUpFilter props), so clicking a number is never a dead
-  // end - every row on the landed page already links to that lead's own
-  // profile, where the admin can act immediately.
-  const stats = [
-    {
-      label: "Total Leads",
-      value: String(totalLeads),
-      href: "/leadgen/admin/leads",
-      tone: LEADGEN_STAT_CARD_STYLES.leads,
-      icon: Users,
-      trend: trends.totalLeads,
-    },
-    {
-      label: "Interested Leads",
-      value: String(interestedLeads),
-      href: "/leadgen/admin/leads?status=Interested",
-      tone: LEADGEN_STAT_CARD_STYLES.interested,
-      icon: UserCheck,
-      trend: trends.interestedLeads,
-    },
-    {
-      label: "Appointments Booked",
-      value: String(appointmentsBooked),
-      // Filters by the appointment record's own status (source of
-      // truth), not the lead's main status - a lead whose appointment is
-      // genuinely Booked must show up here even if its main status
-      // hasn't caught up (e.g. still "Consultation Information Sent").
-      // See LeadsListClient's appointmentStatusFilter.
-      href: `/leadgen/admin/leads?appointment_status=${encodeURIComponent("Booked")}`,
-      tone: LEADGEN_STAT_CARD_STYLES.appointments,
-      icon: CalendarCheck,
-      trend: trends.appointmentsBooked,
-    },
-    {
-      label: "Follow-ups Due Today",
-      value: String(followUpsDueToday),
-      href: "/leadgen/admin/leads?followup=due_today",
-      tone: LEADGEN_STAT_CARD_STYLES.dueToday,
-      icon: Clock,
-      trend: trends.followUpsDue,
-    },
-    {
-      label: "Overdue Follow-ups",
-      value: String(overdueFollowUps),
-      href: "/leadgen/admin/leads?followup=overdue",
-      tone: LEADGEN_STAT_CARD_STYLES.overdue,
-      icon: AlertTriangle,
-      // Rising overdue count is bad, not good - flip the arrow's color
-      // logic so an "up" trend reads red, not green.
-      trend: { ...trends.overdueFollowUps, goodDirection: "down" as const },
-    },
-  ];
-
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -272,17 +248,64 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {stats.map((stat) => (
-          <KpiCard
-            key={stat.label}
-            label={stat.label}
-            value={stat.value}
-            href={stat.href}
-            tone={stat.tone}
-            icon={<stat.icon />}
-            trend={stat.trend}
-          />
-        ))}
+        <LeadgenLeadRecordsModal
+          label="Total Leads"
+          tone={LEADGEN_STAT_CARD_STYLES.leads}
+          icon={<Users />}
+          trend={trends.totalLeads}
+          records={enrichedLeads}
+          leadHrefBase="/leadgen/admin/leads"
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
+        />
+        <LeadgenLeadRecordsModal
+          label="Interested Leads"
+          tone={LEADGEN_STAT_CARD_STYLES.interested}
+          icon={<UserCheck />}
+          trend={trends.interestedLeads}
+          records={interestedRecords}
+          leadHrefBase="/leadgen/admin/leads"
+          emptyMessage="No interested leads right now."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
+        />
+        <LeadgenAppointmentRecordsModal
+          label="Appointments Booked"
+          tone={LEADGEN_STAT_CARD_STYLES.appointments}
+          icon={<CalendarCheck />}
+          trend={trends.appointmentsBooked}
+          records={bookedAppointmentRecords}
+          leadHrefBase="/leadgen/admin/leads"
+          appointmentsHref="/leadgen/admin/appointments"
+        />
+        <LeadgenLeadRecordsModal
+          label="Follow-ups Due Today"
+          tone={LEADGEN_STAT_CARD_STYLES.dueToday}
+          icon={<Clock />}
+          trend={trends.followUpsDue}
+          records={followUpsDueTodayRecords}
+          leadHrefBase="/leadgen/admin/leads"
+          emptyMessage="No follow-ups due today."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
+        />
+        <LeadgenLeadRecordsModal
+          label="Overdue Follow-ups"
+          tone={LEADGEN_STAT_CARD_STYLES.overdue}
+          icon={<AlertTriangle />}
+          // Rising overdue count is bad, not good - flip the arrow's
+          // color logic so an "up" trend reads red, not green.
+          trend={{ ...trends.overdueFollowUps, goodDirection: "down" as const }}
+          records={overdueRecords}
+          leadHrefBase="/leadgen/admin/leads"
+          emptyMessage="No overdue follow-ups."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
+        />
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
@@ -313,7 +336,15 @@ export default async function LeadgenAdminDashboardPage() {
         <KpiCard label="Warm" value={opportunityScoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/leadgen/admin/opportunity-finder?category=warm" />
         <KpiCard label="Follow-Up" value={opportunityScoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/leadgen/admin/opportunity-finder?category=follow_up" />
         <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/admin/opportunity-finder?category=retry" />
-        <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/leadgen/admin/opportunity-finder?category=closed" />
+        <LeadgenLeadRecordsModal
+          label="Opportunities Converted"
+          tone="green"
+          icon={<Trophy />}
+          records={convertedRecords}
+          leadHrefBase="/leadgen/admin/leads"
+          emptyMessage="No converted opportunities yet."
+          onAddNote={addBoardLeadNoteAction}
+        />
       </div>
 
       <SmartOpportunitiesModal
