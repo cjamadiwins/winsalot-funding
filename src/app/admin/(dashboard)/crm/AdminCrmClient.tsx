@@ -22,7 +22,6 @@ import {
   isOverdue,
   isDueToday,
   overdueDurationLabel,
-  type CrmOpportunityRow,
   type CrmUserRow,
   type OpportunityStage,
   type OpportunityType,
@@ -34,7 +33,10 @@ import {
   isoInRange,
   type CrmResultsDateFilter,
 } from "@/lib/crm-conversion";
-import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
+import CrmOpportunityRecordsModal from "@/components/crm-ui/CrmOpportunityRecordsModal";
+import CrmConsultationRecordsModal from "@/components/crm-ui/CrmConsultationRecordsModal";
+import { sortByMostRecentlyWon, sortByMostUrgentFollowUp, type OpportunityCardRecord } from "@/lib/crm-dashboard-records";
+import type { ConsultationCardRecord } from "@/lib/winsalot-consultation-data";
 
 const TYPE_BADGE_STYLES: Record<OpportunityType, string> = {
   lead_generation: "bg-teal-100 text-teal-800",
@@ -42,29 +44,28 @@ const TYPE_BADGE_STYLES: Record<OpportunityType, string> = {
   both_services: "bg-indigo-100 text-indigo-800",
 };
 
-type CardKey =
-  | "total"
-  | "new"
-  | "interested"
-  | "consultations"
-  | "financing"
-  | "leadgen"
-  | "followups"
-  | "won";
-
 type FollowUpStatusFilter = "all" | "due_today" | "overdue" | "none";
+
+type NoteAction = (opportunityId: string, note: string) => Promise<{ error?: string }>;
+type CompleteFollowUpAction = (followUpId: string, opportunityId: string) => Promise<{ error?: string } | void>;
+type RescheduleAction = (followUpId: string, opportunityId: string, formData: FormData) => Promise<void>;
 
 export default function AdminCrmClient({
   opportunities,
+  consultationRecords,
   agents,
-  initialCard = "total",
+  onAddNote,
+  onCompleteFollowUp,
+  onReschedule,
 }: {
-  opportunities: CrmOpportunityRow[];
+  opportunities: OpportunityCardRecord[];
+  consultationRecords: ConsultationCardRecord[];
   agents: CrmUserRow[];
-  initialCard?: CardKey;
+  onAddNote: NoteAction;
+  onCompleteFollowUp: CompleteFollowUpAction;
+  onReschedule: RescheduleAction;
 }) {
   const [search, setSearch] = useState("");
-  const [activeCard, setActiveCard] = useState<CardKey>(initialCard);
   const [typeFilter, setTypeFilter] = useState<OpportunityType | "all">("all");
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "all">("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
@@ -76,56 +77,28 @@ export default function AdminCrmClient({
   const agentById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
   const dateRange = useMemo(() => crmResultsDateRange(dateFilter), [dateFilter]);
 
-  // Each card's own count is always computed against the full, unfiltered
-  // roster (matching the old file's stage tiles) - only the table below
-  // reflects every active filter combined.
-  const cardCounts: Record<CardKey, number> = {
-    total: opportunities.length,
-    new: opportunities.filter((o) => o.stage === "New Prospect").length,
-    interested: opportunities.filter((o) => o.stage === "Interested").length,
-    consultations: opportunities.filter((o) => o.stage === "Consultation Booked").length,
-    financing: opportunities.filter(
-      (o) => o.opportunity_type === "business_financing" || o.opportunity_type === "both_services"
-    ).length,
-    leadgen: opportunities.filter(
-      (o) => o.opportunity_type === "lead_generation" || o.opportunity_type === "both_services"
-    ).length,
-    followups: opportunities.filter((o) => isOverdue(o) || isDueToday(o)).length,
-    won: opportunities.filter((o) => o.stage === "Client Won").length,
-  };
-
-  const cards: { key: CardKey; label: string; tone: KpiTone; icon: typeof Users }[] = [
-    { key: "total", label: "Total Prospects", tone: "blue", icon: Users },
-    { key: "new", label: "New Prospects", tone: "indigo", icon: Inbox },
-    { key: "interested", label: "Interested Prospects", tone: "cyan", icon: Eye },
-    { key: "consultations", label: "Consultations Booked", tone: "purple", icon: CalendarCheck },
-    { key: "financing", label: "Financing Opportunities", tone: "amber", icon: DollarSign },
-    { key: "leadgen", label: "Lead Generation Opportunities", tone: "teal", icon: Megaphone },
-    { key: "followups", label: "Follow-Ups Due", tone: "orange", icon: Clock },
-    { key: "won", label: "Clients Won", tone: "green", icon: Trophy },
-  ];
-
-  function passesCard(o: CrmOpportunityRow): boolean {
-    switch (activeCard) {
-      case "new":
-        return o.stage === "New Prospect";
-      case "interested":
-        return o.stage === "Interested";
-      case "consultations":
-        return o.stage === "Consultation Booked";
-      case "financing":
-        return o.opportunity_type === "business_financing" || o.opportunity_type === "both_services";
-      case "leadgen":
-        return o.opportunity_type === "lead_generation" || o.opportunity_type === "both_services";
-      case "followups":
-        return isOverdue(o) || isDueToday(o);
-      case "won":
-        return o.stage === "Client Won";
-      case "total":
-      default:
-        return true;
-    }
-  }
+  // Every card's number IS `records.length` for the exact array passed to
+  // its drill-down modal (CrmCardModal derives the KpiCard's value from
+  // that same array) - so a card's count and what clicking it shows can
+  // never disagree. The table below is a separate, general-purpose browse/
+  // search view (its own manual filters only, no longer tied to which
+  // card was last clicked) for anyone who wants "View Full Record" access
+  // beyond one specific card's records.
+  const newRecords = useMemo(() => opportunities.filter((o) => o.stage === "New Prospect"), [opportunities]);
+  const interestedRecords = useMemo(() => opportunities.filter((o) => o.stage === "Interested"), [opportunities]);
+  const financingRecords = useMemo(
+    () => opportunities.filter((o) => o.opportunity_type === "business_financing" || o.opportunity_type === "both_services"),
+    [opportunities]
+  );
+  const leadgenRecords = useMemo(
+    () => opportunities.filter((o) => o.opportunity_type === "lead_generation" || o.opportunity_type === "both_services"),
+    [opportunities]
+  );
+  const followUpsDueRecords = useMemo(
+    () => sortByMostUrgentFollowUp(opportunities.filter((o) => isOverdue(o) || isDueToday(o))),
+    [opportunities]
+  );
+  const wonRecords = useMemo(() => sortByMostRecentlyWon(opportunities.filter((o) => o.stage === "Client Won")), [opportunities]);
 
   const query = search.trim().toLowerCase();
   const industryQuery = industryFilter.trim().toLowerCase();
@@ -133,7 +106,6 @@ export default function AdminCrmClient({
 
   const filtered = useMemo(() => {
     return opportunities.filter((opportunity) => {
-      if (!passesCard(opportunity)) return false;
       if (typeFilter !== "all" && opportunity.opportunity_type !== typeFilter) return false;
       if (stageFilter !== "all" && opportunity.stage !== stageFilter) return false;
       if (agentFilter !== "all" && (opportunity.assigned_agent_id ?? "unassigned") !== agentFilter) {
@@ -159,34 +131,100 @@ export default function AdminCrmClient({
         (opportunity.email ?? "").toLowerCase().includes(query)
       );
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    opportunities,
-    activeCard,
-    typeFilter,
-    stageFilter,
-    agentFilter,
-    dateRange,
-    industryQuery,
-    locationQuery,
-    followUpStatusFilter,
-    query,
-  ]);
+  }, [opportunities, typeFilter, stageFilter, agentFilter, dateRange, industryQuery, locationQuery, followUpStatusFilter, query]);
 
   return (
     <div id="all-opportunities" className="scroll-mt-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {cards.map((card) => (
-          <KpiCard
-            key={card.key}
-            label={card.label}
-            value={cardCounts[card.key]}
-            tone={card.tone}
-            icon={<card.icon />}
-            active={activeCard === card.key}
-            onClick={() => setActiveCard((current) => (current === card.key ? "total" : card.key))}
-          />
-        ))}
+        <CrmOpportunityRecordsModal
+          label="Total Prospects"
+          tone="blue"
+          icon={<Users />}
+          records={opportunities}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="prospect"
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="New Prospects"
+          tone="indigo"
+          icon={<Inbox />}
+          records={newRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="prospect"
+          emptyMessage="No new prospects right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Interested Prospects"
+          tone="cyan"
+          icon={<Eye />}
+          records={interestedRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="prospect"
+          emptyMessage="No interested prospects right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmConsultationRecordsModal
+          label="Consultations Booked"
+          tone="purple"
+          icon={<CalendarCheck />}
+          records={consultationRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          appointmentsHref="/admin/crm/appointments"
+        />
+        <CrmOpportunityRecordsModal
+          label="Financing Opportunities"
+          tone="amber"
+          icon={<DollarSign />}
+          records={financingRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="opportunity"
+          emptyMessage="No financing opportunities right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Lead Generation Opportunities"
+          tone="teal"
+          icon={<Megaphone />}
+          records={leadgenRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="opportunity"
+          emptyMessage="No lead generation opportunities right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Follow-Ups Due"
+          tone="orange"
+          icon={<Clock />}
+          records={followUpsDueRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="follow-up"
+          emptyMessage="No follow-ups due right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Clients Won"
+          tone="green"
+          icon={<Trophy />}
+          records={wonRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="client"
+          emptyMessage="No clients won yet."
+          onAddNote={onAddNote}
+        />
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">

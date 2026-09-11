@@ -10,11 +10,13 @@ import {
   OPPORTUNITY_TYPE_LABELS,
   isOverdue,
   isDueToday,
-  type CrmOpportunityRow,
   type OpportunityStage,
   type OpportunityType,
 } from "@/lib/crm-types";
-import KpiCard from "@/components/crm-ui/KpiCard";
+import CrmOpportunityRecordsModal from "@/components/crm-ui/CrmOpportunityRecordsModal";
+import CrmConsultationRecordsModal from "@/components/crm-ui/CrmConsultationRecordsModal";
+import { sortByMostRecentlyWon, sortByMostUrgentFollowUp, type OpportunityCardRecord } from "@/lib/crm-dashboard-records";
+import type { ConsultationCardRecord } from "@/lib/winsalot-consultation-data";
 
 type StageFilter = OpportunityStage | "all";
 type TypeFilter = OpportunityType | "all";
@@ -25,95 +27,48 @@ type FollowUpFilter = "all" | "due_today" | "overdue";
 // selling both services is, by definition, also a Lead Generation
 // opportunity and also a Business Financing opportunity), while
 // "both_services" itself is a strict, both-only filter.
-function matchesTypeFilter(opportunity: CrmOpportunityRow, filter: TypeFilter): boolean {
+function matchesTypeFilter(opportunity: { opportunity_type: OpportunityType }, filter: TypeFilter): boolean {
   if (filter === "all") return true;
   if (filter === "both_services") return opportunity.opportunity_type === "both_services";
   return opportunity.opportunity_type === filter || opportunity.opportunity_type === "both_services";
 }
 
-export default function AgentDashboardClient({ opportunities }: { opportunities: CrmOpportunityRow[] }) {
+type NoteAction = (opportunityId: string, note: string) => Promise<{ error?: string }>;
+type CompleteFollowUpAction = (followUpId: string, opportunityId: string) => Promise<{ error?: string } | void>;
+type RescheduleAction = (followUpId: string, opportunityId: string, formData: FormData) => Promise<void>;
+
+export default function AgentDashboardClient({
+  opportunities,
+  consultationRecords,
+  onAddNote,
+  onCompleteFollowUp,
+  onReschedule,
+}: {
+  opportunities: OpportunityCardRecord[];
+  consultationRecords: ConsultationCardRecord[];
+  onAddNote: NoteAction;
+  onCompleteFollowUp: CompleteFollowUpAction;
+  onReschedule: RescheduleAction;
+}) {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("all");
 
-  const newProspects = opportunities.filter((o) => o.stage === "New Prospect").length;
-  const interested = opportunities.filter((o) => o.stage === "Interested").length;
-  const consultationsBooked = opportunities.filter((o) => o.stage === "Consultation Booked").length;
-  const financing = opportunities.filter((o) => matchesTypeFilter(o, "business_financing")).length;
-  const leadGen = opportunities.filter((o) => matchesTypeFilter(o, "lead_generation")).length;
-  const followUpsDue = opportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
-  const clientsWon = opportunities.filter((o) => o.stage === "Client Won").length;
-
-  // Every card both scrolls to the table below AND seeds the same
-  // client-side filter state the manual dropdowns use, so "8 clickable KPI
-  // cards" and "filters over a table" are the same single mechanism rather
-  // than two competing ones.
-  function applyAndScroll(next: Partial<{ stage: StageFilter; type: TypeFilter; followUp: FollowUpFilter }>) {
-    setStageFilter(next.stage ?? "all");
-    setTypeFilter(next.type ?? "all");
-    setFollowUpFilter(next.followUp ?? "all");
-    document.getElementById("my-opportunities")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  const stats = [
-    {
-      label: "Total Prospects",
-      value: opportunities.length,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.total,
-      icon: Users,
-      onClick: () => applyAndScroll({}),
-    },
-    {
-      label: "New Prospects",
-      value: newProspects,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.newProspect,
-      icon: UserPlus,
-      onClick: () => applyAndScroll({ stage: "New Prospect" }),
-    },
-    {
-      label: "Interested Prospects",
-      value: interested,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.interested,
-      icon: Sparkles,
-      onClick: () => applyAndScroll({ stage: "Interested" }),
-    },
-    {
-      label: "Consultations Booked",
-      value: consultationsBooked,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.consultations,
-      icon: CalendarCheck2,
-      onClick: () => applyAndScroll({ stage: "Consultation Booked" }),
-    },
-    {
-      label: "Financing Opportunities",
-      value: financing,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.financing,
-      icon: Landmark,
-      onClick: () => applyAndScroll({ type: "business_financing" }),
-    },
-    {
-      label: "Lead Generation Opportunities",
-      value: leadGen,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.leadGen,
-      icon: Megaphone,
-      onClick: () => applyAndScroll({ type: "lead_generation" }),
-    },
-    {
-      label: "Follow-Ups Due",
-      value: followUpsDue,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.followUp,
-      icon: Clock,
-      onClick: () => applyAndScroll({ followUp: "due_today" }),
-    },
-    {
-      label: "Clients Won",
-      value: clientsWon,
-      tone: CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.won,
-      icon: Trophy,
-      onClick: () => applyAndScroll({ stage: "Client Won" }),
-    },
-  ];
+  // Every card's number IS `records.length` for the exact array passed to
+  // its drill-down modal - so a card's count and what clicking it shows
+  // can never disagree. The table below is a separate, general browse/
+  // search view (its own manual filters only, no longer tied to which
+  // card was last clicked).
+  const newRecords = useMemo(() => opportunities.filter((o) => o.stage === "New Prospect"), [opportunities]);
+  const interestedRecords = useMemo(() => opportunities.filter((o) => o.stage === "Interested"), [opportunities]);
+  const financingRecords = useMemo(() => opportunities.filter((o) => matchesTypeFilter(o, "business_financing")), [opportunities]);
+  const leadGenRecords = useMemo(() => opportunities.filter((o) => matchesTypeFilter(o, "lead_generation")), [opportunities]);
+  const followUpsDueRecords = useMemo(
+    () => sortByMostUrgentFollowUp(opportunities.filter((o) => isOverdue(o) || isDueToday(o))),
+    [opportunities]
+  );
+  const wonRecords = useMemo(() => sortByMostRecentlyWon(opportunities.filter((o) => o.stage === "Client Won")), [opportunities]);
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -135,16 +90,95 @@ export default function AgentDashboardClient({ opportunities }: { opportunities:
   return (
     <div>
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stats.map((stat) => (
-          <KpiCard
-            key={stat.label}
-            onClick={stat.onClick}
-            label={stat.label}
-            value={stat.value}
-            tone={stat.tone}
-            icon={<stat.icon />}
-          />
-        ))}
+        <CrmOpportunityRecordsModal
+          label="Total Prospects"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.total}
+          icon={<Users />}
+          records={opportunities}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="prospect"
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="New Prospects"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.newProspect}
+          icon={<UserPlus />}
+          records={newRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="prospect"
+          emptyMessage="No new prospects right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Interested Prospects"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.interested}
+          icon={<Sparkles />}
+          records={interestedRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="prospect"
+          emptyMessage="No interested prospects right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmConsultationRecordsModal
+          label="Consultations Booked"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.consultations}
+          icon={<CalendarCheck2 />}
+          records={consultationRecords}
+          opportunityHrefBase="/agent/opportunities"
+          appointmentsHref="/agent/appointments"
+        />
+        <CrmOpportunityRecordsModal
+          label="Financing Opportunities"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.financing}
+          icon={<Landmark />}
+          records={financingRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="opportunity"
+          emptyMessage="No financing opportunities right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Lead Generation Opportunities"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.leadGen}
+          icon={<Megaphone />}
+          records={leadGenRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="opportunity"
+          emptyMessage="No lead generation opportunities right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Follow-Ups Due"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.followUp}
+          icon={<Clock />}
+          records={followUpsDueRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="follow-up"
+          emptyMessage="No follow-ups due right now."
+          onAddNote={onAddNote}
+          onCompleteFollowUp={onCompleteFollowUp}
+          onReschedule={onReschedule}
+        />
+        <CrmOpportunityRecordsModal
+          label="Clients Won"
+          tone={CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES.won}
+          icon={<Trophy />}
+          records={wonRecords}
+          opportunityHrefBase="/agent/opportunities"
+          recordNoun="client"
+          emptyMessage="No clients won yet."
+          onAddNote={onAddNote}
+        />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">

@@ -14,12 +14,16 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, CalendarCheck, Clock, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
+import CrmOpportunityRecordsModal from "@/components/crm-ui/CrmOpportunityRecordsModal";
+import CrmConsultationRecordsModal from "@/components/crm-ui/CrmConsultationRecordsModal";
 import { addBoardOpportunityNoteAction } from "./opportunity-finder/actions";
-import { completeFollowUpAction } from "./followup-actions";
+import { completeFollowUpAction, rescheduleFollowUpAction } from "./followup-actions";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { computeCrmAgentPerformance, crmWeeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
+import { buildOpportunityCardRecords, sortByMostRecentlyWon, sortByMostUrgentFollowUp } from "@/lib/crm-dashboard-records";
+import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/lib/winsalot-consultation-data";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -29,15 +33,14 @@ import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 // here from /admin/crm/leads, which is being removed in a separate
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
-export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string; card?: string }> }) {
+export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   await requireCrmAdmin();
-  const { deleted, card } = await searchParams;
-  const initialCard = card === "interested" || card === "consultations" || card === "followups" || card === "won" ? card : "total";
+  const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
-  // crm_followups_admin_all) permits a full read here because this page
-  // is already gated by requireCrmAdmin().
+  // crm_followups_admin_all / winsalot_appointments_admin_all) permits a
+  // full read here because this page is already gated by requireCrmAdmin().
   const [
     { data: opportunities, error: opportunitiesError },
     { data: agents, error: agentsError },
@@ -46,6 +49,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     dialpadData,
     { data: opportunityScores },
     performanceRecords,
+    consultationRecordsRaw,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -70,6 +74,10 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // opportunities already fetched above rather than re-fetching them.
     supabase.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
     getCrmPerformanceRecords(),
+    // Consultations Booked (below) - a genuine winsalot_appointments row
+    // with status='booked', not just an opportunity whose stage happens to
+    // read "Consultation Booked" (see winsalot-consultation-data.ts).
+    getBookedConsultationRecords(supabase),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -83,19 +91,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     else if (effective === "follow_up") scoreCounts.followUp += 1;
     else if (effective === "retry") scoreCounts.retry += 1;
   }
-  // Main KPI row below - the same crm_opportunities rows already fetched
-  // above, just five of the most-used counts surfaced at the top of the
-  // page (matching the Lead Generation CRM dashboard's layout) instead of
-  // only inside AdminCrmClient's fuller 8-card filter grid further down.
-  // Each predicate mirrors AdminCrmClient's own card logic exactly (same
-  // source array, same rules) rather than a second calculation method.
   const allOpportunities = (opportunities ?? []) as CrmOpportunityRow[];
-  const totalOpportunities = allOpportunities.length;
-  const interestedOpportunities = allOpportunities.filter((o) => o.stage === "Interested").length;
-  const consultationsBooked = allOpportunities.filter((o) => o.stage === "Consultation Booked").length;
-  const followUpsDue = allOpportunities.filter((o) => isOverdue(o) || isDueToday(o)).length;
-  const convertedCount = allOpportunities.filter((o) => o.stage === "Client Won").length;
-
   const opportunityById = new Map(allOpportunities.map((opportunity) => [opportunity.id, opportunity]));
   const agentNameById = new Map(activeAgents.map((agent) => [agent.id, agent.full_name || agent.email] as const));
   const earliestFollowUpIdByOpportunity = new Map<string, string>();
@@ -104,6 +100,24 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
     }
   }
+
+  // Main KPI row below (and AdminCrmClient's own fuller 8-card grid
+  // further down) - one enriched copy of every opportunity (agent name,
+  // latest call outcome/note from Opportunity Finder's signals, earliest
+  // pending follow-up id), then each card's own count AND its drill-down
+  // modal's rows are both `.filter()`ed from this exact same array, so a
+  // card's number can never disagree with what clicking it shows.
+  const enrichedOpportunities = buildOpportunityCardRecords(allOpportunities, {
+    scores: scoredOpportunities,
+    followUps: (followUps ?? []) as CrmFollowUpWithOpportunity[],
+    agentNameById,
+  });
+  const interestedRecords = enrichedOpportunities.filter((o) => o.stage === "Interested");
+  const followUpsDueRecords = sortByMostUrgentFollowUp(enrichedOpportunities.filter((o) => isOverdue(o) || isDueToday(o)));
+  const wonRecords = sortByMostRecentlyWon(enrichedOpportunities.filter((o) => o.stage === "Client Won"));
+  // Consultations Booked - a real winsalot_appointments row with
+  // status='booked', not an opportunity stage (see the fetch above).
+  const consultationRecords = sortConsultationsUpcomingFirst(consultationRecordsRaw);
   const smartOpportunities: SmartOpportunityRow[] = scoredOpportunities
     .filter((score) => score.finder_state === "active" && score.category !== "closed")
     .map((score): SmartOpportunityRow | null => {
@@ -142,14 +156,6 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     count: allOpportunities.filter((o) => o.stage === stage).length,
     styleClass: OPPORTUNITY_STAGE_STYLES[stage],
   }));
-
-  const mainStats = [
-    { label: "Total Opportunities", value: totalOpportunities, icon: Users, tone: "blue" as const, href: "/admin/crm?card=total#all-opportunities" },
-    { label: "Interested Opportunities", value: interestedOpportunities, icon: UserCheck, tone: "indigo" as const, href: "/admin/crm?card=interested#all-opportunities" },
-    { label: "Consultations Booked", value: consultationsBooked, icon: CalendarCheck, tone: "green" as const, href: "/admin/crm?card=consultations#all-opportunities" },
-    { label: "Follow-Ups Due", value: followUpsDue, icon: Clock, tone: "amber" as const, href: "/admin/crm?card=followups#all-opportunities" },
-    { label: "Clients Won", value: convertedCount, icon: Trophy, tone: "purple" as const, href: "/admin/crm?card=won#all-opportunities" },
-  ];
 
   const performanceGaugeRows = activeAgents.map((agent) => {
     const performance = computeCrmAgentPerformance(performanceRecords, agent.id).current;
@@ -213,9 +219,59 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {mainStats.map((stat) => (
-          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} href={stat.href} />
-        ))}
+        <CrmOpportunityRecordsModal
+          label="Total Opportunities"
+          tone="blue"
+          icon={<Users />}
+          records={enrichedOpportunities}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="opportunity"
+          onAddNote={addBoardOpportunityNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onReschedule={rescheduleFollowUpAction}
+        />
+        <CrmOpportunityRecordsModal
+          label="Interested Opportunities"
+          tone="indigo"
+          icon={<UserCheck />}
+          records={interestedRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="opportunity"
+          emptyMessage="No interested opportunities right now."
+          onAddNote={addBoardOpportunityNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onReschedule={rescheduleFollowUpAction}
+        />
+        <CrmConsultationRecordsModal
+          label="Consultations Booked"
+          tone="green"
+          icon={<CalendarCheck />}
+          records={consultationRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          appointmentsHref="/admin/crm/appointments"
+        />
+        <CrmOpportunityRecordsModal
+          label="Follow-Ups Due"
+          tone="amber"
+          icon={<Clock />}
+          records={followUpsDueRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="follow-up"
+          emptyMessage="No follow-ups due right now."
+          onAddNote={addBoardOpportunityNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onReschedule={rescheduleFollowUpAction}
+        />
+        <CrmOpportunityRecordsModal
+          label="Clients Won"
+          tone="purple"
+          icon={<Trophy />}
+          records={wonRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="client"
+          emptyMessage="No clients won yet."
+          onAddNote={addBoardOpportunityNoteAction}
+        />
       </div>
 
       <h2 className="mt-8 text-lg font-bold text-slate-900">Opportunity Finder</h2>
@@ -224,7 +280,24 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         <KpiCard label="Warm" value={scoreCounts.warm} icon={<Gauge />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.warm} href="/admin/crm/opportunity-finder?category=warm" />
         <KpiCard label="Follow-Up" value={scoreCounts.followUp} icon={<CalendarClock />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.follow_up} href="/admin/crm/opportunity-finder?category=follow_up" />
         <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/admin/crm/opportunity-finder?category=retry" />
-        <KpiCard label="Opportunities Converted" value={convertedCount} icon={<Trophy />} tone="green" href="/admin/crm/opportunity-finder?category=closed" />
+        {/* "Opportunities Converted" is the same definition and the same
+            records as the "Clients Won" card above (stage === "Client
+            Won") - it used to link to the Opportunity Finder's own
+            category=closed filter, which is a different, broader concept
+            (won, not-interested, OR an appointment booked with nothing
+            else outstanding - see opportunity-finder.ts), so a converted
+            count here could disagree with what that page showed. Reusing
+            the exact same wonRecords array fixes that. */}
+        <CrmOpportunityRecordsModal
+          label="Opportunities Converted"
+          tone="green"
+          icon={<Trophy />}
+          records={wonRecords}
+          opportunityHrefBase="/admin/crm/opportunities"
+          recordNoun="client"
+          emptyMessage="No clients won yet."
+          onAddNote={addBoardOpportunityNoteAction}
+        />
       </div>
 
       <SmartOpportunitiesModal
@@ -261,9 +334,12 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       {!opportunitiesError && !agentsError && (
         <div className="mt-6">
           <AdminCrmClient
-            opportunities={(opportunities ?? []) as CrmOpportunityRow[]}
+            opportunities={enrichedOpportunities}
+            consultationRecords={consultationRecords}
             agents={(agents ?? []) as CrmUserRow[]}
-            initialCard={initialCard}
+            onAddNote={addBoardOpportunityNoteAction}
+            onCompleteFollowUp={completeFollowUpAction}
+            onReschedule={rescheduleFollowUpAction}
           />
         </div>
       )}

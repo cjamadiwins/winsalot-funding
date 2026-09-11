@@ -37,7 +37,9 @@ import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
 import { markOpportunityHandledTodayAction } from "../actions";
 import { addBoardOpportunityNoteAction } from "../my-opportunities/actions";
-import { completeOpportunityFollowUpAction } from "../opportunities/[id]/actions";
+import { completeOpportunityFollowUpAction, rescheduleOpportunityFollowUpAction } from "../opportunities/[id]/actions";
+import { buildOpportunityCardRecords } from "@/lib/crm-dashboard-records";
+import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/lib/winsalot-consultation-data";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -58,6 +60,7 @@ export default async function AgentDashboardPage() {
     { data: followUpsData, error: followUpsError },
     { data: attendanceData, error: attendanceError },
     { data: opportunityScores },
+    consultationRecordsRaw,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase
@@ -77,11 +80,18 @@ export default async function AgentDashboardPage() {
     // Opportunity Finder counters, below - RLS (crm_opportunity_scores_agent_select_own)
     // already scopes this to the signed-in agent's own opportunities.
     supabase.from("crm_opportunity_scores").select("*").order("score", { ascending: false }),
+    // Consultations Booked (below) - a genuine winsalot_appointments row
+    // with status='booked' (RLS: winsalot_appointments_agent_select_own
+    // already scopes this to the signed-in agent's own appointments only),
+    // not just an opportunity whose stage happens to read "Consultation
+    // Booked" - see winsalot-consultation-data.ts.
+    getBookedConsultationRecords(supabase),
   ]);
 
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
   const followUps = (followUpsData ?? []) as CrmFollowUpWithOpportunity[];
   const openShift = attendanceError ? null : ((attendanceData ?? null) as AgentAttendanceRow | null);
+  const consultationRecords = sortConsultationsUpcomingFirst(consultationRecordsRaw);
 
   const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
   const scoredOpportunities = (opportunityScores ?? []) as CrmOpportunityScoreRow[];
@@ -100,6 +110,17 @@ export default async function AgentDashboardPage() {
       earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
     }
   }
+  // My Opportunities cards below - one enriched copy of every opportunity
+  // (latest call outcome/note from Opportunity Finder's signals, earliest
+  // pending follow-up id), so each card's own count AND its drill-down
+  // modal's rows are both `.filter()`ed from this exact same array - see
+  // crm-dashboard-records.ts.
+  const enrichedOpportunities = buildOpportunityCardRecords(opportunities, {
+    scores: scoredOpportunities,
+    followUps,
+    agentNameById: new Map([[crmUser.id, agentDisplayName]]),
+  });
+
   const todayKey = opportunityTodayKey();
   const smartOpportunities: SmartOpportunityRow[] = scoredOpportunities
     .filter((score) => score.finder_state === "active" && score.category !== "closed" && score.handled_on !== todayKey)
@@ -200,7 +221,15 @@ export default async function AgentDashboardPage() {
         </p>
       )}
 
-      {!opportunitiesError && <AgentDashboardClient opportunities={opportunities} />}
+      {!opportunitiesError && (
+        <AgentDashboardClient
+          opportunities={enrichedOpportunities}
+          consultationRecords={consultationRecords}
+          onAddNote={addBoardOpportunityNoteAction}
+          onCompleteFollowUp={completeOpportunityFollowUpAction}
+          onReschedule={rescheduleOpportunityFollowUpAction}
+        />
+      )}
 
       {/* 2. Dashboard and performance */}
       <div className="flex flex-wrap items-center justify-between gap-4">
