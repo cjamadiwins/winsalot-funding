@@ -36,6 +36,10 @@ export default function AppointmentEmailActions({
   appointmentTime,
   timezone,
   latestEmail,
+  confirmationStatus,
+  confirmationError,
+  smsConfirmationStatus,
+  smsConfirmationError,
   automaticReminderStatus24h,
   automaticReminderError24h,
   automaticReminderStatus1h,
@@ -61,6 +65,13 @@ export default function AppointmentEmailActions({
   // most recent appointment-email status to both administrators and the
   // assigned agent").
   latestEmail?: LeadgenEmailRow | null;
+  // Immediate booking confirmation status (email + SMS) - the single
+  // confirmation send that already happened synchronously at booking
+  // time, distinct from the 24h/1h automatic reminders below.
+  confirmationStatus?: string | null;
+  confirmationError?: string | null;
+  smsConfirmationStatus?: string | null;
+  smsConfirmationError?: string | null;
   // Server-computed labels for the automatic 24-hour and 1-hour prospect
   // reminders (brief "EMAIL TRACKING": "Show: Scheduled / Sent /
   // Delivered / Bounced / Failed") - "Scheduled" means eligible and not
@@ -82,8 +93,11 @@ export default function AppointmentEmailActions({
   // Gates the "Count this as the 24-hour reminder" checkbox (brief
   // MANUAL CONTROLS: admin-only).
   isAdmin?: boolean;
-  onResend: (appointmentId: string) => Promise<{ error?: string } | void>;
-  onReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
+  // message carries the SMS-side outcome (e.g. "SMS sent." / "SMS not
+  // sent (no phone number on file).") - the email side is always
+  // implied by a successful result, same as before.
+  onResend: (appointmentId: string) => Promise<{ error?: string; message?: string } | void>;
+  onReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string; message?: string } | void>;
 }) {
   const [mode, setMode] = useState<"resend" | "reminder" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -116,6 +130,24 @@ export default function AppointmentEmailActions({
       {latestEmail && (
         <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[latestEmail.status]}`}>
           Last appointment email: {LEADGEN_EMAIL_STATUS_LABELS[latestEmail.status]} ({new Date(leadgenEmailStatusAt(latestEmail)).toLocaleString()})
+        </span>
+      )}
+
+      {confirmationStatus && (
+        <span
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          title={confirmationError ?? undefined}
+        >
+          Email confirmation: {confirmationStatus}
+        </span>
+      )}
+
+      {smsConfirmationStatus && (
+        <span
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsConfirmationStatus] ?? SMS_STATUS_STYLE.default}`}
+          title={smsConfirmationError ?? undefined}
+        >
+          SMS confirmation: {smsConfirmationStatus}
         </span>
       )}
 
@@ -169,8 +201,9 @@ export default function AppointmentEmailActions({
           showCountAsAutomaticReminder={isAdmin}
           onClose={() => setMode(null)}
           onConfirm={(countAsAutomaticReminder) => (mode === "reminder" ? onReminder(appointmentId, countAsAutomaticReminder) : onResend(appointmentId))}
-          onSent={() => {
-            setMessage(mode === "reminder" ? "Reminder sent." : "Confirmation resent.");
+          onSent={(result) => {
+            const emailPart = mode === "reminder" ? "Reminder sent." : "Confirmation resent.";
+            setMessage(result?.message ? `${emailPart} ${result.message}` : emailPart);
             setMode(null);
           }}
         />

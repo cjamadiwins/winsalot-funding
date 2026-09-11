@@ -1,7 +1,13 @@
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { LeadgenAppointmentRow, LeadgenEmailRow } from "@/lib/leadgen-types";
-import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
+import {
+  fetchLeadgenAppointmentReminderStatusMap,
+  fetchLeadgenAppointmentSmsReminderStatusMap,
+  fetchLeadgenImmediateConfirmationStatusMap,
+  fetchLeadgenImmediateSmsConfirmationStatusMap,
+} from "@/lib/leadgen-appointment-reminders";
 import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
 import AgentAppointmentsListClient from "./AgentAppointmentsListClient";
 
@@ -48,9 +54,30 @@ export default async function LeadgenAgentAppointmentsPage({
     }
   }
 
-  const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(supabase, rows);
-  const businessReminderStatusByAppointmentId = await fetchLeadgenBusinessAppointmentReminderStatusMap(supabase, rows);
-  const smsReminderStatusByAppointmentId = await fetchLeadgenAppointmentSmsReminderStatusMap(supabase, rows);
+  const [automaticReminderStatusByAppointmentId, businessReminderStatusByAppointmentId, smsReminderStatusByAppointmentId, confirmationStatusByAppointmentId, smsConfirmationStatusByAppointmentId] =
+    await Promise.all([
+      fetchLeadgenAppointmentReminderStatusMap(supabase, rows),
+      fetchLeadgenBusinessAppointmentReminderStatusMap(supabase, rows),
+      fetchLeadgenAppointmentSmsReminderStatusMap(supabase, rows),
+      fetchLeadgenImmediateConfirmationStatusMap(supabase, rows),
+      fetchLeadgenImmediateSmsConfirmationStatusMap(supabase, rows),
+    ]);
+
+  // Agent name per card (brief: "Each appointment card must clearly show
+  // ... Agent name") - an agent's own RLS (leadgen_users_select_self)
+  // can only read their own row, so a colleague specialist's name (for
+  // an appointment visible here via a shared lead, not this agent's own
+  // assignment) is resolved via the service-role client instead - this
+  // only enriches appointments already authorized above with a name, it
+  // never widens which appointments this agent can see.
+  const specialistIds = Array.from(new Set(rows.map((a) => a.assigned_specialist_id).filter((id): id is string => !!id)));
+  const { data: specialists } = specialistIds.length
+    ? await getSupabaseAdmin().from("leadgen_users").select("id, full_name, email").in("id", specialistIds)
+    : { data: [] as { id: string; full_name: string; email: string }[] };
+  const agentNameById: Record<string, string> = {};
+  for (const s of specialists ?? []) {
+    agentNameById[s.id] = s.full_name || s.email;
+  }
 
   return (
     <div>
@@ -68,6 +95,9 @@ export default async function LeadgenAgentAppointmentsPage({
         automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
         businessReminderStatusByAppointmentId={businessReminderStatusByAppointmentId}
         smsReminderStatusByAppointmentId={smsReminderStatusByAppointmentId}
+        confirmationStatusByAppointmentId={confirmationStatusByAppointmentId}
+        smsConfirmationStatusByAppointmentId={smsConfirmationStatusByAppointmentId}
+        agentNameById={agentNameById}
         initialClientFilter={client}
         viewingClientName={viewingClient?.name ?? null}
       />

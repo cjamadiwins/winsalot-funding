@@ -17,6 +17,7 @@ import {
 } from "./appointment-sms";
 import {
   winsalotAppointmentOccurrenceKey,
+  winsalotAppointmentTypeCopyLabel,
   winsalotReminderDisplayStatus,
   winsalotReminderErrorDetail,
   winsalotSmsReminderDisplayStatus,
@@ -324,7 +325,12 @@ async function recordWinsalotAppointmentSms(
         recipientType: "prospect",
         toPhoneRaw: appt.phone,
         consentGiven: appt.sms_consent,
-        message: buildProspectReminderSms({ businessName: appt.business_name, reminderType, timeLabel }),
+        message: buildProspectReminderSms({
+          businessName: appt.business_name,
+          reminderType,
+          timeLabel,
+          appointmentTypeLabel: winsalotAppointmentTypeCopyLabel(appt.appointment_type),
+        }),
       }),
     ]);
   }
@@ -440,6 +446,7 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
             contactName: appt.contact_name,
             businessName: appt.business_name,
             serviceType: appt.service_type,
+            appointmentType: appt.appointment_type,
             startUtcIso: appt.appointment_start_at,
             timezone: appt.prospect_timezone || appt.business_timezone,
             rescheduleUrl: `${getSiteUrl()}/book-consultation/reschedule/${rescheduleToken}`,

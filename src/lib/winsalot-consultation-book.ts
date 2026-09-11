@@ -4,7 +4,7 @@ import { fetchWinsalotAvailabilitySettings, fetchWinsalotBlackouts } from "./win
 import { generateWinsalotBookingSlots, isWinsalotSlotOffered, winsalotSlotEndIso } from "./winsalot-consultation-booking";
 import { notifyOfNewWinsalotAppointment, notifyOfWinsalotCancellation, notifyOfWinsalotReschedule } from "./winsalot-consultation-notifications";
 import { fetchWinsalotAppointmentReminderSettings } from "./winsalot-consultation-reminders";
-import { isValidEmail } from "./winsalot-consultation-types";
+import { isValidEmail, winsalotAppointmentTypeCopyLabel, WINSALOT_APPOINTMENT_TYPES, type WinsalotAppointmentType } from "./winsalot-consultation-types";
 import {
   buildCompanyAppointmentBookingSms,
   claimAndSendAppointmentSms,
@@ -37,6 +37,7 @@ export type WinsalotBookingInput = {
   email: string;
   phone: string;
   serviceType: OpportunityType;
+  appointmentType: WinsalotAppointmentType;
   notes: string | null;
   startUtcIso: string;
   prospectTimezone: string | null;
@@ -53,6 +54,7 @@ function validateInput(input: WinsalotBookingInput): string | null {
   if (!input.email.trim() || !isValidEmail(input.email)) return "Enter a valid email address.";
   if (!input.phone.trim()) return "Enter a phone number.";
   if (!OPPORTUNITY_TYPES.includes(input.serviceType)) return "Choose a valid service interest.";
+  if (!WINSALOT_APPOINTMENT_TYPES.includes(input.appointmentType)) return "Choose a valid appointment type.";
   if (!input.startUtcIso || Number.isNaN(new Date(input.startUtcIso).getTime())) return "Choose a date and time.";
   return null;
 }
@@ -154,6 +156,7 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
       // reminder texts..."). Opt-out is still fully honored via STOP.
       sms_consent: isValidMobileNumber(input.phone.trim()),
       service_type: input.serviceType,
+      appointment_type: input.appointmentType,
       notes: input.notes,
       appointment_start_at: input.startUtcIso,
       appointment_end_at: winsalotSlotEndIso(input.startUtcIso),
@@ -209,6 +212,7 @@ export async function performWinsalotBooking(input: WinsalotBookingInput): Promi
     prospectPhone: input.phone.trim(),
     prospectConsent: isValidMobileNumber(input.phone.trim()),
     businessName: "Winsalot Corp.",
+    appointmentTypeLabel: winsalotAppointmentTypeCopyLabel(input.appointmentType),
   });
 
   // Immediate booking SMS to Winsalot Corp's own Company SMS Notification
@@ -403,6 +407,7 @@ export type WinsalotAppointmentEditInput = {
   email: string;
   phone: string;
   serviceType: OpportunityType;
+  appointmentType: WinsalotAppointmentType;
   notes: string;
 };
 
@@ -417,6 +422,7 @@ export async function performWinsalotAppointmentEdit(appointmentId: string, inpu
   if (!input.email.trim() || !isValidEmail(input.email)) return { error: "Enter a valid email address." };
   if (!input.phone.trim()) return { error: "Enter a phone number." };
   if (!OPPORTUNITY_TYPES.includes(input.serviceType)) return { error: "Choose a valid service interest." };
+  if (!WINSALOT_APPOINTMENT_TYPES.includes(input.appointmentType)) return { error: "Choose a valid appointment type." };
 
   const admin = getSupabaseAdmin();
   const { error } = await admin
@@ -430,6 +436,7 @@ export async function performWinsalotAppointmentEdit(appointmentId: string, inpu
       // eligibility follows the new number automatically.
       sms_consent: isValidMobileNumber(input.phone.trim()),
       service_type: input.serviceType,
+      appointment_type: input.appointmentType,
       notes: input.notes.trim() ? input.notes.trim() : null,
       updated_at: new Date().toISOString(),
     })

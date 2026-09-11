@@ -7,9 +7,15 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
-import { claimManualAppointmentReminderSlot, updateLeadgenAppointmentReminderSettings } from "@/lib/leadgen-appointment-reminders";
+import {
+  claimManualAppointmentReminderSlot,
+  describeManualSmsOutcome,
+  fetchLeadgenAppointmentReminderSettings,
+  sendManualLeadgenAppointmentSms,
+  updateLeadgenAppointmentReminderSettings,
+  zonedWallTimeToUtcMs,
+} from "@/lib/leadgen-appointment-reminders";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
-import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
   LEADGEN_APPOINTMENT_STATUSES,
@@ -571,9 +577,30 @@ export async function resendAppointmentNotificationAction(appointmentId: string)
   const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, adminUser, "resend_confirmation");
   if (result.error) return { error: result.error };
 
+  const smsMessage = await sendManualSmsForAction(appointmentId, "resend_confirmation");
+
   revalidatePath("/leadgen/admin/appointments");
   if (result.leadId) revalidatePath(`/leadgen/admin/leads/${result.leadId}`);
-  return {};
+  return { message: smsMessage ?? undefined };
+}
+
+// Shared by resendAppointmentNotificationAction/sendAppointmentReminderAction
+// above - fetches the appointment and current SMS-reminder-enabled
+// setting via the service-role client (the same reasoning as every other
+// admin-notification send in this codebase: this only enriches an
+// appointment the caller has already been authorized to email) and hands
+// off to sendManualLeadgenAppointmentSms, never a new claim/send path of
+// its own.
+async function sendManualSmsForAction(appointmentId: string, kind: "resend_confirmation" | "reminder"): Promise<string | null> {
+  const admin = getSupabaseAdmin();
+  const [{ data: appointment }, settings] = await Promise.all([
+    admin.from("leadgen_appointments").select("*").eq("id", appointmentId).maybeSingle(),
+    fetchLeadgenAppointmentReminderSettings(admin),
+  ]);
+  if (!appointment) return null;
+
+  const result = await sendManualLeadgenAppointmentSms(admin, appointment as LeadgenAppointmentRow, kind, settings.automatic_sms_reminders_enabled);
+  return describeManualSmsOutcome(result);
 }
 
 // countAsAutomaticReminder (brief MANUAL CONTROLS: "unless the
@@ -605,9 +632,11 @@ export async function sendAppointmentReminderAction(appointmentId: string, count
     }
   }
 
+  const smsMessage = await sendManualSmsForAction(appointmentId, "reminder");
+
   revalidatePath("/leadgen/admin/appointments");
   if (result.leadId) revalidatePath(`/leadgen/admin/leads/${result.leadId}`);
-  return {};
+  return { message: smsMessage ?? undefined };
 }
 
 // "ADMIN SETTINGS" (brief): a small on/off toggle plus the reminder

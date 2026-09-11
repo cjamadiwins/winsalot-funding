@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CrmLeadEmailRow } from "@/lib/crm-types";
 import {
+  WINSALOT_APPOINTMENT_TYPES,
+  winsalotAppointmentTypeCopyLabel,
   winsalotReminderDisplayStatus,
   winsalotReminderErrorDetail,
   type WinsalotAppointmentReminderRow,
@@ -70,5 +72,15 @@ describe("Growth CRM appointment reminder display status", () => {
     const bouncedEmail = { ...trackedEmail("bounced"), bounce_reason: "Address rejected" };
     expect(winsalotReminderDisplayStatus(reminder, bouncedEmail, true)).toBe("Bounced");
     expect(winsalotReminderErrorDetail(reminder, bouncedEmail)).toBe("Address rejected");
+  });
+});
+
+describe("Growth CRM appointment type", () => {
+  it("offers Phone Call as an available appointment type", () => {
+    expect(WINSALOT_APPOINTMENT_TYPES).toContain("Phone Call");
+  });
+
+  it("describes a Phone Call appointment correctly for confirmation/reminder copy", () => {
+    expect(winsalotAppointmentTypeCopyLabel("Phone Call")).toBe("phone call appointment");
   });
 });

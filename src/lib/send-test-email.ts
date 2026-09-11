@@ -72,6 +72,7 @@ const SAMPLE_APPOINTMENT_PARAMS = {
   contactName: "Jordan Sample",
   businessName: "Acme Test Co.",
   serviceType: "lead_generation" as const,
+  appointmentType: "Phone Call" as const,
   startUtcIso: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   timezone: "America/Toronto",
   rescheduleUrl: "https://example.com/test-reschedule",
