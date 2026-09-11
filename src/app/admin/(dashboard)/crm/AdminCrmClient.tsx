@@ -73,6 +73,22 @@ export default function AdminCrmClient({
   const [industryFilter, setIndustryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [followUpStatusFilter, setFollowUpStatusFilter] = useState<FollowUpStatusFilter>("all");
+  // Pagination over the same `filtered` array below - purely a display
+  // slice, no change to which records match the filters or how they're
+  // fetched/sorted.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  function clearFilters() {
+    setSearch("");
+    setTypeFilter("all");
+    setStageFilter("all");
+    setAgentFilter("all");
+    setDateFilter("all");
+    setIndustryFilter("");
+    setLocationFilter("");
+    setFollowUpStatusFilter("all");
+  }
 
   const agentById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
   const dateRange = useMemo(() => crmResultsDateRange(dateFilter), [dateFilter]);
@@ -132,6 +148,31 @@ export default function AdminCrmClient({
       );
     });
   }, [opportunities, typeFilter, stageFilter, agentFilter, dateRange, industryQuery, locationQuery, followUpStatusFilter, query]);
+
+  // A filter/search change can shrink the result set out from under the
+  // page the admin was on - jump back to page 1 whenever the filters
+  // themselves change. Adjusting state during render (React's documented
+  // pattern for "derived state that resets on a dependency change")
+  // rather than in a useEffect, which would cause an extra render pass.
+  const filterKey = JSON.stringify([typeFilter, stageFilter, agentFilter, dateRange, industryQuery, locationQuery, followUpStatusFilter, query]);
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = filtered.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    let start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + maxButtons - 1);
+    start = Math.max(1, end - maxButtons + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [totalPages, currentPage]);
 
   return (
     <div id="all-opportunities" className="scroll-mt-6">
@@ -309,27 +350,36 @@ export default function AdminCrmClient({
           <option value="overdue">Overdue</option>
           <option value="none">No follow-up scheduled</option>
         </select>
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="ml-auto rounded-lg border border-slate-300 px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-800"
+        >
+          Clear Filters
+        </button>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-left text-[13px]">
+          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3">Business</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Stage</th>
-              <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3">City</th>
-              <th className="px-4 py-3">Next Follow-up</th>
-              <th className="px-4 py-3">Email Status</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2">Business</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Stage</th>
+              <th className="px-3 py-2">Agent</th>
+              <th className="px-3 py-2">City</th>
+              <th className="px-3 py-2">Next Follow-up</th>
+              <th className="px-3 py-2">Email Status</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((opportunity) => {
+            {pageRows.map((opportunity) => {
               const agent = opportunity.assigned_agent_id ? agentById.get(opportunity.assigned_agent_id) : null;
               const bounced =
                 opportunity.last_email_status === "bounced" || opportunity.last_email_status === "complained";
+              const cityProvince = [opportunity.city, opportunity.province_state].filter(Boolean).join(", ");
               return (
                 <tr
                   key={opportunity.id}
@@ -337,43 +387,43 @@ export default function AdminCrmClient({
                     bounced ? "bg-rose-50" : isOverdue(opportunity) ? "bg-rose-50" : ""
                   }`}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-900">
-                    <Link href={`/admin/crm/opportunities/${opportunity.id}`} className="hover:text-sky-600">
+                  <td className="max-w-[220px] px-3 py-2 font-medium text-slate-900">
+                    <Link href={`/admin/crm/opportunities/${opportunity.id}`} className="line-clamp-2 break-words hover:text-sky-600">
                       {opportunity.business_name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${TYPE_BADGE_STYLES[opportunity.opportunity_type]}`}
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TYPE_BADGE_STYLES[opportunity.opportunity_type]}`}
                     >
                       {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${OPPORTUNITY_STAGE_STYLES[opportunity.stage]}`}
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${OPPORTUNITY_STAGE_STYLES[opportunity.stage]}`}
                     >
                       {opportunity.stage}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{agent?.full_name || agent?.email || "Unassigned"}</td>
-                  <td className="px-4 py-3 text-slate-600">{opportunity.city || "—"}</td>
+                  <td className="px-3 py-2 text-slate-600">{agent?.full_name || agent?.email || "Unassigned"}</td>
+                  <td className="px-3 py-2 text-slate-600">{cityProvince || "—"}</td>
                   <td
-                    className={`px-4 py-3 ${isOverdue(opportunity) ? "font-semibold text-rose-700" : "text-slate-600"}`}
+                    className={`px-3 py-2 ${isOverdue(opportunity) ? "font-semibold text-rose-700" : "text-slate-600"}`}
                   >
                     {opportunity.next_follow_up_at
                       ? new Date(opportunity.next_follow_up_at).toLocaleString()
                       : "—"}
                     {isOverdue(opportunity) && opportunity.next_follow_up_at && (
-                      <div className="text-xs font-normal">
+                      <div className="text-[11px] font-normal">
                         {overdueDurationLabel(opportunity.next_follow_up_at)}
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     {opportunity.last_email_status ? (
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${EMAIL_STATUS_STYLES[opportunity.last_email_status]}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${EMAIL_STATUS_STYLES[opportunity.last_email_status]}`}
                       >
                         {EMAIL_STATUS_LABELS[opportunity.last_email_status]}
                       </span>
@@ -381,10 +431,10 @@ export default function AdminCrmClient({
                       <span className="text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-2 text-right">
                     <Link
                       href={`/admin/crm/opportunities/${opportunity.id}`}
-                      className="inline-flex rounded-full border border-sky-600 px-3 py-1.5 text-xs font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
+                      className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
                     >
                       Manage Prospect
                     </Link>
@@ -395,13 +445,76 @@ export default function AdminCrmClient({
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                   No opportunities match your filters.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
+
+        {filtered.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+            <span>
+              Showing {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} prospect
+              {filtered.length === 1 ? "" : "s"}
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5">
+                <span>Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                >
+                  {[10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                {pageNumbers.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n)}
+                    className={`rounded-md px-2.5 py-1 font-semibold ${
+                      n === currentPage
+                        ? "bg-sky-600 text-white"
+                        : "border border-slate-300 text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
