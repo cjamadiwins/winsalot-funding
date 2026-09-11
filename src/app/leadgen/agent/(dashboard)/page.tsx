@@ -25,7 +25,7 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
-import { completeFollowUpAction } from "./leads/[id]/actions";
+import { completeFollowUpAction, scheduleFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
@@ -35,6 +35,8 @@ import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-ca
 import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
 import { markLeadgenOpportunityHandledTodayAction } from "./actions";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
+import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
+import { buildLeadCardRecords } from "@/lib/leadgen-dashboard-records";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -139,6 +141,26 @@ export default async function LeadgenAgentDashboardPage() {
     else if (effective === "retry") opportunityScoreCounts.retry += 1;
   }
 
+  // Dashboard stat cards below - one enriched copy of every one of this
+  // agent's own leads (latest call outcome/note from Opportunity Finder's
+  // signals, earliest pending follow-up id), so each card's own count AND
+  // its drill-down modal's rows are both `.filter()`ed from this exact
+  // same array (see leadgen-dashboard-records.ts). Due Today/Overdue
+  // reuse the exact same lead-id sets as the `dueToday`/`overdue`
+  // follow-up arrays above, rather than re-deriving from
+  // next_follow_up_at directly, so this modal never disagrees with the
+  // FollowUpGroup lists further down the page.
+  const enrichedLeads = buildLeadCardRecords(myLeads, {
+    scores: scoredLeads,
+    followUps: allFollowUps,
+    agentNameById: new Map([[agent.id, agentDisplayName]]),
+  });
+  const interestedRecords = enrichedLeads.filter((l) => l.status === "Interested");
+  const dueTodayLeadIds = new Set(dueToday.map((f) => f.lead_id));
+  const overdueLeadIds = new Set(overdue.map((f) => f.lead_id));
+  const dueTodayRecords = enrichedLeads.filter((l) => dueTodayLeadIds.has(l.id));
+  const overdueRecords = enrichedLeads.filter((l) => overdueLeadIds.has(l.id));
+
   // Opportunity Pipeline summary card (below) - reuses statusCounts above.
   const pipelineStageCounts = LEADGEN_LEAD_STATUSES.map((status) => ({
     label: status,
@@ -230,33 +252,48 @@ export default async function LeadgenAgentDashboardPage() {
       />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard
-          href="/leadgen/agent/leads"
+        <LeadgenLeadRecordsModal
           label="My Leads"
-          value={String(myLeads.length)}
           tone={LEADGEN_STAT_CARD_STYLES.leads}
           icon={<Users />}
+          records={enrichedLeads}
+          leadHrefBase="/leadgen/agent/leads"
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
         />
-        <KpiCard
-          href="/leadgen/agent/leads?followup=due_today"
+        <LeadgenLeadRecordsModal
           label="Due Today"
-          value={String(dueToday.length)}
           tone={LEADGEN_STAT_CARD_STYLES.dueToday}
           icon={<Clock />}
+          records={dueTodayRecords}
+          leadHrefBase="/leadgen/agent/leads"
+          emptyMessage="No follow-ups due today."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
         />
-        <KpiCard
-          href="/leadgen/agent/leads?followup=overdue"
+        <LeadgenLeadRecordsModal
           label="Overdue"
-          value={String(overdue.length)}
           tone={LEADGEN_STAT_CARD_STYLES.overdue}
           icon={<AlertTriangle />}
+          records={overdueRecords}
+          leadHrefBase="/leadgen/agent/leads"
+          emptyMessage="No overdue follow-ups."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
         />
-        <KpiCard
-          href={`/leadgen/agent/leads?status=${encodeURIComponent("Interested")}`}
+        <LeadgenLeadRecordsModal
           label="Interested"
-          value={String(statusCounts.get("Interested") ?? 0)}
           tone={LEADGEN_STAT_CARD_STYLES.interested}
           icon={<UserCheck />}
+          records={interestedRecords}
+          leadHrefBase="/leadgen/agent/leads"
+          emptyMessage="No interested leads right now."
+          onAddNote={addBoardLeadNoteAction}
+          onCompleteFollowUp={completeFollowUpAction}
+          onScheduleFollowUp={scheduleFollowUpAction}
         />
       </div>
 

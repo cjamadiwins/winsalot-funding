@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import KpiCard, { type KpiTone } from "./KpiCard";
+import KpiCard, { type KpiTone, type KpiTrend } from "./KpiCard";
 
 // Shared chrome for every "click a dashboard stat card, see exactly the
 // records behind that number" drill-down: the KpiCard trigger (its value
@@ -10,11 +10,14 @@ import KpiCard, { type KpiTone } from "./KpiCard";
 // wide, desktop-friendly, in-page modal - same dialog treatment as
 // SmartOpportunitiesModal (max-w-5xl, capped height, internal scroll, no
 // horizontal overflow) so every card's pop-up looks and behaves the same.
+// Used by both the Growth CRM and Lead Generation CRM dashboards so their
+// drill-down cards stay visually and behaviorally identical.
 export default function CrmCardModal({
   label,
   value,
   tone,
   icon,
+  trend,
   title,
   subtitle,
   countLabel,
@@ -24,6 +27,10 @@ export default function CrmCardModal({
   value: number;
   tone: KpiTone;
   icon: ReactNode;
+  // Optional "vs last 7 days" trend row (see KpiCard) - preserves a
+  // dashboard's existing trend sparklines (e.g. Lead Gen's admin cards)
+  // when the card is converted into one of these drill-down modals.
+  trend?: KpiTrend;
   title: string;
   subtitle?: string;
   countLabel: string;
@@ -47,7 +54,7 @@ export default function CrmCardModal({
 
   return (
     <>
-      <KpiCard label={label} value={value} tone={tone} icon={icon} onClick={() => setOpen(true)} />
+      <KpiCard label={label} value={value} tone={tone} icon={icon} trend={trend} onClick={() => setOpen(true)} />
 
       {open && (
         <div
