@@ -52,9 +52,8 @@ export default async function LeadgenLeadsPage({
     admin.from("leadgen_campaigns").select("*").order("name"),
     admin.from("leadgen_users").select("*").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL).order("full_name"),
     // Most recent appointment per lead, for the Appointment Status
-    // column and the "Manage" link beside Delete (below) - ordered
-    // oldest-first so the reduce below keeps the last (most recent) one
-    // per lead_id.
+    // column - ordered oldest-first so the reduce below keeps the last
+    // (most recent) one per lead_id.
     admin.from("leadgen_appointments").select("id, lead_id, status, created_at").order("created_at", { ascending: true }),
     // Most recent tracked email per lead, for the Email Status column -
     // the same leadgen_emails rows/statuses the Client Detail page's
@@ -67,16 +66,8 @@ export default async function LeadgenLeadsPage({
   const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
   const appointmentStatusByLeadId: Record<string, LeadgenAppointmentStatus> = {};
-  // "Manage" (beside "Delete") deep-links into the same appointment
-  // edit panel already on /leadgen/admin/appointments (via ?highlight=)
-  // instead of a second copy of that form here - one editable appointment
-  // form, not two that could drift apart.
-  const appointmentIdByLeadId: Record<string, string> = {};
   for (const appt of appointments ?? []) {
-    if (appt.lead_id) {
-      appointmentStatusByLeadId[appt.lead_id] = appt.status;
-      appointmentIdByLeadId[appt.lead_id] = appt.id;
-    }
+    if (appt.lead_id) appointmentStatusByLeadId[appt.lead_id] = appt.status;
   }
 
   const emailStatusByLeadId: Record<string, LeadgenEmailStatus> = {};
@@ -105,7 +96,6 @@ export default async function LeadgenLeadsPage({
         campaigns={((campaigns ?? []).filter((campaign) => !isHiddenLeadgenCampaignName(campaign.name))) as LeadgenCampaignRow[]}
         agents={(agents ?? []) as LeadgenUserRow[]}
         appointmentStatusByLeadId={appointmentStatusByLeadId}
-        appointmentIdByLeadId={appointmentIdByLeadId}
         emailStatusByLeadId={emailStatusByLeadId}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
         initialStatusFilter={status}

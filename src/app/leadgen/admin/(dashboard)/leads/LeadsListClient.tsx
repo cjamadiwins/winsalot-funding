@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   isLeadgenNextFollowUpDueToday,
   isLeadgenNextFollowUpOverdue,
@@ -21,7 +20,7 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import { leadgenDateKey } from "@/lib/leadgen-performance";
-import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, deleteLeadgenLeadAction, uploadLeadsCsvAction } from "./actions";
+import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 // Compact filter-bar controls only (Add Lead/CSV upload forms keep the
@@ -39,7 +38,6 @@ export default function LeadsListClient({
   campaigns,
   agents,
   appointmentStatusByLeadId,
-  appointmentIdByLeadId,
   emailStatusByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
@@ -59,11 +57,6 @@ export default function LeadsListClient({
   // Most recent appointment status per lead_id, for the Appointment
   // Status column - a lead with no appointment simply has no entry here.
   appointmentStatusByLeadId?: Record<string, LeadgenAppointmentStatus>;
-  // That same most-recent appointment's id per lead_id - powers the
-  // "Manage" link beside "Delete" (only shown when a lead actually has
-  // an appointment to manage), which deep-links to that appointment's
-  // edit panel on /leadgen/admin/appointments.
-  appointmentIdByLeadId?: Record<string, string>;
   // Most recent leadgen_emails.status per lead_id, for the Email Status
   // column - the exact same tracked-email data the Client Detail page's
   // Communications tab already reads, just reduced to the latest status
@@ -107,16 +100,14 @@ export default function LeadsListClient({
   // unscoped "every client" view).
   viewingClientName?: string | null;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showAddForm, setShowAddForm] = useState(!!initialOpenAdd);
   const [uploadResult, setUploadResult] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(initialSuccessMessage ?? null);
+  const successMessage = initialSuccessMessage ?? null;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAgent, setBulkAgent] = useState("");
-  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
 
   const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
   const [clientFilter, setClientFilter] = useState(validInitialClient);
@@ -239,33 +230,6 @@ export default function LeadsListClient({
       else next.add(id);
       return next;
     });
-  }
-
-  async function handleDeleteLead(lead: LeadgenLeadRow) {
-    if (isPending || deletingLeadId) return;
-    if (!confirm("Are you sure you want to permanently delete this lead and all related test data? This action cannot be undone.")) {
-      return;
-    }
-
-    setError(null);
-    setSuccessMessage(null);
-    setDeletingLeadId(lead.id);
-
-    const result = await deleteLeadgenLeadAction(lead.id);
-    if (result.error) {
-      setError(result.error);
-      setDeletingLeadId(null);
-      return;
-    }
-
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(lead.id);
-      return next;
-    });
-    setDeletingLeadId(null);
-    setSuccessMessage("Lead deleted successfully.");
-    router.refresh();
   }
 
   return (
@@ -597,24 +561,16 @@ export default function LeadsListClient({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          {appointmentIdByLeadId?.[lead.id] && (
-                            <Link
-                              href={`/leadgen/admin/appointments?highlight=${appointmentIdByLeadId[lead.id]}`}
-                              className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 hover:bg-sky-100"
-                            >
-                              Manage
-                            </Link>
-                          )}
-                          <button
-                            type="button"
-                            disabled={isPending || deletingLeadId === lead.id}
-                            onClick={() => handleDeleteLead(lead)}
-                            className="rounded-full border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11.5px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
-                          </button>
-                        </div>
+                        {/* Delete lives inside the Manage view (admin-only,
+                            same confirmation/safety logic) - not a primary
+                            row action, so a busy admin can't mis-click it
+                            while scanning the table. */}
+                        <Link
+                          href={`/leadgen/admin/leads/${lead.id}`}
+                          className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 hover:bg-sky-100"
+                        >
+                          Manage
+                        </Link>
                       </td>
                     </tr>
                   ))}
