@@ -32,8 +32,8 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
       score={current.overallPercentage}
       tier={overallTier}
       segments={GROWTH_CRM_GAUGE_SEGMENTS}
-      gaugeSize={260}
-      strokeWidth={15}
+      gaugeSize={380}
+      strokeWidth={19}
       periodLabel={`Week: ${crmWeeklyRangeLabel(current.periodStart, current.periodEnd)}`}
       resultsLine={`${current.consultationsBooked} consultations · ${current.leadsAdded} leads added · ${current.emailsDelivered} emails delivered`}
       tiles={

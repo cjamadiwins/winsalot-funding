@@ -157,7 +157,13 @@ export default function PerformanceRing({
         {segments.map((segment) => {
           const midpoint = (segment.start + segment.end) / 2;
           const position = pointForScore(midpoint, 84);
-          const rotation = 180 - midpoint * 1.8;
+          // Tangent-to-the-arc rotation (not the point's position angle -
+          // that formula used to read 180 - midpoint*1.8, which is off by
+          // a quarter turn and rendered "Needs Improvement" upside down).
+          // Ranges -90deg at score 0 to +90deg at score 100, passing
+          // through 0deg (horizontal) at the very top of the arc (score
+          // 50), so every band label stays readable and right-side up.
+          const rotation = midpoint * 1.8 - 90;
           return (
             <text
               key={`${segment.label}-label`}

@@ -35,7 +35,7 @@ export default function AdminPerformanceGaugeGrid({
       {rows.length === 0 ? (
         <p className="mt-4 text-[13px] text-slate-500">No active agents yet.</p>
       ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div className="mt-5 flex flex-col gap-6">
           {rows.map((row) => (
             <PerformanceScoreCard
               key={row.id}
@@ -45,7 +45,8 @@ export default function AdminPerformanceGaugeGrid({
               segments={segments}
               periodLabel={row.periodLabel}
               resultsLine={row.summary}
-              gaugeSize={220}
+              gaugeSize={340}
+              strokeWidth={16}
             />
           ))}
         </div>
