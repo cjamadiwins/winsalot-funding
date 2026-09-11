@@ -34,14 +34,14 @@ export default function AdminPerformanceGaugeGrid({
       {rows.length === 0 ? (
         <p className="mt-4 text-[13px] text-slate-500">No active agents yet.</p>
       ) : (
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
           {rows.map((row) => (
-            <article key={row.id} className="flex min-w-0 flex-col items-center rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:gap-4">
-              <PerformanceRing percentage={row.score} tier={row.tier} label="Performance Score" size={150} strokeWidth={12} segments={segments} />
+            <article key={row.id} className="flex min-w-0 flex-col items-center rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 shadow-sm sm:flex-row sm:gap-6">
+              <PerformanceRing percentage={row.score} tier={row.tier} label="Performance Score" size={230} strokeWidth={14} segments={segments} />
               <div className="min-w-0 text-center sm:text-left">
-                <h3 className="truncate text-[14px] font-bold text-slate-900">{row.agentName}</h3>
-                <p className="mt-1 text-[12px] font-medium text-slate-600">{row.summary}</p>
-                <p className="mt-1 text-[11.5px] text-slate-500">{row.periodLabel}</p>
+                <h3 className="truncate text-[17px] font-bold text-slate-900">{row.agentName}</h3>
+                <p className="mt-2 text-[13px] font-semibold leading-5 text-slate-700">{row.summary}</p>
+                <p className="mt-1.5 text-[12px] text-slate-500">{row.periodLabel}</p>
               </div>
             </article>
           ))}
