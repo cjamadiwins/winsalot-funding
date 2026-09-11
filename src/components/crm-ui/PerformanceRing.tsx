@@ -85,7 +85,9 @@ export default function PerformanceRing({
 
     let animationFrame = 0;
     const startedAt = performance.now();
-    const duration = 950;
+    // Long enough to be clearly visible after login, while still feeling
+    // quick when the selected week or live score changes.
+    const duration = 1250;
     const animate = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
@@ -101,7 +103,10 @@ export default function PerformanceRing({
   const displayedScore = Math.round(animatedScore);
 
   return (
-    <figure className="m-0 flex shrink-0 flex-col items-center" style={{ width: size }}>
+    <figure
+      className="group m-0 flex shrink-0 flex-col items-center"
+      style={{ width: size }}
+    >
       <svg
         viewBox="0 0 240 148"
         className="block h-auto w-full overflow-visible"
@@ -186,7 +191,18 @@ export default function PerformanceRing({
             transformOrigin: `${CENTER_X}px ${CENTER_Y}px`,
           }}
         >
-          <path d={`M ${CENTER_X - 70} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y - 6} L ${CENTER_X} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y + 6} Z`} fill={color} />
+          {/* A separate inner transform keeps the score animation exact while
+              giving the needle a small, responsive nudge when the user points
+              at or presses anywhere around the gauge. */}
+          <g
+            className="transition-transform duration-300 ease-out group-hover:rotate-[2deg] group-active:rotate-[-1deg] motion-reduce:transform-none motion-reduce:transition-none"
+            style={{
+              transformBox: "view-box",
+              transformOrigin: `${CENTER_X}px ${CENTER_Y}px`,
+            }}
+          >
+            <path d={`M ${CENTER_X - 70} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y - 6} L ${CENTER_X} ${CENTER_Y} L ${CENTER_X - 7} ${CENTER_Y + 6} Z`} fill={color} />
+          </g>
         </g>
         <circle cx={CENTER_X} cy={CENTER_Y} r="29" fill={color} opacity="0.2" />
         <circle cx={CENTER_X} cy={CENTER_Y} r="24" fill={color} />
