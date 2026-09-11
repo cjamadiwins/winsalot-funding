@@ -8,7 +8,7 @@ import {
   crmWeeklyRangeLabel,
   crmPerformanceTier,
 } from "@/lib/crm-performance";
-import { GROWTH_CRM_GAUGE_SEGMENTS, PERFORMANCE_BAND_STYLES } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS, PERFORMANCE_BAND_STYLES } from "@/lib/performance-gauge";
 import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 
 // One color per tier, shared by every percentage badge and progress bar

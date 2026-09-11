@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { TrendingUp } from "lucide-react";
-import PerformanceRing, {
+import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import {
   GROWTH_CRM_GAUGE_SEGMENTS,
   PERFORMANCE_BAND_STYLES,
   performanceBand,
   type PerformanceGaugeSegment,
   type PerformanceTier,
-} from "@/components/crm-ui/PerformanceRing";
+} from "@/lib/performance-gauge";
 import { performanceStatusMessage } from "@/lib/performance-message";
 
 // The single "Agent Performance Score" card shared by every Growth CRM

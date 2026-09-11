@@ -19,7 +19,7 @@ import { completeFollowUpAction } from "./followup-actions";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { computeCrmAgentPerformance, crmWeeklyRangeLabel, crmPerformanceTier } from "@/lib/crm-performance";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
-import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import PerformanceScoreCard from "@/components/crm-ui/PerformanceScoreCard";
-import { GROWTH_CRM_GAUGE_SEGMENTS, type PerformanceGaugeSegment, type PerformanceTier } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS, type PerformanceGaugeSegment, type PerformanceTier } from "@/lib/performance-gauge";
 
 export type AdminPerformanceGaugeRow = {
   id: string;

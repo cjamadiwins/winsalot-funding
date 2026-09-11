@@ -24,7 +24,7 @@ import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/
 import { addBoardLeadNoteAction } from "./opportunity-finder/actions";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
-import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 

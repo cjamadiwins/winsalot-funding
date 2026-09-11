@@ -2,7 +2,7 @@ import { CalendarCheck, Target, Hourglass } from "lucide-react";
 import type { LeadgenAgentPerformance } from "@/lib/leadgen-performance";
 import { leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES } from "@/lib/leadgen-types";
-import { GROWTH_CRM_GAUGE_SEGMENTS, PERFORMANCE_BAND_STYLES, performanceBand } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS, PERFORMANCE_BAND_STYLES, performanceBand } from "@/lib/performance-gauge";
 import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 
 // Renders one agent's Agent Performance Report card - shared by the
