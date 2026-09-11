@@ -100,9 +100,9 @@ function PeriodDetails({ period }: { period: CrmWeeklyPeriodPerformance }) {
         <PerformanceRing
           percentage={period.overallPercentage}
           tier={overallTier}
-          label="of weekly target"
-          size={180}
-          strokeWidth={14}
+          label="Performance Score"
+          size={280}
+          strokeWidth={15}
           segments={GROWTH_CRM_GAUGE_SEGMENTS}
         />
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-2">
