@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { LeadgenEmailStatus, LeadgenLeadRow } from "@/lib/leadgen-types";
+import type { LeadgenAppointmentStatus, LeadgenEmailStatus, LeadgenLeadRow } from "@/lib/leadgen-types";
 import AgentLeadsListClient from "./AgentLeadsListClient";
 
 export default async function LeadgenAgentLeadsPage({
@@ -16,13 +16,16 @@ export default async function LeadgenAgentLeadsPage({
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
   const { status, followup, client } = await searchParams;
-  const [{ data: leads }, { data: clients }] = await Promise.all([
+  const [{ data: leads }, { data: clients }, { data: campaigns }] = await Promise.all([
     supabase
       .from("leadgen_leads")
       .select("*")
       .eq("assigned_agent_id", agent.id)
       .order("next_follow_up_at", { ascending: true, nullsFirst: false }),
     supabase.from("leadgen_clients").select("id, name"),
+    // Agents can already read the full campaign roster (leadgen_campaigns_agent_select)
+    // - same broad read as clients above - only used here to label leads.
+    supabase.from("leadgen_campaigns").select("id, name"),
   ]);
   const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
@@ -49,6 +52,24 @@ export default async function LeadgenAgentLeadsPage({
     }
   }
 
+  // Most recent appointment per lead, for the Appointment Status column -
+  // leadgen_appointments RLS (leadgen_appointments_agent_select_own)
+  // already scopes this agent to only their own leads' appointments.
+  // Ordered oldest-first so the reduce below keeps the last (most recent)
+  // one per lead_id - same convention as the admin leads page.
+  const { data: appointments } = leadIds.length
+    ? await supabase
+        .from("leadgen_appointments")
+        .select("lead_id, status")
+        .in("lead_id", leadIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as { lead_id: string | null; status: LeadgenAppointmentStatus }[] };
+
+  const appointmentStatusByLeadId: Record<string, LeadgenAppointmentStatus> = {};
+  for (const appt of appointments ?? []) {
+    if (appt.lead_id) appointmentStatusByLeadId[appt.lead_id] = appt.status as LeadgenAppointmentStatus;
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -66,11 +87,13 @@ export default async function LeadgenAgentLeadsPage({
       <AgentLeadsListClient
         leads={(leads ?? []) as LeadgenLeadRow[]}
         clients={(clients ?? []) as { id: string; name: string }[]}
+        campaigns={(campaigns ?? []) as { id: string; name: string }[]}
         initialStatusFilter={status}
         initialFollowUpFilter={followup === "due_today" || followup === "overdue" ? followup : undefined}
         initialClientFilter={client}
         viewingClientName={viewingClient?.name ?? null}
         emailStatusByLeadId={emailStatusByLeadId}
+        appointmentStatusByLeadId={appointmentStatusByLeadId}
       />
     </div>
   );

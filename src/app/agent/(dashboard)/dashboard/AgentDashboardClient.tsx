@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Users, UserPlus, Sparkles, CalendarCheck2, Landmark, Megaphone, Clock, Trophy } from "lucide-react";
 import {
   CRM_OPPORTUNITY_DASHBOARD_CARD_STYLES,
+  EMAIL_STATUS_LABELS,
+  EMAIL_STATUS_STYLES,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_STYLES,
   OPPORTUNITY_TYPE_LABELS,
@@ -54,6 +56,11 @@ export default function AgentDashboardClient({
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("all");
+  // Pagination over the same `filtered` array below - a pure display
+  // slice, no change to which opportunities match the filters. Same
+  // approach as the Admin CRM's compact prospect table (AdminCrmClient).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Every card's number IS `records.length` for the exact array passed to
   // its drill-down modal - so a card's count and what clicking it shows
@@ -86,6 +93,31 @@ export default function AgentDashboardClient({
       );
     });
   }, [opportunities, query, stageFilter, typeFilter, followUpFilter]);
+
+  // A filter/search change can shrink the result set out from under the
+  // page the agent was on - jump back to page 1 whenever the filters
+  // themselves change. Adjusting state during render (React's documented
+  // pattern for "derived state that resets on a dependency change")
+  // rather than in a useEffect, which would cause an extra render pass.
+  const filterKey = JSON.stringify([stageFilter, typeFilter, followUpFilter, query]);
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = filtered.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    let start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + maxButtons - 1);
+    start = Math.max(1, end - maxButtons + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [totalPages, currentPage]);
 
   return (
     <div>
@@ -235,70 +267,144 @@ export default function AgentDashboardClient({
           No opportunities match your filters.
         </div>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--color-border)]">
-          <table className="w-full min-w-[720px] text-left text-[13.5px]">
-            <thead className="border-b border-[var(--color-border)] bg-[var(--crm-surface-2)] text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">
-              <tr>
-                <th className="px-4 py-3">Business</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Stage</th>
-                <th className="px-4 py-3">City</th>
-                <th className="px-4 py-3">Next Follow-Up</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((opportunity) => (
-                <tr
-                  key={opportunity.id}
-                  className={`border-b border-[var(--color-border-soft)] last:border-0 hover:bg-[var(--crm-surface-2)] ${
-                    isOverdue(opportunity) ? "bg-red-50" : isDueToday(opportunity) ? "bg-amber-50" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/agent/opportunities/${opportunity.id}`}
-                      className="font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
-                    >
-                      {opportunity.business_name}
-                    </Link>
-                    <div className="text-[12px] text-[var(--color-text-muted)]">
-                      {opportunity.contact_name ? `${opportunity.contact_name} · ` : ""}
-                      {opportunity.phone}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-text-body)]">
-                    {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${OPPORTUNITY_STAGE_STYLES[opportunity.stage]}`}
-                    >
-                      {opportunity.stage}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-text-body)]">{opportunity.city || "—"}</td>
-                  <td className="px-4 py-3">
-                    {opportunity.next_follow_up_at ? (
-                      <span className={isOverdue(opportunity) ? "font-medium text-red-700" : "text-[var(--color-text-body)]"}>
-                        {new Date(opportunity.next_follow_up_at).toLocaleString()}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/agent/opportunities/${opportunity.id}`}
-                      className="inline-flex rounded-full border border-[var(--color-accent)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white"
-                    >
-                      Manage Prospect
-                    </Link>
-                  </td>
+        <div className="mt-6 rounded-xl border border-[var(--color-border)]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--crm-surface-2)] text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">
+                <tr>
+                  <th className="min-w-[180px] px-3 py-2">Business</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Stage</th>
+                  <th className="px-3 py-2">City</th>
+                  <th className="px-3 py-2">Next Follow-Up</th>
+                  <th className="px-3 py-2">Email Status</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageRows.map((opportunity) => (
+                  <tr
+                    key={opportunity.id}
+                    className={`border-b border-[var(--color-border-soft)] last:border-0 hover:bg-[var(--crm-surface-2)] ${
+                      isOverdue(opportunity) ? "bg-red-50" : isDueToday(opportunity) ? "bg-amber-50" : ""
+                    }`}
+                  >
+                    <td className="max-w-[220px] px-3 py-2">
+                      <Link
+                        href={`/agent/opportunities/${opportunity.id}`}
+                        className="line-clamp-2 break-words font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-accent)]"
+                      >
+                        {opportunity.business_name}
+                      </Link>
+                      <div className="truncate text-[11px] text-[var(--color-text-muted)]">
+                        {opportunity.contact_name ? `${opportunity.contact_name} · ` : ""}
+                        {opportunity.phone}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--color-text-body)]">
+                      {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${OPPORTUNITY_STAGE_STYLES[opportunity.stage]}`}
+                      >
+                        {opportunity.stage}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--color-text-body)]">{opportunity.city || "—"}</td>
+                    <td className="px-3 py-2">
+                      {opportunity.next_follow_up_at ? (
+                        <span className={isOverdue(opportunity) ? "font-medium text-red-700" : "text-[var(--color-text-body)]"}>
+                          {new Date(opportunity.next_follow_up_at).toLocaleString()}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {opportunity.last_email_status ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${EMAIL_STATUS_STYLES[opportunity.last_email_status]}`}
+                        >
+                          {EMAIL_STATUS_LABELS[opportunity.last_email_status]}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Link
+                        href={`/agent/opportunities/${opportunity.id}`}
+                        className="inline-flex whitespace-nowrap rounded-full border border-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white"
+                      >
+                        Manage Prospect
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
+            <span>
+              {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} opportunit
+              {filtered.length === 1 ? "y" : "ies"}
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5">
+                <span>Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-2 py-1 text-[12.5px]"
+                >
+                  {[10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                  className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-body)] hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                {pageNumbers.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n)}
+                    className={`rounded-md px-2.5 py-1 font-semibold ${
+                      n === currentPage
+                        ? "bg-[var(--color-accent)] text-white"
+                        : "border border-[var(--color-border)] text-[var(--color-text-body)] hover:border-[var(--color-accent)]"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                  className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-body)] hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
