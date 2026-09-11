@@ -42,6 +42,8 @@ const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text
 
 type LeadOption = Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">;
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+
 export default function AppointmentsListClient({
   appointments,
   clients,
@@ -154,6 +156,45 @@ export default function AppointmentsListClient({
     () => (clientFilter === "all" ? appointments : appointments.filter((a) => a.client_id === clientFilter)),
     [appointments, clientFilter]
   );
+
+  // Pagination over `visibleAppointments` - a pure display slice, no
+  // change to which appointments match the Client filter. Same approach
+  // as the admin Leads table (LeadsListClient).
+  const [pageSize, setPageSize] = useState<number>(25);
+  // A ?highlight=<id> deep link (admin booking-notification email, "My
+  // Appointments" dashboard card) must land on whichever page actually
+  // contains that appointment, or the scroll-into-view effect below would
+  // have nothing to scroll to.
+  const [page, setPage] = useState(() => {
+    if (!highlightId) return 1;
+    const idx = visibleAppointments.findIndex((a) => a.id === highlightId);
+    return idx === -1 ? 1 : Math.floor(idx / pageSize) + 1;
+  });
+
+  // A filter change can shrink the result set out from under the page the
+  // admin was on - jump back to page 1 whenever the filter itself
+  // changes. Adjusting state during render (React's documented pattern
+  // for "derived state that resets on a dependency change") rather than
+  // in a useEffect, which would cause an extra render pass.
+  const filterKey = clientFilter;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visibleAppointments.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = visibleAppointments.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    let start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + maxButtons - 1);
+    start = Math.max(1, end - maxButtons + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [totalPages, currentPage]);
 
   function runAction(fn: () => Promise<{ error?: string; message?: string } | void>, onSuccess?: (message?: string) => void) {
     setError(null);
@@ -490,33 +531,35 @@ export default function AppointmentsListClient({
         </form>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {visibleAppointments.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">
             {appointments.length === 0 ? "No appointments booked yet." : "No appointments match this client."}
           </p>
         ) : (
+          <>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                <th className="p-3">Business</th>
-                <th className="p-3">Client</th>
-                <th className="p-3">Date/Time</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Incentive</th>
-                <th className="p-3">Business Reminder</th>
-                <th className="sticky right-0 z-10 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)]">Actions</th>
+              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                <th className="px-3 py-2">Business</th>
+                <th className="px-3 py-2">Client</th>
+                <th className="px-3 py-2">Date/Time</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Incentive</th>
+                <th className="px-3 py-2">Business Reminder</th>
+                <th className="sticky right-0 z-10 bg-[var(--crm-surface)] px-3 py-2 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)]">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {visibleAppointments.map((appt) => (
+              {pageRows.map((appt) => (
                 <Fragment key={appt.id}>
                   <tr
                     ref={appt.id === highlightId ? highlightRef : undefined}
                     className={`border-b border-slate-100 ${appt.id === highlightId ? "bg-amber-50" : ""}`}
                   >
-                    <td className="p-3 font-semibold text-slate-900">
+                    <td className="px-3 py-2 font-semibold text-slate-900">
                       {appt.lead_id ? (
                         <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
                           {appt.business_name}
@@ -525,24 +568,24 @@ export default function AppointmentsListClient({
                         appt.business_name
                       )}
                     </td>
-                    <td className="p-3 text-slate-600">{clientById.get(appt.client_id)?.name ?? "—"}</td>
-                    <td className="p-3 text-slate-600">
+                    <td className="px-3 py-2 text-slate-600">{clientById.get(appt.client_id)?.name ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-600">
                       {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
                     </td>
-                    <td className="p-3 text-slate-600">{appt.meeting_type}</td>
-                    <td className="p-3">
+                    <td className="px-3 py-2 text-slate-600">{appt.meeting_type}</td>
+                    <td className="px-3 py-2">
                       <span
                         title={appt.status_reason ?? undefined}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
                       >
                         {appt.status}
                       </span>
                     </td>
-                    <td className="p-3">
-                      <div className="flex flex-col items-start gap-1.5">
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col items-start gap-1">
                         <span
                           title={appt.incentive_status_reason ?? undefined}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
                             appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                           }`}
                         >
@@ -555,7 +598,7 @@ export default function AppointmentsListClient({
                                 type="button"
                                 disabled={isPending}
                                 onClick={() => handleVerifyQualified(appt)}
-                                className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 Verify as Qualified
                               </button>
@@ -569,7 +612,7 @@ export default function AppointmentsListClient({
                                   setRejectIncentiveReason("");
                                   setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
                                 }}
-                                className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-full bg-rose-600 px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 Reject
                               </button>
@@ -606,10 +649,10 @@ export default function AppointmentsListClient({
                         )}
                       </div>
                     </td>
-                    <td className="p-3">
+                    <td className="px-3 py-2">
                       {businessReminderStatusByAppointmentId?.[appt.id] && (
                         <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
                             LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                           }`}
                           title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
@@ -619,11 +662,11 @@ export default function AppointmentsListClient({
                       )}
                     </td>
                     <td
-                      className={`sticky right-0 z-10 p-3 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)] ${
+                      className={`sticky right-0 z-10 px-3 py-2 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)] ${
                         appt.id === highlightId ? "bg-amber-50" : "bg-[var(--crm-surface)]"
                       }`}
                     >
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -654,7 +697,7 @@ export default function AppointmentsListClient({
                         </button>
                       </div>
                       {(appt.status === "Booked" || appt.status === "Confirmed") && (
-                        <div className="mt-2.5">
+                        <div className="mt-2">
                           <AppointmentEmailActions
                             appointmentId={appt.id}
                             businessName={appt.business_name}
@@ -888,6 +931,66 @@ export default function AppointmentsListClient({
               ))}
             </tbody>
           </table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+            <span>
+              {pageStart + 1}–{Math.min(pageStart + pageSize, visibleAppointments.length)} of {visibleAppointments.length} appointment
+              {visibleAppointments.length === 1 ? "" : "s"}
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5">
+                <span>Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                {pageNumbers.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n)}
+                    className={`rounded-md px-2.5 py-1 font-semibold ${
+                      n === currentPage ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          </div>
+          </>
         )}
       </div>
     </div>

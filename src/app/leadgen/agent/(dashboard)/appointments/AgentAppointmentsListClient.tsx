@@ -19,6 +19,8 @@ import { resendAppointmentNotificationAction, sendAppointmentReminderAction } fr
 
 type LeadContact = { email: string | null; contact_name: string | null };
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+
 export default function AgentAppointmentsListClient({
   appointments,
   clients,
@@ -62,6 +64,37 @@ export default function AgentAppointmentsListClient({
     [appointments, clientFilter]
   );
 
+  // Pagination over `visibleAppointments` - a pure display slice, no
+  // change to which appointments match the Client filter. Same approach
+  // as the admin Appointments table.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+
+  // A filter change can shrink the result set out from under the page
+  // the agent was on - jump back to page 1 whenever the filter itself
+  // changes. Adjusting state during render (React's documented pattern
+  // for "derived state that resets on a dependency change") rather than
+  // in a useEffect, which would cause an extra render pass.
+  const filterKey = clientFilter;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visibleAppointments.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = visibleAppointments.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    let start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + maxButtons - 1);
+    start = Math.max(1, end - maxButtons + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [totalPages, currentPage]);
+
   return (
     <div>
       {viewingClientName && (
@@ -90,32 +123,34 @@ export default function AgentAppointmentsListClient({
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {visibleAppointments.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">
             {appointments.length === 0 ? "No appointments yet." : "No appointments match this client."}
           </p>
         ) : (
+          <>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                <th className="p-3">Business</th>
-                {showClientFilter && <th className="p-3">Client</th>}
-                <th className="p-3">Date/Time</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Incentive</th>
-                <th className="p-3">Business Reminder</th>
-                <th className="p-3">Lead</th>
-                <th className="p-3">Actions</th>
+              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                <th className="px-3 py-2">Business</th>
+                {showClientFilter && <th className="px-3 py-2">Client</th>}
+                <th className="px-3 py-2">Date/Time</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Incentive</th>
+                <th className="px-3 py-2">Business Reminder</th>
+                <th className="px-3 py-2">Lead</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {visibleAppointments.map((appt) => {
+              {pageRows.map((appt) => {
               const leadContact = appt.lead_id ? leadContactByLeadId[appt.lead_id] : undefined;
               return (
                 <tr key={appt.id} className="border-b border-slate-100">
-                  <td className="p-3 font-semibold text-slate-900">
+                  <td className="px-3 py-2 font-semibold text-slate-900">
                     {appt.lead_id ? (
                       <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
                         {appt.business_name}
@@ -124,28 +159,28 @@ export default function AgentAppointmentsListClient({
                       appt.business_name
                     )}
                   </td>
-                  {showClientFilter && <td className="p-3 text-slate-600">{clientNameById.get(appt.client_id) ?? "—"}</td>}
-                  <td className="p-3 text-slate-600">
+                  {showClientFilter && <td className="px-3 py-2 text-slate-600">{clientNameById.get(appt.client_id) ?? "—"}</td>}
+                  <td className="px-3 py-2 text-slate-600">
                     {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
                   </td>
-                  <td className="p-3 text-slate-600">{appt.meeting_type}</td>
-                  <td className="p-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                  <td className="px-3 py-2 text-slate-600">{appt.meeting_type}</td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
                   </td>
-                  <td className="p-3">
+                  <td className="px-3 py-2">
                     <span
                       title={appt.incentive_status_reason ?? undefined}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
                         appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                       }`}
                     >
                       {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                     </span>
                   </td>
-                  <td className="p-3">
+                  <td className="px-3 py-2">
                     {businessReminderStatusByAppointmentId[appt.id] && (
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
                           LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                         }`}
                         title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
@@ -154,14 +189,14 @@ export default function AgentAppointmentsListClient({
                       </span>
                     )}
                   </td>
-                  <td className="p-3">
+                  <td className="px-3 py-2">
                     {appt.lead_id && (
                       <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="font-semibold text-sky-600 hover:text-sky-700">
                         View Lead
                       </Link>
                     )}
                   </td>
-                  <td className="p-3">
+                  <td className="px-3 py-2">
                     {(appt.status === "Booked" || appt.status === "Confirmed") && (
                       <AppointmentEmailActions
                         appointmentId={appt.id}
@@ -190,6 +225,66 @@ export default function AgentAppointmentsListClient({
             })}
           </tbody>
         </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+          <span>
+            {pageStart + 1}–{Math.min(pageStart + pageSize, visibleAppointments.length)} of {visibleAppointments.length} appointment
+            {visibleAppointments.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-1.5">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+                className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ‹
+              </button>
+              {pageNumbers.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  className={`rounded-md px-2.5 py-1 font-semibold ${
+                    n === currentPage ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-700 hover:border-slate-400"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+                className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        </div>
+        </>
       )}
       </div>
     </div>
