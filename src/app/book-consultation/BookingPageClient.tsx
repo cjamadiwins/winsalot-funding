@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Image from "next/image";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
+import { WINSALOT_APPOINTMENT_TYPES, type WinsalotAppointmentType } from "@/lib/winsalot-consultation-types";
 import { bookWinsalotConsultationAction } from "./actions";
 
 export type WinsalotPrefill = {
@@ -60,6 +61,7 @@ export default function BookingPageClient({
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [phone, setPhone] = useState(prefill?.phone ?? "");
   const [serviceType, setServiceType] = useState<OpportunityType>(prefill?.serviceType ?? "lead_generation");
+  const [appointmentType, setAppointmentType] = useState<WinsalotAppointmentType>("Phone Call");
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -93,6 +95,7 @@ export default function BookingPageClient({
       email,
       phone,
       serviceType,
+      appointmentType,
       notes,
       startUtcIso: selectedSlot,
       prospectTimezone,
@@ -199,6 +202,15 @@ export default function BookingPageClient({
                 {OPPORTUNITY_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {OPPORTUNITY_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </Labeled>
+            <Labeled label="Appointment Type">
+              <select value={appointmentType} onChange={(e) => setAppointmentType(e.target.value as WinsalotAppointmentType)} className={inputClass}>
+                {WINSALOT_APPOINTMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
                   </option>
                 ))}
               </select>

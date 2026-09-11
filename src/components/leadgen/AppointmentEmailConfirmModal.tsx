@@ -41,8 +41,12 @@ export default function AppointmentEmailConfirmModal({
   // change) by every other caller.
   note?: string;
   onClose: () => void;
-  onConfirm: (countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
-  onSent: () => void;
+  onConfirm: (countAsAutomaticReminder: boolean) => Promise<{ error?: string; message?: string } | void>;
+  // Receives the resolved result (e.g. the SMS-side outcome message from
+  // resendAppointmentNotificationAction/sendAppointmentReminderAction) so
+  // the caller can build its own combined success message - optional so
+  // existing callers that only care "it sent" can keep ignoring it.
+  onSent: (result?: { message?: string }) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export default function AppointmentEmailConfirmModal({
       setError(result.error);
       return;
     }
-    onSent();
+    onSent(result ?? undefined);
   }
 
   return (

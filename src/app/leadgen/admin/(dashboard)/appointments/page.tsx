@@ -1,7 +1,13 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
-import { fetchLeadgenAppointmentReminderSettings, fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
+import {
+  fetchLeadgenAppointmentReminderSettings,
+  fetchLeadgenAppointmentReminderStatusMap,
+  fetchLeadgenAppointmentSmsReminderStatusMap,
+  fetchLeadgenImmediateConfirmationStatusMap,
+  fetchLeadgenImmediateSmsConfirmationStatusMap,
+} from "@/lib/leadgen-appointment-reminders";
 import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
 import AppointmentsListClient from "./AppointmentsListClient";
 
@@ -47,9 +53,25 @@ export default async function LeadgenAppointmentsPage({
     }
   }
 
-  const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
-  const businessReminderStatusByAppointmentId = await fetchLeadgenBusinessAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
-  const smsReminderStatusByAppointmentId = await fetchLeadgenAppointmentSmsReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
+  const appointmentRows = (appointments ?? []) as LeadgenAppointmentRow[];
+  const [automaticReminderStatusByAppointmentId, businessReminderStatusByAppointmentId, smsReminderStatusByAppointmentId, confirmationStatusByAppointmentId, smsConfirmationStatusByAppointmentId] =
+    await Promise.all([
+      fetchLeadgenAppointmentReminderStatusMap(admin, appointmentRows),
+      fetchLeadgenBusinessAppointmentReminderStatusMap(admin, appointmentRows),
+      fetchLeadgenAppointmentSmsReminderStatusMap(admin, appointmentRows),
+      fetchLeadgenImmediateConfirmationStatusMap(admin, appointmentRows),
+      fetchLeadgenImmediateSmsConfirmationStatusMap(admin, appointmentRows),
+    ]);
+
+  // Agent name per card (brief: "Each appointment card must clearly show
+  // ... Agent name") - resolved from the same active-agent roster the
+  // "Assigned Specialist" dropdown already offers, so a historical
+  // appointment assigned to a since-deactivated agent simply shows no
+  // name, exactly like that dropdown would no longer offer them either.
+  const agentNameById: Record<string, string> = {};
+  for (const a of (agents ?? []) as LeadgenUserRow[]) {
+    agentNameById[a.id] = a.full_name || a.email;
+  }
 
   return (
     <div>
@@ -66,6 +88,9 @@ export default async function LeadgenAppointmentsPage({
         automaticReminderStatusByAppointmentId={automaticReminderStatusByAppointmentId}
         businessReminderStatusByAppointmentId={businessReminderStatusByAppointmentId}
         smsReminderStatusByAppointmentId={smsReminderStatusByAppointmentId}
+        confirmationStatusByAppointmentId={confirmationStatusByAppointmentId}
+        smsConfirmationStatusByAppointmentId={smsConfirmationStatusByAppointmentId}
+        agentNameById={agentNameById}
         reminderSettings={reminderSettings}
         highlightId={highlight}
         initialClientFilter={client}

@@ -5,6 +5,7 @@ import { performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsal
 import { resolveWinsalotPrefillToken } from "@/lib/winsalot-consultation-tokens";
 import { getClientIpFromHeaders, isRateLimited } from "@/lib/rate-limit";
 import type { OpportunityType } from "@/lib/crm-types";
+import type { WinsalotAppointmentType } from "@/lib/winsalot-consultation-types";
 
 export type BookWinsalotConsultationInput = {
   prefillToken: string | null;
@@ -13,6 +14,7 @@ export type BookWinsalotConsultationInput = {
   email: string;
   phone: string;
   serviceType: OpportunityType;
+  appointmentType: WinsalotAppointmentType;
   notes: string;
   startUtcIso: string;
   prospectTimezone: string;
@@ -44,6 +46,7 @@ export async function bookWinsalotConsultationAction(input: BookWinsalotConsulta
     email: input.email,
     phone: input.phone,
     serviceType: input.serviceType,
+    appointmentType: input.appointmentType,
     notes: input.notes.trim() ? input.notes.trim() : null,
     startUtcIso: input.startUtcIso,
     prospectTimezone: input.prospectTimezone || null,

@@ -1,6 +1,6 @@
 import { escapeHtml } from "./html";
 import type { OpportunityType } from "./crm-types";
-import { winsalotServiceTypeLabel } from "./winsalot-consultation-types";
+import { winsalotAppointmentTypeCopyLabel, winsalotServiceTypeLabel, type WinsalotAppointmentType } from "./winsalot-consultation-types";
 
 // Winsalot-branded email templates for the consultation-booking system.
 // Same plain personal-email visual language as the existing prospect-
@@ -77,6 +77,7 @@ export type ConsultationEmailParams = {
   contactName: string;
   businessName: string;
   serviceType: OpportunityType;
+  appointmentType: WinsalotAppointmentType;
   startUtcIso: string;
   timezone: string; // display timezone - prospect's local when known, else business timezone
   rescheduleUrl?: string;
@@ -93,12 +94,13 @@ export type ConsultationEmailParams = {
 // testSubject() in send-test-email.ts, not from this string.
 export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
+  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
   const subject = "Your appointment with Winsalot Corp.";
 
   const textLines = [
     `Hi ${params.contactName},`,
     "",
-    "Your free 15-minute business consultation with Winsalot Corp has been confirmed.",
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been confirmed.`,
     "",
     `Business: ${params.businessName}`,
     `Date: ${date}`,
@@ -126,7 +128,7 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
   }
 
   const bodyHtml = `
-    ${paragraphsHtml([`Hi ${params.contactName},`, "", "Your free 15-minute business consultation with Winsalot Corp has been confirmed."])}
+    ${paragraphsHtml([`Hi ${params.contactName},`, "", `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been confirmed.`])}
     ${detailsHtml}
     ${paragraphsHtml(["We look forward to learning more about your business and discussing how Winsalot Corp may be able to support your goals."])}
     ${linksHtml}
@@ -150,6 +152,7 @@ export function buildWinsalotInternalBookingNotification(
     `Prospect: ${params.contactName}`,
     `Business: ${params.businessName}`,
     `Service: ${serviceLabel}`,
+    `Appointment Type: ${params.appointmentType}`,
     `Date: ${date}`,
     `Time: ${time} (${timezoneLabel})`,
     `Assigned Agent: ${params.assignedAgentName || "Unassigned"}`,
@@ -163,11 +166,12 @@ export function buildWinsalotInternalBookingNotification(
 
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
+  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
   const subject = "Your appointment with Winsalot Corp has been rescheduled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
-    "Your free 15-minute business consultation with Winsalot Corp has been rescheduled.",
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been rescheduled.`,
     "",
     `Business: ${params.businessName}`,
     `New Date: ${date}`,
@@ -187,7 +191,7 @@ export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): W
   const bodyHtml = `${paragraphsHtml([
     `Hi ${params.contactName},`,
     "",
-    "Your free 15-minute business consultation with Winsalot Corp has been rescheduled.",
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been rescheduled.`,
   ])}${paragraphsHtml([
     `Business: ${params.businessName}`,
     `New Date: ${date}`,
@@ -224,6 +228,7 @@ export function buildWinsalotReminderEmail(
   params: ConsultationEmailParams & { reminderType: "24_hour_reminder" | "1_hour_reminder" }
 ): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
+  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
   const when = params.reminderType === "24_hour_reminder" ? "tomorrow" : "in about 1 hour";
   const subject =
     params.reminderType === "24_hour_reminder"
@@ -233,7 +238,7 @@ export function buildWinsalotReminderEmail(
   const lines = [
     `Hi ${params.contactName},`,
     "",
-    `This is a reminder that your free 15-minute business consultation with Winsalot Corp is ${when}.`,
+    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp is ${when}.`,
     "",
     `Business: ${params.businessName}`,
     `Date: ${date}`,
@@ -250,7 +255,7 @@ export function buildWinsalotReminderEmail(
   const bodyHtml = `${paragraphsHtml([
     `Hi ${params.contactName},`,
     "",
-    `This is a reminder that your free 15-minute business consultation with Winsalot Corp is ${when}.`,
+    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp is ${when}.`,
   ])}${paragraphsHtml([`Business: ${params.businessName}`, `Date: ${date}`, `Time: ${time}`, `Timezone: ${timezoneLabel}`])}${linksHtml}`;
 
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };

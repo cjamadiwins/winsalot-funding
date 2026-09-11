@@ -344,6 +344,7 @@ export async function bookConsultationAction(opportunityId: string, input: BookC
     email: input.email,
     phone: input.phone,
     serviceType: input.serviceType,
+    appointmentType: input.appointmentType,
     notes: input.notes.trim() ? input.notes.trim() : null,
     startUtcIso: input.startUtcIso,
     prospectTimezone: null,

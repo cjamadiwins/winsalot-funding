@@ -125,10 +125,22 @@ function shrinkToFit(build: (name: string) => string, name: string): string {
   return message;
 }
 
-export function buildProspectReminderSms(params: { businessName: string; reminderType: SmsReminderType; timeLabel: string }): string {
+export function buildProspectReminderSms(params: {
+  businessName: string;
+  reminderType: SmsReminderType;
+  timeLabel: string;
+  // Lowercase noun phrase describing the appointment (e.g. "phone call
+  // appointment") - optional so every existing caller (Lead Gen CRM,
+  // and Growth CRM before this parameter existed) keeps its exact
+  // current wording untouched. Growth CRM's own reminder job passes
+  // this explicitly, derived from the appointment's own appointment_type
+  // (see winsalotAppointmentTypeCopyLabel).
+  appointmentTypeLabel?: string;
+}): string {
   const leadTime = params.reminderType === "24_hour_reminder" ? "24 hours" : "1 hour";
+  const typeLabel = params.appointmentTypeLabel ?? "phone call appointment";
   return shrinkToFit(
-    (name) => `Winsalot Corp.: Your phone call appointment with ${name} is in ${leadTime} at ${params.timeLabel}. STOP to opt out.`,
+    (name) => `Winsalot Corp.: Your ${typeLabel} with ${name} is in ${leadTime} at ${params.timeLabel}. STOP to opt out.`,
     params.businessName
   );
 }
@@ -141,9 +153,10 @@ export function formatSmsDateLabel(scheduledMs: number, timeZone: string): strin
   }).format(new Date(scheduledMs));
 }
 
-export function buildAppointmentConfirmationSms(params: { businessName: string; dateLabel: string; timeLabel: string }): string {
+export function buildAppointmentConfirmationSms(params: { businessName: string; dateLabel: string; timeLabel: string; appointmentTypeLabel?: string }): string {
+  const typeLabel = params.appointmentTypeLabel ?? "phone call appointment";
   return shrinkToFit(
-    (name) => `Winsalot Corp.: Your phone call appointment with ${name} is confirmed for ${params.dateLabel} at ${params.timeLabel}. STOP to opt out.`,
+    (name) => `Winsalot Corp.: Your ${typeLabel} with ${name} is confirmed for ${params.dateLabel} at ${params.timeLabel}. STOP to opt out.`,
     params.businessName
   );
 }
@@ -436,6 +449,10 @@ export async function sendImmediateAppointmentConfirmation(
     prospectPhone: string | null;
     prospectConsent: boolean;
     businessName: string;
+    // See buildAppointmentConfirmationSms - optional, defaults to the
+    // existing "phone call appointment" wording for every caller that
+    // doesn't pass it.
+    appointmentTypeLabel?: string;
   }
 ): Promise<{ outcome: SmsOutcome; error?: string; recipientPhone?: string | null }> {
   const scheduledMs = new Date(params.scheduledAppointmentAtIso).getTime();
@@ -456,7 +473,7 @@ export async function sendImmediateAppointmentConfirmation(
     scheduledAppointmentAtIso: params.scheduledAppointmentAtIso,
     toPhoneRaw: params.prospectPhone,
     consentGiven: params.prospectConsent,
-    message: buildAppointmentConfirmationSms({ businessName: params.businessName, dateLabel, timeLabel }),
+    message: buildAppointmentConfirmationSms({ businessName: params.businessName, dateLabel, timeLabel, appointmentTypeLabel: params.appointmentTypeLabel }),
     dryRun: false,
   });
 }

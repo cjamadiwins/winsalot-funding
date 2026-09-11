@@ -81,6 +81,16 @@ describe("buildProspectReminderSms", () => {
     const message = buildProspectReminderSms({ businessName: "   ", reminderType: "24_hour_reminder", timeLabel: "3:00 PM EST" });
     expect(message).toContain("your business");
   });
+
+  it("uses an explicit appointmentTypeLabel override instead of the default 'phone call appointment' wording", () => {
+    const message = buildProspectReminderSms({
+      businessName: "Acme Co",
+      reminderType: "24_hour_reminder",
+      timeLabel: "3:00 PM EST",
+      appointmentTypeLabel: "video call appointment",
+    });
+    expect(message).toBe("Winsalot Corp.: Your video call appointment with Acme Co is in 24 hours at 3:00 PM EST. STOP to opt out.");
+  });
 });
 
 describe("buildAppointmentConfirmationSms", () => {
@@ -102,6 +112,16 @@ describe("buildAppointmentConfirmationSms", () => {
     });
     expect(message.length).toBeLessThanOrEqual(160);
     expect(message.endsWith("STOP to opt out.")).toBe(true);
+  });
+
+  it("uses an explicit appointmentTypeLabel override instead of the default 'phone call appointment' wording", () => {
+    const message = buildAppointmentConfirmationSms({
+      businessName: "Acme Co",
+      dateLabel: "Sep 8",
+      timeLabel: "3:00 PM EDT",
+      appointmentTypeLabel: "video call appointment",
+    });
+    expect(message).toBe("Winsalot Corp.: Your video call appointment with Acme Co is confirmed for Sep 8 at 3:00 PM EDT. STOP to opt out.");
   });
 });
 

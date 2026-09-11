@@ -3,17 +3,27 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { sendLeadgenEmail } from "./leadgen-email";
 import { buildAppointmentEmailBody, buildAppointmentEmailSubject, resolveAppointmentEmailRecipient } from "./leadgen-appointment-emails";
-import { sendAppointmentReminderSmsPair, type SmsOutcome } from "./appointment-sms";
+import {
+  buildAppointmentConfirmationSms,
+  buildProspectReminderSms,
+  claimAndSendAppointmentSms,
+  formatSmsDateLabel,
+  formatSmsTimeLabel,
+  sendAppointmentReminderSmsPair,
+  type SmsOutcome,
+} from "./appointment-sms";
 import {
   isValidEmail,
   leadgenAppointmentOccurrenceKey,
   leadgenAppointmentReminderDisplayStatus,
   leadgenAppointmentReminderErrorDetail,
   leadgenSmsReminderDisplayStatus,
+  type LeadgenAppointmentReminderDisplayStatus,
   type LeadgenAppointmentReminderRow,
   type LeadgenAppointmentReminderSettingsRow,
   type LeadgenAppointmentReminderStatusEntry,
   type LeadgenAppointmentReminderType,
+  type LeadgenSmsReminderDisplayStatus,
   type LeadgenAppointmentRow,
   type LeadgenAppointmentSmsReminderRow,
   type LeadgenEmailRow,
@@ -741,6 +751,89 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
 }
 
 // ---------------------------------------------------------------------
+// Manual SMS counterpart to "Resend Appointment Notification" / "Send
+// Appointment Reminder" (sendLeadgenAppointmentEmail in
+// leadgen-appointment-emails.ts handles the email half of both buttons).
+// Reuses the exact same claim/send/record machinery as every automatic
+// SMS reminder (claimAndSendAppointmentSms, leadgen_appointment_sms_reminders,
+// the same buildAppointmentConfirmationSms/buildProspectReminderSms
+// templates the automatic job and the immediate booking confirmation
+// already use) - never a new table, sender, or template. Only the
+// occurrence_key differs: a fresh, always-unique one per click, so an
+// admin/agent's explicit manual send is never silently swallowed by the
+// "already claimed this occurrence" dedup that exists to stop the
+// automatic cron job from double-sending. This also means a manual send
+// never appears in - and never interferes with - the 24h/1h automatic
+// reminder status badges, which stay derived purely from the automatic
+// job's own claims.
+// ---------------------------------------------------------------------
+
+export type ManualSmsOutcome = SmsOutcome | "disabled";
+export type ManualSmsResult = { outcome: ManualSmsOutcome; error?: string };
+
+export async function sendManualLeadgenAppointmentSms(
+  admin: SupabaseClient,
+  appointment: LeadgenAppointmentRow,
+  kind: "resend_confirmation" | "reminder",
+  automaticSmsRemindersEnabled: boolean
+): Promise<ManualSmsResult> {
+  if (!automaticSmsRemindersEnabled) return { outcome: "disabled" };
+
+  const scheduledMs = zonedWallTimeToUtcMs(appointment.appointment_date, appointment.appointment_time, appointment.timezone);
+  const timeLabel = formatSmsTimeLabel(scheduledMs, appointment.timezone);
+  const message =
+    kind === "resend_confirmation"
+      ? buildAppointmentConfirmationSms({ businessName: appointment.business_name, dateLabel: formatSmsDateLabel(scheduledMs, appointment.timezone), timeLabel })
+      : buildProspectReminderSms({ businessName: appointment.business_name, reminderType: "24_hour_reminder", timeLabel });
+
+  const result = await claimAndSendAppointmentSms(admin, {
+    table: "leadgen_appointment_sms_reminders",
+    appointmentId: appointment.id,
+    leadId: appointment.lead_id,
+    reminderType: kind === "resend_confirmation" ? "24_hour_reminder" : "1_hour_reminder",
+    recipientType: "prospect",
+    occurrenceKey: `manual_${kind}:${Date.now()}`,
+    scheduledAppointmentAtIso: new Date(scheduledMs).toISOString(),
+    toPhoneRaw: appointment.phone,
+    consentGiven: appointment.sms_consent,
+    message,
+    dryRun: false,
+  });
+
+  return { outcome: result.outcome, error: result.error };
+}
+
+// Human-readable one-liner for the button's own success/failure message
+// (brief: "Show a clear success or failure message"). Returns null for
+// "disabled" so the caller can omit any SMS mention entirely when the
+// automatic_sms_reminders_enabled toggle is off - unrelated to
+// isValidMobileNumber, which is only used by callers deciding whether to
+// attempt a send at all elsewhere in this codebase.
+export function describeManualSmsOutcome(result: ManualSmsResult): string | null {
+  switch (result.outcome) {
+    case "disabled":
+      return null;
+    case "sent":
+      return "SMS sent.";
+    case "failed":
+      return `SMS failed${result.error ? `: ${result.error}` : "."}`;
+    case "skipped_no_consent":
+      return "SMS not sent (no SMS consent on file).";
+    case "skipped_no_phone":
+      return "SMS not sent (no phone number on file).";
+    case "skipped_invalid_phone":
+      return "SMS not sent (phone number on file is invalid).";
+    case "skipped_opted_out":
+      return "SMS not sent (this number has opted out).";
+    case "skipped_claimed_elsewhere":
+    case "would_send":
+      return "SMS not sent (already in progress).";
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------
 // Display status for the UI (brief EMAIL TRACKING: "Show: Scheduled /
 // Sent / Delivered / Bounced / Failed... visible to both administrators
 // and the assigned agent")
@@ -857,4 +950,129 @@ export async function fetchLeadgenAppointmentSmsReminderStatusMap(
   }
 
   return statusByAppointmentId;
+}
+
+// ---------------------------------------------------------------------
+// Immediate booking confirmation status (email + SMS) - a separate
+// concept from the 24h/1h automatic reminders above: it reflects the
+// single confirmation send that already happens synchronously at
+// booking time (notifyOfNewLeadgenAppointment / sendImmediateAppointmentConfirmation),
+// not a scheduled future send. Reuses the exact same tracked tables
+// (leadgen_emails, leadgen_appointment_sms_reminders) and display-status
+// vocabulary as every other badge in this file - no new table, no new
+// send path.
+// ---------------------------------------------------------------------
+
+export type LeadgenImmediateConfirmationStatusEntry = { status: LeadgenAppointmentReminderDisplayStatus; errorDetail: string | null };
+
+// Identifies the original confirmation email among every leadgen_emails
+// row tied to this appointment (which also include the admin/client-
+// facing notifications, and any later manual "Resend"/"Reminder" sends -
+// all inserted concurrently at booking time via Promise.allSettled, so
+// insertion order alone can't distinguish them) by matching on the
+// prospect's own address and taking the earliest such row: a manual
+// resend can only ever happen after the original synchronous booking
+// notification, so "earliest row addressed to the prospect" is always
+// the real confirmation, never a later resend.
+export async function fetchLeadgenImmediateConfirmationStatusMap(
+  supabase: SupabaseClient,
+  appointments: Pick<LeadgenAppointmentRow, "id" | "email" | "confirmation_sent">[]
+): Promise<Record<string, LeadgenImmediateConfirmationStatusEntry>> {
+  if (appointments.length === 0) return {};
+
+  const appointmentIds = appointments.map((a) => a.id);
+  const { data: emailRows } = await supabase
+    .from("leadgen_emails")
+    .select("*")
+    .in("appointment_id", appointmentIds)
+    .order("created_at", { ascending: true });
+  const emails = (emailRows ?? []) as LeadgenEmailRow[];
+
+  const byAppointmentId = new Map<string, LeadgenEmailRow[]>();
+  for (const email of emails) {
+    if (!email.appointment_id) continue;
+    const list = byAppointmentId.get(email.appointment_id) ?? [];
+    list.push(email);
+    byAppointmentId.set(email.appointment_id, list);
+  }
+
+  const result: Record<string, LeadgenImmediateConfirmationStatusEntry> = {};
+  for (const appt of appointments) {
+    const prospectEmail = appt.email?.trim().toLowerCase();
+    // Already ascending by created_at from the query above - the first
+    // match is the earliest.
+    const confirmationEmail = prospectEmail ? (byAppointmentId.get(appt.id) ?? []).find((e) => e.to_email?.trim().toLowerCase() === prospectEmail) : undefined;
+
+    if (!confirmationEmail) {
+      // confirmation_sent is set only after a real successful send
+      // (notifyOfNewLeadgenAppointment) - if it's true but no tracked
+      // row was found (e.g. legacy data from before leadgen_emails
+      // tracked appointment_id), the send itself is still known-true.
+      result[appt.id] = { status: appt.confirmation_sent ? "Sent" : "Not scheduled", errorDetail: null };
+      continue;
+    }
+
+    let status: LeadgenAppointmentReminderDisplayStatus;
+    let errorDetail: string | null = null;
+    if (confirmationEmail.status === "delivered") {
+      status = "Delivered";
+    } else if (confirmationEmail.status === "bounced" || confirmationEmail.status === "complained") {
+      status = "Bounced";
+      errorDetail = confirmationEmail.bounce_reason;
+    } else if (confirmationEmail.status === "failed") {
+      status = "Failed";
+      errorDetail = confirmationEmail.failure_reason;
+    } else {
+      status = "Sent";
+    }
+
+    result[appt.id] = { status, errorDetail };
+  }
+
+  return result;
+}
+
+export type LeadgenImmediateSmsConfirmationStatusEntry = { status: LeadgenSmsReminderDisplayStatus; errorDetail: string | null };
+
+// SMS counterpart to fetchLeadgenImmediateConfirmationStatusMap above -
+// reads the same "booking_confirmation:<iso>" occurrence key
+// sendImmediateAppointmentConfirmation claims under (see
+// leadgen-appointment-notifications.ts), never the real 24h/1h keys.
+export async function fetchLeadgenImmediateSmsConfirmationStatusMap(
+  supabase: SupabaseClient,
+  appointments: Pick<LeadgenAppointmentRow, "id" | "appointment_date" | "appointment_time" | "timezone">[]
+): Promise<Record<string, LeadgenImmediateSmsConfirmationStatusEntry>> {
+  if (appointments.length === 0) return {};
+
+  const appointmentIds = appointments.map((a) => a.id);
+  const { data: reminderRows } = await supabase
+    .from("leadgen_appointment_sms_reminders")
+    .select("*")
+    .eq("recipient_type", "prospect")
+    .in("appointment_id", appointmentIds);
+  const reminders = (reminderRows ?? []) as LeadgenAppointmentSmsReminderRow[];
+
+  const byAppointmentId = new Map<string, LeadgenAppointmentSmsReminderRow[]>();
+  for (const r of reminders) {
+    const list = byAppointmentId.get(r.appointment_id) ?? [];
+    list.push(r);
+    byAppointmentId.set(r.appointment_id, list);
+  }
+
+  const result: Record<string, LeadgenImmediateSmsConfirmationStatusEntry> = {};
+  for (const appt of appointments) {
+    const occurrenceKey = `booking_confirmation:${new Date(zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone)).toISOString()}`;
+    const confirmationRow = (byAppointmentId.get(appt.id) ?? []).find((r) => r.occurrence_key === occurrenceKey) ?? null;
+
+    // Never "Scheduled" for a missing row - unlike a future 24h/1h
+    // reminder, there's nothing left to schedule for an immediate,
+    // already-past send; a missing row means it never happened (no
+    // phone/consent at booking time, or a pre-this-feature appointment).
+    result[appt.id] = {
+      status: leadgenSmsReminderDisplayStatus(confirmationRow, false),
+      errorDetail: confirmationRow && ["failed", "skipped", "opted_out"].includes(confirmationRow.status) ? confirmationRow.error_detail : null,
+    };
+  }
+
+  return result;
 }

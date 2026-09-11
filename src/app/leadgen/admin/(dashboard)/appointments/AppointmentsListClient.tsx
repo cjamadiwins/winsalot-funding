@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import type { LeadgenImmediateConfirmationStatusEntry, LeadgenImmediateSmsConfirmationStatusEntry } from "@/lib/leadgen-appointment-reminders";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
 import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailConfirmModal";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
@@ -54,6 +55,9 @@ export default function AppointmentsListClient({
   automaticReminderStatusByAppointmentId,
   businessReminderStatusByAppointmentId,
   smsReminderStatusByAppointmentId,
+  confirmationStatusByAppointmentId,
+  smsConfirmationStatusByAppointmentId,
+  agentNameById,
   reminderSettings,
   highlightId,
   initialClientFilter,
@@ -80,6 +84,13 @@ export default function AppointmentsListClient({
   // client-facing (e.g. Brent's Essentials) 24-hour + 1-hour reminder
   // status, distinct from the prospect-facing one above.
   businessReminderStatusByAppointmentId?: Record<string, LeadgenBusinessAppointmentReminderStatusEntry>;
+  // Immediate booking confirmation status (email + SMS) - distinct from
+  // the 24h/1h automatic reminders above.
+  confirmationStatusByAppointmentId?: Record<string, LeadgenImmediateConfirmationStatusEntry>;
+  smsConfirmationStatusByAppointmentId?: Record<string, LeadgenImmediateSmsConfirmationStatusEntry>;
+  // Assigned specialist's display name per appointment id (card field
+  // "Agent name") - resolved server-side from leadgen_users.
+  agentNameById?: Record<string, string>;
   // Current leadgen_appointment_reminder_settings row (brief "ADMIN
   // SETTINGS").
   reminderSettings: LeadgenAppointmentReminderSettingsRow;
@@ -132,7 +143,7 @@ export default function AppointmentsListClient({
     appointmentTime: string;
     timezone: string;
   } | null>(null);
-  const highlightRef = useRef<HTMLTableRowElement>(null);
+  const highlightRef = useRef<HTMLLIElement>(null);
   // Which appointment's inline "Reject" reason box is open, in the
   // Incentive column's quick-review controls below (distinct from
   // `editingId`'s full "Manage" panel).
@@ -538,400 +549,388 @@ export default function AppointmentsListClient({
           </p>
         ) : (
           <>
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
-                <th className="px-3 py-2">Business</th>
-                <th className="px-3 py-2">Client</th>
-                <th className="px-3 py-2">Date/Time</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Incentive</th>
-                <th className="px-3 py-2">Business Reminder</th>
-                <th className="sticky right-0 z-10 bg-[var(--crm-surface)] px-3 py-2 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((appt) => (
-                <Fragment key={appt.id}>
-                  <tr
-                    ref={appt.id === highlightId ? highlightRef : undefined}
-                    className={`border-b border-slate-100 ${appt.id === highlightId ? "bg-amber-50" : ""}`}
-                  >
-                    <td className="px-3 py-2 font-semibold text-slate-900">
-                      {appt.lead_id ? (
-                        <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
-                          {appt.business_name}
-                        </Link>
-                      ) : (
-                        appt.business_name
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{clientById.get(appt.client_id)?.name ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{appt.meeting_type}</td>
-                    <td className="px-3 py-2">
+          <ul className="space-y-3 p-3">
+            {pageRows.map((appt) => (
+              <li
+                key={appt.id}
+                ref={appt.id === highlightId ? highlightRef : undefined}
+                id={`appointment-${appt.id}`}
+                className={`scroll-mt-6 rounded-xl border p-4 ${appt.id === highlightId ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">
+                        {appt.lead_id ? (
+                          <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
+                            {appt.business_name}
+                          </Link>
+                        ) : (
+                          appt.business_name
+                        )}
+                      </span>
                       <span
                         title={appt.status_reason ?? undefined}
                         className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
                       >
                         {appt.status}
                       </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-col items-start gap-1">
-                        <span
-                          title={appt.incentive_status_reason ?? undefined}
-                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                            appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
-                          }`}
-                        >
-                          {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
-                        </span>
-                        {isLeadgenAppointmentCountable(appt.status) && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {appt.incentive_status !== "Qualified" && (
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => handleVerifyQualified(appt)}
-                                className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                Verify as Qualified
-                              </button>
-                            )}
-                            {appt.incentive_status !== "Unqualified" && (
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => {
-                                  setError(null);
-                                  setRejectIncentiveReason("");
-                                  setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
-                                }}
-                                className="rounded-full bg-rose-600 px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                Reject
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {rejectingIncentiveId === appt.id && (
-                          <div className="flex w-56 flex-col gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2">
-                            <input
-                              type="text"
-                              value={rejectIncentiveReason}
-                              onChange={(e) => setRejectIncentiveReason(e.target.value)}
-                              placeholder="Rejection reason (required)"
-                              className="rounded border border-rose-300 px-2 py-1 text-[11.5px] text-slate-900"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => handleConfirmReject(appt)}
-                                className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {isPending ? "Saving…" : "Confirm Reject"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setRejectingIncentiveId(null)}
-                                className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {businessReminderStatusByAppointmentId?.[appt.id] && (
+                      <span
+                        title={appt.incentive_status_reason ?? undefined}
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                          appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                        }`}
+                      >
+                        {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13px] text-slate-600">
+                      Client: {clientById.get(appt.client_id)?.name ?? "—"} · {appt.contact_name || "No contact name"} · {appt.email || "No email"} ·{" "}
+                      {appt.phone || "No phone"}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-slate-600">
+                      {appt.appointment_date} {appt.appointment_time} ({appt.timezone}) · {appt.meeting_type} · Agent:{" "}
+                      {(appt.assigned_specialist_id && agentNameById?.[appt.assigned_specialist_id]) || "Unassigned"}
+                    </p>
+                    {businessReminderStatusByAppointmentId?.[appt.id] && (
+                      <p className="mt-1">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
                             LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                           }`}
                           title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
                         >
-                          {businessReminderStatusByAppointmentId[appt.id].status}
+                          Business Reminder: {businessReminderStatusByAppointmentId[appt.id].status}
                         </span>
-                      )}
-                    </td>
-                    <td
-                      className={`sticky right-0 z-10 px-3 py-2 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.12)] ${
-                        appt.id === highlightId ? "bg-amber-50" : "bg-[var(--crm-surface)]"
-                      }`}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManageResult(null);
+                        setPendingResend(null);
+                        setEditingId(editingId === appt.id ? null : appt.id);
+                      }}
+                      className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
                     >
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setManageResult(null);
-                            setPendingResend(null);
-                            setEditingId(editingId === appt.id ? null : appt.id);
+                      {editingId === appt.id ? "Close" : "Manage"}
+                    </button>
+                    {appt.status !== "Cancelled" && appt.status !== "Replaced" && (
+                      <button
+                        type="button"
+                        onClick={() => setCancelingId(cancelingId === appt.id ? null : appt.id)}
+                        className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        {cancelingId === appt.id ? "Close" : "Cancel/Replace"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isPending || deletingId === appt.id}
+                      onClick={() => handleDeleteAppointment(appt)}
+                      className="text-[12.5px] font-semibold text-rose-700 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deletingId === appt.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+
+                {isLeadgenAppointmentCountable(appt.status) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Weekly Incentive:</span>
+                    {appt.incentive_status !== "Qualified" && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleVerifyQualified(appt)}
+                        className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Verify as Qualified
+                      </button>
+                    )}
+                    {appt.incentive_status !== "Unqualified" && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          setError(null);
+                          setRejectIncentiveReason("");
+                          setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
+                        }}
+                        className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {rejectingIncentiveId === appt.id && (
+                  <div className="mt-2 flex flex-col gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2 sm:w-72">
+                    <input
+                      type="text"
+                      value={rejectIncentiveReason}
+                      onChange={(e) => setRejectIncentiveReason(e.target.value)}
+                      placeholder="Rejection reason (required)"
+                      className="rounded border border-rose-300 px-2 py-1 text-[11.5px] text-slate-900"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleConfirmReject(appt)}
+                        className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isPending ? "Saving…" : "Confirm Reject"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRejectingIncentiveId(null)}
+                        className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(appt.status === "Booked" || appt.status === "Confirmed") && (
+                  <div className="mt-2 border-t border-slate-100 pt-2">
+                    <AppointmentEmailActions
+                      appointmentId={appt.id}
+                      businessName={appt.business_name}
+                      contactName={leadById.get(appt.lead_id ?? "")?.contact_name ?? appt.contact_name}
+                      email={leadById.get(appt.lead_id ?? "")?.email ?? appt.email}
+                      appointmentDate={appt.appointment_date}
+                      appointmentTime={appt.appointment_time}
+                      timezone={appt.timezone}
+                      latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
+                      confirmationStatus={confirmationStatusByAppointmentId?.[appt.id]?.status}
+                      confirmationError={confirmationStatusByAppointmentId?.[appt.id]?.errorDetail}
+                      smsConfirmationStatus={smsConfirmationStatusByAppointmentId?.[appt.id]?.status}
+                      smsConfirmationError={smsConfirmationStatusByAppointmentId?.[appt.id]?.errorDetail}
+                      automaticReminderStatus24h={automaticReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                      automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                      automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                      automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
+                      smsReminderStatus24h={smsReminderStatusByAppointmentId?.[appt.id]?.status24h}
+                      smsReminderError24h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
+                      smsReminderStatus1h={smsReminderStatusByAppointmentId?.[appt.id]?.status1h}
+                      smsReminderError1h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
+                      isAdmin
+                      onResend={resendAppointmentNotificationAction}
+                      onReminder={sendAppointmentReminderAction}
+                    />
+                  </div>
+                )}
+
+                {cancelingId === appt.id && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <form
+                      action={(formData) =>
+                        runAction(() => cancelOrReplaceAppointmentAction(appt.id, formData), () => setCancelingId(null))
+                      }
+                      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                    >
+                      <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                        Use this to correct an invalid appointment (e.g. rebooked because the original contact email
+                        bounced) without deleting the record - it&apos;s excluded from every appointment total, but the
+                        lead and activity history are kept.
+                      </p>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">New Status</span>
+                        <select name="status" defaultValue="Replaced" className={inputClass}>
+                          <option value="Replaced">Replaced (a corrected appointment exists)</option>
+                          <option value="Cancelled">Cancelled (no replacement)</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Reason (optional)</span>
+                        <input
+                          name="reason"
+                          type="text"
+                          placeholder="e.g. Incorrect email—appointment rebooked."
+                          className={inputClass}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={isPending}
+                        className="rounded-full bg-rose-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-rose-700 sm:col-span-2 sm:w-fit"
+                      >
+                        Cancel/Replace Appointment
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {editingId === appt.id && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <form
+                      onSubmit={(e) => handleManageSubmit(appt, e)}
+                      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                    >
+                      <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                        Edits save to this same appointment record - it&apos;s never re-created, so the appointment
+                        count, agent attribution, and any already-reviewed incentive can&apos;t duplicate. Every
+                        changed field is logged to this lead&apos;s activity timeline with its old and new value.
+                      </p>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Business Name</span>
+                        <input name="business_name" required defaultValue={appt.business_name} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Contact Name</span>
+                        <input name="contact_name" defaultValue={appt.contact_name ?? ""} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Phone</span>
+                        <input name="phone" defaultValue={appt.phone ?? ""} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
+                        <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
+                      </label>
+                      <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
+                        <input name="appointment_date" type="date" required defaultValue={appt.appointment_date} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Time</span>
+                        <input name="appointment_time" type="time" required defaultValue={appt.appointment_time} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Time Zone</span>
+                        <input name="timezone" required defaultValue={appt.timezone} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Meeting Type</span>
+                        <select name="meeting_type" defaultValue={appt.meeting_type} className={inputClass}>
+                          {LEADGEN_MEETING_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
+                        <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Status</span>
+                        <select name="status" defaultValue={appt.status} className={inputClass}>
+                          {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
+                        <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
+                          <option value="">Unassigned</option>
+                          {agents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.full_name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Incentive Status</span>
+                        <select name="incentive_status" defaultValue={appt.incentive_status ?? ""} className={inputClass}>
+                          <option value="">{LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}</option>
+                          {LEADGEN_APPOINTMENT_INCENTIVE_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-slate-600">
+                          Incentive Reason (required unless Qualified/Not Reviewed)
+                        </span>
+                        <input
+                          name="incentive_status_reason"
+                          type="text"
+                          defaultValue={appt.incentive_status_reason ?? ""}
+                          className={inputClass}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 sm:col-span-2">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Notes</span>
+                        <textarea name="appointment_notes" defaultValue={appt.appointment_notes ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
+                      </label>
+                      <label className="flex flex-col gap-1.5 sm:col-span-2">
+                        <span className="text-[12.5px] font-semibold text-slate-600">Client Feedback</span>
+                        <textarea name="client_feedback" defaultValue={appt.client_feedback ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
+                      </label>
+                      <label className="flex items-center gap-2 text-[13px]">
+                        <input type="hidden" name="confirmation_sent" value={appt.confirmation_sent ? "true" : "false"} />
+                        <input
+                          type="checkbox"
+                          defaultChecked={appt.confirmation_sent}
+                          onChange={(e) => {
+                            const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                            hidden.value = e.currentTarget.checked ? "true" : "false";
                           }}
-                          className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
-                        >
-                          {editingId === appt.id ? "Close" : "Manage"}
-                        </button>
-                        {appt.status !== "Cancelled" && appt.status !== "Replaced" && (
-                          <button
-                            type="button"
-                            onClick={() => setCancelingId(cancelingId === appt.id ? null : appt.id)}
-                            className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
-                          >
-                            {cancelingId === appt.id ? "Close" : "Cancel/Replace"}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isPending || deletingId === appt.id}
-                          onClick={() => handleDeleteAppointment(appt)}
-                          className="text-[12.5px] font-semibold text-rose-700 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {deletingId === appt.id ? "Deleting…" : "Delete"}
-                        </button>
-                      </div>
-                      {(appt.status === "Booked" || appt.status === "Confirmed") && (
-                        <div className="mt-2">
-                          <AppointmentEmailActions
-                            appointmentId={appt.id}
-                            businessName={appt.business_name}
-                            contactName={leadById.get(appt.lead_id ?? "")?.contact_name ?? appt.contact_name}
-                            email={leadById.get(appt.lead_id ?? "")?.email ?? appt.email}
-                            appointmentDate={appt.appointment_date}
-                            appointmentTime={appt.appointment_time}
-                            timezone={appt.timezone}
-                            latestEmail={latestEmailByAppointmentId?.[appt.id] ?? null}
-                            automaticReminderStatus24h={automaticReminderStatusByAppointmentId?.[appt.id]?.status24h}
-                            automaticReminderError24h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
-                            automaticReminderStatus1h={automaticReminderStatusByAppointmentId?.[appt.id]?.status1h}
-                            automaticReminderError1h={automaticReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
-                            smsReminderStatus24h={smsReminderStatusByAppointmentId?.[appt.id]?.status24h}
-                            smsReminderError24h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail24h}
-                            smsReminderStatus1h={smsReminderStatusByAppointmentId?.[appt.id]?.status1h}
-                            smsReminderError1h={smsReminderStatusByAppointmentId?.[appt.id]?.errorDetail1h}
-                            isAdmin
-                            onResend={resendAppointmentNotificationAction}
-                            onReminder={sendAppointmentReminderAction}
-                          />
-                        </div>
+                        />
+                        Confirmation sent
+                      </label>
+                      <label className="flex items-center gap-2 text-[13px]">
+                        <input type="hidden" name="send_updated_confirmation" value="false" />
+                        <input
+                          type="checkbox"
+                          onChange={(e) => {
+                            const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                            hidden.value = e.currentTarget.checked ? "true" : "false";
+                          }}
+                        />
+                        Send the updated confirmation to the prospect&apos;s latest saved email (you&apos;ll be asked to
+                        confirm before it sends)
+                      </label>
+                      {manageResult?.id === appt.id && (
+                        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700 sm:col-span-2">
+                          {manageResult.text}
+                        </p>
                       )}
-                    </td>
-                  </tr>
-                  {cancelingId === appt.id && (
-                    <tr>
-                      <td colSpan={8} className="bg-rose-50 p-4">
-                        <form
-                          action={(formData) =>
-                            runAction(() => cancelOrReplaceAppointmentAction(appt.id, formData), () => setCancelingId(null))
+                      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+                        {isPending ? "Saving…" : "Save"}
+                      </button>
+                    </form>
+                    {pendingResend?.appointmentId === appt.id && (
+                      <AppointmentEmailConfirmModal
+                        mode="resend"
+                        businessName={pendingResend.businessName}
+                        contactName={pendingResend.contactName}
+                        email={pendingResend.email}
+                        appointmentDate={pendingResend.appointmentDate}
+                        appointmentTime={pendingResend.appointmentTime}
+                        timezone={pendingResend.timezone}
+                        note="Your other edits on this form will be saved at the same time."
+                        onClose={() => setPendingResend(null)}
+                        onConfirm={async () => {
+                          const result = await updateAppointmentAction(pendingResend.appointmentId, pendingResend.formData);
+                          if (!result?.error) {
+                            setManageResult({ id: pendingResend.appointmentId, text: result?.message ?? "Appointment saved and confirmation resent." });
                           }
-                          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-                        >
-                          <p className="text-[12.5px] text-slate-600 sm:col-span-2">
-                            Use this to correct an invalid appointment (e.g. rebooked because the original contact email
-                            bounced) without deleting the record - it&apos;s excluded from every appointment total, but the
-                            lead and activity history are kept.
-                          </p>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">New Status</span>
-                            <select name="status" defaultValue="Replaced" className={inputClass}>
-                              <option value="Replaced">Replaced (a corrected appointment exists)</option>
-                              <option value="Cancelled">Cancelled (no replacement)</option>
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Reason (optional)</span>
-                            <input
-                              name="reason"
-                              type="text"
-                              placeholder="e.g. Incorrect email—appointment rebooked."
-                              className={inputClass}
-                            />
-                          </label>
-                          <button
-                            type="submit"
-                            disabled={isPending}
-                            className="rounded-full bg-rose-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-rose-700 sm:col-span-2 sm:w-fit"
-                          >
-                            Cancel/Replace Appointment
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  )}
-                  {editingId === appt.id && (
-                    <tr>
-                      <td colSpan={8} className="bg-slate-50 p-4">
-                        <form
-                          onSubmit={(e) => handleManageSubmit(appt, e)}
-                          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-                        >
-                          <p className="text-[12.5px] text-slate-600 sm:col-span-2">
-                            Edits save to this same appointment record - it&apos;s never re-created, so the appointment
-                            count, agent attribution, and any already-reviewed incentive can&apos;t duplicate. Every
-                            changed field is logged to this lead&apos;s activity timeline with its old and new value.
-                          </p>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Business Name</span>
-                            <input name="business_name" required defaultValue={appt.business_name} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Contact Name</span>
-                            <input name="contact_name" defaultValue={appt.contact_name ?? ""} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Phone</span>
-                            <input name="phone" defaultValue={appt.phone ?? ""} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
-                            <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
-                          </label>
-                          <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
-                            <input name="appointment_date" type="date" required defaultValue={appt.appointment_date} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Time</span>
-                            <input name="appointment_time" type="time" required defaultValue={appt.appointment_time} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Time Zone</span>
-                            <input name="timezone" required defaultValue={appt.timezone} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Meeting Type</span>
-                            <select name="meeting_type" defaultValue={appt.meeting_type} className={inputClass}>
-                              {LEADGEN_MEETING_TYPES.map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
-                            <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Status</span>
-                            <select name="status" defaultValue={appt.status} className={inputClass}>
-                              {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
-                                <option key={s} value={s}>
-                                  {s}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
-                            <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
-                              <option value="">Unassigned</option>
-                              {agents.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.full_name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Incentive Status</span>
-                            <select name="incentive_status" defaultValue={appt.incentive_status ?? ""} className={inputClass}>
-                              <option value="">{LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}</option>
-                              {LEADGEN_APPOINTMENT_INCENTIVE_STATUSES.map((s) => (
-                                <option key={s} value={s}>
-                                  {s}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1.5">
-                            <span className="text-[12.5px] font-semibold text-slate-600">
-                              Incentive Reason (required unless Qualified/Not Reviewed)
-                            </span>
-                            <input
-                              name="incentive_status_reason"
-                              type="text"
-                              defaultValue={appt.incentive_status_reason ?? ""}
-                              className={inputClass}
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1.5 sm:col-span-2">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Appointment Notes</span>
-                            <textarea name="appointment_notes" defaultValue={appt.appointment_notes ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
-                          </label>
-                          <label className="flex flex-col gap-1.5 sm:col-span-2">
-                            <span className="text-[12.5px] font-semibold text-slate-600">Client Feedback</span>
-                            <textarea name="client_feedback" defaultValue={appt.client_feedback ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
-                          </label>
-                          <label className="flex items-center gap-2 text-[13px]">
-                            <input type="hidden" name="confirmation_sent" value={appt.confirmation_sent ? "true" : "false"} />
-                            <input
-                              type="checkbox"
-                              defaultChecked={appt.confirmation_sent}
-                              onChange={(e) => {
-                                const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
-                                hidden.value = e.currentTarget.checked ? "true" : "false";
-                              }}
-                            />
-                            Confirmation sent
-                          </label>
-                          <label className="flex items-center gap-2 text-[13px]">
-                            <input type="hidden" name="send_updated_confirmation" value="false" />
-                            <input
-                              type="checkbox"
-                              onChange={(e) => {
-                                const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
-                                hidden.value = e.currentTarget.checked ? "true" : "false";
-                              }}
-                            />
-                            Send the updated confirmation to the prospect&apos;s latest saved email (you&apos;ll be asked to
-                            confirm before it sends)
-                          </label>
-                          {manageResult?.id === appt.id && (
-                            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700 sm:col-span-2">
-                              {manageResult.text}
-                            </p>
-                          )}
-                          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
-                            {isPending ? "Saving…" : "Save"}
-                          </button>
-                        </form>
-                        {pendingResend?.appointmentId === appt.id && (
-                          <AppointmentEmailConfirmModal
-                            mode="resend"
-                            businessName={pendingResend.businessName}
-                            contactName={pendingResend.contactName}
-                            email={pendingResend.email}
-                            appointmentDate={pendingResend.appointmentDate}
-                            appointmentTime={pendingResend.appointmentTime}
-                            timezone={pendingResend.timezone}
-                            note="Your other edits on this form will be saved at the same time."
-                            onClose={() => setPendingResend(null)}
-                            onConfirm={async () => {
-                              const result = await updateAppointmentAction(pendingResend.appointmentId, pendingResend.formData);
-                              if (!result?.error) {
-                                setManageResult({ id: pendingResend.appointmentId, text: result?.message ?? "Appointment saved and confirmation resent." });
-                              }
-                              return result;
-                            }}
-                            onSent={() => setPendingResend(null)}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-          </div>
+                          return result;
+                        }}
+                        onSent={() => setPendingResend(null)}
+                      />
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
             <span>

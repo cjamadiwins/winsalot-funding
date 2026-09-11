@@ -14,6 +14,7 @@ import {
   type LeadgenSmsReminderStatusEntry,
   type LeadgenEmailRow,
 } from "@/lib/leadgen-types";
+import type { LeadgenImmediateConfirmationStatusEntry, LeadgenImmediateSmsConfirmationStatusEntry } from "@/lib/leadgen-appointment-reminders";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
 import { resendAppointmentNotificationAction, sendAppointmentReminderAction } from "./actions";
 
@@ -29,6 +30,9 @@ export default function AgentAppointmentsListClient({
   automaticReminderStatusByAppointmentId,
   businessReminderStatusByAppointmentId,
   smsReminderStatusByAppointmentId,
+  confirmationStatusByAppointmentId,
+  smsConfirmationStatusByAppointmentId,
+  agentNameById,
   initialClientFilter,
   viewingClientName,
 }: {
@@ -47,6 +51,13 @@ export default function AgentAppointmentsListClient({
   automaticReminderStatusByAppointmentId: Record<string, LeadgenAppointmentReminderStatusEntry>;
   businessReminderStatusByAppointmentId: Record<string, LeadgenBusinessAppointmentReminderStatusEntry>;
   smsReminderStatusByAppointmentId: Record<string, LeadgenSmsReminderStatusEntry>;
+  // Immediate booking confirmation status (email + SMS) - distinct from
+  // the 24h/1h automatic reminders above.
+  confirmationStatusByAppointmentId?: Record<string, LeadgenImmediateConfirmationStatusEntry>;
+  smsConfirmationStatusByAppointmentId?: Record<string, LeadgenImmediateSmsConfirmationStatusEntry>;
+  // Assigned specialist's display name per appointment id (card field
+  // "Agent name") - resolved server-side.
+  agentNameById?: Record<string, string>;
   // Set by the agent dashboard's "My Results by Client" section via
   // ?client=<id> - pre-selects the Client filter below.
   initialClientFilter?: string;
@@ -130,74 +141,65 @@ export default function AgentAppointmentsListClient({
           </p>
         ) : (
           <>
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
-                <th className="px-3 py-2">Business</th>
-                {showClientFilter && <th className="px-3 py-2">Client</th>}
-                <th className="px-3 py-2">Date/Time</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Incentive</th>
-                <th className="px-3 py-2">Business Reminder</th>
-                <th className="px-3 py-2">Lead</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((appt) => {
+          <ul className="space-y-3 p-3">
+            {pageRows.map((appt) => {
               const leadContact = appt.lead_id ? leadContactByLeadId[appt.lead_id] : undefined;
               return (
-                <tr key={appt.id} className="border-b border-slate-100">
-                  <td className="px-3 py-2 font-semibold text-slate-900">
-                    {appt.lead_id ? (
-                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
-                        {appt.business_name}
-                      </Link>
-                    ) : (
-                      appt.business_name
-                    )}
-                  </td>
-                  {showClientFilter && <td className="px-3 py-2 text-slate-600">{clientNameById.get(appt.client_id) ?? "—"}</td>}
-                  <td className="px-3 py-2 text-slate-600">
-                    {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">{appt.meeting_type}</td>
-                  <td className="px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      title={appt.incentive_status_reason ?? undefined}
-                      className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                        appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
-                      }`}
-                    >
-                      {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    {businessReminderStatusByAppointmentId[appt.id] && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                          LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
-                        }`}
-                        title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
-                      >
-                        {businessReminderStatusByAppointmentId[appt.id].status}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
+                <li key={appt.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-900">
+                          {appt.lead_id ? (
+                            <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
+                              {appt.business_name}
+                            </Link>
+                          ) : (
+                            appt.business_name
+                          )}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                        <span
+                          title={appt.incentive_status_reason ?? undefined}
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                            appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
+                          }`}
+                        >
+                          {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[13px] text-slate-600">
+                        {showClientFilter && <>Client: {clientNameById.get(appt.client_id) ?? "—"} · </>}
+                        {leadContact?.contact_name ?? appt.contact_name ?? "No contact name"} · {leadContact?.email ?? appt.email ?? "No email"} ·{" "}
+                        {appt.phone || "No phone"}
+                      </p>
+                      <p className="mt-0.5 text-[13px] text-slate-600">
+                        {appt.appointment_date} {appt.appointment_time} ({appt.timezone}) · {appt.meeting_type} · Agent:{" "}
+                        {(appt.assigned_specialist_id && agentNameById?.[appt.assigned_specialist_id]) || "Unassigned"}
+                      </p>
+                      {businessReminderStatusByAppointmentId[appt.id] && (
+                        <p className="mt-1">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                              LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
+                            }`}
+                            title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
+                          >
+                            Business Reminder: {businessReminderStatusByAppointmentId[appt.id].status}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
                     {appt.lead_id && (
-                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="font-semibold text-sky-600 hover:text-sky-700">
+                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
                         View Lead
                       </Link>
                     )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {(appt.status === "Booked" || appt.status === "Confirmed") && (
+                  </div>
+
+                  {(appt.status === "Booked" || appt.status === "Confirmed") && (
+                    <div className="mt-2 border-t border-slate-100 pt-2">
                       <AppointmentEmailActions
                         appointmentId={appt.id}
                         businessName={appt.business_name}
@@ -207,6 +209,10 @@ export default function AgentAppointmentsListClient({
                         appointmentTime={appt.appointment_time}
                         timezone={appt.timezone}
                         latestEmail={latestEmailByAppointmentId[appt.id] ?? null}
+                        confirmationStatus={confirmationStatusByAppointmentId?.[appt.id]?.status}
+                        confirmationError={confirmationStatusByAppointmentId?.[appt.id]?.errorDetail}
+                        smsConfirmationStatus={smsConfirmationStatusByAppointmentId?.[appt.id]?.status}
+                        smsConfirmationError={smsConfirmationStatusByAppointmentId?.[appt.id]?.errorDetail}
                         automaticReminderStatus24h={automaticReminderStatusByAppointmentId[appt.id]?.status24h}
                         automaticReminderError24h={automaticReminderStatusByAppointmentId[appt.id]?.errorDetail24h}
                         automaticReminderStatus1h={automaticReminderStatusByAppointmentId[appt.id]?.status1h}
@@ -218,16 +224,14 @@ export default function AgentAppointmentsListClient({
                         onResend={resendAppointmentNotificationAction}
                         onReminder={sendAppointmentReminderAction}
                       />
-                    )}
-                  </td>
-                </tr>
+                    </div>
+                  )}
+                </li>
               );
             })}
-          </tbody>
-        </table>
-        </div>
+          </ul>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
           <span>
             {pageStart + 1}–{Math.min(pageStart + pageSize, visibleAppointments.length)} of {visibleAppointments.length} appointment
             {visibleAppointments.length === 1 ? "" : "s"}

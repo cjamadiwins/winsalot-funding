@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
+import { WINSALOT_APPOINTMENT_TYPES, type WinsalotAppointmentType } from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
 
 export type BookConsultationInput = {
@@ -11,6 +12,7 @@ export type BookConsultationInput = {
   email: string;
   phone: string;
   serviceType: OpportunityType;
+  appointmentType: WinsalotAppointmentType;
   notes: string;
   startUtcIso: string;
 };
@@ -51,6 +53,7 @@ export default function BookConsultationModal({
   const [emailValue, setEmailValue] = useState(email ?? "");
   const [phoneValue, setPhoneValue] = useState(phone);
   const [serviceType, setServiceType] = useState<OpportunityType>(opportunityType);
+  const [appointmentType, setAppointmentType] = useState<WinsalotAppointmentType>("Phone Call");
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -81,6 +84,7 @@ export default function BookConsultationModal({
       email: emailValue,
       phone: phoneValue,
       serviceType,
+      appointmentType,
       notes,
       startUtcIso: selectedSlot,
     });
@@ -146,6 +150,15 @@ export default function BookConsultationModal({
                   {OPPORTUNITY_TYPES.map((type) => (
                     <option key={type} value={type}>
                       {OPPORTUNITY_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </Labeled>
+              <Labeled label="Appointment Type">
+                <select value={appointmentType} onChange={(e) => setAppointmentType(e.target.value as WinsalotAppointmentType)} className={fieldClass}>
+                  {WINSALOT_APPOINTMENT_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
                     </option>
                   ))}
                 </select>

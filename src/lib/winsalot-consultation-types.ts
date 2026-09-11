@@ -14,6 +14,14 @@ export type WinsalotAppointmentBookedBy = (typeof WINSALOT_APPOINTMENT_BOOKED_BY
 export const WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES = ["admin", "agent", "prospect"] as const;
 export type WinsalotAppointmentCancelledByRole = (typeof WINSALOT_APPOINTMENT_CANCELLED_BY_ROLES)[number];
 
+// Meeting format (migration 0154) - a separate axis from service_type
+// below (which describes what the consultation is ABOUT, not how it's
+// conducted). Starts with a single value; widen this list (and the
+// database check constraint) together whenever a new format is actually
+// needed - never rename or remove "Phone Call".
+export const WINSALOT_APPOINTMENT_TYPES = ["Phone Call"] as const;
+export type WinsalotAppointmentType = (typeof WINSALOT_APPOINTMENT_TYPES)[number];
+
 // Weekly Incentive qualification review state (migration 0090) - a
 // separate axis from `status` above, mirroring the Lead Gen CRM's
 // LeadgenAppointmentIncentiveStatus (leadgen-types.ts) exactly. `status`
@@ -63,6 +71,7 @@ export type WinsalotAppointmentRow = {
   // starts receiving SMS reminders until it's next booked or edited.
   sms_consent: boolean;
   service_type: OpportunityType;
+  appointment_type: WinsalotAppointmentType;
   notes: string | null;
 
   appointment_start_at: string; // ISO, UTC
@@ -286,4 +295,15 @@ const SERVICE_TYPE_LABELS: Record<OpportunityType, string> = {
 
 export function winsalotServiceTypeLabel(type: OpportunityType): string {
   return SERVICE_TYPE_LABELS[type];
+}
+
+// Lowercase noun phrase for confirmation/reminder copy ("your phone call
+// appointment is..."), keyed off appointment_type rather than
+// hardcoded - see appointment-sms.ts and winsalot-consultation-emails.ts.
+const APPOINTMENT_TYPE_COPY_LABELS: Record<WinsalotAppointmentType, string> = {
+  "Phone Call": "phone call appointment",
+};
+
+export function winsalotAppointmentTypeCopyLabel(type: WinsalotAppointmentType): string {
+  return APPOINTMENT_TYPE_COPY_LABELS[type];
 }

@@ -8,9 +8,11 @@ import {
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL,
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE,
   WINSALOT_APPOINTMENT_INCENTIVE_STATUS_STYLES,
+  WINSALOT_APPOINTMENT_TYPES,
   isWinsalotAppointmentCountable,
   type WinsalotAppointmentIncentiveStatus,
   type WinsalotAppointmentRow,
+  type WinsalotAppointmentType,
   type WinsalotReminderDisplayStatus,
 } from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
@@ -41,7 +43,15 @@ export type WinsalotAppointmentActions = {
   cancel: (id: string, reason: string | null) => Promise<{ error?: string }>;
   edit: (
     id: string,
-    input: { businessName: string; contactName: string; email: string; phone: string; serviceType: OpportunityType; notes: string }
+    input: {
+      businessName: string;
+      contactName: string;
+      email: string;
+      phone: string;
+      serviceType: OpportunityType;
+      appointmentType: WinsalotAppointmentType;
+      notes: string;
+    }
   ) => Promise<{ error?: string }>;
   remove?: (id: string) => Promise<{ error?: string }>;
   // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
@@ -143,6 +153,7 @@ export default function WinsalotAppointmentsListClient({
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
         serviceType: String(formData.get("service_type") ?? "lead_generation") as OpportunityType,
+        appointmentType: String(formData.get("appointment_type") ?? "Phone Call") as WinsalotAppointmentType,
         notes: String(formData.get("notes") ?? ""),
       });
       if (result.error) setError(result.error);
@@ -240,7 +251,7 @@ export default function WinsalotAppointmentsListClient({
                   {appt.contact_name} · {appt.email} · {appt.phone}
                 </p>
                 <p className="mt-0.5 text-[13px] text-slate-600">
-                  {start.toLocaleString()} ({appt.business_timezone}) · {OPPORTUNITY_TYPE_LABELS[appt.service_type]} · Agent:{" "}
+                  {start.toLocaleString()} ({appt.business_timezone}) · {appt.appointment_type} · {OPPORTUNITY_TYPE_LABELS[appt.service_type]} · Agent:{" "}
                   {appt.assignedAgentName || "Unassigned"}
                 </p>
                 <p className="mt-0.5 flex flex-wrap gap-1.5 text-[11px]">
@@ -370,6 +381,13 @@ export default function WinsalotAppointmentsListClient({
                   {OPPORTUNITY_TYPES.map((t) => (
                     <option key={t} value={t}>
                       {OPPORTUNITY_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <select name="appointment_type" defaultValue={appt.appointment_type} className={inputClass}>
+                  {WINSALOT_APPOINTMENT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
                     </option>
                   ))}
                 </select>

@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const claimAndSendAppointmentSmsMock = vi.fn(async (_admin, input: { recipientType: string; toPhoneRaw: string | null }) => ({
+const claimAndSendAppointmentSmsMock = vi.fn(async (_admin, input: { recipientType: string; toPhoneRaw: string | null; message: string }) => ({
   outcome: "would_send" as const,
   recipientPhone: input.toPhoneRaw,
 }));
 
 vi.mock("@/lib/appointment-sms", () => ({
   buildAdminReminderSms: () => "admin reminder",
-  buildProspectReminderSms: () => "prospect reminder",
+  // Real (unmocked) pass-through, matching the production signature -
+  // lets the test below verify the Growth CRM reminder job actually
+  // threads appointment_type into the SMS copy, not just that some
+  // string was sent.
+  buildProspectReminderSms: (params: { appointmentTypeLabel?: string }) => `prospect reminder: ${params.appointmentTypeLabel ?? "phone call appointment"}`,
   claimAndSendAppointmentSms: claimAndSendAppointmentSmsMock,
   formatSmsTimeLabel: () => "10:00 AM EDT",
   isAppointmentToday: () => false,
@@ -38,6 +42,7 @@ describe("Growth CRM appointment reminder job", () => {
         phone: "+14165550101",
         sms_consent: true,
         service_type: "lead_generation",
+        appointment_type: "Phone Call",
         status: "booked",
         appointment_start_at: "2026-09-12T14:00:00.000Z",
         business_timezone: "America/Toronto",
@@ -53,6 +58,7 @@ describe("Growth CRM appointment reminder job", () => {
         phone: "+14165550102",
         sms_consent: true,
         service_type: "lead_generation",
+        appointment_type: "Phone Call",
         status: "booked",
         appointment_start_at: "2026-09-11T15:00:00.000Z",
         business_timezone: "America/Toronto",
@@ -107,5 +113,15 @@ describe("Growth CRM appointment reminder job", () => {
       ])
     );
     expect(claimAndSendAppointmentSmsMock).toHaveBeenCalledTimes(4); // prospect + company for both reminder slots
+
+    // Every prospect-facing SMS call for these Phone Call appointments
+    // must describe the appointment_type correctly (task requirement:
+    // "make sure confirmation and reminder messages correctly describe
+    // it as a phone call appointment").
+    const prospectCalls = claimAndSendAppointmentSmsMock.mock.calls.filter(([, input]) => input.recipientType === "prospect");
+    expect(prospectCalls).toHaveLength(2);
+    for (const [, input] of prospectCalls) {
+      expect(input.message).toBe("prospect reminder: phone call appointment");
+    }
   });
 });

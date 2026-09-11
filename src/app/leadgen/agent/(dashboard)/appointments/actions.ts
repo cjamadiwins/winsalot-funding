@@ -7,10 +7,33 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
-import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
-import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import {
+  describeManualSmsOutcome,
+  fetchLeadgenAppointmentReminderSettings,
+  sendManualLeadgenAppointmentSms,
+  zonedWallTimeToUtcMs,
+} from "@/lib/leadgen-appointment-reminders";
+import { LEADGEN_MEETING_TYPES, type LeadgenAppointmentRow, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
-type ActionResult = { error?: string };
+type ActionResult = { error?: string; message?: string };
+
+// Shared by resendAppointmentNotificationAction/sendAppointmentReminderAction
+// below - mirrors the admin action file's own helper of the same shape.
+// Uses the service-role client only to enrich an appointment this agent
+// has already been authorized (via sendLeadgenAppointmentEmail's own RLS-
+// scoped fetch above it) to email/text - never widens which appointments
+// an agent can act on.
+async function sendManualSmsForAction(appointmentId: string, kind: "resend_confirmation" | "reminder"): Promise<string | null> {
+  const admin = getSupabaseAdmin();
+  const [{ data: appointment }, settings] = await Promise.all([
+    admin.from("leadgen_appointments").select("*").eq("id", appointmentId).maybeSingle(),
+    fetchLeadgenAppointmentReminderSettings(admin),
+  ]);
+  if (!appointment) return null;
+
+  const result = await sendManualLeadgenAppointmentSms(admin, appointment as LeadgenAppointmentRow, kind, settings.automatic_sms_reminders_enabled);
+  return describeManualSmsOutcome(result);
+}
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -143,9 +166,11 @@ export async function resendAppointmentNotificationAction(appointmentId: string)
   const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "resend_confirmation");
   if (result.error) return { error: result.error };
 
+  const smsMessage = await sendManualSmsForAction(appointmentId, "resend_confirmation");
+
   revalidatePath("/leadgen/agent/appointments");
   if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
-  return {};
+  return { message: smsMessage ?? undefined };
 }
 
 // Second parameter accepted only so this matches sendAppointmentReminderAction's
@@ -159,7 +184,9 @@ export async function sendAppointmentReminderAction(appointmentId: string, _coun
   const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "reminder");
   if (result.error) return { error: result.error };
 
+  const smsMessage = await sendManualSmsForAction(appointmentId, "reminder");
+
   revalidatePath("/leadgen/agent/appointments");
   if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
-  return {};
+  return { message: smsMessage ?? undefined };
 }
