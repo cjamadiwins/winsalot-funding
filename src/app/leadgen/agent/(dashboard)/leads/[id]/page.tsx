@@ -15,7 +15,7 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
-import { bookAppointmentAction, resendAppointmentNotificationAction, sendAppointmentReminderAction } from "../../appointments/actions";
+import { bookAppointmentAction } from "../../appointments/actions";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import {
   completeFollowUpAction,
@@ -39,9 +39,9 @@ const actions: LeadDetailActions = {
   sendConsultationFollowUp: sendConsultationFollowUpAction,
   sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
-  // email (admin-only per the brief) or reassign a lead.
-  resendAppointmentNotification: resendAppointmentNotificationAction,
-  sendAppointmentReminder: sendAppointmentReminderAction,
+  // email (admin-only per the brief) or reassign a lead. Likewise no
+  // resendAppointmentNotification / sendAppointmentReminder - those manual
+  // sends are admin-only (see LeadDetailActions above).
 };
 
 export default async function LeadgenAgentLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {

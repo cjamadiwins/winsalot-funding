@@ -74,11 +74,12 @@ export type LeadDetailActions = {
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
   deleteLead?: (leadId: string) => Promise<{ error?: string } | void>;
   // "Resend Appointment Notification" / "Send Appointment Reminder" -
-  // both admin and agent wire these (agents are scoped to their own
-  // leads by RLS, same as every other agent action here), so they're
-  // always present, unlike the admin-only actions above.
-  resendAppointmentNotification: (appointmentId: string) => Promise<{ error?: string } | void>;
-  sendAppointmentReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
+  // Admin-only manual sends; agents no longer receive these action props
+  // at all (AppointmentEmailActions also gates rendering on isAdmin, but
+  // the action itself must be absent here so an agent can't invoke it
+  // even by bypassing the UI).
+  resendAppointmentNotification?: (appointmentId: string) => Promise<{ error?: string } | void>;
+  sendAppointmentReminder?: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string } | void>;
 };
 
 // Shared Lead Generation CRM lead profile - identical between

@@ -90,42 +90,50 @@ export default function AppointmentEmailActions({
   smsReminderError24h?: string | null;
   smsReminderStatus1h?: string | null;
   smsReminderError1h?: string | null;
-  // Gates the "Count this as the 24-hour reminder" checkbox (brief
-  // MANUAL CONTROLS: admin-only).
+  // Admin-only, on two levels: gates the "Count this as the 24-hour
+  // reminder" checkbox, AND (together with onResend/onReminder being
+  // provided at all) whether the "Resend Appointment Notification" /
+  // "Send Appointment Reminder" buttons render at all - agents may see
+  // every status badge below but never manually trigger a send.
   isAdmin?: boolean;
   // message carries the SMS-side outcome (e.g. "SMS sent." / "SMS not
   // sent (no phone number on file).") - the email side is always
-  // implied by a successful result, same as before.
-  onResend: (appointmentId: string) => Promise<{ error?: string; message?: string } | void>;
-  onReminder: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string; message?: string } | void>;
+  // implied by a successful result, same as before. Omitted entirely by
+  // the agent Appointments page - see isAdmin above.
+  onResend?: (appointmentId: string) => Promise<{ error?: string; message?: string } | void>;
+  onReminder?: (appointmentId: string, countAsAutomaticReminder: boolean) => Promise<{ error?: string; message?: string } | void>;
 }) {
   const [mode, setMode] = useState<"resend" | "reminder" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const canSendManually = isAdmin && onResend && onReminder;
+
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setMessage(null);
-            setMode("resend");
-          }}
-          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
-        >
-          Resend Appointment Notification
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMessage(null);
-            setMode("reminder");
-          }}
-          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
-        >
-          Send Appointment Reminder
-        </button>
-      </div>
+      {canSendManually && (
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setMessage(null);
+              setMode("resend");
+            }}
+            className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+          >
+            Resend Appointment Notification
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMessage(null);
+              setMode("reminder");
+            }}
+            className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+          >
+            Send Appointment Reminder
+          </button>
+        </div>
+      )}
 
       {latestEmail && (
         <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[latestEmail.status]}`}>
@@ -189,7 +197,7 @@ export default function AppointmentEmailActions({
 
       {message && <span className="text-[11.5px] font-medium text-emerald-700">{message}</span>}
 
-      {mode && (
+      {canSendManually && mode && (
         <AppointmentEmailConfirmModal
           mode={mode}
           businessName={businessName}

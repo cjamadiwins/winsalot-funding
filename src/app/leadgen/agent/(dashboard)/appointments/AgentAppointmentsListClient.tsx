@@ -16,7 +16,6 @@ import {
 } from "@/lib/leadgen-types";
 import type { LeadgenImmediateConfirmationStatusEntry, LeadgenImmediateSmsConfirmationStatusEntry } from "@/lib/leadgen-appointment-reminders";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
-import { resendAppointmentNotificationAction, sendAppointmentReminderAction } from "./actions";
 
 type LeadContact = { email: string | null; contact_name: string | null };
 
@@ -221,8 +220,6 @@ export default function AgentAppointmentsListClient({
                         smsReminderError24h={smsReminderStatusByAppointmentId[appt.id]?.errorDetail24h}
                         smsReminderStatus1h={smsReminderStatusByAppointmentId[appt.id]?.status1h}
                         smsReminderError1h={smsReminderStatusByAppointmentId[appt.id]?.errorDetail1h}
-                        onResend={resendAppointmentNotificationAction}
-                        onReminder={sendAppointmentReminderAction}
                       />
                     </div>
                   )}

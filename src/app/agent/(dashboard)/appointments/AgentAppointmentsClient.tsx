@@ -10,8 +10,6 @@ import {
   editAppointmentAction,
   getOfferedSlotsAction,
   rescheduleAppointmentAction,
-  resendAppointmentNotificationAction,
-  sendAppointmentReminderAction,
 } from "./actions";
 import { bookConsultationAction, getConsultationOfferedSlotsAction } from "../opportunities/[id]/actions";
 
@@ -112,8 +110,6 @@ export default function AgentAppointmentsClient({
           reschedule: rescheduleAppointmentAction,
           cancel: cancelAppointmentAction,
           edit: editAppointmentAction,
-          resend: resendAppointmentNotificationAction,
-          sendReminder: sendAppointmentReminderAction,
           opportunityHref: (opportunityId) => `/agent/opportunities/${opportunityId}`,
         }}
       />

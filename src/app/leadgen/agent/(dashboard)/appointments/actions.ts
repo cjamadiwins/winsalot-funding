@@ -5,35 +5,11 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
-import {
-  describeManualSmsOutcome,
-  fetchLeadgenAppointmentReminderSettings,
-  sendManualLeadgenAppointmentSms,
-  zonedWallTimeToUtcMs,
-} from "@/lib/leadgen-appointment-reminders";
-import { LEADGEN_MEETING_TYPES, type LeadgenAppointmentRow, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
+import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string; message?: string };
-
-// Shared by resendAppointmentNotificationAction/sendAppointmentReminderAction
-// below - mirrors the admin action file's own helper of the same shape.
-// Uses the service-role client only to enrich an appointment this agent
-// has already been authorized (via sendLeadgenAppointmentEmail's own RLS-
-// scoped fetch above it) to email/text - never widens which appointments
-// an agent can act on.
-async function sendManualSmsForAction(appointmentId: string, kind: "resend_confirmation" | "reminder"): Promise<string | null> {
-  const admin = getSupabaseAdmin();
-  const [{ data: appointment }, settings] = await Promise.all([
-    admin.from("leadgen_appointments").select("*").eq("id", appointmentId).maybeSingle(),
-    fetchLeadgenAppointmentReminderSettings(admin),
-  ]);
-  if (!appointment) return null;
-
-  const result = await sendManualLeadgenAppointmentSms(admin, appointment as LeadgenAppointmentRow, kind, settings.automatic_sms_reminders_enabled);
-  return describeManualSmsOutcome(result);
-}
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -150,43 +126,4 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   revalidatePath("/leadgen/agent/appointments");
   if (leadId) revalidatePath(`/leadgen/agent/leads/${leadId}`);
   return {};
-}
-
-// "Resend Appointment Notification" / "Send Appointment Reminder" (brief
-// EMAIL FEATURES #4/#5) - agents may only use these for a lead assigned
-// to them (or an appointment where they're the assigned specialist),
-// enforced by the same RLS this session-scoped client already applies to
-// every other agent action in this CRM (leadgen_appointments_agent_
-// select_own / leadgen_emails_agent_insert_own_lead): an appointment that
-// isn't theirs simply isn't visible here, so sendLeadgenAppointmentEmail
-// fails closed with "Appointment not found." rather than leaking it.
-export async function resendAppointmentNotificationAction(appointmentId: string): Promise<ActionResult> {
-  const agent = await requireLeadgenAgent();
-  const supabase = await createSupabaseServerClient();
-  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "resend_confirmation");
-  if (result.error) return { error: result.error };
-
-  const smsMessage = await sendManualSmsForAction(appointmentId, "resend_confirmation");
-
-  revalidatePath("/leadgen/agent/appointments");
-  if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
-  return { message: smsMessage ?? undefined };
-}
-
-// Second parameter accepted only so this matches sendAppointmentReminderAction's
-// admin-side signature for LeadDetailActions/AppointmentEmailActions -
-// "Count this as the 24-hour reminder" is an admin-only affordance (the
-// agent UI never renders that checkbox, so this is never actually true
-// in practice), and is deliberately ignored here regardless.
-export async function sendAppointmentReminderAction(appointmentId: string, _countAsAutomaticReminder?: boolean): Promise<ActionResult> {
-  const agent = await requireLeadgenAgent();
-  const supabase = await createSupabaseServerClient();
-  const result = await sendLeadgenAppointmentEmail(supabase, appointmentId, agent, "reminder");
-  if (result.error) return { error: result.error };
-
-  const smsMessage = await sendManualSmsForAction(appointmentId, "reminder");
-
-  revalidatePath("/leadgen/agent/appointments");
-  if (result.leadId) revalidatePath(`/leadgen/agent/leads/${result.leadId}`);
-  return { message: smsMessage ?? undefined };
 }
