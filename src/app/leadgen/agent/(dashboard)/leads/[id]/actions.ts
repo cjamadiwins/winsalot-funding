@@ -307,9 +307,10 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     occurred_at: now,
   });
 
-  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
-    ? { last_contacted_at: now, updated_at: now }
-    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  // An automated email send is not "contact" (Last Contact only advances
+  // for a genuine direct interaction), so last_contacted_at is
+  // deliberately left untouched here.
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId)) ? { updated_at: now } : { status: "Consultation Information Sent" as const, updated_at: now };
   await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
@@ -388,9 +389,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
-    ? { last_contacted_at: now, updated_at: now }
-    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  // An automated email send is not "contact" (Last Contact only advances
+  // for a genuine direct interaction), so last_contacted_at is
+  // deliberately left untouched here.
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId)) ? { updated_at: now } : { status: "Consultation Information Sent" as const, updated_at: now };
   await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
@@ -466,7 +468,9 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  // An automated email send is not "contact" - last_contacted_at is
+  // deliberately left untouched here.
+  await supabase.from("leadgen_leads").update({ updated_at: now }).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
@@ -536,7 +540,9 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  // An automated email send is not "contact" - last_contacted_at is
+  // deliberately left untouched here.
+  await supabase.from("leadgen_leads").update({ updated_at: now }).eq("id", leadId);
 
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");

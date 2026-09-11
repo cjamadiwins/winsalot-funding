@@ -11,6 +11,7 @@ import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingRe
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
   ACTIVITY_TYPES,
+  isDirectContactActivityType,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_TYPES,
   type ActivityType,
@@ -228,13 +229,18 @@ export async function addActivityAction(opportunityId: string, formData: FormDat
     }
   }
 
-  const { error: opportunityError } = await supabase
-    .from("crm_opportunities")
-    .update({ last_contacted_at: new Date().toISOString() })
-    .eq("id", opportunityId);
+  // A logged email is not "contact" - Last Contact only advances for a
+  // genuine direct interaction (call, text, voicemail, follow-up outcome,
+  // consultation booking/reschedule/cancellation).
+  if (isDirectContactActivityType(activityType as ActivityType)) {
+    const { error: opportunityError } = await supabase
+      .from("crm_opportunities")
+      .update({ last_contacted_at: new Date().toISOString() })
+      .eq("id", opportunityId);
 
-  if (opportunityError) {
-    throw new Error("Activity saved, but failed to update the opportunity's last-contacted date.");
+    if (opportunityError) {
+      throw new Error("Activity saved, but failed to update the opportunity's last-contacted date.");
+    }
   }
 
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);

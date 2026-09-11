@@ -3,7 +3,7 @@ import { UserPlus, CalendarPlus, BarChart3, CalendarCheck, Target, Mail } from "
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
+import { EMAIL_STATUS_LABELS, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
@@ -141,6 +141,9 @@ export default async function AgentDashboardPage() {
         score: score.score,
         lastContactAt: opportunity.last_contacted_at ?? signals.last_call_at ?? null,
         lastCallOutcome: signals.last_call_outcome ?? null,
+        lastEmailStatusLabel: opportunity.last_email_status ? EMAIL_STATUS_LABELS[opportunity.last_email_status] : null,
+        lastEmailAt: opportunity.last_email_status_at,
+        lastEmailTo: opportunity.last_email_to,
         followUpAt: opportunity.next_follow_up_at,
         followUpId: earliestFollowUpIdByOpportunity.get(opportunity.id) ?? null,
         latestNote: signals.last_note_summary ?? opportunity.notes,

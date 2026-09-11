@@ -27,7 +27,8 @@ import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGauge
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
 import LeadgenAppointmentRecordsModal from "@/components/leadgen/LeadgenAppointmentRecordsModal";
-import { buildAppointmentCardRecords, buildLeadCardRecords, sortAppointmentsUpcomingFirst, sortLeadsByMostUrgentFollowUp } from "@/lib/leadgen-dashboard-records";
+import { buildAppointmentCardRecords, buildLeadCardRecords, latestLeadgenEmailByLeadId, sortAppointmentsUpcomingFirst, sortLeadsByMostUrgentFollowUp } from "@/lib/leadgen-dashboard-records";
+import { LEADGEN_EMAIL_STATUS_LABELS } from "@/lib/leadgen-types";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -37,8 +38,17 @@ export default async function LeadgenAdminDashboardPage() {
   const now = new Date();
   const todayKey = leadgenDateKey(now);
 
-  const [{ data: leads }, { data: appointments }, { data: clients }, { data: users }, { data: campaigns }, { data: todaysAppointments }, { data: opportunityScores }, { data: pendingFollowUps }] =
-    await Promise.all([
+  const [
+    { data: leads },
+    { data: appointments },
+    { data: clients },
+    { data: users },
+    { data: campaigns },
+    { data: todaysAppointments },
+    { data: opportunityScores },
+    { data: pendingFollowUps },
+    { data: recentEmails },
+  ] = await Promise.all([
       admin
         .from("leadgen_leads")
         .select(
@@ -68,6 +78,16 @@ export default async function LeadgenAdminDashboardPage() {
       // scoring table (supabase/migrations/0113).
       admin.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
       admin.from("leadgen_followups").select("id, lead_id, status, scheduled_at").eq("status", "pending").order("scheduled_at", { ascending: true }),
+      // "Latest Email Activity" card (Total Leads / Smart Opportunities) -
+      // leadgen_leads has no denormalized last-email columns (unlike
+      // crm_opportunities in the Growth CRM), so the most recent
+      // leadgen_emails row per lead is resolved from a fresh read here
+      // instead (see latestLeadgenEmailByLeadId).
+      admin
+        .from("leadgen_emails")
+        .select("lead_id, status, to_email, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at, created_at")
+        .not("lead_id", "is", null)
+        .order("created_at", { ascending: false }),
     ]);
 
   const allLeads = leads ?? [];
@@ -135,7 +155,8 @@ export default async function LeadgenAdminDashboardPage() {
   // drill-down modal's rows are both `.filter()`ed from this exact same
   // array - a card's number can never disagree with what clicking it
   // shows (see leadgen-dashboard-records.ts).
-  const enrichedLeads = buildLeadCardRecords(allLeads, { scores: scoredLeads, followUps: pendingFollowUps ?? [], agentNameById });
+  const latestEmailByLeadId = latestLeadgenEmailByLeadId(recentEmails ?? []);
+  const enrichedLeads = buildLeadCardRecords(allLeads, { scores: scoredLeads, followUps: pendingFollowUps ?? [], agentNameById, latestEmailByLeadId });
   const interestedRecords = enrichedLeads.filter((l) => l.status === "Interested");
   const followUpsDueTodayRecords = sortLeadsByMostUrgentFollowUp(enrichedLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)));
   const overdueRecords = sortLeadsByMostUrgentFollowUp(enrichedLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)));
@@ -163,6 +184,7 @@ export default async function LeadgenAdminDashboardPage() {
       const lead = leadById.get(score.lead_id);
       if (!lead) return null;
       const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      const latestEmail = latestEmailByLeadId.get(lead.id);
       return {
         scoreId: score.id,
         prospectId: lead.id,
@@ -176,6 +198,9 @@ export default async function LeadgenAdminDashboardPage() {
         score: score.score,
         lastContactAt: lead.last_contacted_at ?? signals.last_call_at ?? null,
         lastCallOutcome: signals.last_call_outcome ?? null,
+        lastEmailStatusLabel: latestEmail ? LEADGEN_EMAIL_STATUS_LABELS[latestEmail.status] : null,
+        lastEmailAt: latestEmail?.statusAt ?? null,
+        lastEmailTo: latestEmail?.to_email ?? null,
         followUpAt: lead.next_follow_up_at,
         followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
         latestNote: signals.last_note_summary ?? null,

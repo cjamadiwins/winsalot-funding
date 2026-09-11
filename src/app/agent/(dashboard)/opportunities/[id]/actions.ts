@@ -9,7 +9,9 @@ import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingRe
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
   AGENT_SETTABLE_STAGES,
+  isDirectContactActivityType,
   OPPORTUNITY_TYPES,
+  type ActivityType,
   type OpportunityStage,
   type OpportunityType,
 } from "@/lib/crm-types";
@@ -185,11 +187,16 @@ export async function addOpportunityActivityAction(id: string, formData: FormDat
     if (followUpError) return { error: "Note saved, but failed to schedule the follow-up." };
   }
 
-  const { error: lastContactedError } = await supabase
-    .from("crm_opportunities")
-    .update({ last_contacted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (lastContactedError) return { error: "Note saved, but failed to update the last-contacted date." };
+  // A logged email is not "contact" - Last Contact only advances for a
+  // genuine direct interaction (call, text, voicemail, follow-up outcome,
+  // consultation booking/reschedule/cancellation).
+  if (isDirectContactActivityType(activityType as ActivityType)) {
+    const { error: lastContactedError } = await supabase
+      .from("crm_opportunities")
+      .update({ last_contacted_at: new Date().toISOString() })
+      .eq("id", id);
+    if (lastContactedError) return { error: "Note saved, but failed to update the last-contacted date." };
+  }
 
   revalidateOpportunity(id);
   return {};

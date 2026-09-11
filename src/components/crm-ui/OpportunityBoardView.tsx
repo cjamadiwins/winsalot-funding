@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Phone } from "lucide-react";
 import type { OpportunityBoardCard, OpportunityBoardColumn } from "@/lib/opportunity-board";
 
 // How far one click of the left/right nav arrow scrolls the board -
@@ -138,7 +138,7 @@ export default function OpportunityBoardView({
                       <div className="mt-0.5 truncate text-[11.5px] text-slate-500">{card.assignedAgentName || "Unassigned"}</div>
                       <dl className="mt-1.5 space-y-0.5 text-[11.5px] text-slate-600">
                         <div className="flex justify-between gap-2">
-                          <dt className="text-slate-400">Last call</dt>
+                          <dt className="flex items-center gap-1 text-slate-400"><Phone className="h-3 w-3" /> Last Contact</dt>
                           <dd className="text-right">{fmt(card.lastCallAt)}</dd>
                         </div>
                         {card.lastCallOutcome && (
@@ -148,7 +148,7 @@ export default function OpportunityBoardView({
                           </div>
                         )}
                         <div className="flex justify-between gap-2">
-                          <dt className="text-slate-400">Follow-up</dt>
+                          <dt className="flex items-center gap-1 text-slate-400"><Calendar className="h-3 w-3" /> Follow-up</dt>
                           <dd className="text-right">{fmt(card.nextFollowUpAt)}</dd>
                         </div>
                       </dl>
@@ -195,9 +195,9 @@ export default function OpportunityBoardView({
               <Row label="Client / Current Business" value={selected.clientOrBusiness} />
               <Row label="Assigned Agent" value={selected.assignedAgentName || "Unassigned"} />
               <Row label="Phone" value={selected.phone || "—"} />
-              <Row label="Last Call Date/Time" value={fmt(selected.lastCallAt)} />
-              <Row label="Last Call Outcome" value={selected.lastCallOutcome || "—"} />
-              <Row label="Next Follow-Up" value={fmt(selected.nextFollowUpAt)} />
+              <Row label="Last Contact Date/Time" icon={<Phone className="h-3 w-3" />} value={fmt(selected.lastCallAt)} />
+              <Row label="Last Contact Outcome" value={selected.lastCallOutcome || "—"} />
+              <Row label="Next Follow-Up" icon={<Calendar className="h-3 w-3" />} value={fmt(selected.nextFollowUpAt)} />
               {selected.appointmentStatus && <Row label="Appointment Status" value={selected.appointmentStatus} />}
             </dl>
 
@@ -251,10 +251,13 @@ export default function OpportunityBoardView({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <dt className="shrink-0 text-slate-400">{label}</dt>
+      <dt className="flex shrink-0 items-center gap-1 text-slate-400">
+        {icon}
+        {label}
+      </dt>
       <dd className="text-right font-medium text-slate-800">{value}</dd>
     </div>
   );

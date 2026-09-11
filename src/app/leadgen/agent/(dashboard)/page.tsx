@@ -36,7 +36,8 @@ import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/
 import { markLeadgenOpportunityHandledTodayAction } from "./actions";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
-import { buildLeadCardRecords } from "@/lib/leadgen-dashboard-records";
+import { buildLeadCardRecords, latestLeadgenEmailByLeadId } from "@/lib/leadgen-dashboard-records";
+import { LEADGEN_EMAIL_STATUS_LABELS } from "@/lib/leadgen-types";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -58,6 +59,7 @@ export default async function LeadgenAgentDashboardPage() {
     ledgerRow,
     monthToDateApproved,
     { data: opportunityScores },
+    { data: recentEmails },
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -96,6 +98,14 @@ export default async function LeadgenAgentDashboardPage() {
     // (leadgen_opportunity_scores_agent_select_own) already scopes this to
     // the signed-in agent's own leads.
     supabase.from("leadgen_opportunity_scores").select("*").order("score", { ascending: false }),
+    // "Latest Email Activity" card - RLS (leadgen_emails_agent_select_own)
+    // already scopes this to emails sent for this agent's own leads, same
+    // as leadgen_leads/leadgen_opportunity_scores above.
+    supabase
+      .from("leadgen_emails")
+      .select("lead_id, status, to_email, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at, created_at")
+      .not("lead_id", "is", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -150,10 +160,12 @@ export default async function LeadgenAgentDashboardPage() {
   // follow-up arrays above, rather than re-deriving from
   // next_follow_up_at directly, so this modal never disagrees with the
   // FollowUpGroup lists further down the page.
+  const latestEmailByLeadId = latestLeadgenEmailByLeadId(recentEmails ?? []);
   const enrichedLeads = buildLeadCardRecords(myLeads, {
     scores: scoredLeads,
     followUps: allFollowUps,
     agentNameById: new Map([[agent.id, agentDisplayName]]),
+    latestEmailByLeadId,
   });
   const interestedRecords = enrichedLeads.filter((l) => l.status === "Interested");
   const dueTodayLeadIds = new Set(dueToday.map((f) => f.lead_id));
@@ -215,6 +227,7 @@ export default async function LeadgenAgentDashboardPage() {
       const lead = leadById.get(score.lead_id);
       if (!lead) return null;
       const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
+      const latestEmail = latestEmailByLeadId.get(lead.id);
       return {
         scoreId: score.id,
         prospectId: lead.id,
@@ -228,6 +241,9 @@ export default async function LeadgenAgentDashboardPage() {
         score: score.score,
         lastContactAt: lead.last_contacted_at ?? signals.last_call_at ?? null,
         lastCallOutcome: signals.last_call_outcome ?? null,
+        lastEmailStatusLabel: latestEmail ? LEADGEN_EMAIL_STATUS_LABELS[latestEmail.status] : null,
+        lastEmailAt: latestEmail?.statusAt ?? null,
+        lastEmailTo: latestEmail?.to_email ?? null,
         followUpAt: lead.next_follow_up_at,
         followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
         latestNote: signals.last_note_summary ?? null,
