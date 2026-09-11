@@ -64,12 +64,14 @@ export type WinsalotAppointmentActions = {
   // badge is still shown read-only but no review controls render.
   reviewIncentive?: (id: string, decision: Extract<WinsalotAppointmentIncentiveStatus, "Qualified" | "Unqualified">, reason: string | null) => Promise<{ error?: string }>;
   // "Resend Appointment Notification" / "Send Appointment Reminder" -
-  // available to both admin and agent alike (mirrors the Lead Gen CRM's
-  // own two buttons). message carries the SMS-side outcome (e.g. "SMS
-  // sent." / "SMS not sent (no phone number on file).") - the email side
-  // is always implied by a successful result.
-  resend: (id: string) => Promise<{ error?: string; message?: string }>;
-  sendReminder: (id: string) => Promise<{ error?: string; message?: string }>;
+  // admin-only (mirrors the Lead Gen CRM's own two buttons, also admin-
+  // only) - undefined for the agent view, where the reminder/confirmation
+  // status badges are still shown read-only but no send controls render.
+  // message carries the SMS-side outcome (e.g. "SMS sent." / "SMS not
+  // sent (no phone number on file).") - the email side is always implied
+  // by a successful result.
+  resend?: (id: string) => Promise<{ error?: string; message?: string }>;
+  sendReminder?: (id: string) => Promise<{ error?: string; message?: string }>;
   opportunityHref: (opportunityId: string) => string;
 };
 
@@ -330,12 +332,16 @@ export default function WinsalotAppointmentsListClient({
                     <button type="button" onClick={() => openRow(appt, "cancel")} className="text-xs font-semibold text-rose-600 hover:text-rose-700">
                       Cancel
                     </button>
-                    <button type="button" onClick={() => openEmailAction(appt, "resend")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
-                      Resend Appointment Notification
-                    </button>
-                    <button type="button" onClick={() => openEmailAction(appt, "reminder")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
-                      Send Appointment Reminder
-                    </button>
+                    {isAdmin && actions.resend && actions.sendReminder && (
+                      <>
+                        <button type="button" onClick={() => openEmailAction(appt, "resend")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                          Resend Appointment Notification
+                        </button>
+                        <button type="button" onClick={() => openEmailAction(appt, "reminder")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                          Send Appointment Reminder
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
                 {isAdmin && actions.remove && (
@@ -494,7 +500,7 @@ export default function WinsalotAppointmentsListClient({
               </div>
             )}
 
-            {emailActionId === appt.id && emailMode && (
+            {isAdmin && actions.resend && actions.sendReminder && emailActionId === appt.id && emailMode && (
               <AppointmentEmailConfirmModal
                 mode={emailMode === "reminder" ? "reminder" : "resend"}
                 businessName={appt.business_name}
@@ -504,7 +510,7 @@ export default function WinsalotAppointmentsListClient({
                 appointmentTime={start.toLocaleTimeString()}
                 timezone={appt.business_timezone}
                 onClose={closeEmailAction}
-                onConfirm={() => (emailMode === "reminder" ? actions.sendReminder(appt.id) : actions.resend(appt.id))}
+                onConfirm={() => (emailMode === "reminder" ? actions.sendReminder!(appt.id) : actions.resend!(appt.id))}
                 onSent={(result) => {
                   const emailPart = emailMode === "reminder" ? "Reminder sent." : "Confirmation resent.";
                   setEmailMessage({ id: appt.id, text: result?.message ? `${emailPart} ${result.message}` : emailPart });
