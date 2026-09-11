@@ -1,35 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  GROWTH_CRM_GAUGE_SEGMENTS,
+  performanceBand,
+  type PerformanceGaugeSegment,
+  type PerformanceTier,
+} from "@/lib/performance-gauge";
 
 // Semicircular 0-100 performance gauge shared by both CRMs. The public
 // component name is retained so every existing Admin/Agent report and
 // dashboard receives the upgrade without duplicating presentation logic.
-export type PerformanceTier = "green" | "yellow" | "red" | "blue";
+//
+// This file is a Client Component ("use client", for the needle/number
+// animation below). The band/segment/style logic it renders with lives
+// in src/lib/performance-gauge.ts instead of here, because every value
+// this file exported used to be treated as a client-only reference by
+// Next's Server/Client boundary - a Server Component calling
+// performanceBand() (or even just reading GROWTH_CRM_GAUGE_SEGMENTS)
+// directly from this module crashed in production with "Attempted to
+// call performanceBand() from the server but performanceBand is on the
+// client." Re-export only the types here (erased at compile time, so
+// they cross the boundary safely); import values from the lib module.
+export type { PerformanceTier, PerformanceGaugeSegment };
 
-export type PerformanceGaugeSegment = { start: number; end: number; color: string; label: string; key: PerformanceTier };
+// Kept as an alias so this file's own default `segments` parameter below
+// doesn't need every caller to pass GROWTH_CRM_GAUGE_SEGMENTS explicitly.
+const DEFAULT_SEGMENTS: readonly PerformanceGaugeSegment[] = GROWTH_CRM_GAUGE_SEGMENTS;
 
 const CENTER_X = 120;
 const CENTER_Y = 116;
 const ARC_RADIUS = 84;
-
-// Universal four-band gauge treatment shared by both CRMs and every
-// Agent Performance Score surface: 0-39 Needs Improvement (red), 40-59
-// Fair (amber), 60-79 Good (green), 80-100 Excellent (blue). `key` lines
-// up with PerformanceTier/CrmPerformanceTier so callers can look up a
-// matching badge/progress-bar style (see PERFORMANCE_BAND_STYLES) for
-// whatever band the needle lands in - the gauge, status pill, and
-// progress bars can then never disagree for the same score.
-export const GROWTH_CRM_GAUGE_SEGMENTS: readonly PerformanceGaugeSegment[] = [
-  { start: 0, end: 40, color: "#df7f82", label: "Needs Improvement", key: "red" },
-  { start: 40, end: 60, color: "#efc76f", label: "Fair", key: "yellow" },
-  { start: 60, end: 80, color: "#78bd72", label: "Good", key: "green" },
-  { start: 80, end: 100, color: "#63b9c7", label: "Excellent", key: "blue" },
-];
-
-// Kept as an alias (rather than every caller importing the growth-named
-// constant) now that both CRMs render the identical band set.
-const DEFAULT_SEGMENTS: readonly PerformanceGaugeSegment[] = GROWTH_CRM_GAUGE_SEGMENTS;
 
 const SCORE_COLOR: Record<PerformanceTier, string> = {
   blue: "#3f8fc4",
@@ -37,31 +38,6 @@ const SCORE_COLOR: Record<PerformanceTier, string> = {
   yellow: "#d7a43c",
   red: "#ce676b",
 };
-
-// One Tailwind color set per band, shared by every percentage badge,
-// progress bar, and status pill across both CRMs' redesigned performance
-// cards - keyed the same way as the gauge's own segments so a card's
-// status pill/progress bar can never show a different color than the
-// gauge it sits next to.
-export const PERFORMANCE_BAND_STYLES: Record<PerformanceTier, { bar: string; badge: string; text: string }> = {
-  blue: { bar: "bg-sky-500", badge: "bg-sky-100 text-sky-800", text: "text-sky-700" },
-  green: { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800", text: "text-emerald-700" },
-  yellow: { bar: "bg-amber-500", badge: "bg-amber-100 text-amber-800", text: "text-amber-700" },
-  red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
-};
-
-// The band a given 0-100 score falls in for a segment set - exported so
-// callers can derive a status pill/message/progress-bar color that is
-// guaranteed to match whatever band PerformanceRing itself paints for
-// the same score, instead of computing it a second, possibly-drifting way.
-export function performanceBand(
-  score: number,
-  segments: readonly PerformanceGaugeSegment[] = GROWTH_CRM_GAUGE_SEGMENTS
-): PerformanceGaugeSegment {
-  const clamped = Math.max(0, Math.min(100, Math.round(score)));
-  const match = segments.find((segment, index) => clamped >= segment.start && (clamped < segment.end || index === segments.length - 1));
-  return match ?? segments[segments.length - 1];
-}
 
 function pointForScore(score: number, radius: number) {
   const angle = Math.PI - (Math.PI * score) / 100;

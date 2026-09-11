@@ -1,4 +1,4 @@
-import type { PerformanceTier } from "@/components/crm-ui/PerformanceRing";
+import type { PerformanceTier } from "@/lib/performance-gauge";
 
 // Short, generic copy for the Agent Performance Score card's message box,
 // keyed only by which of the four universal gauge bands (see
