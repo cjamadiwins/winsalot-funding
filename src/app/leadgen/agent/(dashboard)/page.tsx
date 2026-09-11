@@ -319,9 +319,9 @@ export default async function LeadgenAgentDashboardPage() {
         </section>
       )}
 
-      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col items-center gap-5 sm:flex-row">
-          <PerformanceRing percentage={performance.percentage} tier={performanceTier} label="of weekly target" size={112} strokeWidth={10} />
+      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-center gap-6 sm:flex-row">
+          <PerformanceRing percentage={performance.percentage} tier={performanceTier} label="Performance Score" size={230} strokeWidth={14} />
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</div>
             <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
