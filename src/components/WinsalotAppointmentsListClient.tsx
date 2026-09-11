@@ -11,6 +11,7 @@ import {
   isWinsalotAppointmentCountable,
   type WinsalotAppointmentIncentiveStatus,
   type WinsalotAppointmentRow,
+  type WinsalotReminderDisplayStatus,
 } from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
 
@@ -21,14 +22,13 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   opportunityBusinessName: string | null;
   opportunityStage: string | null;
   assignedAgentName: string | null;
-  reminder24h: "scheduled" | "sent" | "failed";
-  reminder1h: "scheduled" | "sent" | "failed";
+  reminder24h: WinsalotReminderDisplayStatus;
+  reminder1h: WinsalotReminderDisplayStatus;
   reminder24hError: string | null;
   reminder1hError: string | null;
   // SMS counterpart (src/lib/winsalot-consultation-reminders.ts's
   // fetchWinsalotSmsReminderStatusMap) - the fuller Scheduled/Sending/
-  // Sent/Delivered/Failed/Skipped/Opted Out/Not scheduled set, unlike the
-  // email badge's simpler three states above.
+  // Sent/Delivered/Failed/Skipped/Opted Out/Not scheduled set.
   smsReminder24h: string;
   smsReminder1h: string;
   smsReminder24hError: string | null;
@@ -51,11 +51,14 @@ export type WinsalotAppointmentActions = {
   opportunityHref: (opportunityId: string) => string;
 };
 
-const REMINDER_LABEL: Record<string, string> = { scheduled: "Scheduled", sent: "Sent", failed: "Failed" };
 const REMINDER_STYLE: Record<string, string> = {
-  scheduled: "bg-slate-100 text-slate-600",
-  sent: "bg-emerald-100 text-emerald-700",
-  failed: "bg-rose-100 text-rose-700",
+  Scheduled: "bg-slate-100 text-slate-600",
+  "Not scheduled": "bg-slate-100 text-slate-500",
+  Sending: "bg-sky-100 text-sky-700",
+  Sent: "bg-emerald-100 text-emerald-700",
+  Delivered: "bg-emerald-100 text-emerald-800",
+  Bounced: "bg-amber-100 text-amber-800",
+  Failed: "bg-rose-100 text-rose-700",
 };
 
 // SMS reminder display status (leadgenSmsReminderDisplayStatus /
@@ -245,13 +248,13 @@ export default function WinsalotAppointmentsListClient({
                     className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder24h]}`}
                     title={appt.reminder24hError ?? undefined}
                   >
-                    24h: {REMINDER_LABEL[appt.reminder24h]}
+                    Email 24h: {appt.reminder24h}
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.reminder1h]}`}
                     title={appt.reminder1hError ?? undefined}
                   >
-                    1h: {REMINDER_LABEL[appt.reminder1h]}
+                    Email 1h: {appt.reminder1h}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${SMS_STATUS_STYLE[appt.smsReminder24h] ?? SMS_STATUS_STYLE.default}`} title={appt.smsReminder24hError ?? undefined}>
                     SMS 24h: {appt.smsReminder24h}

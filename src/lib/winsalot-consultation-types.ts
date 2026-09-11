@@ -3,7 +3,7 @@
 // same architecture reused, no shared code, per the brief's requirement
 // that the two systems stay completely separate.
 
-import type { OpportunityType } from "./crm-types";
+import type { CrmLeadEmailRow, OpportunityType } from "./crm-types";
 
 export const WINSALOT_APPOINTMENT_STATUSES = ["booked", "cancelled"] as const;
 export type WinsalotAppointmentStatus = (typeof WINSALOT_APPOINTMENT_STATUSES)[number];
@@ -147,6 +147,46 @@ export type WinsalotAppointmentReminderRow = {
   attempt_count: number;
   sent_at: string | null;
 };
+
+export type WinsalotReminderDisplayStatus =
+  | "Scheduled"
+  | "Sending"
+  | "Sent"
+  | "Delivered"
+  | "Bounced"
+  | "Failed"
+  | "Not scheduled";
+
+// Growth reminders are already recorded in crm_lead_emails and updated
+// by the shared Resend webhook. Keep the appointment badge derived from
+// that tracked row, exactly like Lead Gen, instead of stopping at the
+// initial API-accepted "sent" state in winsalot_appointment_reminders.
+export function winsalotReminderDisplayStatus(
+  reminder: WinsalotAppointmentReminderRow | null,
+  linkedEmail: CrmLeadEmailRow | null,
+  isEligibleForFutureReminder: boolean
+): WinsalotReminderDisplayStatus {
+  if (!reminder) return isEligibleForFutureReminder ? "Scheduled" : "Not scheduled";
+  if (linkedEmail) {
+    if (linkedEmail.status === "delivered") return "Delivered";
+    if (linkedEmail.status === "bounced" || linkedEmail.status === "complained") return "Bounced";
+    if (linkedEmail.status === "failed") return "Failed";
+    if (["sent", "opened", "clicked", "delayed"].includes(linkedEmail.status)) return "Sent";
+  }
+  if (reminder.status === "failed") return "Failed";
+  if (reminder.status === "sent") return "Sent";
+  return "Sending";
+}
+
+export function winsalotReminderErrorDetail(
+  reminder: WinsalotAppointmentReminderRow | null,
+  linkedEmail: CrmLeadEmailRow | null
+): string | null {
+  if (linkedEmail?.status === "bounced" || linkedEmail?.status === "complained") return linkedEmail.bounce_reason ?? null;
+  if (linkedEmail?.status === "failed") return linkedEmail.failure_reason ?? null;
+  if (reminder?.status === "failed") return reminder.error_detail ?? null;
+  return null;
+}
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

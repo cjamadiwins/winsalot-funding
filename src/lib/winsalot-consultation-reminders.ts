@@ -17,14 +17,19 @@ import {
 } from "./appointment-sms";
 import {
   winsalotAppointmentOccurrenceKey,
+  winsalotReminderDisplayStatus,
+  winsalotReminderErrorDetail,
   winsalotSmsReminderDisplayStatus,
   type WinsalotAppointmentReminderSettingsRow,
+  type WinsalotAppointmentReminderRow,
   type WinsalotAppointmentRow,
   type WinsalotAppointmentSmsReminderRow,
   type WinsalotReminderType,
+  type WinsalotReminderDisplayStatus,
   type WinsalotSmsRecipientType,
   type WinsalotSmsReminderStatusEntry,
 } from "./winsalot-consultation-types";
+import type { CrmLeadEmailRow } from "./crm-types";
 
 const SMS_SETTINGS_TABLE = "winsalot_appointment_reminder_settings";
 const SMS_SETTINGS_ID = "00000000-0000-0000-0000-000000000202";
@@ -497,13 +502,13 @@ export async function runWinsalotAppointmentReminderJob(options?: { dryRun?: boo
   return summary;
 }
 
-// Display status for the admin/agent appointment views - "Scheduled" /
-// "Sent" / "Failed" per reminder type, for the appointment's *current*
-// occurrence (a reschedule invalidates the previous occurrence's rows
-// for this purpose, same as leadgen's equivalent).
+// Display status for the admin/agent appointment views. Delivery status
+// comes from the existing crm_lead_emails + Resend webhook pipeline,
+// matching the Lead Gen reminder badges without creating another sender
+// or scheduler.
 export type WinsalotReminderStatusEntry = {
-  reminder24h: "scheduled" | "sent" | "failed";
-  reminder1h: "scheduled" | "sent" | "failed";
+  reminder24h: WinsalotReminderDisplayStatus;
+  reminder1h: WinsalotReminderDisplayStatus;
   // The Resend/claim failure reason (winsalot_appointment_reminders.error_detail)
   // for the failed reminder type, if any - null whenever that reminder
   // isn't in a "failed" state. Lets the admin/agent appointment list show
@@ -513,39 +518,48 @@ export type WinsalotReminderStatusEntry = {
 };
 
 export async function fetchWinsalotReminderStatusMap(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   appointments: Pick<WinsalotAppointmentRow, "id" | "status" | "appointment_start_at">[]
 ): Promise<Record<string, WinsalotReminderStatusEntry>> {
   if (appointments.length === 0) return {};
 
+  const nowMs = Date.now();
   const appointmentIds = appointments.map((a) => a.id);
-  const { data: reminderRows } = await supabase.from(REMINDER_TABLE).select("*").in("appointment_id", appointmentIds);
-  const reminders = (reminderRows ?? []) as {
-    appointment_id: string;
-    reminder_type: WinsalotReminderType;
-    occurrence_key: string;
-    status: string;
-    error_detail: string | null;
-  }[];
+  // These two delivery bookkeeping tables intentionally use service-role
+  // RLS. The caller has already supplied only appointments visible to the
+  // current admin/agent page, so this lookup cannot widen appointment
+  // access; it only enriches those authorized rows with their statuses.
+  const admin = getSupabaseAdmin();
+  const { data: reminderRows } = await admin.from(REMINDER_TABLE).select("*").in("appointment_id", appointmentIds);
+  const reminders = (reminderRows ?? []) as WinsalotAppointmentReminderRow[];
 
-  const byAppointment = new Map<string, typeof reminders>();
+  const byAppointment = new Map<string, WinsalotAppointmentReminderRow[]>();
   for (const r of reminders) {
     const list = byAppointment.get(r.appointment_id) ?? [];
     list.push(r);
     byAppointment.set(r.appointment_id, list);
   }
 
+  const trackedEmailIds = reminders.map((r) => r.crm_lead_email_id).filter((id): id is string => !!id);
+  const { data: trackedEmailRows } = trackedEmailIds.length
+    ? await admin.from("crm_lead_emails").select("*").in("id", trackedEmailIds)
+    : { data: [] as CrmLeadEmailRow[] };
+  const trackedEmailById = new Map(((trackedEmailRows ?? []) as CrmLeadEmailRow[]).map((email) => [email.id, email]));
+
   const result: Record<string, WinsalotReminderStatusEntry> = {};
   for (const appt of appointments) {
     const occurrenceKey = winsalotAppointmentOccurrenceKey(appt.appointment_start_at);
     const current = (byAppointment.get(appt.id) ?? []).filter((r) => r.occurrence_key === occurrenceKey);
-    const r24 = current.find((r) => r.reminder_type === "24_hour_reminder");
-    const r1 = current.find((r) => r.reminder_type === "1_hour_reminder");
+    const r24 = current.find((r) => r.reminder_type === "24_hour_reminder") ?? null;
+    const r1 = current.find((r) => r.reminder_type === "1_hour_reminder") ?? null;
+    const email24 = r24?.crm_lead_email_id ? (trackedEmailById.get(r24.crm_lead_email_id) ?? null) : null;
+    const email1 = r1?.crm_lead_email_id ? (trackedEmailById.get(r1.crm_lead_email_id) ?? null) : null;
+    const isEligible = appt.status === "booked" && new Date(appt.appointment_start_at).getTime() > nowMs;
     result[appt.id] = {
-      reminder24h: (r24?.status as "sent" | "failed") ?? "scheduled",
-      reminder1h: (r1?.status as "sent" | "failed") ?? "scheduled",
-      reminder24hError: r24?.status === "failed" ? (r24.error_detail ?? null) : null,
-      reminder1hError: r1?.status === "failed" ? (r1.error_detail ?? null) : null,
+      reminder24h: winsalotReminderDisplayStatus(r24, email24, isEligible),
+      reminder1h: winsalotReminderDisplayStatus(r1, email1, isEligible),
+      reminder24hError: winsalotReminderErrorDetail(r24, email24),
+      reminder1hError: winsalotReminderErrorDetail(r1, email1),
     };
   }
   return result;
