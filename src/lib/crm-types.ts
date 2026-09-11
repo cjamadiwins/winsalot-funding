@@ -338,6 +338,17 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   email_resubscribed: "Resubscribed to email",
 };
 
+// "Last Contact" must reflect a genuine direct interaction with the
+// prospect (a logged phone call, text, voicemail, follow-up outcome, or
+// consultation booking/reschedule/cancellation) - a delivered/sent email
+// alone never counts, even when it's logged as an activity through the
+// generic Add Activity form. Reused everywhere crm_opportunities.
+// last_contacted_at gets written, so that column's meaning stays this one
+// definition site-wide instead of drifting per call site.
+export function isDirectContactActivityType(type: ActivityType): boolean {
+  return type !== "email" && type !== "email_resubscribed";
+}
+
 // Stages a newly-booked consultation must never downgrade - "Change the
 // prospect's stage to Consultation Booked. Do not overwrite a more
 // advanced stage such as Client Won." An opportunity already at

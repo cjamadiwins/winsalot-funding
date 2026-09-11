@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { CircleCheck, Flame, Search, Sparkles, X } from "lucide-react";
+import { Calendar, CircleCheck, Flame, Mail, Phone, Search, Sparkles, X } from "lucide-react";
 import {
   OPPORTUNITY_PRIORITY_LABELS,
   OPPORTUNITY_PRIORITY_LEVELS,
@@ -22,8 +22,16 @@ export type SmartOpportunityRow = {
   agentName: string;
   agentId: string | null;
   score: number;
+  // Last genuine direct contact (call, text, voicemail, follow-up
+  // outcome, consultation booking/reschedule/cancellation) - never an
+  // email alone, see crm-types.ts's isDirectContactActivityType.
   lastContactAt: string | null;
   lastCallOutcome: string | null;
+  // "Latest Email Activity" - kept fully separate from Last Contact above
+  // per the same rule.
+  lastEmailStatusLabel: string | null;
+  lastEmailAt: string | null;
+  lastEmailTo: string | null;
   followUpAt: string | null;
   followUpId: string | null;
   latestNote: string | null;
@@ -233,9 +241,22 @@ export default function SmartOpportunitiesModal({
                         </div>
 
                         <div className="mt-3 grid grid-cols-1 gap-2 text-[12.5px] sm:grid-cols-3">
-                          <div className="rounded-lg bg-slate-50 p-2.5"><span className="text-slate-400">Last contact</span><div className="font-medium text-slate-700">{formatDate(row.lastContactAt)}</div></div>
-                          <div className="rounded-lg bg-slate-50 p-2.5"><span className="text-slate-400">Latest call outcome</span><div className="font-medium text-slate-700">{row.lastCallOutcome || "—"}</div></div>
-                          <div className="rounded-lg bg-slate-50 p-2.5"><span className="text-slate-400">Follow-up</span><div className="font-medium text-slate-700">{followUpStatus(row.followUpAt)}</div></div>
+                          <div className="rounded-lg bg-slate-50 p-2.5">
+                            <span className="flex items-center gap-1 text-slate-400"><Phone className="h-3 w-3" /> Last Contact</span>
+                            <div className="font-medium text-slate-700">{row.lastContactAt ? formatDate(row.lastContactAt) : "—"}</div>
+                            <div className="text-slate-500">{row.lastContactAt ? row.lastCallOutcome || "Direct contact logged" : "No contact yet"}</div>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 p-2.5">
+                            <span className="flex items-center gap-1 text-slate-400"><Mail className="h-3 w-3" /> Latest Email Activity</span>
+                            <div className="font-medium text-slate-700">
+                              {row.lastEmailStatusLabel ? `${row.lastEmailStatusLabel}${row.lastEmailTo ? ` (to ${row.lastEmailTo})` : ""}` : "No email sent yet"}
+                            </div>
+                            {row.lastEmailAt && <div className="text-slate-500">{formatDate(row.lastEmailAt)}</div>}
+                          </div>
+                          <div className="rounded-lg bg-slate-50 p-2.5">
+                            <span className="flex items-center gap-1 text-slate-400"><Calendar className="h-3 w-3" /> Follow-up</span>
+                            <div className="font-medium text-slate-700">{followUpStatus(row.followUpAt)}</div>
+                          </div>
                         </div>
                         {row.latestNote && <p className="mt-2 text-[12.5px] text-slate-600"><span className="font-semibold text-slate-700">Latest note:</span> {row.latestNote}</p>}
                         <p className="mt-2 text-[12.5px] text-slate-600"><span className="font-semibold text-slate-700">Why this score:</span> {explanation}</p>

@@ -3,7 +3,7 @@
 // its modal's rows are always derived from filtering/sorting THIS SAME
 // enriched array, so a card's number can never drift from what clicking
 // it shows.
-import type { LeadgenAppointmentRow, LeadgenFollowUpRow, LeadgenLeadRow } from "./leadgen-types";
+import { leadgenEmailStatusAt, type LeadgenAppointmentRow, type LeadgenEmailRow, type LeadgenEmailStatus, type LeadgenFollowUpRow, type LeadgenLeadRow } from "./leadgen-types";
 import type { LeadgenOpportunityScoreRow } from "./opportunity-finder";
 // Pulls in "server-only" transitively (leadgen-appointment-reminders.ts) -
 // this module's runtime functions (buildAppointmentCardRecords,
@@ -35,7 +35,39 @@ export type LeadCardRecord = LeadCardSource & {
   // The earliest pending leadgen_followups row for this lead, if any -
   // the same row Complete Follow-Up acts on everywhere else in the CRM.
   followUpId: string | null;
+  // "Latest Email Activity" card (distinct from Last Contact, which never
+  // counts an email alone) - the most recent leadgen_emails row addressed
+  // to this lead, if any. Growth CRM gets the equivalent for free via
+  // crm_opportunities.last_email_status/_status_at/_to, already
+  // denormalized onto the row; leadgen_leads has no such columns, so this
+  // is resolved from a fresh batch of leadgen_emails rows instead (see
+  // latestLeadgenEmailByLeadId below).
+  lastEmailStatus: LeadgenEmailStatus | null;
+  lastEmailAt: string | null;
+  lastEmailTo: string | null;
 };
+
+// One reduction, reused by both buildLeadCardRecords below and each
+// dashboard's own Smart Opportunities row-building - the most recent
+// leadgen_emails row per lead_id, by leadgenEmailStatusAt (the same
+// "latest status-change timestamp" the Communications UI already uses).
+export function latestLeadgenEmailByLeadId(
+  emails: Pick<
+    LeadgenEmailRow,
+    "lead_id" | "status" | "to_email" | "sent_at" | "delivered_at" | "delayed_at" | "bounced_at" | "complained_at" | "opened_at" | "clicked_at" | "failed_at" | "created_at"
+  >[]
+): Map<string, { status: LeadgenEmailStatus; to_email: string; statusAt: string }> {
+  const result = new Map<string, { status: LeadgenEmailStatus; to_email: string; statusAt: string }>();
+  for (const email of emails) {
+    if (!email.lead_id) continue;
+    const statusAt = leadgenEmailStatusAt(email as LeadgenEmailRow);
+    const current = result.get(email.lead_id);
+    if (!current || new Date(statusAt).getTime() > new Date(current.statusAt).getTime()) {
+      result.set(email.lead_id, { status: email.status, to_email: email.to_email, statusAt });
+    }
+  }
+  return result;
+}
 
 export function buildLeadCardRecords(
   leads: LeadCardSource[],
@@ -43,9 +75,10 @@ export function buildLeadCardRecords(
     scores?: Pick<LeadgenOpportunityScoreRow, "lead_id" | "signals">[];
     followUps?: Pick<LeadgenFollowUpRow, "id" | "lead_id" | "status" | "scheduled_at">[];
     agentNameById?: Map<string, string>;
+    latestEmailByLeadId?: Map<string, { status: LeadgenEmailStatus; to_email: string; statusAt: string }>;
   } = {}
 ): LeadCardRecord[] {
-  const { scores = [], followUps = [], agentNameById = new Map<string, string>() } = options;
+  const { scores = [], followUps = [], agentNameById = new Map<string, string>(), latestEmailByLeadId = new Map() } = options;
 
   const signalsByLeadId = new Map<string, { last_call_outcome?: string | null; last_note_summary?: string | null }>();
   for (const score of scores) {
@@ -67,12 +100,16 @@ export function buildLeadCardRecords(
 
   return leads.map((lead) => {
     const signals = signalsByLeadId.get(lead.id);
+    const latestEmail = latestEmailByLeadId.get(lead.id);
     return {
       ...lead,
       agentName: lead.assigned_agent_id ? (agentNameById.get(lead.assigned_agent_id) ?? "Unassigned") : "Unassigned",
       lastCallOutcome: signals?.last_call_outcome ?? null,
       latestNote: signals?.last_note_summary ?? lead.notes,
       followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
+      lastEmailStatus: latestEmail?.status ?? null,
+      lastEmailAt: latestEmail?.statusAt ?? null,
+      lastEmailTo: latestEmail?.to_email ?? null,
     };
   });
 }

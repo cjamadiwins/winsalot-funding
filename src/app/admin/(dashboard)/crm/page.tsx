@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
+import { EMAIL_STATUS_LABELS, isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
 import AdminCrmClient from "./AdminCrmClient";
@@ -137,6 +137,9 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         score: score.score,
         lastContactAt: opportunity.last_contacted_at ?? signals.last_call_at ?? null,
         lastCallOutcome: signals.last_call_outcome ?? null,
+        lastEmailStatusLabel: opportunity.last_email_status ? EMAIL_STATUS_LABELS[opportunity.last_email_status] : null,
+        lastEmailAt: opportunity.last_email_status_at,
+        lastEmailTo: opportunity.last_email_to,
         followUpAt: opportunity.next_follow_up_at,
         followUpId: earliestFollowUpIdByOpportunity.get(opportunity.id) ?? null,
         latestNote: signals.last_note_summary ?? opportunity.notes,

@@ -304,9 +304,10 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
     occurred_at: now,
   });
 
-  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
-    ? { last_contacted_at: now, updated_at: now }
-    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  // An automated email send is not "contact" (Last Contact only advances
+  // for a genuine direct interaction), so last_contacted_at is
+  // deliberately left untouched here.
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId)) ? { updated_at: now } : { status: "Consultation Information Sent" as const, updated_at: now };
   await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
@@ -386,9 +387,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId))
-    ? { last_contacted_at: now, updated_at: now }
-    : { status: "Consultation Information Sent" as const, last_contacted_at: now, updated_at: now };
+  // An automated email send is not "contact" (Last Contact only advances
+  // for a genuine direct interaction), so last_contacted_at is
+  // deliberately left untouched here.
+  const statusUpdate = (await leadHasActiveAppointment(supabase, leadId)) ? { updated_at: now } : { status: "Consultation Information Sent" as const, updated_at: now };
   await supabase.from("leadgen_leads").update(statusUpdate).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
@@ -399,8 +401,9 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
 // never forces the lead's status back to "Consultation Information
 // Sent": a follow-up may be sent well after the lead has already moved
 // on to a further status (e.g. "Interested" or "Appointment booked"),
-// and resetting that would be a regression, not a status update. Still
-// updates last_contacted_at and logs its own distinct activity type.
+// and resetting that would be a regression, not a status update. Logs
+// its own distinct activity type, but never touches last_contacted_at -
+// an automated email send is not "contact".
 export async function sendConsultationFollowUpAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
   const adminUser = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
@@ -467,7 +470,9 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  // An automated email send is not "contact" - last_contacted_at is
+  // deliberately left untouched here.
+  await supabase.from("leadgen_leads").update({ updated_at: now }).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;
@@ -535,7 +540,9 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
     occurred_at: now,
   });
 
-  await supabase.from("leadgen_leads").update({ last_contacted_at: now, updated_at: now }).eq("id", leadId);
+  // An automated email send is not "contact" - last_contacted_at is
+  // deliberately left untouched here.
+  await supabase.from("leadgen_leads").update({ updated_at: now }).eq("id", leadId);
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
-import { CircleCheck } from "lucide-react";
-import { LEADGEN_LEAD_STATUS_STYLES, leadgenOverdueDurationLabel, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
+import { Calendar, CircleCheck, Mail, Phone } from "lucide-react";
+import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_LEAD_STATUS_STYLES, leadgenOverdueDurationLabel, isLeadgenNextFollowUpOverdue } from "@/lib/leadgen-types";
 import type { LeadCardRecord } from "@/lib/leadgen-dashboard-records";
 import CrmCardModal from "@/components/crm-ui/CrmCardModal";
 import type { KpiTone, KpiTrend } from "@/components/crm-ui/KpiCard";
@@ -119,15 +119,21 @@ export default function LeadgenLeadRecordsModal({
 
                 <div className="mt-3 grid grid-cols-1 gap-2 text-[12.5px] sm:grid-cols-3">
                   <div className="rounded-lg bg-slate-50 p-2.5">
-                    <span className="text-slate-400">Last contact</span>
-                    <div className="font-medium text-slate-700">{formatDate(record.last_contacted_at)}</div>
+                    <span className="flex items-center gap-1 text-slate-400"><Phone className="h-3 w-3" /> Last Contact</span>
+                    <div className="font-medium text-slate-700">{record.last_contacted_at ? formatDate(record.last_contacted_at) : "—"}</div>
+                    <div className="text-slate-500">{record.last_contacted_at ? record.lastCallOutcome || "Direct contact logged" : "No contact yet"}</div>
                   </div>
                   <div className="rounded-lg bg-slate-50 p-2.5">
-                    <span className="text-slate-400">Latest call outcome</span>
-                    <div className="font-medium text-slate-700">{record.lastCallOutcome || "—"}</div>
+                    <span className="flex items-center gap-1 text-slate-400"><Mail className="h-3 w-3" /> Latest Email Activity</span>
+                    <div className="font-medium text-slate-700">
+                      {record.lastEmailStatus
+                        ? `${LEADGEN_EMAIL_STATUS_LABELS[record.lastEmailStatus]}${record.lastEmailTo ? ` (to ${record.lastEmailTo})` : ""}`
+                        : "No email sent yet"}
+                    </div>
+                    {record.lastEmailAt && <div className="text-slate-500">{formatDate(record.lastEmailAt)}</div>}
                   </div>
                   <div className={`rounded-lg p-2.5 ${overdue ? "bg-rose-50" : "bg-slate-50"}`}>
-                    <span className={overdue ? "text-rose-500" : "text-slate-400"}>Follow-up</span>
+                    <span className={`flex items-center gap-1 ${overdue ? "text-rose-500" : "text-slate-400"}`}><Calendar className="h-3 w-3" /> Follow-up</span>
                     <div className={`font-medium ${overdue ? "text-rose-700" : "text-slate-700"}`}>
                       {followUpStatusLabel(record.next_follow_up_at)}
                       {overdue && record.next_follow_up_at && (
