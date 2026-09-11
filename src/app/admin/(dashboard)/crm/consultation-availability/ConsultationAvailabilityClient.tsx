@@ -5,6 +5,7 @@ import type { WinsalotAppointmentReminderSettingsRow, WinsalotAvailabilitySettin
 import {
   addWinsalotBlackoutAction,
   removeWinsalotBlackoutAction,
+  updateWinsalotAutomaticSmsRemindersAction,
   updateWinsalotAvailabilityAction,
   updateWinsalotCompanySmsNumberAction,
 } from "./actions";
@@ -32,6 +33,8 @@ export default function ConsultationAvailabilityClient({
   const [blackoutError, setBlackoutError] = useState<string | null>(null);
   const [companySmsError, setCompanySmsError] = useState<string | null>(null);
   const [companySmsSaved, setCompanySmsSaved] = useState(false);
+  const [smsToggleError, setSmsToggleError] = useState<string | null>(null);
+  const [smsToggleSaved, setSmsToggleSaved] = useState(false);
 
   function toggleWeekday(day: number) {
     setSelectedWeekdays((current) => (current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort()));
@@ -69,6 +72,16 @@ export default function ConsultationAvailabilityClient({
       const result = await updateWinsalotCompanySmsNumberAction(formData);
       if (result.error) setCompanySmsError(result.error);
       else setCompanySmsSaved(true);
+    });
+  }
+
+  function handleSaveSmsToggle(formData: FormData) {
+    setSmsToggleError(null);
+    setSmsToggleSaved(false);
+    startTransition(async () => {
+      const result = await updateWinsalotAutomaticSmsRemindersAction(formData);
+      if (result.error) setSmsToggleError(result.error);
+      else setSmsToggleSaved(true);
     });
   }
 
@@ -153,6 +166,34 @@ export default function ConsultationAvailabilityClient({
         </form>
         {companySmsError && <p className="mt-2 text-sm text-rose-600">{companySmsError}</p>}
         {companySmsSaved && !companySmsError && <p className="mt-2 text-sm font-medium text-emerald-600">Saved.</p>}
+
+        <form action={handleSaveSmsToggle} className="mt-5 border-t border-slate-100 pt-4">
+          <label className="flex items-center gap-2 text-sm text-slate-800">
+            <input
+              type="hidden"
+              name="automatic_sms_reminders_enabled"
+              value={reminderSettings.automatic_sms_reminders_enabled ? "true" : "false"}
+            />
+            <input
+              type="checkbox"
+              defaultChecked={reminderSettings.automatic_sms_reminders_enabled}
+              onChange={(e) => {
+                const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
+                hidden.value = e.currentTarget.checked ? "true" : "false";
+              }}
+            />
+            Automatic SMS reminders: {reminderSettings.automatic_sms_reminders_enabled ? "On" : "Off"}
+          </label>
+          <p className="mt-1 text-xs text-slate-500">
+            Controls the prospect-facing 24-hour and 1-hour reminder SMS above. Off by default; the immediate booking
+            SMS and Winsalot Corp&apos;s own notifications are unaffected. Independent of email, which is always on.
+          </p>
+          <button type="submit" disabled={isPending} className={`${buttonClass} mt-3`}>
+            Save
+          </button>
+          {smsToggleError && <p className="mt-2 text-sm text-rose-600">{smsToggleError}</p>}
+          {smsToggleSaved && !smsToggleError && <p className="mt-2 text-sm font-medium text-emerald-600">Saved.</p>}
+        </form>
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
