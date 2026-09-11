@@ -24,6 +24,7 @@ import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/
 import { addBoardLeadNoteAction } from "./opportunity-finder/actions";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGaugeGrid";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -327,7 +328,7 @@ export default async function LeadgenAdminDashboardPage() {
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/admin/opportunity-finder?view=board" />
 
-      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/leadgen/admin/performance" />
+      <AdminPerformanceGaugeGrid rows={performanceGaugeRows} reportHref="/leadgen/admin/performance" segments={GROWTH_CRM_GAUGE_SEGMENTS} />
 
       <DialpadDashboardPreview
         audience="admin"

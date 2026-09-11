@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
+import { UserPlus, CalendarPlus, BarChart3, CalendarCheck, Target, Mail } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
@@ -11,11 +11,21 @@ import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
 import { getCrmOpportunityConversionRecords } from "@/lib/crm-conversion-data";
-import { computeCrmAgentPerformance, crmPerformanceTier, crmWeeklyRangeLabel, crmDateKey, addDays as crmAddDays } from "@/lib/crm-performance";
+import {
+  computeCrmAgentPerformance,
+  crmPerformanceTier,
+  crmWeeklyRangeLabel,
+  crmDateKey,
+  addDays as crmAddDays,
+  CRM_WEEKLY_CONSULTATIONS_TARGET,
+  CRM_WEEKLY_LEADS_ADDED_TARGET,
+  CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
+} from "@/lib/crm-performance";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
-import PerformanceRing, { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
+import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import AgentDashboardClient from "./AgentDashboardClient";
@@ -227,30 +237,38 @@ export default async function AgentDashboardPage() {
         </div>
       </div>
 
-      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-[var(--crm-border)] bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col items-center gap-6 sm:flex-row">
-          <PerformanceRing
-            percentage={performance.current.overallPercentage}
-            tier={performanceTier}
-            label="of weekly target"
-            size={230}
-            strokeWidth={14}
-            segments={GROWTH_CRM_GAUGE_SEGMENTS}
-          />
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--crm-text-muted)]">Performance</div>
-            <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
-              {performance.current.consultationsBooked} consultations · {performance.current.leadsAdded} leads added
-            </div>
-            <div className="mt-0.5 text-[12.5px] text-[var(--crm-text-muted)]">
-              Week: {crmWeeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}
-            </div>
-          </div>
-        </div>
-        <Link href="/agent/performance" className="whitespace-nowrap text-[13.5px] font-semibold text-[var(--crm-accent)] hover:opacity-80">
-          View full report →
-        </Link>
-      </section>
+      <PerformanceScoreCard
+        className="mt-6"
+        agentName={agentDisplayName}
+        score={performance.current.overallPercentage}
+        tier={performanceTier}
+        segments={GROWTH_CRM_GAUGE_SEGMENTS}
+        periodLabel={`Week: ${crmWeeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}`}
+        resultsLine={`${performance.current.consultationsBooked} consultations · ${performance.current.leadsAdded} leads added · ${performance.current.emailsDelivered} emails delivered`}
+        reportHref="/agent/performance"
+        tiles={
+          <>
+            <PerformanceTile
+              label="Consultations Booked"
+              value={`${performance.current.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}`}
+              icon={<CalendarCheck className="h-5 w-5" strokeWidth={2.3} />}
+              tone="violet"
+            />
+            <PerformanceTile
+              label="Opportunity Leads Added"
+              value={`${performance.current.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}`}
+              icon={<Target className="h-5 w-5" strokeWidth={2.3} />}
+              tone="emerald"
+            />
+            <PerformanceTile
+              label="Emails Delivered"
+              value={`${performance.current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
+              icon={<Mail className="h-5 w-5" strokeWidth={2.3} />}
+              tone="sky"
+            />
+          </>
+        }
+      />
 
       <h2 className="mt-8 font-heading text-[19px] font-bold text-[var(--color-ink-strong)]">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
