@@ -6,6 +6,7 @@ import {
   type LeadgenAppointmentStatus,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
+  type LeadgenEmailStatus,
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
@@ -45,7 +46,7 @@ export default async function LeadgenLeadsPage({
   const admin = getSupabaseAdmin();
   const { deleted, status, appointment_status, followup, agent, due_from, due_to, client, openAdd } = await searchParams;
 
-  const [{ data: leads }, { data: clients }, { data: campaigns }, { data: agents }, { data: appointments }] = await Promise.all([
+  const [{ data: leads }, { data: clients }, { data: campaigns }, { data: agents }, { data: appointments }, { data: emails }] = await Promise.all([
     admin.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     admin.from("leadgen_clients").select("*").order("name"),
     admin.from("leadgen_campaigns").select("*").order("name"),
@@ -55,6 +56,12 @@ export default async function LeadgenLeadsPage({
     // oldest-first so the reduce below keeps the last (most recent) one
     // per lead_id.
     admin.from("leadgen_appointments").select("id, lead_id, status, created_at").order("created_at", { ascending: true }),
+    // Most recent tracked email per lead, for the Email Status column -
+    // the same leadgen_emails rows/statuses the Client Detail page's
+    // Communications tab already reads, just reduced to one status per
+    // lead instead of a full history. Ordered oldest-first so the reduce
+    // below keeps the last (most recent) one per lead_id.
+    admin.from("leadgen_emails").select("id, lead_id, status, created_at").not("lead_id", "is", null).order("created_at", { ascending: true }),
   ]);
 
   const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
@@ -70,6 +77,11 @@ export default async function LeadgenLeadsPage({
       appointmentStatusByLeadId[appt.lead_id] = appt.status;
       appointmentIdByLeadId[appt.lead_id] = appt.id;
     }
+  }
+
+  const emailStatusByLeadId: Record<string, LeadgenEmailStatus> = {};
+  for (const email of emails ?? []) {
+    if (email.lead_id) emailStatusByLeadId[email.lead_id] = email.status;
   }
 
   return (
@@ -94,6 +106,7 @@ export default async function LeadgenLeadsPage({
         agents={(agents ?? []) as LeadgenUserRow[]}
         appointmentStatusByLeadId={appointmentStatusByLeadId}
         appointmentIdByLeadId={appointmentIdByLeadId}
+        emailStatusByLeadId={emailStatusByLeadId}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
         initialStatusFilter={status}
         initialAppointmentStatusFilter={appointment_status}

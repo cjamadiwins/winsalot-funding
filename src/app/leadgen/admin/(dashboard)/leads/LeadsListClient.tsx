@@ -8,11 +8,14 @@ import {
   isLeadgenNextFollowUpOverdue,
   LEADGEN_APPOINTMENT_STATUSES,
   LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_EMAIL_STATUS_LABELS,
+  LEADGEN_EMAIL_STATUS_STYLES,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
   type LeadgenAppointmentStatus,
   type LeadgenCampaignRow,
   type LeadgenClientRow,
+  type LeadgenEmailStatus,
   type LeadgenLeadRow,
   type LeadgenLeadStatus,
   type LeadgenUserRow,
@@ -21,8 +24,14 @@ import { leadgenDateKey } from "@/lib/leadgen-performance";
 import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, deleteLeadgenLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+// Compact filter-bar controls only (Add Lead/CSV upload forms keep the
+// roomier inputClass above) - same tighter sizing as the Growth CRM's
+// prospect table filter bar, so the filter row doesn't eat up vertical
+// space on desktop.
+const filterInputClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px] text-slate-900";
 
 type FollowUpFilter = "all" | "due_today" | "due" | "overdue";
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 export default function LeadsListClient({
   leads,
@@ -31,6 +40,7 @@ export default function LeadsListClient({
   agents,
   appointmentStatusByLeadId,
   appointmentIdByLeadId,
+  emailStatusByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
   initialAppointmentStatusFilter,
@@ -54,6 +64,11 @@ export default function LeadsListClient({
   // an appointment to manage), which deep-links to that appointment's
   // edit panel on /leadgen/admin/appointments.
   appointmentIdByLeadId?: Record<string, string>;
+  // Most recent leadgen_emails.status per lead_id, for the Email Status
+  // column - the exact same tracked-email data the Client Detail page's
+  // Communications tab already reads, just reduced to the latest status
+  // per lead. A lead with no tracked email simply has no entry here.
+  emailStatusByLeadId?: Record<string, LeadgenEmailStatus>;
   initialSuccessMessage?: string | null;
   // Pre-select a filter when landing here from the admin dashboard's
   // clickable stat cards or Results by Agent chart (see
@@ -175,6 +190,38 @@ export default function LeadsListClient({
       );
     });
   }, [leads, clientFilter, campaignFilter, agentFilter, statusFilter, appointmentStatusFilter, appointmentStatusByLeadId, followUpFilter, search, initialDueFrom, initialDueTo]);
+
+  // Pagination over `filtered` - a pure display slice, no change to which
+  // leads match the filters. Every filter above already lives in this
+  // same component's local state, so changing page never loses a filter
+  // selection - it's all one render, not a navigation.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+
+  // A filter/search change can shrink the result set out from under the
+  // page the admin was on - jump back to page 1 whenever the filters
+  // themselves change. Adjusting state during render (React's documented
+  // pattern for "derived state that resets on a dependency change")
+  // rather than in a useEffect, which would cause an extra render pass.
+  const filterKey = JSON.stringify([clientFilter, campaignFilter, agentFilter, statusFilter, appointmentStatusFilter, followUpFilter, search]);
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = filtered.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    let start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + maxButtons - 1);
+    start = Math.max(1, end - maxButtons + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [totalPages, currentPage]);
 
   function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
     setError(null);
@@ -360,15 +407,15 @@ export default function LeadsListClient({
         />
       )}
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-wrap gap-2">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by business, contact, phone, email…"
-          className={`${inputClass} w-full max-w-xs`}
+          className={`${filterInputClass} w-full max-w-xs`}
         />
-        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={`${inputClass} w-auto`}>
+        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={`${filterInputClass} w-auto`}>
           <option value="all">All clients</option>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
@@ -376,7 +423,7 @@ export default function LeadsListClient({
             </option>
           ))}
         </select>
-        <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className={`${inputClass} w-auto`}>
+        <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className={`${filterInputClass} w-auto`}>
           <option value="all">All campaigns</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
@@ -384,7 +431,7 @@ export default function LeadsListClient({
             </option>
           ))}
         </select>
-        <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className={`${inputClass} w-auto`}>
+        <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className={`${filterInputClass} w-auto`}>
           <option value="all">All agents</option>
           <option value="unassigned">Unassigned</option>
           {agents.map((a) => (
@@ -393,7 +440,7 @@ export default function LeadsListClient({
             </option>
           ))}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${inputClass} w-auto`}>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${filterInputClass} w-auto`}>
           <option value="all">All statuses</option>
           {LEADGEN_LEAD_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -401,7 +448,7 @@ export default function LeadsListClient({
             </option>
           ))}
         </select>
-        <select value={appointmentStatusFilter} onChange={(e) => setAppointmentStatusFilter(e.target.value)} className={`${inputClass} w-auto`}>
+        <select value={appointmentStatusFilter} onChange={(e) => setAppointmentStatusFilter(e.target.value)} className={`${filterInputClass} w-auto`}>
           <option value="all">All appointment statuses</option>
           {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -412,7 +459,7 @@ export default function LeadsListClient({
         <select
           value={followUpFilter}
           onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)}
-          className={`${inputClass} w-auto`}
+          className={`${filterInputClass} w-auto`}
         >
           <option value="all">All follow-ups</option>
           <option value="due_today">Due today</option>
@@ -452,115 +499,187 @@ export default function LeadsListClient({
         </div>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {filtered.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">No leads match your filters.</p>
         ) : (
-          <table className="w-full min-w-[1180px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
-                <th className="sticky left-0 z-30 w-11 min-w-11 bg-[var(--crm-surface)] p-3">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && filtered.every((l) => selected.has(l.id))}
-                    onChange={(e) =>
-                      setSelected(e.target.checked ? new Set(filtered.map((l) => l.id)) : new Set())
-                    }
-                  />
-                </th>
-                <th className="sticky left-11 z-30 min-w-48 bg-[var(--crm-surface)] p-3 shadow-[6px_0_8px_-8px_rgba(15,23,42,0.45)]">
-                  Business
-                </th>
-                <th className="p-3">Client</th>
-                <th className="p-3">Campaign</th>
-                <th className="p-3">Agent</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Appointment Status</th>
-                <th className="p-3">Next Follow-up</th>
-                <th className="p-3">Last Activity</th>
-                <th className="sticky right-0 z-30 min-w-28 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.45)]">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((lead) => (
-                <tr key={lead.id} className="border-b border-slate-100">
-                  <td className="sticky left-0 z-20 w-11 min-w-11 bg-[var(--crm-surface)] p-3">
-                    <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
-                  </td>
-                  <td className="sticky left-11 z-20 min-w-48 bg-[var(--crm-surface)] p-3 shadow-[6px_0_8px_-8px_rgba(15,23,42,0.45)]">
-                    <Link href={`/leadgen/admin/leads/${lead.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
-                      {lead.business_name}
-                    </Link>
-                    <div className="text-[11.5px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
-                  </td>
-                  <td className="p-3 text-slate-600">{clientById.get(lead.client_id)?.name ?? "—"}</td>
-                  <td className="p-3 text-slate-600">{lead.campaign_id ? campaignById.get(lead.campaign_id)?.name ?? "—" : "—"}</td>
-                  <td className="p-3">
-                    <select
-                      value={lead.assigned_agent_id ?? ""}
-                      disabled={isPending}
-                      onChange={(e) => runAction(() => assignLeadAction(lead.id, e.target.value || null))}
-                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-[12.5px]"
-                    >
-                      <option value="">Unassigned</option>
-                      {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.full_name}
-                        </option>
-                      ))}
-                    </select>
-                    {lead.assigned_agent_id && !agentById.get(lead.assigned_agent_id) && (
-                      <span className="ml-1 text-[11px] text-slate-400">(former agent)</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    {appointmentStatusByLeadId?.[lead.id] ? (
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
-                      >
-                        {appointmentStatusByLeadId[lead.id]}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-slate-600">
-                    {lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : "—"}
-                  </td>
-                  <td className="p-3 text-slate-600">
-                    {lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : "—"}
-                  </td>
-                  <td className="sticky right-0 z-20 min-w-28 bg-[var(--crm-surface)] p-3 shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.45)]">
-                    <div className="flex flex-wrap gap-2">
-                      {appointmentIdByLeadId?.[lead.id] && (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                    <th className="w-9 min-w-9 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={pageRows.length > 0 && pageRows.every((l) => selected.has(l.id))}
+                        onChange={(e) =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            for (const l of pageRows) {
+                              if (e.target.checked) next.add(l.id);
+                              else next.delete(l.id);
+                            }
+                            return next;
+                          })
+                        }
+                      />
+                    </th>
+                    <th className="min-w-[180px] px-3 py-2">Business</th>
+                    <th className="px-3 py-2">Client</th>
+                    <th className="px-3 py-2">Campaign</th>
+                    <th className="px-3 py-2">Agent</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Email Status</th>
+                    <th className="px-3 py-2">Appointment Status</th>
+                    <th className="px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((lead) => (
+                    <tr key={lead.id} className="border-b border-slate-100">
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
+                      </td>
+                      <td className="max-w-[220px] px-3 py-2">
                         <Link
-                          href={`/leadgen/admin/appointments?highlight=${appointmentIdByLeadId[lead.id]}`}
-                          className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-700 hover:bg-sky-100"
+                          href={`/leadgen/admin/leads/${lead.id}`}
+                          className="line-clamp-2 break-words font-semibold text-sky-600 hover:text-sky-700"
                         >
-                          Manage
+                          {lead.business_name}
                         </Link>
-                      )}
-                      <button
-                        type="button"
-                        disabled={isPending || deletingLeadId === lead.id}
-                        onClick={() => handleDeleteLead(lead)}
-                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        <div className="truncate text-[11px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{clientById.get(lead.client_id)?.name ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{lead.campaign_id ? campaignById.get(lead.campaign_id)?.name ?? "—" : "—"}</td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={lead.assigned_agent_id ?? ""}
+                          disabled={isPending}
+                          onChange={(e) => runAction(() => assignLeadAction(lead.id, e.target.value || null))}
+                          className="rounded-md border border-slate-300 px-1.5 py-1 text-[12px]"
+                        >
+                          <option value="">Unassigned</option>
+                          {agents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.full_name}
+                            </option>
+                          ))}
+                        </select>
+                        {lead.assigned_agent_id && !agentById.get(lead.assigned_agent_id) && (
+                          <span className="ml-1 text-[10.5px] text-slate-400">(former agent)</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
+                          {lead.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {emailStatusByLeadId?.[lead.id] ? (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
+                          >
+                            {LEADGEN_EMAIL_STATUS_LABELS[emailStatusByLeadId[lead.id]]}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {appointmentStatusByLeadId?.[lead.id] ? (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
+                          >
+                            {appointmentStatusByLeadId[lead.id]}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {appointmentIdByLeadId?.[lead.id] && (
+                            <Link
+                              href={`/leadgen/admin/appointments?highlight=${appointmentIdByLeadId[lead.id]}`}
+                              className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 hover:bg-sky-100"
+                            >
+                              Manage
+                            </Link>
+                          )}
+                          <button
+                            type="button"
+                            disabled={isPending || deletingLeadId === lead.id}
+                            onClick={() => handleDeleteLead(lead)}
+                            className="rounded-full border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11.5px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingLeadId === lead.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+              <span>
+                {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} lead
+                {filtered.length === 1 ? "" : "s"}
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5">
+                  <span>Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-label="Previous page"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ‹
+                  </button>
+                  {pageNumbers.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPage(n)}
+                      className={`rounded-md px-2.5 py-1 font-semibold ${
+                        n === currentPage ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-700 hover:border-slate-400"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    aria-label="Next page"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
