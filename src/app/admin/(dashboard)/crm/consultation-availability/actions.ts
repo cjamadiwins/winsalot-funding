@@ -9,7 +9,7 @@ import {
   updateWinsalotAvailabilitySettings,
   type UpdateWinsalotAvailabilityInput,
 } from "@/lib/winsalot-consultation-availability";
-import { updateWinsalotCompanySmsNotificationNumber } from "@/lib/winsalot-consultation-reminders";
+import { updateWinsalotAppointmentReminderSettings, updateWinsalotCompanySmsNotificationNumber } from "@/lib/winsalot-consultation-reminders";
 
 export async function updateWinsalotAvailabilityAction(formData: FormData): Promise<{ error?: string }> {
   const crmUser = await requireCrmAdmin();
@@ -73,6 +73,16 @@ export async function updateWinsalotCompanySmsNumberAction(formData: FormData): 
 
   const raw = String(formData.get("company_sms_notification_number") ?? "").trim();
   const result = await updateWinsalotCompanySmsNotificationNumber(supabase, raw || null, crmUser.full_name || crmUser.email);
+  revalidatePath("/admin/crm/consultation-availability");
+  return result;
+}
+
+export async function updateWinsalotAutomaticSmsRemindersAction(formData: FormData): Promise<{ error?: string }> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const automaticSmsRemindersEnabled = String(formData.get("automatic_sms_reminders_enabled") ?? "false") === "true";
+  const result = await updateWinsalotAppointmentReminderSettings(supabase, automaticSmsRemindersEnabled, crmUser.full_name || crmUser.email);
   revalidatePath("/admin/crm/consultation-availability");
   return result;
 }
