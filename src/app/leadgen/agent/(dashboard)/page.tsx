@@ -16,13 +16,14 @@ import {
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
-import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
+import { Flame, Gauge, CalendarClock, Snowflake, CalendarCheck, Target, Hourglass } from "lucide-react";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
 import KpiCard from "@/components/crm-ui/KpiCard";
-import PerformanceRing from "@/components/crm-ui/PerformanceRing";
+import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/components/crm-ui/PerformanceRing";
+import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
 import { completeFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
@@ -319,21 +320,33 @@ export default async function LeadgenAgentDashboardPage() {
         </section>
       )}
 
-      <section className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col items-center gap-6 sm:flex-row">
-          <PerformanceRing percentage={performance.percentage} tier={performanceTier} label="Performance Score" size={230} strokeWidth={14} />
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</div>
-            <div className="mt-1 text-[15px] font-bold text-[var(--crm-text)]">
-              {performance.bookedThisWeek}/{performance.target} appointments booked
-            </div>
-            <div className="mt-0.5 text-[12.5px] text-slate-500">Week of {leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd)}</div>
-          </div>
-        </div>
-        <Link href="/leadgen/agent/performance" className="whitespace-nowrap text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-          View full report →
-        </Link>
-      </section>
+      <PerformanceScoreCard
+        className="mt-6"
+        agentName={agentDisplayName}
+        score={performance.percentage}
+        tier={performanceTier}
+        segments={GROWTH_CRM_GAUGE_SEGMENTS}
+        periodLabel={`Week of ${leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd)}`}
+        resultsLine={`${performance.bookedThisWeek}/${performance.target} appointments booked`}
+        reportHref="/leadgen/agent/performance"
+        tiles={
+          <>
+            <PerformanceTile
+              label="Appointments Booked"
+              value={`${performance.bookedThisWeek}/${performance.target}`}
+              icon={<CalendarCheck className="h-5 w-5" strokeWidth={2.3} />}
+              tone="violet"
+            />
+            <PerformanceTile label="Weekly Target" value={String(performance.target)} icon={<Target className="h-5 w-5" strokeWidth={2.3} />} tone="emerald" />
+            <PerformanceTile
+              label="Remaining to Target"
+              value={String(performance.remainingToTarget)}
+              icon={<Hourglass className="h-5 w-5" strokeWidth={2.3} />}
+              tone="sky"
+            />
+          </>
+        }
+      />
 
       <LeadToAppointmentRateCard
         leads={myLeads.map((lead) => ({ id: lead.id, business_name: lead.business_name, status: lead.status, created_at: lead.created_at }))}
