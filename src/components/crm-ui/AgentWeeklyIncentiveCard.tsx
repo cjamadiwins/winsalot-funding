@@ -93,8 +93,8 @@ export default function AgentWeeklyIncentiveCard({
       </div>
 
       <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-        <PerformanceRing percentage={percentage} tier={tier} label="of weekly quota" />
-        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+        <PerformanceRing percentage={percentage} tier={tier} label="Weekly Quota Progress" />
+        <div className="grid w-full grid-cols-2 gap-3.5 sm:grid-cols-3">
           <Stat label={`This Week's ${recordLabel}`} value={String(qualifiedCount)} />
           <Stat label="Weekly Quota" value={String(quota)} />
           <Stat label="Still Required" value={String(remainingToQuota)} />
@@ -103,32 +103,32 @@ export default function AgentWeeklyIncentiveCard({
         </div>
       </div>
 
-      <p className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5 text-[12.5px] text-slate-600">{message}</p>
+      <p className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-[12.5px] leading-relaxed text-slate-600">{message}</p>
 
       {capReached && displayStatus !== "paid" && (
-        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] font-semibold text-amber-800">
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] font-semibold leading-relaxed text-amber-800">
           ⚠ Your monthly incentive cap of {formatNgn(monthlyCap)} has been reached.
         </p>
       )}
 
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <div className="mt-5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <div className="flex h-full flex-col justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Status</div>
-          <div className="mt-1.5">
-            <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${WEEKLY_INCENTIVE_DISPLAY_STATUS_STYLES[displayStatus]}`}>
-              {WEEKLY_INCENTIVE_DISPLAY_STATUS_LABEL[displayStatus]}
-            </span>
-          </div>
+          <span
+            className={`inline-block w-fit rounded-full px-2.5 py-1 text-[12px] font-semibold ${WEEKLY_INCENTIVE_DISPLAY_STATUS_STYLES[displayStatus]}`}
+          >
+            {WEEKLY_INCENTIVE_DISPLAY_STATUS_LABEL[displayStatus]}
+          </span>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <div className="flex h-full flex-col justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Month-to-Date Approved</div>
-          <div className="mt-1 text-[18px] font-extrabold text-slate-900">{formatNgn(monthToDateApproved)}</div>
-          <div className="mt-1 text-[11px] text-slate-500">{monthLabel}</div>
+          <div className="text-[18px] font-extrabold text-slate-900">{formatNgn(monthToDateApproved)}</div>
+          <div className="text-[11px] text-slate-500">{monthLabel}</div>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <div className="flex h-full flex-col justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Remaining Before Cap</div>
-          <div className="mt-1 text-[18px] font-extrabold text-slate-900">{formatNgn(remainingToCap)}</div>
-          <div className="mt-1 text-[11px] text-slate-500">of {formatNgn(monthlyCap)} monthly cap</div>
+          <div className="text-[18px] font-extrabold text-slate-900">{formatNgn(remainingToCap)}</div>
+          <div className="text-[11px] text-slate-500">of {formatNgn(monthlyCap)} monthly cap</div>
         </div>
       </div>
 
@@ -145,9 +145,9 @@ export default function AgentWeeklyIncentiveCard({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+    <div className="flex h-full flex-col justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-4">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
+      <div className="text-[18px] font-extrabold text-slate-900">{value}</div>
     </div>
   );
 }
