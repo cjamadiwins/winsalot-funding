@@ -30,8 +30,8 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       score={percentage}
       tier={band.key}
       segments={GROWTH_CRM_GAUGE_SEGMENTS}
-      gaugeSize={260}
-      strokeWidth={15}
+      gaugeSize={380}
+      strokeWidth={19}
       periodLabel={`Week of ${leadgenWeekRangeLabel(weekStart, weekEnd)}`}
       resultsLine={`${bookedThisWeek}/${target} appointments booked`}
       tiles={
