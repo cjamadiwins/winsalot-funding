@@ -3,10 +3,12 @@ import { UserPlus, CalendarPlus, BarChart3, CalendarCheck, Target, Mail } from "
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { EMAIL_STATUS_LABELS, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, OPPORTUNITY_TYPE_LABELS, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type AgentAttendanceRow, type CrmFollowUpWithOpportunity, type CrmOpportunityRow } from "@/lib/crm-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import KpiCard from "@/components/crm-ui/KpiCard";
-import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { loadAgentMyOpportunities } from "@/lib/agent-my-opportunities-data";
+import OpportunityFinderModalTrigger from "../my-opportunities/OpportunityFinderModalTrigger";
 import { Flame, Gauge, CalendarClock, Snowflake } from "lucide-react";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
 import { getCrmIncentiveAppointments } from "@/lib/crm-incentive-data";
@@ -34,10 +36,8 @@ import OverdueOpportunitiesPanel from "./OverdueOpportunitiesPanel";
 import AttendanceCard from "./AttendanceCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
-import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
-import { markOpportunityHandledTodayAction } from "../actions";
 import { addBoardOpportunityNoteAction } from "../my-opportunities/actions";
-import { completeOpportunityFollowUpAction, rescheduleOpportunityFollowUpAction } from "../opportunities/[id]/actions";
+import { completeOpportunityFollowUpAction, rescheduleOpportunityFollowUpAction, scheduleOpportunityFollowUpAction } from "../opportunities/[id]/actions";
 import { buildOpportunityCardRecords } from "@/lib/crm-dashboard-records";
 import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/lib/winsalot-consultation-data";
 
@@ -61,6 +61,7 @@ export default async function AgentDashboardPage() {
     { data: attendanceData, error: attendanceError },
     { data: opportunityScores },
     consultationRecordsRaw,
+    myOpportunitiesRows,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase
@@ -86,6 +87,10 @@ export default async function AgentDashboardPage() {
     // not just an opportunity whose stage happens to read "Consultation
     // Booked" - see winsalot-consultation-data.ts.
     getBookedConsultationRecords(supabase),
+    // Opportunity Finder dashboard modal (below) - the exact same rows the
+    // standalone /agent/my-opportunities page loads (RLS already scopes
+    // this to the signed-in agent's own opportunities).
+    loadAgentMyOpportunities(supabase, agentDisplayName),
   ]);
 
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
@@ -103,13 +108,6 @@ export default async function AgentDashboardPage() {
     else if (effective === "retry") scoreCounts.retry += 1;
   }
 
-  const opportunityById = new Map(opportunities.map((opportunity) => [opportunity.id, opportunity]));
-  const earliestFollowUpIdByOpportunity = new Map<string, string>();
-  for (const followUp of followUps) {
-    if (followUp.opportunity_id && !earliestFollowUpIdByOpportunity.has(followUp.opportunity_id)) {
-      earliestFollowUpIdByOpportunity.set(followUp.opportunity_id, followUp.id);
-    }
-  }
   // My Opportunities cards below - one enriched copy of every opportunity
   // (latest call outcome/note from Opportunity Finder's signals, earliest
   // pending follow-up id), so each card's own count AND its drill-down
@@ -121,40 +119,12 @@ export default async function AgentDashboardPage() {
     agentNameById: new Map([[crmUser.id, agentDisplayName]]),
   });
 
-  const todayKey = opportunityTodayKey();
-  const smartOpportunities: SmartOpportunityRow[] = scoredOpportunities
-    .filter((score) => score.finder_state === "active" && score.category !== "closed" && score.handled_on !== todayKey)
-    .map((score): SmartOpportunityRow | null => {
-      const opportunity = opportunityById.get(score.opportunity_id);
-      if (!opportunity) return null;
-      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
-      return {
-        scoreId: score.id,
-        prospectId: opportunity.id,
-        businessName: opportunity.business_name,
-        clientOrBusiness: "Winsalot Corp.",
-        clientId: "winsalot",
-        campaignName: `${OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}${opportunity.industry ? ` · ${opportunity.industry}` : ""}`,
-        campaignId: opportunity.industry ? `niche:${opportunity.industry}` : `type:${opportunity.opportunity_type}`,
-        agentName: agentDisplayName,
-        agentId: crmUser.id,
-        score: score.score,
-        lastContactAt: opportunity.last_contacted_at ?? signals.last_call_at ?? null,
-        lastCallOutcome: signals.last_call_outcome ?? null,
-        lastEmailStatusLabel: opportunity.last_email_status ? EMAIL_STATUS_LABELS[opportunity.last_email_status] : null,
-        lastEmailAt: opportunity.last_email_status_at,
-        lastEmailTo: opportunity.last_email_to,
-        followUpAt: opportunity.next_follow_up_at,
-        followUpId: earliestFollowUpIdByOpportunity.get(opportunity.id) ?? null,
-        latestNote: signals.last_note_summary ?? opportunity.notes,
-        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
-        recommendedAction: score.recommended_action,
-        detailHref: `/agent/opportunities/${opportunity.id}`,
-        logCallHref: `/agent/opportunities/${opportunity.id}`,
-        bookAppointmentHref: `/agent/opportunities/${opportunity.id}`,
-      };
-    })
-    .filter((row): row is SmartOpportunityRow => row !== null);
+  // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
+  // numeric-score-based "hot" definition (opportunityPriorityLevel) the
+  // modal's own list uses, counted over active (not dismissed) rows only.
+  const opportunityFinderHotCount = myOpportunitiesRows.filter(
+    (row) => row.score.finder_state === "active" && opportunityPriorityLevel(row.score.score) === "hot"
+  ).length;
 
   // Opportunity Pipeline summary card (below) - stage counts from the
   // same opportunities array already fetched above (RLS-scoped to this
@@ -310,11 +280,13 @@ export default async function AgentDashboardPage() {
         <KpiCard label="Retry" value={scoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/agent/my-opportunities?category=retry" />
       </div>
 
-      <SmartOpportunitiesModal
-        rows={smartOpportunities}
+      <OpportunityFinderModalTrigger
+        rows={myOpportunitiesRows}
+        currentAgentId={crmUser.id}
         onAddNote={addBoardOpportunityNoteAction}
+        onScheduleCallback={scheduleOpportunityFollowUpAction}
         onCompleteFollowUp={completeOpportunityFollowUpAction}
-        onMarkHandled={markOpportunityHandledTodayAction}
+        hotCount={opportunityFinderHotCount}
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/agent/my-opportunities?view=board" />

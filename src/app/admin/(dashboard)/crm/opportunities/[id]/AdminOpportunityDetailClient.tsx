@@ -60,6 +60,7 @@ export default function AdminOpportunityDetailClient({
   bookingUrl,
   appointments,
   score,
+  onBack,
 }: {
   opportunity: CrmOpportunityRow;
   activities: CrmActivityRow[];
@@ -72,9 +73,16 @@ export default function AdminOpportunityDetailClient({
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
   score: CrmOpportunityScoreRow | null;
+  // Set only when rendered inside the Opportunity Finder dashboard modal
+  // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
+  // to Opportunity Finder" link below for a button that switches the modal
+  // back to its list view instead of navigating away. The standalone
+  // /admin/crm/opportunities/[id] page never passes this, so its own
+  // ?from=opportunity-finder Link behavior is unchanged.
+  onBack?: () => void;
 }) {
   const searchParams = useSearchParams();
-  const cameFromOpportunityFinder = searchParams.get("from") === "opportunity-finder";
+  const cameFromOpportunityFinder = !onBack && searchParams.get("from") === "opportunity-finder";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -132,10 +140,16 @@ export default function AdminOpportunityDetailClient({
 
   return (
     <div>
-      {cameFromOpportunityFinder && (
-        <Link href="/admin/crm/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
-          ← Back to Opportunity Finder
-        </Link>
+      {onBack ? (
+        <button type="button" onClick={onBack} className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          ← Back to Opportunities
+        </button>
+      ) : (
+        cameFromOpportunityFinder && (
+          <Link href="/admin/crm/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            ← Back to Opportunity Finder
+          </Link>
+        )
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -4,9 +4,23 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { OpportunityPriorityOverride } from "@/lib/opportunity-finder";
+import { loadAdminOpportunityDetail, type AdminOpportunityDetailData } from "@/lib/admin-opportunity-detail-data";
 import { addActivityAction } from "../opportunities/[id]/actions";
 
 type ActionResult = { error?: string };
+
+// Fetches one opportunity's full detail record on demand - called by the
+// Opportunity Finder dashboard modal's "View Lead" so it can show the
+// exact same detail view the standalone /admin/crm/opportunities/[id]
+// page renders, without navigating away from the dashboard. Reuses that
+// page's own query logic (loadAdminOpportunityDetail) rather than a
+// second, lighter lookup.
+export async function getOpportunityDetailForModalAction(opportunityId: string): Promise<AdminOpportunityDetailData | { error: string }> {
+  await requireCrmAdmin();
+  const detail = await loadAdminOpportunityDetail(opportunityId);
+  if (!detail) return { error: "This opportunity may have been deleted, or the link may be incorrect." };
+  return detail;
+}
 
 // Board View's compact "Add Note" quick-form - a thin wrapper around the
 // exact same addActivityAction the full opportunity detail page's own

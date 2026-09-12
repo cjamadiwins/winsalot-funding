@@ -17,6 +17,7 @@ import {
 import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type OpportunityStage } from "@/lib/crm-types";
 import type { OpportunityBoardCard } from "@/lib/opportunity-board";
 import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
+import RowsPerPagePager, { usePagedRows } from "@/components/crm-ui/RowsPerPagePager";
 import { setMyOpportunityStatusAction } from "./actions";
 
 const APPOINTMENT_STATUS_STYLES: Record<string, string> = {
@@ -57,6 +58,7 @@ export default function MyOpportunitiesClient({
   onAddNote,
   onScheduleCallback,
   onCompleteFollowUp,
+  onViewDetail,
 }: {
   rows: MyOpportunityRow[];
   initialView?: "list" | "board";
@@ -64,6 +66,12 @@ export default function MyOpportunitiesClient({
   onAddNote: (opportunityId: string, note: string) => Promise<{ error?: string }>;
   onScheduleCallback: (opportunityId: string, formData: FormData) => Promise<void>;
   onCompleteFollowUp: (followUpId: string, opportunityId: string) => Promise<void>;
+  // Set only when rendered inside the Opportunity Finder dashboard modal -
+  // "View Opportunity" then switches the modal to its inline detail view
+  // instead of navigating away. Omitted on the standalone
+  // /agent/my-opportunities page, which keeps its normal Link-based
+  // navigation exactly as before.
+  onViewDetail?: (id: string) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -104,6 +112,8 @@ export default function MyOpportunitiesClient({
       }),
     [rows, showClosed, categoryFilter]
   );
+
+  const { pageRows, page, pageCount, pageSize, setPage, setPageSize, totalCount, rangeStart, rangeEnd } = usePagedRows(visible);
 
   const boardColumns = OPPORTUNITY_STAGES.map((stage) => ({ key: stage, label: stage, styleClass: OPPORTUNITY_STAGE_STYLES[stage] }));
   const boardCards: OpportunityBoardCard[] = useMemo(
@@ -190,19 +200,31 @@ export default function MyOpportunitiesClient({
           cards={boardCards}
           onAddNote={onAddNote}
           scopeNotice="Showing only opportunities assigned to you."
+          onViewDetail={onViewDetail}
         />
       )}
 
       {view === "list" && (
+      <>
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map((row) => {
+        {pageRows.map((row) => {
           const effective = effectiveOpportunityCategory(row.score);
           return (
-            <div key={row.score.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={row.score.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-bold text-slate-900">{row.businessName}</div>
-                  <div className="text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
+                <div className="min-w-0">
+                  {onViewDetail ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewDetail(row.score.opportunity_id)}
+                      className="break-words text-left font-bold text-slate-900 hover:text-sky-700"
+                    >
+                      {row.businessName}
+                    </button>
+                  ) : (
+                    <div className="break-words font-bold text-slate-900">{row.businessName}</div>
+                  )}
+                  <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xl font-extrabold text-slate-900">{row.score.score}</span>
@@ -243,9 +265,19 @@ export default function MyOpportunitiesClient({
                     Email
                   </a>
                 )}
-                <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
-                  View Opportunity
-                </Link>
+                {onViewDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => onViewDetail(row.score.opportunity_id)}
+                    className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                  >
+                    View Opportunity
+                  </button>
+                ) : (
+                  <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
+                    View Opportunity
+                  </Link>
+                )}
                 <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
                   Book Appointment
                 </Link>
@@ -341,6 +373,19 @@ export default function MyOpportunitiesClient({
         })}
         {visible.length === 0 && <div className="col-span-full py-10 text-center text-slate-400">No opportunities to show right now.</div>}
       </div>
+      {visible.length > 0 && (
+        <RowsPerPagePager
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          totalCount={totalCount}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+        />
+      )}
+      </>
       )}
     </div>
   );

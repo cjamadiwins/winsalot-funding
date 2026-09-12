@@ -44,6 +44,7 @@ export default function OpportunityDetailClient({
   emailHistory,
   isEmailSuppressed,
   bookingUrl,
+  onBack,
 }: {
   opportunity: CrmOpportunityRow;
   activities: CrmActivityRow[];
@@ -52,6 +53,12 @@ export default function OpportunityDetailClient({
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
   bookingUrl: string;
+  // Set only when rendered inside the Opportunity Finder dashboard modal
+  // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
+  // to My Opportunities" link for a button that switches the modal back to
+  // its list view instead of navigating away. The standalone
+  // /agent/opportunities/[id] page never passes this.
+  onBack?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -79,9 +86,15 @@ export default function OpportunityDetailClient({
 
   return (
     <div>
-      <Link href="/agent/dashboard#my-opportunities" className="text-[13px] font-medium text-[var(--color-accent)]">
-        &larr; Back to My Opportunities
-      </Link>
+      {onBack ? (
+        <button type="button" onClick={onBack} className="text-[13px] font-medium text-[var(--color-accent)]">
+          &larr; Back to My Opportunities
+        </button>
+      ) : (
+        <Link href="/agent/dashboard#my-opportunities" className="text-[13px] font-medium text-[var(--color-accent)]">
+          &larr; Back to My Opportunities
+        </Link>
+      )}
 
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>

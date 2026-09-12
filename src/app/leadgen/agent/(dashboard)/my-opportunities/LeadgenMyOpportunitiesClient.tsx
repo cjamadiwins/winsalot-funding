@@ -23,6 +23,7 @@ import {
 } from "@/lib/leadgen-types";
 import type { OpportunityBoardCard } from "@/lib/opportunity-board";
 import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
+import RowsPerPagePager, { usePagedRows } from "@/components/crm-ui/RowsPerPagePager";
 import { setMyLeadgenOpportunityStatusAction } from "./actions";
 
 export type LeadgenMyOpportunityRow = {
@@ -61,6 +62,7 @@ export default function LeadgenMyOpportunitiesClient({
   onAddNote,
   onScheduleCallback,
   onCompleteFollowUp,
+  onViewDetail,
 }: {
   rows: LeadgenMyOpportunityRow[];
   initialView?: "list" | "board";
@@ -68,6 +70,11 @@ export default function LeadgenMyOpportunitiesClient({
   onAddNote: (leadId: string, note: string) => Promise<{ error?: string }>;
   onScheduleCallback: (leadId: string, formData: FormData) => Promise<ActionResult>;
   onCompleteFollowUp: (followUpId: string, leadId: string) => Promise<ActionResult>;
+  // Set only when rendered inside the Opportunity Finder dashboard modal -
+  // "View Lead" then switches the modal to its inline detail view instead
+  // of navigating away. Omitted on the standalone
+  // /leadgen/agent/my-opportunities page.
+  onViewDetail?: (id: string) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -108,6 +115,8 @@ export default function LeadgenMyOpportunitiesClient({
       }),
     [rows, showClosed, categoryFilter]
   );
+
+  const { pageRows, page, pageCount, pageSize, setPage, setPageSize, totalCount, rangeStart, rangeEnd } = usePagedRows(visible);
 
   const boardColumns = LEADGEN_LEAD_STATUSES.map((status) => ({ key: status, label: status, styleClass: LEADGEN_LEAD_STATUS_STYLES[status] }));
   const boardCards: OpportunityBoardCard[] = useMemo(
@@ -196,19 +205,31 @@ export default function LeadgenMyOpportunitiesClient({
           cards={boardCards}
           onAddNote={onAddNote}
           scopeNotice="Showing only opportunities assigned to you."
+          onViewDetail={onViewDetail}
         />
       )}
 
       {view === "list" && (
+      <>
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map((row) => {
+        {pageRows.map((row) => {
           const effective = effectiveOpportunityCategory(row.score);
           return (
-            <div key={row.score.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={row.score.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-bold text-slate-900">{row.businessName}</div>
-                  <div className="text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
+                <div className="min-w-0">
+                  {onViewDetail ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewDetail(row.score.lead_id)}
+                      className="break-words text-left font-bold text-slate-900 hover:text-sky-700"
+                    >
+                      {row.businessName}
+                    </button>
+                  ) : (
+                    <div className="break-words font-bold text-slate-900">{row.businessName}</div>
+                  )}
+                  <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xl font-extrabold text-slate-900">{row.score.score}</span>
@@ -251,9 +272,19 @@ export default function LeadgenMyOpportunitiesClient({
                     Email
                   </a>
                 )}
-                <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
-                  View Lead
-                </Link>
+                {onViewDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => onViewDetail(row.score.lead_id)}
+                    className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                  >
+                    View Lead
+                  </button>
+                ) : (
+                  <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
+                    View Lead
+                  </Link>
+                )}
                 <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
                   Book Appointment
                 </Link>
@@ -349,6 +380,19 @@ export default function LeadgenMyOpportunitiesClient({
         })}
         {visible.length === 0 && <div className="col-span-full py-10 text-center text-slate-400">No opportunities to show right now.</div>}
       </div>
+      {visible.length > 0 && (
+        <RowsPerPagePager
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          totalCount={totalCount}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+        />
+      )}
+      </>
       )}
     </div>
   );

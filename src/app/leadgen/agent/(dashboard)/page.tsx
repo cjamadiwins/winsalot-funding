@@ -15,7 +15,21 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
-import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_KPI_TONE, opportunityTodayKey, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { loadLeadgenAgentMyOpportunities } from "@/lib/leadgen-agent-my-opportunities-data";
+import OpportunityFinderModalTrigger from "./my-opportunities/OpportunityFinderModalTrigger";
+import type { LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
+import { bookAppointmentAction } from "./appointments/actions";
+import {
+  completeFollowUpAction,
+  recordCallOutcomeAction,
+  scheduleFollowUpAction,
+  sendConsultationEmailAction,
+  sendConsultationFollowUpAction,
+  sendConsultationInvitationAction,
+  sendMantraCollabIntroEmailAction,
+  updateLeadAction,
+} from "./leads/[id]/actions";
 import { Flame, Gauge, CalendarClock, Snowflake, CalendarCheck, Target, Hourglass } from "lucide-react";
 import { computeLeadgenAgentPerformance, leadgenPerformanceTier, leadgenWeekRangeLabel, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
 import { computeLeadgenWeeklyIncentive, leadgenCurrentIncentiveWeek, type LeadgenIncentiveAppointment } from "@/lib/leadgen-incentives";
@@ -25,19 +39,15 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
 import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCard";
-import { completeFollowUpAction, scheduleFollowUpAction } from "./leads/[id]/actions";
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
-import SmartOpportunitiesModal, { type SmartOpportunityRow } from "@/components/crm-ui/SmartOpportunitiesModal";
-import { markLeadgenOpportunityHandledTodayAction } from "./actions";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
 import { buildLeadCardRecords, latestLeadgenEmailByLeadId } from "@/lib/leadgen-dashboard-records";
-import { LEADGEN_EMAIL_STATUS_LABELS } from "@/lib/leadgen-types";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -60,6 +70,7 @@ export default async function LeadgenAgentDashboardPage() {
     monthToDateApproved,
     { data: opportunityScores },
     { data: recentEmails },
+    myOpportunitiesRows,
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -106,6 +117,10 @@ export default async function LeadgenAgentDashboardPage() {
       .select("lead_id, status, to_email, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at, created_at")
       .not("lead_id", "is", null)
       .order("created_at", { ascending: false }),
+    // Opportunity Finder dashboard modal (below) - the exact same rows the
+    // standalone /leadgen/agent/my-opportunities page loads (RLS already
+    // scopes this to the signed-in agent's own leads).
+    loadLeadgenAgentMyOpportunities(supabase, agentDisplayName),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -214,47 +229,27 @@ export default async function LeadgenAgentDashboardPage() {
     .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS)
     .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
 
-  const leadById = new Map(myLeads.map((lead) => [lead.id, lead] as const));
-  const campaignNameById = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.name] as const));
-  const earliestFollowUpIdByLead = new Map<string, string>();
-  for (const followUp of allFollowUps) {
-    if (!earliestFollowUpIdByLead.has(followUp.lead_id)) earliestFollowUpIdByLead.set(followUp.lead_id, followUp.id);
-  }
-  const todayKey = opportunityTodayKey();
-  const smartOpportunities: SmartOpportunityRow[] = scoredLeads
-    .filter((score) => score.finder_state === "active" && score.category !== "closed" && score.handled_on !== todayKey)
-    .map((score): SmartOpportunityRow | null => {
-      const lead = leadById.get(score.lead_id);
-      if (!lead) return null;
-      const signals = score.signals as { last_call_at?: string | null; last_call_outcome?: string | null; last_note_summary?: string | null };
-      const latestEmail = latestEmailByLeadId.get(lead.id);
-      return {
-        scoreId: score.id,
-        prospectId: lead.id,
-        businessName: lead.business_name,
-        clientOrBusiness: clientNameById.get(lead.client_id) ?? "Assigned Client",
-        clientId: lead.client_id,
-        campaignName: lead.campaign_id ? campaignNameById.get(lead.campaign_id) ?? "Campaign" : "No campaign",
-        campaignId: lead.campaign_id,
-        agentName: agentDisplayName,
-        agentId: agent.id,
-        score: score.score,
-        lastContactAt: lead.last_contacted_at ?? signals.last_call_at ?? null,
-        lastCallOutcome: signals.last_call_outcome ?? null,
-        lastEmailStatusLabel: latestEmail ? LEADGEN_EMAIL_STATUS_LABELS[latestEmail.status] : null,
-        lastEmailAt: latestEmail?.statusAt ?? null,
-        lastEmailTo: latestEmail?.to_email ?? null,
-        followUpAt: lead.next_follow_up_at,
-        followUpId: earliestFollowUpIdByLead.get(lead.id) ?? null,
-        latestNote: signals.last_note_summary ?? null,
-        explanation: score.reasons.slice(0, 3).join(" · ") || signals.last_note_summary || "No significant activity recorded yet.",
-        recommendedAction: score.recommended_action,
-        detailHref: `/leadgen/agent/leads/${lead.id}`,
-        logCallHref: `/leadgen/agent/leads/${lead.id}`,
-        bookAppointmentHref: `/leadgen/agent/leads/${lead.id}`,
-      };
-    })
-    .filter((row): row is SmartOpportunityRow => row !== null);
+  // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
+  // numeric-score-based "hot" definition (opportunityPriorityLevel) the
+  // modal's own list uses, counted over active (not dismissed) rows only.
+  const opportunityFinderHotCount = myOpportunitiesRows.filter(
+    (row) => row.score.finder_state === "active" && opportunityPriorityLevel(row.score.score) === "hot"
+  ).length;
+  const leadDetailActions: LeadDetailActions = {
+    updateLead: updateLeadAction,
+    recordCallOutcome: recordCallOutcomeAction,
+    scheduleFollowUp: scheduleFollowUpAction,
+    completeFollowUp: completeFollowUpAction,
+    bookAppointment: bookAppointmentAction,
+    sendConsultationEmail: sendConsultationEmailAction,
+    sendConsultationInvitation: sendConsultationInvitationAction,
+    sendConsultationFollowUp: sendConsultationFollowUpAction,
+    sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
+    // No resendEmail / assignAgent / clearBouncedEmail /
+    // resendAppointmentNotification / sendAppointmentReminder - all
+    // admin-only, same as the standalone /leadgen/agent/leads/[id] page's
+    // own `actions` bag.
+  };
 
   return (
     <div>
@@ -321,11 +316,15 @@ export default async function LeadgenAgentDashboardPage() {
         <KpiCard label="Retry" value={opportunityScoreCounts.retry} icon={<Snowflake />} tone={OPPORTUNITY_CATEGORY_KPI_TONE.retry} href="/leadgen/agent/my-opportunities?category=retry" />
       </div>
 
-      <SmartOpportunitiesModal
-        rows={smartOpportunities}
+      <OpportunityFinderModalTrigger
+        rows={myOpportunitiesRows}
+        currentUserName={agent.full_name || agent.email}
+        currentUserId={agent.id}
+        actions={leadDetailActions}
         onAddNote={addBoardLeadNoteAction}
+        onScheduleCallback={scheduleFollowUpAction}
         onCompleteFollowUp={completeFollowUpAction}
-        onMarkHandled={markLeadgenOpportunityHandledTodayAction}
+        hotCount={opportunityFinderHotCount}
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/agent/my-opportunities?view=board" />

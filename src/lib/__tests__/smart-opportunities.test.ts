@@ -93,15 +93,22 @@ describe("Smart Opportunity database contract", () => {
   });
 });
 
-describe("Smart Opportunity dashboard integration", () => {
+describe("Opportunity Finder dashboard integration", () => {
   const source = (relativePath: string) => fs.readFileSync(path.resolve(__dirname, relativePath), "utf8");
 
+  // The dashboard "Smart Opportunities" launcher (SmartOpportunitiesModal)
+  // was superseded by the full Opportunity Finder dashboard modal
+  // (OpportunityFinderModalTrigger, one per CRM/role) - same trigger spot
+  // on the dashboard, now opening the complete scored list/board views,
+  // filters, and actions the standalone Opportunity Finder/My
+  // Opportunities pages have always had, plus an inline lead detail view,
+  // instead of the old lighter widget.
   it.each([
     "../../app/admin/(dashboard)/crm/page.tsx",
     "../../app/agent/(dashboard)/dashboard/page.tsx",
     "../../app/leadgen/admin/(dashboard)/page.tsx",
     "../../app/leadgen/agent/(dashboard)/page.tsx",
   ])("places the modal launcher directly on %s", (relativePath) => {
-    expect(source(relativePath)).toContain("<SmartOpportunitiesModal");
+    expect(source(relativePath)).toContain("<OpportunityFinderModalTrigger");
   });
 });
