@@ -48,12 +48,13 @@ export default function DialpadPerformanceDashboard({
       data.summaries.reduce(
         (result, row) => ({
           calls: result.calls + row.total_calls,
+          inbound: result.inbound + row.inbound_calls,
           placed: result.placed + row.placed_calls,
           answered: result.answered + row.answered_calls,
           missed: result.missed + row.missed_calls,
           duration: result.duration + row.total_duration_seconds,
         }),
-        { calls: 0, placed: 0, answered: 0, missed: 0, duration: 0 }
+        { calls: 0, inbound: 0, placed: 0, answered: 0, missed: 0, duration: 0 }
       ),
     [data.summaries]
   );
@@ -162,8 +163,9 @@ export default function DialpadPerformanceDashboard({
         </section>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <Stat label="Total Calls" value={totals.calls.toLocaleString()} tone="blue" />
+            <Stat label="Inbound Calls" value={totals.inbound.toLocaleString()} tone="indigo" />
             <Stat label="Outbound Calls" value={totals.placed.toLocaleString()} tone="indigo" />
             <Stat label="Answered Calls" value={totals.answered.toLocaleString()} tone="green" />
             <Stat label="Avg Talk Time" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />

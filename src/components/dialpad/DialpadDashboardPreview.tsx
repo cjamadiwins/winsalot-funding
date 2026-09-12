@@ -23,12 +23,13 @@ export default function DialpadDashboardPreview({ audience, report, summaries, f
   const totals = summaries.reduce(
     (total, row) => ({
       calls: total.calls + row.total_calls,
+      inbound: total.inbound + row.inbound_calls,
       placed: total.placed + row.placed_calls,
       answered: total.answered + row.answered_calls,
       missed: total.missed + row.missed_calls,
       duration: total.duration + row.total_duration_seconds,
     }),
-    { calls: 0, placed: 0, answered: 0, missed: 0, duration: 0 }
+    { calls: 0, inbound: 0, placed: 0, answered: 0, missed: 0, duration: 0 }
   );
   const maxCalls = Math.max(1, ...visibleRows.map((row) => row.total_calls));
 
@@ -63,10 +64,11 @@ export default function DialpadDashboardPreview({ audience, report, summaries, f
         </p>
       ) : isAdmin ? (
         <>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
               ["Total calls", totals.calls],
-              ["Placed", totals.placed],
+              ["Inbound", totals.inbound],
+              ["Outbound", totals.placed],
               ["Answered", totals.answered],
               ["Missed", totals.missed],
               ["Talk time", formatDialpadDuration(totals.duration)],
@@ -107,10 +109,11 @@ export default function DialpadDashboardPreview({ audience, report, summaries, f
         // shown with the same stat/chart language as the admin Dialpad
         // Performance dashboard rather than the team comparison list above.
         <>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               ["Total Calls", totals.calls],
-              ["Placed", totals.placed],
+              ["Inbound", totals.inbound],
+              ["Outbound", totals.placed],
               ["Answered", totals.answered],
               ["Missed", totals.missed],
               ["Total Duration", formatDialpadDuration(totals.duration)],
