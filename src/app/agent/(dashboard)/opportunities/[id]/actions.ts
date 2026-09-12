@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
+import { loadAgentOpportunityDetail, type AgentOpportunityDetailData } from "@/lib/agent-opportunity-detail-data";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
@@ -403,4 +404,18 @@ export async function bookConsultationAction(opportunityId: string, input: BookC
   revalidateOpportunity(opportunityId);
   revalidatePath("/agent/appointments");
   return result;
+}
+
+// Fetches one opportunity's full detail record on demand - called by the
+// agent Opportunity Finder dashboard modal's "View Opportunity" so it can
+// show the exact same detail view the standalone
+// /agent/opportunities/[id] page renders, without navigating away from
+// the dashboard. Reuses that page's own query logic
+// (loadAgentOpportunityDetail, RLS-scoped to this agent's own
+// opportunities) rather than a second, lighter lookup.
+export async function getAgentOpportunityDetailForModalAction(opportunityId: string): Promise<AgentOpportunityDetailData | { error: string }> {
+  await requireCrmUser();
+  const detail = await loadAgentOpportunityDetail(opportunityId);
+  if (!detail) return { error: "This opportunity may have been deleted, reassigned, or the link may be incorrect." };
+  return detail;
 }

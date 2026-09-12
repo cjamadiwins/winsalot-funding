@@ -23,6 +23,7 @@ import {
 } from "@/lib/leadgen-types";
 import type { OpportunityBoardCard } from "@/lib/opportunity-board";
 import OpportunityBoardView from "@/components/crm-ui/OpportunityBoardView";
+import RowsPerPagePager, { usePagedRows } from "@/components/crm-ui/RowsPerPagePager";
 import {
   assignFinderLeadAgentAction,
   dismissFinderOpportunityAction,
@@ -94,6 +95,7 @@ export default function LeadgenOpportunityFinderClient({
   onAddNote,
   onScheduleCallback,
   onCompleteFollowUp,
+  onViewDetail,
 }: {
   rows: LeadgenOpportunityFinderRow[];
   agents: { id: string; name: string }[];
@@ -109,6 +111,12 @@ export default function LeadgenOpportunityFinderClient({
   onAddNote: (leadId: string, note: string) => Promise<{ error?: string }>;
   onScheduleCallback: (leadId: string, formData: FormData) => Promise<ActionResult>;
   onCompleteFollowUp: (followUpId: string, leadId: string) => Promise<ActionResult>;
+  // Set only when rendered inside the Opportunity Finder dashboard modal -
+  // "View Lead" then switches the modal to its inline detail view instead
+  // of navigating to /leadgen/admin/leads/[id]. Omitted on the standalone
+  // /leadgen/admin/opportunity-finder page, which keeps its normal
+  // Link-based navigation exactly as before.
+  onViewDetail?: (id: string) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -208,6 +216,8 @@ export default function LeadgenOpportunityFinderClient({
   );
 
   const boardColumns = LEADGEN_LEAD_STATUSES.map((status) => ({ key: status, label: status, styleClass: LEADGEN_LEAD_STATUS_STYLES[status] }));
+
+  const { pageRows, page, pageCount, pageSize, setPage, setPageSize, totalCount, rangeStart, rangeEnd } = usePagedRows(filtered);
 
   return (
     <div className="mt-6">
@@ -313,252 +323,278 @@ export default function LeadgenOpportunityFinderClient({
         />
       </div>
 
-      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} />}
+      {view === "board" && <OpportunityBoardView columns={boardColumns} cards={boardCards} onAddNote={onAddNote} onViewDetail={onViewDetail} />}
 
       {view === "list" && (
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1300px] text-left text-[13px]">
-          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Business / Contact</th>
-              <th className="px-4 py-3">Client / Campaign</th>
-              <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3">Score</th>
-              <th className="px-4 py-3">Last Call</th>
-              <th className="px-4 py-3">Last Email</th>
-              <th className="px-4 py-3">Last Note</th>
-              <th className="px-4 py-3">Follow-Up</th>
-              <th className="px-4 py-3">Why / Next Action</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filtered.map((row) => {
+        <>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {pageRows.map((row) => {
               const effective = effectiveOpportunityCategory(row.score);
               const dismissed = row.score.finder_state === "dismissed";
               return (
-                <tr key={row.score.id} className="align-top">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`${row.detailHref}?from=opportunity-finder`}
-                      className="font-semibold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
-                    >
-                      {row.businessName}
-                    </Link>
-                    <div className="text-slate-500">{row.contactName || "—"}</div>
-                    <div className="mt-1 text-[11px] text-slate-400">{row.status}</div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    <div>{row.clientName || "—"}</div>
-                    <div className="text-[11px] text-slate-400">{row.campaignName || "—"}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={row.assignedAgentId ?? ""}
-                      onChange={(e) => runAction(() => assignFinderLeadAgentAction(row.score.lead_id, e.target.value || null))}
-                      disabled={isPending}
-                      className={inputClass}
-                    >
-                      <option value="">Unassigned</option>
-                      {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-extrabold text-slate-900">{row.score.score}</span>
+                <div key={row.score.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      {onViewDetail ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewDetail(row.score.lead_id)}
+                          className="break-words text-left font-bold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
+                        >
+                          {row.businessName}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`${row.detailHref}?from=opportunity-finder`}
+                          className="break-words font-bold text-sky-700 underline decoration-sky-300 decoration-1 underline-offset-2 hover:text-sky-800 hover:decoration-sky-500"
+                        >
+                          {row.businessName}
+                        </Link>
+                      )}
+                      <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
+                      <div className="break-words text-[11px] text-slate-400">
+                        {row.status} · {row.clientName || "No client"} · {row.campaignName || "No campaign"}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="text-xl font-extrabold text-slate-900">{row.score.score}</span>
                       <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
                         {OPPORTUNITY_CATEGORY_LABELS[effective]}
                       </span>
                     </div>
-                    <select
-                      value={row.score.priority_override ?? ""}
-                      onChange={(e) =>
-                        runAction(() =>
-                          setFinderPriorityOverrideAction(row.score.id, (e.target.value || null) as OpportunityPriorityOverride | null)
-                        )
-                      }
-                      disabled={isPending}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="">No manual override</option>
-                      {PRIORITY_OVERRIDE_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          Override: {OPPORTUNITY_CATEGORY_LABELS[opt]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{fmt(row.lastCallAt)}</td>
-                  <td className="px-4 py-3 text-slate-600">{fmt(row.lastEmailAt)}</td>
-                  <td className="px-4 py-3 max-w-[220px] text-slate-600">
-                    {row.lastNote ? <span title={row.lastNote}>{row.lastNote.length > 80 ? `${row.lastNote.slice(0, 80)}…` : row.lastNote}</span> : "—"}
-                  </td>
-                  <td className={`px-4 py-3 ${isOverdue(row.nextFollowUpAt) ? "font-semibold text-rose-600" : "text-slate-600"}`}>
-                    {fmt(row.nextFollowUpAt)}
-                  </td>
-                  <td className="px-4 py-3 max-w-[280px]">
-                    <ul className="list-disc pl-4 text-slate-600">
-                      {row.score.reasons.slice(0, 3).map((reason, i) => (
-                        <li key={i}>{reason}</li>
-                      ))}
-                    </ul>
-                    <div className="mt-1.5 font-semibold text-slate-800">{row.score.recommended_action}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {row.phone && (
-                        <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
-                          Call
-                        </a>
-                      )}
-                      {row.email && (
-                        <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
-                          Email
-                        </a>
-                      )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Agent
+                      <select
+                        value={row.assignedAgentId ?? ""}
+                        onChange={(e) => runAction(() => assignFinderLeadAgentAction(row.score.lead_id, e.target.value || null))}
+                        disabled={isPending}
+                        className={`${inputClass} mt-1 w-full normal-case`}
+                      >
+                        <option value="">Unassigned</option>
+                        {agents.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Priority Override
+                      <select
+                        value={row.score.priority_override ?? ""}
+                        onChange={(e) =>
+                          runAction(() =>
+                            setFinderPriorityOverrideAction(row.score.id, (e.target.value || null) as OpportunityPriorityOverride | null)
+                          )
+                        }
+                        disabled={isPending}
+                        className={`${inputClass} mt-1 w-full normal-case`}
+                      >
+                        <option value="">No override</option>
+                        {PRIORITY_OVERRIDE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {OPPORTUNITY_CATEGORY_LABELS[opt]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-[12.5px] text-slate-600">
+                    <div>
+                      <dt className="text-slate-400">Last call</dt>
+                      <dd className="break-words">{fmt(row.lastCallAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-400">Last email</dt>
+                      <dd className="break-words">{fmt(row.lastEmailAt)}</dd>
+                    </div>
+                    <div className={isOverdue(row.nextFollowUpAt) ? "font-semibold text-rose-600" : ""}>
+                      <dt className={isOverdue(row.nextFollowUpAt) ? "text-rose-400" : "text-slate-400"}>Follow-up</dt>
+                      <dd className="break-words">{fmt(row.nextFollowUpAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-400">Last note</dt>
+                      <dd className="break-words">{row.lastNote || "—"}</dd>
+                    </div>
+                  </dl>
+
+                  <ul className="mt-3 list-disc space-y-0.5 break-words pl-4 text-[12.5px] text-slate-600">
+                    {row.score.reasons.slice(0, 3).map((reason, i) => (
+                      <li key={i}>{reason}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 break-words rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] font-semibold text-slate-800">{row.score.recommended_action}</div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {row.phone && (
+                      <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                        Call
+                      </a>
+                    )}
+                    {row.email && (
+                      <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                        Email
+                      </a>
+                    )}
+                    {onViewDetail ? (
+                      <button
+                        type="button"
+                        onClick={() => onViewDetail(row.score.lead_id)}
+                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                      >
+                        View Lead
+                      </button>
+                    ) : (
                       <Link
                         href={`${row.detailHref}?from=opportunity-finder`}
                         className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
                       >
                         View Lead
                       </Link>
-                      <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
-                        Book Appointment
-                      </Link>
+                    )}
+                    <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                      Book Appointment
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotingId(notingId === row.score.id ? null : row.score.id);
+                        setNoteDraft("");
+                      }}
+                      className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                    >
+                      Add Note
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSchedulingId(schedulingId === row.score.id ? null : row.score.id);
+                        setCallbackDraft("");
+                      }}
+                      className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                    >
+                      Set Callback
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending || !row.followUpId}
+                      title={row.followUpId ? undefined : "No pending callback to complete"}
+                      onClick={() => row.followUpId && runAction(() => onCompleteFollowUp(row.followUpId!, row.score.lead_id))}
+                      className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Mark Complete
+                    </button>
+                    {dismissed ? (
                       <button
                         type="button"
+                        disabled={isPending}
+                        onClick={() => runAction(() => reopenFinderOpportunityAction(row.score.id))}
+                        className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400"
+                      >
+                        Reopen
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setDismissingId(dismissingId === row.score.id ? null : row.score.id)}
+                        className="rounded-full border border-rose-300 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+
+                  {notingId === row.score.id && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <input
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder="Quick note..."
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                      />
+                      <button
+                        type="button"
+                        disabled={isPending || !noteDraft.trim()}
                         onClick={() => {
-                          setNotingId(notingId === row.score.id ? null : row.score.id);
+                          const note = noteDraft.trim();
+                          runAction(() => onAddNote(row.score.lead_id, note));
+                          setNotingId(null);
                           setNoteDraft("");
                         }}
-                        className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Add Note
+                        Save
                       </button>
+                    </div>
+                  )}
+                  {schedulingId === row.score.id && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <input
+                        type="datetime-local"
+                        value={callbackDraft}
+                        onChange={(e) => setCallbackDraft(e.target.value)}
+                        className="rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                      />
                       <button
                         type="button"
+                        disabled={isPending || !callbackDraft}
                         onClick={() => {
-                          setSchedulingId(schedulingId === row.score.id ? null : row.score.id);
+                          const formData = new FormData();
+                          formData.set("scheduled_at", callbackDraft);
+                          runAction(() => onScheduleCallback(row.score.lead_id, formData));
+                          setSchedulingId(null);
                           setCallbackDraft("");
                         }}
-                        className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Set Callback
+                        Save
                       </button>
+                    </div>
+                  )}
+                  {dismissingId === row.score.id && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <input
+                        value={dismissReason}
+                        onChange={(e) => setDismissReason(e.target.value)}
+                        placeholder="Reason for dismissing"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                      />
                       <button
                         type="button"
-                        disabled={isPending || !row.followUpId}
-                        title={row.followUpId ? undefined : "No pending callback to complete"}
-                        onClick={() => row.followUpId && runAction(() => onCompleteFollowUp(row.followUpId!, row.score.lead_id))}
-                        className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={isPending}
+                        onClick={() => {
+                          runAction(() => dismissFinderOpportunityAction(row.score.id, dismissReason));
+                          setDismissingId(null);
+                          setDismissReason("");
+                        }}
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
                       >
-                        Mark Complete
+                        Confirm Dismiss
                       </button>
-                      {notingId === row.score.id && (
-                        <span className="flex w-full flex-wrap items-center gap-1">
-                          <input
-                            value={noteDraft}
-                            onChange={(e) => setNoteDraft(e.target.value)}
-                            placeholder="Quick note..."
-                            className="w-40 rounded-lg border border-slate-300 px-2 py-1 text-[11.5px]"
-                          />
-                          <button
-                            type="button"
-                            disabled={isPending || !noteDraft.trim()}
-                            onClick={() => {
-                              const note = noteDraft.trim();
-                              runAction(() => onAddNote(row.score.lead_id, note));
-                              setNotingId(null);
-                              setNoteDraft("");
-                            }}
-                            className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            Save
-                          </button>
-                        </span>
-                      )}
-                      {schedulingId === row.score.id && (
-                        <span className="flex w-full flex-wrap items-center gap-1">
-                          <input
-                            type="datetime-local"
-                            value={callbackDraft}
-                            onChange={(e) => setCallbackDraft(e.target.value)}
-                            className="rounded-lg border border-slate-300 px-2 py-1 text-[11.5px]"
-                          />
-                          <button
-                            type="button"
-                            disabled={isPending || !callbackDraft}
-                            onClick={() => {
-                              const formData = new FormData();
-                              formData.set("scheduled_at", callbackDraft);
-                              runAction(() => onScheduleCallback(row.score.lead_id, formData));
-                              setSchedulingId(null);
-                              setCallbackDraft("");
-                            }}
-                            className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            Save
-                          </button>
-                        </span>
-                      )}
-                      {dismissed ? (
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() => runAction(() => reopenFinderOpportunityAction(row.score.id))}
-                          className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400"
-                        >
-                          Reopen
-                        </button>
-                      ) : dismissingId === row.score.id ? (
-                        <span className="flex items-center gap-1">
-                          <input
-                            value={dismissReason}
-                            onChange={(e) => setDismissReason(e.target.value)}
-                            placeholder="Reason"
-                            className="rounded-lg border border-slate-300 px-2 py-1 text-[11.5px]"
-                          />
-                          <button
-                            type="button"
-                            disabled={isPending}
-                            onClick={() => {
-                              runAction(() => dismissFinderOpportunityAction(row.score.id, dismissReason));
-                              setDismissingId(null);
-                              setDismissReason("");
-                            }}
-                            className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
-                          >
-                            Confirm
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDismissingId(row.score.id)}
-                          className="rounded-full border border-rose-300 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
-                        >
-                          Dismiss
-                        </button>
-                      )}
                     </div>
-                  </td>
-                </tr>
+                  )}
+                </div>
               );
             })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
-                  No opportunities match these filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            {filtered.length === 0 && <div className="col-span-full py-10 text-center text-slate-400">No opportunities match these filters.</div>}
+          </div>
+          {filtered.length > 0 && (
+            <RowsPerPagePager
+              page={page}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              totalCount={totalCount}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+            />
+          )}
+        </>
       )}
     </div>
   );

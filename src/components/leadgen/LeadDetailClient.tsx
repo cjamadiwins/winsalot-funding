@@ -112,6 +112,7 @@ export default function LeadDetailClient({
   actions,
   listPath,
   score,
+  onBack,
 }: {
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
@@ -161,10 +162,17 @@ export default function LeadDetailClient({
   // admin-only); omitted (undefined) on the agent lead detail page, where
   // it's simply not rendered.
   score?: LeadgenOpportunityScoreRow | null;
+  // Set only when rendered inside the Opportunity Finder dashboard modal
+  // (see OpportunityFinderModalTrigger, admin and agent) - swaps both
+  // page-navigation "back" links for a button that switches the modal back
+  // to its list view instead of navigating away, and a successful delete
+  // returns to that list view instead of redirecting to listPath. Neither
+  // standalone lead detail page (admin or agent) ever passes this.
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const cameFromOpportunityFinder = searchParams.get("from") === "opportunity-finder";
+  const cameFromOpportunityFinder = !onBack && searchParams.get("from") === "opportunity-finder";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -206,7 +214,8 @@ export default function LeadDetailClient({
       return;
     }
 
-    router.replace(`${listPath}?deleted=1`);
+    if (onBack) onBack();
+    else router.replace(`${listPath}?deleted=1`);
   }
 
   const bouncedSet = new Set(bouncedEmails);
@@ -305,10 +314,16 @@ export default function LeadDetailClient({
   return (
     <div>
       <RefreshOnFocus />
-      {cameFromOpportunityFinder && (
-        <Link href="/leadgen/admin/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
-          ← Back to Opportunity Finder
-        </Link>
+      {onBack ? (
+        <button type="button" onClick={onBack} className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          ← Back to Opportunities
+        </button>
+      ) : (
+        cameFromOpportunityFinder && (
+          <Link href="/leadgen/admin/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            ← Back to Opportunity Finder
+          </Link>
+        )
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -350,9 +365,15 @@ export default function LeadDetailClient({
         ) : (
           <span className="text-slate-700">{assignedAgentName ?? "Unassigned"}</span>
         )}
-        <Link href={listPath} className="ml-auto text-[13px] font-semibold text-sky-600 hover:text-sky-700">
-          ← Back to Leads
-        </Link>
+        {onBack ? (
+          <button type="button" onClick={onBack} className="ml-auto text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            ← Back to Leads
+          </button>
+        ) : (
+          <Link href={listPath} className="ml-auto text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            ← Back to Leads
+          </Link>
+        )}
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}

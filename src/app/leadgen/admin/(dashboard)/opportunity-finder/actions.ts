@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { OpportunityPriorityOverride } from "@/lib/opportunity-finder";
+import { loadLeadgenLeadDetail, type LeadgenLeadDetailData } from "@/lib/leadgen-lead-detail-data";
 import { recordCallOutcomeAction } from "../leads/[id]/actions";
 
 type ActionResult = { error?: string };
@@ -108,4 +109,17 @@ export async function reopenFinderOpportunityAction(scoreId: string): Promise<Ac
 
   revalidateFinder();
   return {};
+}
+
+// Fetches one lead's full detail record on demand - called by the
+// Opportunity Finder dashboard modal's "View Lead" so it can show the
+// exact same detail view the standalone /leadgen/admin/leads/[id] page
+// renders, without navigating away from the dashboard. Reuses that page's
+// own query logic (loadLeadgenLeadDetail) rather than a second, lighter
+// lookup.
+export async function getLeadgenLeadDetailForModalAction(leadId: string): Promise<LeadgenLeadDetailData | { error: string }> {
+  await requireLeadgenAdmin();
+  const detail = await loadLeadgenLeadDetail(leadId);
+  if (!detail) return { error: "This lead may have been deleted, or the link may be incorrect." };
+  return detail;
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { loadLeadgenAgentLeadDetail, type LeadgenAgentLeadDetailData } from "@/lib/leadgen-agent-lead-detail-data";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import {
   isLeadgenAppointmentCountable,
@@ -547,4 +548,17 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
   revalidatePath(`/leadgen/agent/leads/${leadId}`);
   revalidatePath("/leadgen/agent");
   return result;
+}
+
+// Fetches one lead's full detail record on demand - called by the agent
+// Opportunity Finder dashboard modal's "View Lead" so it can show the
+// exact same detail view the standalone /leadgen/agent/leads/[id] page
+// renders, without navigating away from the dashboard. Reuses that
+// page's own query logic (loadLeadgenAgentLeadDetail, RLS-scoped to this
+// agent's own leads) rather than a second, lighter lookup.
+export async function getLeadgenAgentLeadDetailForModalAction(leadId: string): Promise<LeadgenAgentLeadDetailData | { error: string }> {
+  await requireLeadgenAgent();
+  const detail = await loadLeadgenAgentLeadDetail(leadId);
+  if (!detail) return { error: "This lead may have been deleted, reassigned, or the link may be incorrect." };
+  return detail;
 }

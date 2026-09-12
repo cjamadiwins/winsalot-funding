@@ -29,6 +29,7 @@ export default function OpportunityBoardView({
   cards,
   onAddNote,
   scopeNotice,
+  onViewDetail,
 }: {
   columns: OpportunityBoardColumn[];
   cards: OpportunityBoardCard[];
@@ -38,6 +39,12 @@ export default function OpportunityBoardView({
   // is scoped - purely a text hint, never changes which cards RLS/the
   // caller's own query already returned.
   scopeNotice?: string;
+  // Set only when rendered inside the Opportunity Finder dashboard modal -
+  // "View Full Record" then switches the modal to its inline detail view
+  // instead of navigating to viewHref. Omitted elsewhere, so every other
+  // caller of this board keeps its existing Link-based navigation exactly
+  // as before.
+  onViewDetail?: (id: string) => void;
 }) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -217,12 +224,24 @@ export default function OpportunityBoardView({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href={selected.viewHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3.5 py-1.5 text-[12px] font-semibold text-indigo-700 hover:border-indigo-400">
-                View Full Record
-              </Link>
-              <Link href={selected.editHref} className="rounded-full border border-slate-300 px-3.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:border-slate-400">
-                Edit
-              </Link>
+              {onViewDetail ? (
+                <button
+                  type="button"
+                  onClick={() => onViewDetail(selected.id)}
+                  className="rounded-full border border-indigo-300 bg-indigo-50 px-3.5 py-1.5 text-[12px] font-semibold text-indigo-700 hover:border-indigo-400"
+                >
+                  View Full Record
+                </button>
+              ) : (
+                <Link href={selected.viewHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3.5 py-1.5 text-[12px] font-semibold text-indigo-700 hover:border-indigo-400">
+                  View Full Record
+                </Link>
+              )}
+              {!onViewDetail && (
+                <Link href={selected.editHref} className="rounded-full border border-slate-300 px-3.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:border-slate-400">
+                  Edit
+                </Link>
+              )}
             </div>
 
             <div className="mt-4 border-t border-slate-100 pt-4">
