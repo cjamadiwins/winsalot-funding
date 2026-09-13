@@ -20,11 +20,15 @@ export default function DoNotContactModalTrigger({
   actions,
 }: {
   rows: DncSuppressionRow[];
-  exportHref: string;
+  // Admin-only CSV export - omitted for the agent-facing trigger (see the
+  // agent dashboards), which also adjusts the card/modal copy below since
+  // an agent can search/view/add but never "manage" the list.
+  exportHref?: string;
   actions: DoNotContactAdminActions;
 }) {
   const [open, setOpen] = useState(false);
   const activeCount = rows.filter((row) => row.status === "active").length;
+  const canManage = Boolean(exportHref || actions.removeSuppression);
 
   return (
     <>
@@ -39,7 +43,9 @@ export default function DoNotContactModalTrigger({
           </span>
           <div>
             <div className="text-[16px] font-bold text-slate-900">Do Not Contact List</div>
-            <div className="mt-0.5 text-[12.5px] text-slate-600">Shared with both CRMs — search, manage, and export restrictions.</div>
+            <div className="mt-0.5 text-[12.5px] text-slate-600">
+              {canManage ? "Shared with both CRMs — search, manage, and export restrictions." : "Shared with both CRMs — search and add restrictions."}
+            </div>
           </div>
         </div>
         <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-[12px] font-bold text-white">
@@ -51,7 +57,11 @@ export default function DoNotContactModalTrigger({
         open={open}
         onClose={() => setOpen(false)}
         title="Do Not Contact List"
-        subtitle="Shared across the Lead Generation CRM and Growth CRM — a restriction added in either CRM is recognized in both."
+        subtitle={
+          canManage
+            ? "Shared across the Lead Generation CRM and Growth CRM — a restriction added in either CRM is recognized in both."
+            : "Shared across the Lead Generation CRM and Growth CRM — a restriction you add here is recognized in both immediately. Only an admin can remove or reactivate one."
+        }
         maxWidthClassName="max-w-7xl"
         footer={
           <>
