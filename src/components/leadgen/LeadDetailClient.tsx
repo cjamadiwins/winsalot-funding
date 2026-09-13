@@ -33,6 +33,8 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import type { DncSuppressionRow } from "@/lib/dnc-suppression";
+import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import ConsultationEmailModal, { type SendConsultationEmailResult } from "./ConsultationEmailModal";
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import FollowUpPrompt from "./FollowUpPrompt";
@@ -112,6 +114,7 @@ export default function LeadDetailClient({
   actions,
   listPath,
   score,
+  dncSuppression = null,
   onBack,
 }: {
   lead: LeadgenLeadRow;
@@ -162,6 +165,10 @@ export default function LeadDetailClient({
   // admin-only); omitted (undefined) on the agent lead detail page, where
   // it's simply not rendered.
   score?: LeadgenOpportunityScoreRow | null;
+  // Shared cross-CRM Do Not Contact restriction - optional/defaulted so
+  // the Opportunity Finder dashboard modal (which doesn't pass it yet)
+  // keeps compiling; both standalone lead detail pages always supply it.
+  dncSuppression?: DncSuppressionRow | null;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger, admin and agent) - swaps both
   // page-navigation "back" links for a button that switches the modal back
@@ -173,6 +180,7 @@ export default function LeadDetailClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const cameFromOpportunityFinder = !onBack && searchParams.get("from") === "opportunity-finder";
+  const dncJustDetected = searchParams.get("dncDetected") === "1";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -327,7 +335,10 @@ export default function LeadDetailClient({
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-bold text-slate-900">{lead.business_name}</h1>
+          <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
+            {lead.business_name}
+            {dncSuppression && <DncBadge suppression={dncSuppression} />}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             {client.name}
             {campaign ? ` · ${campaign.name}` : ""} · {[lead.city, lead.province].filter(Boolean).join(", ")}
@@ -375,6 +386,8 @@ export default function LeadDetailClient({
           </Link>
         )}
       </div>
+
+      {dncSuppression && <DncWarningBanner suppression={dncSuppression} justDetected={dncJustDetected} />}
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {successMessage && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>}

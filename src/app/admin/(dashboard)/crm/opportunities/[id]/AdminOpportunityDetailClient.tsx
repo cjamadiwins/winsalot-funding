@@ -19,6 +19,8 @@ import {
 } from "@/lib/crm-types";
 import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_CATEGORY_STYLES, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
+import type { DncSuppressionRow } from "@/lib/dnc-suppression";
+import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -57,6 +59,7 @@ export default function AdminOpportunityDetailClient({
   emailHistory,
   isEmailSuppressed,
   suppression,
+  dncSuppression = null,
   bookingUrl,
   appointments,
   score,
@@ -70,6 +73,10 @@ export default function AdminOpportunityDetailClient({
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
   suppression: CrmEmailSuppressionRow | null;
+  // Shared cross-CRM Do Not Contact restriction - optional/defaulted so
+  // the Opportunity Finder dashboard modal (which doesn't pass it yet)
+  // keeps compiling; the standalone page always supplies it.
+  dncSuppression?: DncSuppressionRow | null;
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
   score: CrmOpportunityScoreRow | null;
@@ -83,6 +90,7 @@ export default function AdminOpportunityDetailClient({
 }) {
   const searchParams = useSearchParams();
   const cameFromOpportunityFinder = !onBack && searchParams.get("from") === "opportunity-finder";
+  const dncJustDetected = searchParams.get("dncDetected") === "1";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -153,7 +161,10 @@ export default function AdminOpportunityDetailClient({
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{opportunity.business_name}</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
+            {opportunity.business_name}
+            {dncSuppression && <DncBadge suppression={dncSuppression} />}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">{OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}</p>
           {score && (
             <div className="mt-2 flex items-center gap-2">
@@ -214,6 +225,8 @@ export default function AdminOpportunityDetailClient({
           </button>
         </div>
       </div>
+
+      {dncSuppression && <DncWarningBanner suppression={dncSuppression} justDetected={dncJustDetected} />}
 
       {isEmailSuppressed && suppression && (
         <ResubscribePanel opportunity={opportunity} suppression={suppression} />

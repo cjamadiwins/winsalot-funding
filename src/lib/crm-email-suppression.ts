@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { isEmailDncBlocked } from "./dnc-suppression";
 
 // Suppression-list system for the Growth CRM's prospect emails (crm_email_suppressions,
 // crm_unsubscribe_tokens - migration 0087). No equivalent existed before
@@ -27,15 +28,23 @@ export type CrmEmailSuppressionRow = {
   resubscribe_consent_method: string | null;
 };
 
+// Item 6: "Before an outbound action occurs... check the shared
+// suppression list", specifically the email channel here. Every existing
+// caller of this function (send-prospect-email.ts, crm-marketing-job.ts,
+// crm-retention-job.ts, and both retention/marketing admin actions) is a
+// marketing/nurture email send, so checking the shared cross-CRM
+// crm_dnc_suppressions table here - in addition to this table's own
+// self-service unsubscribe/bounce records - means a Growth CRM "Do Not
+// Call" (or admin-added, email-inclusive) restriction, even one added from
+// the Lead Generation CRM, blocks these sends too without touching every
+// call site individually.
 export async function isEmailSuppressed(email: string): Promise<boolean> {
   const admin = getSupabaseAdmin();
-  const { data } = await admin
-    .from("crm_email_suppressions")
-    .select("email")
-    .eq("email", normalizeEmail(email))
-    .eq("active", true)
-    .maybeSingle();
-  return !!data;
+  const [{ data }, dncBlocked] = await Promise.all([
+    admin.from("crm_email_suppressions").select("email").eq("email", normalizeEmail(email)).eq("active", true).maybeSingle(),
+    isEmailDncBlocked(email),
+  ]);
+  return !!data || dncBlocked;
 }
 
 // Full suppression row for one email, active or not - used by the admin

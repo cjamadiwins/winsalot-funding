@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { checkDncSuppression } from "@/lib/dnc-suppression";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -46,5 +47,10 @@ export async function createAgentLeadAction(formData: FormData) {
     redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("Failed to save the lead.")}`);
   }
 
-  redirect(`/leadgen/agent/leads/${lead.id}?added=1`);
+  // Item 8/9: this phone/email may already carry a restriction added from
+  // either CRM - surface "Existing Do Not Contact restriction detected"
+  // on the lead's own detail page rather than silently treating it as a
+  // fresh, unrestricted prospect.
+  const existingRestriction = await checkDncSuppression({ phone: textOrNull(formData, "phone"), email: textOrNull(formData, "email") });
+  redirect(`/leadgen/agent/leads/${lead.id}?added=1${existingRestriction ? "&dncDetected=1" : ""}`);
 }

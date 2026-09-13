@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { CALL_LOG_AUTOMATIC_NOTES, GROWTH_CRM_BUSINESS_CLIENT_NAME, isCallLogOutcome } from "@/lib/call-log";
+import { CALL_LOG_AUTOMATIC_NOTES, DO_NOT_CALL_OUTCOME, GROWTH_CRM_BUSINESS_CLIENT_NAME, isCallLogOutcome } from "@/lib/call-log";
+import { addOrUpdateDncSuppression } from "@/lib/dnc-suppression";
 
 type ActionResult = { error?: string };
 
@@ -34,6 +35,30 @@ export async function createGrowthCallLogAction(formData: FormData): Promise<Act
   });
 
   if (error) return { error: `Failed to save the call: ${error.message}` };
+
+  // Never blocks/undoes the call log save above - the call was already
+  // recorded (Item 2: "Do not delete the prospect, call logs..."); a
+  // suppression failure here would only mean the Do Not Call list didn't
+  // get this entry, surfaced as an error banner rather than silently
+  // dropped.
+  if (outcome === DO_NOT_CALL_OUTCOME) {
+    const suppression = await addOrUpdateDncSuppression({
+      businessName,
+      phone,
+      sourceCrm: "growth",
+      originalAssignment: GROWTH_CRM_BUSINESS_CLIENT_NAME,
+      reason: "Requested Do Not Call during outbound call",
+      notes: extraDetails || null,
+      addedByUserId: agent.id,
+      addedByName: agent.full_name || agent.email,
+      channels: ["phone"],
+    });
+    if ("error" in suppression) {
+      revalidatePath("/agent/call-log");
+      revalidatePath("/admin/crm/performance/call-notes");
+      return { error: `Call saved, but adding to the Do Not Contact list failed: ${suppression.error}` };
+    }
+  }
 
   revalidatePath("/agent/call-log");
   revalidatePath("/admin/crm/performance/call-notes");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
+import { isEmailDncBlocked } from "@/lib/dnc-suppression";
 import {
   isLeadgenAppointmentCountable,
   isMantraCollabClient,
@@ -265,6 +266,10 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - see the identical check in the agent-side
+  // mirror of this file for the full rationale.
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -354,6 +359,10 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - see the identical check in the agent-side
+  // mirror of this file for the full rationale.
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -440,6 +449,10 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - see the identical check in the agent-side
+  // mirror of this file for the full rationale.
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -509,6 +522,10 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - see the identical check in the agent-side
+  // mirror of this file for the full rationale.
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };

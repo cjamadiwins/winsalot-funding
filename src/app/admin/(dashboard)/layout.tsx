@@ -29,6 +29,7 @@ import {
   Megaphone,
   Briefcase,
   Heart,
+  ShieldOff,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -58,6 +59,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Training", href: "/admin/crm/training", icon: <GraduationCap /> },
   { label: "Winsalot Training", href: "/admin/crm/winsalot-training", icon: <BookOpenCheck /> },
   { label: "Email Tracking", href: "/admin/crm/emails", icon: <Mail /> },
+  { label: "Do Not Contact", href: "/admin/crm/do-not-contact", icon: <ShieldOff /> },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

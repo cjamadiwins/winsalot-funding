@@ -38,6 +38,7 @@ export default async function AgentOpportunityDetailPage({
       currentAgentId={crmUser.id}
       emailHistory={detail.emailHistory}
       isEmailSuppressed={detail.isEmailSuppressed}
+      dncSuppression={detail.dncSuppression}
       bookingUrl={detail.bookingUrl}
     />
   );

@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isEmailSuppressed } from "@/lib/crm-email-suppression";
+import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
 import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -13,6 +14,9 @@ export type AgentOpportunityDetailData = {
   followUps: CrmFollowUpRow[];
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
+  // Shared cross-CRM Do Not Contact restriction (crm_dnc_suppressions),
+  // looked up by this opportunity's phone/email - null when unrestricted.
+  dncSuppression: DncSuppressionRow | null;
   bookingUrl: string;
   // Not accepted by OpportunityDetailClient (the standalone agent page
   // never showed it) - carried here only so the Opportunity Finder
@@ -55,6 +59,7 @@ export async function loadAgentOpportunityDetail(id: string): Promise<AgentOppor
   }));
 
   const suppressed = opportunity.email ? await isEmailSuppressed(opportunity.email) : false;
+  const dncSuppression = await checkDncSuppression({ phone: opportunity.phone, email: opportunity.email });
 
   return {
     opportunity: opportunity as CrmOpportunityRow,
@@ -62,6 +67,7 @@ export async function loadAgentOpportunityDetail(id: string): Promise<AgentOppor
     followUps: (followUps ?? []) as CrmFollowUpRow[],
     emailHistory: emailHistoryEntries,
     isEmailSuppressed: suppressed,
+    dncSuppression,
     bookingUrl: getWinsalotBookingUrlBase(),
     score: score as CrmOpportunityScoreRow | null,
   };

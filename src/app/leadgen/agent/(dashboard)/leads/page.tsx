@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { LeadgenAppointmentStatus, LeadgenEmailStatus, LeadgenLeadRow } from "@/lib/leadgen-types";
+import { mapDncSuppressionsByContacts } from "@/lib/dnc-suppression";
 import AgentLeadsListClient from "./AgentLeadsListClient";
 
 export default async function LeadgenAgentLeadsPage({
@@ -70,6 +71,10 @@ export default async function LeadgenAgentLeadsPage({
     if (appt.lead_id) appointmentStatusByLeadId[appt.lead_id] = appt.status as LeadgenAppointmentStatus;
   }
 
+  const dncByLeadId = await mapDncSuppressionsByContacts(
+    (leads ?? []).map((lead) => ({ id: lead.id, phone: lead.phone, email: lead.email }))
+  );
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -94,6 +99,7 @@ export default async function LeadgenAgentLeadsPage({
         viewingClientName={viewingClient?.name ?? null}
         emailStatusByLeadId={emailStatusByLeadId}
         appointmentStatusByLeadId={appointmentStatusByLeadId}
+        dncByLeadId={dncByLeadId}
       />
     </div>
   );

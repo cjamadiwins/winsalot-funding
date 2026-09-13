@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getEmailSuppression, type CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
+import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
 import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, LatestCrmLeadEmail } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -17,6 +18,8 @@ export type AdminOpportunityDetailData = {
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
   suppression: CrmEmailSuppressionRow | null;
+  // Shared cross-CRM Do Not Contact restriction - see agent-opportunity-detail-data.ts.
+  dncSuppression: DncSuppressionRow | null;
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
   score: CrmOpportunityScoreRow | null;
@@ -76,6 +79,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
   }));
 
   const suppression = opportunity.email ? await getEmailSuppression(opportunity.email) : null;
+  const dncSuppression = await checkDncSuppression({ phone: opportunity.phone, email: opportunity.email });
 
   return {
     opportunity: opportunity as CrmOpportunityRow,
@@ -86,6 +90,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     emailHistory: emailHistoryEntries,
     isEmailSuppressed: !!suppression?.active,
     suppression: suppression as CrmEmailSuppressionRow | null,
+    dncSuppression,
     bookingUrl: getWinsalotBookingUrlBase(),
     appointments: (appointments ?? []) as WinsalotAppointmentRow[],
     score: score as CrmOpportunityScoreRow | null,

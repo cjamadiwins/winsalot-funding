@@ -16,6 +16,7 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
+import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -40,6 +41,9 @@ export type LeadgenLeadDetailData = {
   servicesInfoLink: string | null;
   bouncedEmails: string[];
   score: LeadgenOpportunityScoreRow | null;
+  // Shared cross-CRM Do Not Contact restriction (crm_dnc_suppressions),
+  // looked up by this lead's phone/email - null when unrestricted.
+  dncSuppression: DncSuppressionRow | null;
 };
 
 // One Lead Gen CRM lead's full detail record - the exact same query set
@@ -91,6 +95,7 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
   const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
   const smsReminderStatusByAppointmentId = await fetchLeadgenAppointmentSmsReminderStatusMap(admin, (appointments ?? []) as LeadgenAppointmentRow[]);
+  const dncSuppression = await checkDncSuppression({ phone: lead.phone, email: lead.email });
 
   const assignedAgent = lead.assigned_agent_id ? (agents ?? []).find((a) => a.id === lead.assigned_agent_id) : null;
   const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
@@ -117,5 +122,6 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     servicesInfoLink: (client as LeadgenClientRow)?.services_info_link ?? null,
     bouncedEmails: (bouncedRows ?? []).map((r) => r.email),
     score: score as LeadgenOpportunityScoreRow | null,
+    dncSuppression,
   };
 }

@@ -20,6 +20,8 @@ import {
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
 import { leadgenDateKey } from "@/lib/leadgen-performance";
+import type { DncSuppressionRow } from "@/lib/dnc-suppression";
+import DncBadge from "@/components/crm-ui/DncBadge";
 import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, uploadLeadsCsvAction } from "./actions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
@@ -39,6 +41,7 @@ export default function LeadsListClient({
   agents,
   appointmentStatusByLeadId,
   emailStatusByLeadId,
+  dncByLeadId,
   initialSuccessMessage,
   initialStatusFilter,
   initialAppointmentStatusFilter,
@@ -62,6 +65,10 @@ export default function LeadsListClient({
   // Communications tab already reads, just reduced to the latest status
   // per lead. A lead with no tracked email simply has no entry here.
   emailStatusByLeadId?: Record<string, LeadgenEmailStatus>;
+  // Shared cross-CRM Do Not Contact restriction per lead id (Item 7's
+  // "anywhere a suppressed prospect appears") - a lead with no active
+  // restriction simply has no entry here.
+  dncByLeadId?: Record<string, DncSuppressionRow>;
   initialSuccessMessage?: string | null;
   // Pre-select a filter when landing here from the admin dashboard's
   // clickable stat cards or Results by Agent chart (see
@@ -505,12 +512,15 @@ export default function LeadsListClient({
                         <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                       </td>
                       <td className="max-w-[220px] px-3 py-2">
-                        <Link
-                          href={`/leadgen/admin/leads/${lead.id}`}
-                          className="line-clamp-2 break-words font-semibold text-sky-600 hover:text-sky-700"
-                        >
-                          {lead.business_name}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/leadgen/admin/leads/${lead.id}`}
+                            className="line-clamp-2 break-words font-semibold text-sky-600 hover:text-sky-700"
+                          >
+                            {lead.business_name}
+                          </Link>
+                          {dncByLeadId?.[lead.id] && <DncBadge suppression={dncByLeadId[lead.id]} />}
+                        </div>
                         <div className="truncate text-[11px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-600">{clientById.get(lead.client_id)?.name ?? "—"}</td>
