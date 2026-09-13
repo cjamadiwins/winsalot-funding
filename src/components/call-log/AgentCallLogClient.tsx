@@ -34,6 +34,8 @@ type Props = {
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 
+const DEFAULT_DNC_REASON = "Requested Do Not Call during outbound call";
+
 export default function AgentCallLogClient({ crmLabel, records, createAction, businessClientField }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -47,7 +49,14 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
   // Item 2: selecting "Do Not Call" must show a confirmation modal before
   // it takes effect - the outcome only actually changes to Do Not Call
   // once the agent confirms; Cancel leaves the previous selection in place.
+  // businessName/phone are controlled (rather than left as plain
+  // uncontrolled inputs) purely so the confirmation modal can show exactly
+  // what's about to be suppressed - the form itself still submits via
+  // FormData as before.
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
   const [confirmingDnc, setConfirmingDnc] = useState(false);
+  const [dncReason, setDncReason] = useState(DEFAULT_DNC_REASON);
 
   const filteredRecords = useMemo(() => {
     const q = recentSearch.trim().toLowerCase();
@@ -93,6 +102,9 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       setSaved(true);
       setOutcome("No Answer");
       setClientId(null);
+      setBusinessName("");
+      setPhone("");
+      setDncReason(DEFAULT_DNC_REASON);
       setFormKey((key) => key + 1);
     });
   }
@@ -112,6 +124,8 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
               name="business_name"
               required
               autoFocus
+              value={businessName}
+              onChange={(event) => setBusinessName(event.target.value)}
               placeholder="Paste business name"
               autoComplete="off"
               className={`${inputClass} mt-1`}
@@ -123,6 +137,8 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
               name="phone"
               required
               inputMode="tel"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
               placeholder="Paste phone number"
               autoComplete="off"
               className={`${inputClass} mt-1`}
@@ -175,6 +191,11 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
             ))}
           </div>
           <input type="hidden" name="outcome" value={outcome} />
+          {/* Only meaningful when outcome is Do Not Call - the server
+              action ignores it otherwise. Carries the reason the agent
+              confirmed in the modal below through to the suppression
+              record it creates. */}
+          <input type="hidden" name="dnc_reason" value={dncReason} />
         </fieldset>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -258,9 +279,19 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
                         <td className="px-4 py-3 font-semibold text-slate-800">{record.business_name}</td>
                         <td className="px-4 py-3 text-slate-600">{record.businessClient}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[record.outcome]}`}>
-                            {record.outcome}
-                          </span>
+                          {/* Item 2: "immediately show the red DO NOT CALL
+                              badge" - implied directly by this outcome
+                              itself, so no extra suppression lookup is
+                              needed here to know it applies. */}
+                          {record.outcome === DO_NOT_CALL_OUTCOME ? (
+                            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                              Do Not Call
+                            </span>
+                          ) : (
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${CALL_LOG_OUTCOME_STYLES[record.outcome]}`}>
+                              {record.outcome}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -298,10 +329,36 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       {selected && <CallLogDetailModal entry={selected} onClose={() => setSelected(null)} />}
 
       {confirmingDnc && (
-        <Modal title="Add to Do Not Contact?" onClose={() => setConfirmingDnc(false)}>
+        <Modal title="Add this contact to the Do Not Contact list?" onClose={() => setConfirmingDnc(false)}>
           <p className="text-sm text-slate-600">
-            This contact will be added to the Do Not Contact list and outbound calling will be blocked. Continue?
+            This contact will be added to the Do Not Contact list and outbound calling will be blocked.
           </p>
+
+          <dl className="mt-3 space-y-1.5 rounded-lg bg-slate-50 p-3 text-[13px]">
+            <div className="flex justify-between gap-3">
+              <dt className="font-medium text-slate-500">Business / Contact</dt>
+              <dd className="text-right font-semibold text-slate-800">{businessName || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="font-medium text-slate-500">Phone</dt>
+              <dd className="text-right font-semibold text-slate-800">{phone || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="font-medium text-slate-500">Channels blocked</dt>
+              <dd className="text-right font-semibold text-slate-800">Phone</dd>
+            </div>
+          </dl>
+
+          <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Reason
+            <textarea
+              value={dncReason}
+              onChange={(event) => setDncReason(event.target.value)}
+              rows={2}
+              className={`${inputClass} mt-1 normal-case`}
+            />
+          </label>
+
           <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
@@ -315,7 +372,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
               onClick={confirmDoNotCall}
               className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
             >
-              Add to Do Not Contact
+              Confirm
             </button>
           </div>
         </Modal>
