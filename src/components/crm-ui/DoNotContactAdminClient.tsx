@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { DncAuditLogRow, DncChannel, DncSourceCrm, DncSuppressionRow } from "@/lib/dnc-suppression";
-import { blockedChannelsOf } from "@/lib/dnc-suppression";
+import { blockedChannelsOf, type DncAuditLogRow, type DncChannel, type DncSourceCrm, type DncSuppressionRow } from "@/lib/dnc-types";
 import DncBadge from "./DncBadge";
 import Modal from "@/components/Modal";
 import RowsPerPagePager, { usePagedRows } from "./RowsPerPagePager";

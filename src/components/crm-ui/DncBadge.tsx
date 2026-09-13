@@ -1,5 +1,4 @@
-import type { DncChannel, DncSuppressionRow } from "@/lib/dnc-suppression";
-import { blockedChannelsOf } from "@/lib/dnc-suppression";
+import { blockedChannelsOf, type DncChannel, type DncSuppressionRow } from "@/lib/dnc-types";
 
 const CHANNEL_LABELS: Record<DncChannel, string> = { phone: "Phone", sms: "SMS", email: "Email" };
 
