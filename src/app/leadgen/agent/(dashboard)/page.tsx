@@ -48,6 +48,9 @@ import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-ca
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
 import { buildLeadCardRecords, latestLeadgenEmailByLeadId } from "@/lib/leadgen-dashboard-records";
+import { getActiveDncSuppressions } from "@/lib/dnc-suppression";
+import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
+import { addAgentDncSuppressionAction } from "./do-not-contact-actions";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -71,6 +74,7 @@ export default async function LeadgenAgentDashboardPage() {
     { data: opportunityScores },
     { data: recentEmails },
     myOpportunitiesRows,
+    dncRows,
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -121,6 +125,10 @@ export default async function LeadgenAgentDashboardPage() {
     // standalone /leadgen/agent/my-opportunities page loads (RLS already
     // scopes this to the signed-in agent's own leads).
     loadLeadgenAgentMyOpportunities(supabase, agentDisplayName),
+    // Do Not Contact dashboard card/modal (below) - active restrictions
+    // only, from either CRM, since a restriction added in the Growth CRM
+    // must be visible here too.
+    getActiveDncSuppressions(),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -326,6 +334,8 @@ export default async function LeadgenAgentDashboardPage() {
         onCompleteFollowUp={completeFollowUpAction}
         hotCount={opportunityFinderHotCount}
       />
+
+      <DoNotContactModalTrigger rows={dncRows} actions={{ addSuppression: addAgentDncSuppressionAction }} />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/agent/my-opportunities?view=board" />
 

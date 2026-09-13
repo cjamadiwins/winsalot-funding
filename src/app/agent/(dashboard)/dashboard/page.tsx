@@ -40,6 +40,9 @@ import { addBoardOpportunityNoteAction } from "../my-opportunities/actions";
 import { completeOpportunityFollowUpAction, rescheduleOpportunityFollowUpAction, scheduleOpportunityFollowUpAction } from "../opportunities/[id]/actions";
 import { buildOpportunityCardRecords } from "@/lib/crm-dashboard-records";
 import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/lib/winsalot-consultation-data";
+import { getActiveDncSuppressions } from "@/lib/dnc-suppression";
+import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
+import { addAgentDncSuppressionAction } from "../do-not-contact-actions";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -62,6 +65,7 @@ export default async function AgentDashboardPage() {
     { data: opportunityScores },
     consultationRecordsRaw,
     myOpportunitiesRows,
+    dncRows,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase
@@ -91,6 +95,11 @@ export default async function AgentDashboardPage() {
     // standalone /agent/my-opportunities page loads (RLS already scopes
     // this to the signed-in agent's own opportunities).
     loadAgentMyOpportunities(supabase, agentDisplayName),
+    // Do Not Contact dashboard card/modal (below) - active restrictions
+    // only (Item 3: "Agents CAN view active restrictions"), from either
+    // CRM, since a restriction added in the Lead Generation CRM must be
+    // visible here too.
+    getActiveDncSuppressions(),
   ]);
 
   const opportunities = (opportunitiesData ?? []) as CrmOpportunityRow[];
@@ -288,6 +297,8 @@ export default async function AgentDashboardPage() {
         onCompleteFollowUp={completeOpportunityFollowUpAction}
         hotCount={opportunityFinderHotCount}
       />
+
+      <DoNotContactModalTrigger rows={dncRows} actions={{ addSuppression: addAgentDncSuppressionAction }} />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/agent/my-opportunities?view=board" />
 

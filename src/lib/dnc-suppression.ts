@@ -386,6 +386,19 @@ export async function getAllDncSuppressions(): Promise<DncSuppressionRow[]> {
   return (data ?? []) as DncSuppressionRow[];
 }
 
+// Backs the agent-facing Do Not Contact dashboard card/modal in both CRMs
+// (Item 3: "Agents CAN view active restrictions") - unlike
+// getAllDncSuppressions, this deliberately excludes removed rows so an
+// agent's own view never needs a "Removed"/"All Statuses" filter (and
+// never surfaces a removal reason, which is an admin-facing detail).
+// Still cross-CRM: every source_crm is included, same rationale as
+// getAllDncSuppressions above.
+export async function getActiveDncSuppressions(): Promise<DncSuppressionRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin.from("crm_dnc_suppressions").select("*").eq("status", "active").order("created_at", { ascending: false });
+  return (data ?? []) as DncSuppressionRow[];
+}
+
 // ---------------------------------------------------------------------
 // CSV export / import - Item 5: "ADMIN ONLY". Callers (the export route
 // and the import server action) are responsible for the requireCrmAdmin()/

@@ -8,21 +8,32 @@ import RowsPerPagePager, { usePagedRows } from "./RowsPerPagePager";
 
 type ActionResult = { error?: string; success?: string };
 
-// Server actions this view calls - both CRMs' Do Not Contact admin pages
-// (src/app/admin/(dashboard)/crm/do-not-contact and
-// src/app/leadgen/admin/(dashboard)/do-not-contact) supply their own
-// concrete implementations, each bound to that CRM's own requireCrmAdmin()/
-// requireLeadgenAdmin() gate and sourceCrm label, but every one of them
-// ultimately reads/writes the exact same shared crm_dnc_suppressions table
-// (src/lib/dnc-suppression.ts) - this is what makes cross-CRM management
-// possible from either admin dashboard.
+// Server actions this view calls - every Do Not Contact dashboard trigger
+// in both CRMs (admin AND agent - see DoNotContactModalTrigger) supplies
+// its own concrete implementations, each bound to that CRM/role's own
+// requireCrmAdmin()/requireCrmUser()/requireLeadgenAdmin()/
+// requireLeadgenAgent() gate, but every one of them ultimately reads/
+// writes the exact same shared crm_dnc_suppressions table
+// (src/lib/dnc-suppression.ts) - this is what makes cross-CRM visibility
+// possible from either dashboard, for either role.
+//
+// Only `addSuppression` is required - agents may add a restriction (Item
+// 3) but the remove/reactivate/edit/history/CSV actions are admin-only
+// (Item 4/5). This component renders the corresponding button/column only
+// when the caller actually supplies that action, so an agent-facing
+// caller that simply omits them gets a read-and-add-only view for free -
+// there is no separate "agent mode" flag to keep in sync, and no
+// client-reachable way to invoke an action that was never wired in. The
+// underlying server actions re-verify the caller's role independently
+// regardless (see src/app/*/do-not-contact*/actions.ts), so omitting a
+// prop here is a UI convenience, not the actual access control.
 export type DoNotContactAdminActions = {
   addSuppression: (formData: FormData) => Promise<ActionResult>;
-  removeSuppression: (formData: FormData) => Promise<ActionResult>;
-  reactivateSuppression: (formData: FormData) => Promise<ActionResult>;
-  editSuppression: (formData: FormData) => Promise<ActionResult>;
-  importCsv: (formData: FormData) => Promise<{ error?: string; success?: string; added?: number; merged?: number; skipped?: number }>;
-  getAuditLog: (suppressionId: string) => Promise<DncAuditLogRow[]>;
+  removeSuppression?: (formData: FormData) => Promise<ActionResult>;
+  reactivateSuppression?: (formData: FormData) => Promise<ActionResult>;
+  editSuppression?: (formData: FormData) => Promise<ActionResult>;
+  importCsv?: (formData: FormData) => Promise<{ error?: string; success?: string; added?: number; merged?: number; skipped?: number }>;
+  getAuditLog?: (suppressionId: string) => Promise<DncAuditLogRow[]>;
 };
 
 const inputClass =
@@ -42,9 +53,16 @@ export default function DoNotContactAdminClient({
   actions,
 }: {
   rows: DncSuppressionRow[];
-  exportHref: string;
+  // Admin-only CSV export (Item 5) - omitted entirely for an agent-facing
+  // caller, which hides the "Export CSV" link rather than disabling it.
+  exportHref?: string;
   actions: DoNotContactAdminActions;
 }) {
+  // Whether this row of buttons/column has anything to show at all - an
+  // agent-facing caller supplies none of these, so the whole Actions
+  // column (and its header cell) is omitted rather than rendered empty.
+  const canManageRows = Boolean(actions.getAuditLog || actions.editSuppression || actions.removeSuppression || actions.reactivateSuppression);
+  const columnCount = canManageRows ? 10 : 9;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -94,6 +112,7 @@ export default function DoNotContactAdminClient({
   }
 
   async function openHistory(row: DncSuppressionRow) {
+    if (!actions.getAuditLog) return;
     setHistoryRow(row);
     setAuditLog(null);
     const log = await actions.getAuditLog(row.id);
@@ -129,23 +148,27 @@ export default function DoNotContactAdminClient({
           <option value="lead_generation">Lead Generation CRM</option>
         </select>
 
-        {/* Admin-only actions (Item 5) - this entire component only ever
-            renders inside an admin-gated page, so no further role check
-            is needed here; the server actions themselves re-verify anyway. */}
+        {/* Export/Import are admin-only (Item 5) - an agent-facing caller
+            simply never passes exportHref/actions.importCsv, so these are
+            never rendered for them at all (not just disabled). */}
         <div className="ml-auto flex flex-wrap gap-2">
-          <a
-            href={exportHref}
-            className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
-          >
-            Export CSV
-          </a>
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
-          >
-            Import CSV
-          </button>
+          {exportHref && (
+            <a
+              href={exportHref}
+              className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
+            >
+              Export CSV
+            </a>
+          )}
+          {actions.importCsv && (
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
+            >
+              Import CSV
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
@@ -169,16 +192,16 @@ export default function DoNotContactAdminClient({
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full table-fixed text-left text-[12.5px]">
           <colgroup>
-            <col className="w-[19%]" />
-            <col className="w-[11%]" />
-            <col className="w-[15%]" />
-            <col className="w-[10%]" />
-            <col className="w-[14%]" />
-            <col className="w-[8%]" />
-            <col className="w-[9%]" />
-            <col className="w-[8%]" />
-            <col className="w-[6%]" />
-            <col className="w-[13%]" />
+            <col className={canManageRows ? "w-[19%]" : "w-[21%]"} />
+            <col className={canManageRows ? "w-[11%]" : "w-[12%]"} />
+            <col className={canManageRows ? "w-[15%]" : "w-[16%]"} />
+            <col className={canManageRows ? "w-[10%]" : "w-[11%]"} />
+            <col className={canManageRows ? "w-[14%]" : "w-[15%]"} />
+            <col className={canManageRows ? "w-[8%]" : "w-[9%]"} />
+            <col className={canManageRows ? "w-[9%]" : "w-[10%]"} />
+            <col className={canManageRows ? "w-[8%]" : "w-[8%]"} />
+            <col className={canManageRows ? "w-[6%]" : "w-[8%]"} />
+            {canManageRows && <col className="w-[13%]" />}
           </colgroup>
           <thead className="border-b border-slate-200 bg-slate-50 text-[10.5px] uppercase tracking-wide text-slate-500">
             <tr>
@@ -191,13 +214,13 @@ export default function DoNotContactAdminClient({
               <th className="px-2.5 py-2.5">Agent</th>
               <th className="px-2.5 py-2.5">Added</th>
               <th className="px-2.5 py-2.5">Status</th>
-              <th className="px-2.5 py-2.5">Actions</th>
+              {canManageRows && <th className="px-2.5 py-2.5">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={columnCount} className="px-3 py-8 text-center text-slate-500">
                   No Do Not Contact records match your filters.
                 </td>
               </tr>
@@ -243,25 +266,36 @@ export default function DoNotContactAdminClient({
                     {row.status === "active" ? "Active" : "Removed"}
                   </span>
                 </td>
-                <td className="px-2.5 py-2.5">
-                  <div className="flex flex-wrap gap-1.5">
-                    <button type="button" onClick={() => openHistory(row)} className="text-[11.5px] font-semibold text-sky-600 hover:text-sky-700">
-                      History
-                    </button>
-                    <button type="button" onClick={() => setEditRow(row)} className="text-[11.5px] font-semibold text-slate-600 hover:text-slate-800">
-                      Edit
-                    </button>
-                    {row.status === "active" ? (
-                      <button type="button" onClick={() => setRemovingRow(row)} className="text-[11.5px] font-semibold text-rose-600 hover:text-rose-700">
-                        Remove
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => setReactivatingRow(row)} className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700">
-                        Reactivate
-                      </button>
-                    )}
-                  </div>
-                </td>
+                {canManageRows && (
+                  <td className="px-2.5 py-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {actions.getAuditLog && (
+                        <button type="button" onClick={() => openHistory(row)} className="text-[11.5px] font-semibold text-sky-600 hover:text-sky-700">
+                          History
+                        </button>
+                      )}
+                      {actions.editSuppression && (
+                        <button type="button" onClick={() => setEditRow(row)} className="text-[11.5px] font-semibold text-slate-600 hover:text-slate-800">
+                          Edit
+                        </button>
+                      )}
+                      {/* Item 3/4: only Admin can remove/reactivate - these
+                          two buttons only exist at all when the caller
+                          passed the corresponding action. */}
+                      {row.status === "active"
+                        ? actions.removeSuppression && (
+                            <button type="button" onClick={() => setRemovingRow(row)} className="text-[11.5px] font-semibold text-rose-600 hover:text-rose-700">
+                              Remove
+                            </button>
+                          )
+                        : actions.reactivateSuppression && (
+                            <button type="button" onClick={() => setReactivatingRow(row)} className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700">
+                              Reactivate
+                            </button>
+                          )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -295,7 +329,7 @@ export default function DoNotContactAdminClient({
           onImport={async (formData) => {
             setError(null);
             setMessage(null);
-            const result = await actions.importCsv(formData);
+            const result = actions.importCsv ? await actions.importCsv(formData) : { error: "Not permitted." };
             if (result.error) setError(result.error);
             else {
               setMessage(
@@ -337,7 +371,7 @@ export default function DoNotContactAdminClient({
           row={editRow}
           isPending={isPending}
           onClose={() => setEditRow(null)}
-          onSubmit={(formData) => runAction(() => actions.editSuppression(formData), () => setEditRow(null))}
+          onSubmit={(formData) => runAction(() => actions.editSuppression?.(formData) ?? Promise.resolve({ error: "Not permitted." }), () => setEditRow(null))}
         />
       )}
 
@@ -346,7 +380,7 @@ export default function DoNotContactAdminClient({
           row={removingRow}
           isPending={isPending}
           onClose={() => setRemovingRow(null)}
-          onSubmit={(formData) => runAction(() => actions.removeSuppression(formData), () => setRemovingRow(null))}
+          onSubmit={(formData) => runAction(() => actions.removeSuppression?.(formData) ?? Promise.resolve({ error: "Not permitted." }), () => setRemovingRow(null))}
         />
       )}
 
@@ -355,7 +389,7 @@ export default function DoNotContactAdminClient({
           row={reactivatingRow}
           isPending={isPending}
           onClose={() => setReactivatingRow(null)}
-          onSubmit={(formData) => runAction(() => actions.reactivateSuppression(formData), () => setReactivatingRow(null))}
+          onSubmit={(formData) => runAction(() => actions.reactivateSuppression?.(formData) ?? Promise.resolve({ error: "Not permitted." }), () => setReactivatingRow(null))}
         />
       )}
     </div>
