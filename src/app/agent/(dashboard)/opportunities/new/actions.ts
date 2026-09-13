@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { OPPORTUNITY_TYPES, type OpportunityType } from "@/lib/crm-types";
+import { checkDncSuppression } from "@/lib/dnc-suppression";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -87,5 +88,12 @@ export async function createOpportunityAction(formData: FormData) {
     redirect(`/agent/opportunities/new?error=${encodeURIComponent("Failed to save the opportunity.")}`);
   }
 
-  redirect(`/agent/opportunities/${opportunity.id}?added=1`);
+  // Item 8: "Prevent Re-Import / Duplicate Contacting" - a phone/email
+  // already on the shared Do Not Contact list must never silently become
+  // an apparently-unrestricted new record. The record itself is still
+  // created (it's a real business record, just a restricted one), but the
+  // detail page it redirects to shows the "Existing Do Not Contact
+  // restriction detected" notice via this query param.
+  const existingRestriction = await checkDncSuppression({ phone, email: textOrNull(formData, "email") });
+  redirect(`/agent/opportunities/${opportunity.id}?added=1${existingRestriction ? "&dncDetected=1" : ""}`);
 }

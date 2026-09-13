@@ -4,7 +4,10 @@
 // pulling in a new npm dependency for what's fundamentally a small,
 // well-scoped need.
 
-function parseCsvRows(text: string): string[][] {
+// Exported for reuse by src/lib/dnc-suppression.ts (Do Not Contact CSV
+// import, admin-only) - same well-scoped RFC4180 needs, no reason for a
+// second copy of this state machine.
+export function parseCsvRows(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

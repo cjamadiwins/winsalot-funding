@@ -22,6 +22,7 @@ import {
   Gift,
   PhoneCall,
   Target,
+  ShieldOff,
 } from "lucide-react";
 import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -44,6 +45,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Payroll", href: "/leadgen/admin/payroll", icon: <Wallet /> },
   { label: "Templates", href: "/leadgen/admin/templates", icon: <FileText /> },
   { label: "Training", href: "/leadgen/admin/training", icon: <GraduationCap /> },
+  { label: "Do Not Contact", href: "/leadgen/admin/do-not-contact", icon: <ShieldOff /> },
 ];
 
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
@@ -14,6 +15,8 @@ import {
   type CrmFollowUpRow,
   type CrmOpportunityRow,
 } from "@/lib/crm-types";
+import type { DncSuppressionRow } from "@/lib/dnc-suppression";
+import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
@@ -43,6 +46,7 @@ export default function OpportunityDetailClient({
   currentAgentId,
   emailHistory,
   isEmailSuppressed,
+  dncSuppression = null,
   bookingUrl,
   onBack,
 }: {
@@ -52,6 +56,10 @@ export default function OpportunityDetailClient({
   currentAgentId: string;
   emailHistory: EmailHistoryEntry[];
   isEmailSuppressed: boolean;
+  // Shared cross-CRM Do Not Contact restriction - optional and defaulted
+  // to null so the Opportunity Finder dashboard modal (which doesn't pass
+  // it yet) keeps compiling; the standalone page always supplies it.
+  dncSuppression?: DncSuppressionRow | null;
   bookingUrl: string;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
@@ -60,6 +68,8 @@ export default function OpportunityDetailClient({
   // /agent/opportunities/[id] page never passes this.
   onBack?: () => void;
 }) {
+  const searchParams = useSearchParams();
+  const dncJustDetected = searchParams.get("dncDetected") === "1";
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -98,8 +108,9 @@ export default function OpportunityDetailClient({
 
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-heading text-[22px] font-bold text-[var(--color-ink-strong)]">
+          <h1 className="font-heading text-[22px] font-bold text-[var(--color-ink-strong)] flex items-center gap-2">
             {opportunity.business_name}
+            {dncSuppression && <DncBadge suppression={dncSuppression} />}
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
@@ -133,6 +144,8 @@ export default function OpportunityDetailClient({
       </div>
 
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+
+      {dncSuppression && <DncWarningBanner suppression={dncSuppression} justDetected={dncJustDetected} />}
 
       {isEmailSuppressed && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

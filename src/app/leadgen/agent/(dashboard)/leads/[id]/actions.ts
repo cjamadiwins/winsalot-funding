@@ -5,6 +5,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { loadLeadgenAgentLeadDetail, type LeadgenAgentLeadDetailData } from "@/lib/leadgen-agent-lead-detail-data";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
+import { isEmailDncBlocked } from "@/lib/dnc-suppression";
 import {
   isLeadgenAppointmentCountable,
   isMantraCollabClient,
@@ -269,6 +270,11 @@ export async function sendConsultationEmailAction(leadId: string, formData: Form
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - these are all marketing/nurture-style
+  // consultation emails, never a transactional appointment confirmation
+  // (those live in appointments/actions.ts and are untouched by this check).
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -359,6 +365,11 @@ export async function sendConsultationInvitationAction(leadId: string, formData:
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - these are all marketing/nurture-style
+  // consultation emails, never a transactional appointment confirmation
+  // (those live in appointments/actions.ts and are untouched by this check).
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -439,6 +450,11 @@ export async function sendConsultationFollowUpAction(leadId: string, formData: F
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - these are all marketing/nurture-style
+  // consultation emails, never a transactional appointment confirmation
+  // (those live in appointments/actions.ts and are untouched by this check).
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
@@ -510,6 +526,11 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
 
   if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
   if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  // Item 6: check the shared Do Not Contact list's email channel before
+  // this outreach email send - these are all marketing/nurture-style
+  // consultation emails, never a transactional appointment confirmation
+  // (those live in appointments/actions.ts and are untouched by this check).
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
   if (!subject) return { emailId: "", error: "A subject is required." };
   if (!body) return { emailId: "", error: "An email body is required." };
   if (!bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };

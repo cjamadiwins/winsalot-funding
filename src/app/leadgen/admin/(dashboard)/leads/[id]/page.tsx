@@ -91,6 +91,7 @@ export default async function LeadgenAdminLeadDetailPage({
       actions={actions}
       listPath="/leadgen/admin/leads"
       score={detail.score}
+      dncSuppression={detail.dncSuppression}
     />
   );
 }

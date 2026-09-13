@@ -4,9 +4,17 @@ export const CALL_LOG_OUTCOMES = [
   "Gatekeeper",
   "Not Interested",
   "Callback",
+  "Do Not Call",
 ] as const;
 
 export type CallLogOutcome = (typeof CALL_LOG_OUTCOMES)[number];
+
+// Selecting this outcome in either CRM's Call Log form adds a shared,
+// cross-CRM Do Not Contact suppression record (phone channel) - see
+// AgentCallLogClient's confirmation modal and createGrowthCallLogAction /
+// createLeadgenCallLogAction, which both call addOrUpdateDncSuppression
+// (src/lib/dnc-suppression.ts) after saving the call itself.
+export const DO_NOT_CALL_OUTCOME: CallLogOutcome = "Do Not Call";
 
 export const CALL_LOG_AUTOMATIC_NOTES: Record<CallLogOutcome, string> = {
   "No Answer": "No answer",
@@ -14,6 +22,7 @@ export const CALL_LOG_AUTOMATIC_NOTES: Record<CallLogOutcome, string> = {
   Gatekeeper: "Spoke with gatekeeper",
   "Not Interested": "Not interested",
   Callback: "Callback requested",
+  "Do Not Call": "Requested Do Not Call — added to the Do Not Contact list",
 };
 
 export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
@@ -22,6 +31,7 @@ export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
   Gatekeeper: "bg-sky-100 text-sky-800",
   "Not Interested": "bg-rose-100 text-rose-800",
   Callback: "bg-orange-100 text-orange-800",
+  "Do Not Call": "bg-red-100 text-red-800",
 };
 
 export const GROWTH_CRM_BUSINESS_CLIENT_NAME = "Winsalot Corp." as const;

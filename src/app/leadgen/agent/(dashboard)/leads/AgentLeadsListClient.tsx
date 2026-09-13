@@ -15,6 +15,8 @@ import {
   type LeadgenLeadRow,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
+import type { DncSuppressionRow } from "@/lib/dnc-suppression";
+import DncBadge from "@/components/crm-ui/DncBadge";
 
 // Compact filter-bar controls, matching the admin Leads table's tighter
 // sizing (LeadsListClient) so the filter row doesn't eat up vertical
@@ -34,6 +36,7 @@ export default function AgentLeadsListClient({
   viewingClientName,
   emailStatusByLeadId,
   appointmentStatusByLeadId,
+  dncByLeadId,
 }: {
   leads: LeadgenLeadRow[];
   // Every client's id/name (agents can already read the full roster - see
@@ -63,6 +66,9 @@ export default function AgentLeadsListClient({
   // Most recent appointment status per lead id - a lead with no
   // appointment simply has no entry here.
   appointmentStatusByLeadId?: Record<string, LeadgenAppointmentStatus>;
+  // Shared cross-CRM Do Not Contact restriction per lead id - a lead with
+  // no active restriction simply has no entry here.
+  dncByLeadId?: Record<string, DncSuppressionRow>;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>(
     initialStatusFilter && LEADGEN_LEAD_STATUSES.includes(initialStatusFilter as LeadgenLeadStatus) ? initialStatusFilter : "all"
@@ -203,12 +209,15 @@ export default function AgentLeadsListClient({
                     {pageRows.map((lead) => (
                       <tr key={lead.id} className="border-b border-slate-100">
                         <td className="max-w-[220px] px-3 py-2">
-                          <Link
-                            href={`/leadgen/agent/leads/${lead.id}`}
-                            className="line-clamp-2 break-words font-semibold text-sky-600 hover:text-sky-700"
-                          >
-                            {lead.business_name}
-                          </Link>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/leadgen/agent/leads/${lead.id}`}
+                              className="line-clamp-2 break-words font-semibold text-sky-600 hover:text-sky-700"
+                            >
+                              {lead.business_name}
+                            </Link>
+                            {dncByLeadId?.[lead.id] && <DncBadge suppression={dncByLeadId[lead.id]} />}
+                          </div>
                           <div className="truncate text-[11px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
                         </td>
                         {showClientColumn && (

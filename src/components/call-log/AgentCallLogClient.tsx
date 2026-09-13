@@ -5,12 +5,14 @@ import {
   CALL_LOG_AUTOMATIC_NOTES,
   CALL_LOG_OUTCOMES,
   CALL_LOG_OUTCOME_STYLES,
+  DO_NOT_CALL_OUTCOME,
   formatCallLogDate,
   type CallLogOutcome,
   type CallLogRow,
 } from "@/lib/call-log";
 import SearchableSelect from "@/components/crm-ui/SearchableSelect";
 import RowsPerPagePager, { usePagedRows } from "@/components/crm-ui/RowsPerPagePager";
+import Modal from "@/components/Modal";
 import CallLogDetailModal, { type CallLogDetailEntry } from "./CallLogDetailModal";
 
 type ActionResult = { error?: string };
@@ -42,6 +44,10 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<CallLogDetailEntry | null>(null);
   const [recentSearch, setRecentSearch] = useState("");
+  // Item 2: selecting "Do Not Call" must show a confirmation modal before
+  // it takes effect - the outcome only actually changes to Do Not Call
+  // once the agent confirms; Cancel leaves the previous selection in place.
+  const [confirmingDnc, setConfirmingDnc] = useState(false);
 
   const filteredRecords = useMemo(() => {
     const q = recentSearch.trim().toLowerCase();
@@ -57,8 +63,18 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
   );
 
   function selectOutcome(next: CallLogOutcome) {
+    if (next === DO_NOT_CALL_OUTCOME) {
+      setConfirmingDnc(true);
+      return;
+    }
     setOutcome(next);
     setSaved(false);
+  }
+
+  function confirmDoNotCall() {
+    setOutcome(DO_NOT_CALL_OUTCOME);
+    setSaved(false);
+    setConfirmingDnc(false);
   }
 
   function submit(formData: FormData) {
@@ -280,6 +296,30 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       </section>
 
       {selected && <CallLogDetailModal entry={selected} onClose={() => setSelected(null)} />}
+
+      {confirmingDnc && (
+        <Modal title="Add to Do Not Contact?" onClose={() => setConfirmingDnc(false)}>
+          <p className="text-sm text-slate-600">
+            This contact will be added to the Do Not Contact list and outbound calling will be blocked. Continue?
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingDnc(false)}
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDoNotCall}
+              className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Add to Do Not Contact
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

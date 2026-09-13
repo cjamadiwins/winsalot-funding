@@ -15,6 +15,7 @@ import {
   type LeadgenLeadRow,
 } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
+import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
 
 export type LeadgenAgentLeadDetailData = {
   lead: LeadgenLeadRow;
@@ -39,6 +40,8 @@ export type LeadgenAgentLeadDetailData = {
   // so the Opportunity Finder dashboard modal can show the same "why this
   // score" explanation the admin's own detail view already displays.
   score: LeadgenOpportunityScoreRow | null;
+  // Shared cross-CRM Do Not Contact restriction - see loadLeadgenLeadDetail.
+  dncSuppression: DncSuppressionRow | null;
 };
 
 // One Lead Gen CRM lead's full detail record, scoped to the signed-in
@@ -87,6 +90,7 @@ export async function loadLeadgenAgentLeadDetail(id: string): Promise<LeadgenAge
   const { data: bouncedRows } = await supabase.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
   const automaticReminderStatusByAppointmentId = await fetchLeadgenAppointmentReminderStatusMap(supabase, (appointments ?? []) as LeadgenAppointmentRow[]);
   const smsReminderStatusByAppointmentId = await fetchLeadgenAppointmentSmsReminderStatusMap(supabase, (appointments ?? []) as LeadgenAppointmentRow[]);
+  const dncSuppression = await checkDncSuppression({ phone: lead.phone, email: lead.email });
 
   const visibleCampaign = campaign && !isHiddenLeadgenCampaignName((campaign as LeadgenCampaignRow).name) ? campaign : null;
   const bookingLink = client ? resolveSiteRelativeUrl(getEffectiveBookingLink(client as LeadgenClientRow, visibleCampaign as LeadgenCampaignRow | null)) : null;
@@ -110,5 +114,6 @@ export async function loadLeadgenAgentLeadDetail(id: string): Promise<LeadgenAge
     servicesInfoLink: (client as LeadgenClientRow)?.services_info_link ?? null,
     bouncedEmails: (bouncedRows ?? []).map((r) => r.email),
     score: score as LeadgenOpportunityScoreRow | null,
+    dncSuppression,
   };
 }

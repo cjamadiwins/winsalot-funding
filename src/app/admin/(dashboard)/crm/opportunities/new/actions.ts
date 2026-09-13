@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { OPPORTUNITY_TYPES, type OpportunityType } from "@/lib/crm-types";
+import { checkDncSuppression } from "@/lib/dnc-suppression";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -87,5 +88,10 @@ export async function createOpportunityAction(formData: FormData) {
     redirect(`/admin/crm/opportunities/new?error=${encodeURIComponent("Failed to save the opportunity.")}`);
   }
 
-  redirect(`/admin/crm/opportunities/${opportunity.id}?added=1`);
+  // Item 8: surface "Existing Do Not Contact restriction detected" on the
+  // detail page this redirects to, rather than silently creating what
+  // looks like an unrestricted new record - see the agent-side
+  // createOpportunityAction for the identical rationale.
+  const existingRestriction = await checkDncSuppression({ phone, email: textOrNull(formData, "email") });
+  redirect(`/admin/crm/opportunities/${opportunity.id}?added=1${existingRestriction ? "&dncDetected=1" : ""}`);
 }

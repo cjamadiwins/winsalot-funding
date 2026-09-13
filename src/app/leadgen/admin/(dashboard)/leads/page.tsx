@@ -10,6 +10,7 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import { mapDncSuppressionsByContacts } from "@/lib/dnc-suppression";
 import LeadsListClient from "./LeadsListClient";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -75,6 +76,10 @@ export default async function LeadgenLeadsPage({
     if (email.lead_id) emailStatusByLeadId[email.lead_id] = email.status;
   }
 
+  const dncByLeadId = await mapDncSuppressionsByContacts(
+    (leads ?? []).map((lead) => ({ id: lead.id, phone: lead.phone, email: lead.email }))
+  );
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -97,6 +102,7 @@ export default async function LeadgenLeadsPage({
         agents={(agents ?? []) as LeadgenUserRow[]}
         appointmentStatusByLeadId={appointmentStatusByLeadId}
         emailStatusByLeadId={emailStatusByLeadId}
+        dncByLeadId={dncByLeadId}
         initialSuccessMessage={deleted === "1" ? "Lead deleted successfully." : null}
         initialStatusFilter={status}
         initialAppointmentStatusFilter={appointment_status}

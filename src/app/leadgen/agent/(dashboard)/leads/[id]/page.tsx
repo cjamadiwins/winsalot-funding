@@ -77,6 +77,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       isAdmin={false}
       actions={actions}
       listPath="/leadgen/agent/leads"
+      dncSuppression={detail.dncSuppression}
     />
   );
 }
