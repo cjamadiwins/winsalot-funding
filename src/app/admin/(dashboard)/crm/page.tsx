@@ -25,6 +25,16 @@ import AdminPerformanceGaugeGrid from "@/components/crm-ui/AdminPerformanceGauge
 import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 import { buildOpportunityCardRecords, sortByMostRecentlyWon, sortByMostUrgentFollowUp } from "@/lib/crm-dashboard-records";
 import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/lib/winsalot-consultation-data";
+import { getAllDncSuppressions } from "@/lib/dnc-suppression";
+import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
+import {
+  addSuppressionAction as addDncSuppressionAction,
+  editSuppressionAction as editDncSuppressionAction,
+  getAuditLogAction as getDncAuditLogAction,
+  importDncCsvAction,
+  reactivateSuppressionAction as reactivateDncSuppressionAction,
+  removeSuppressionAction as removeDncSuppressionAction,
+} from "./do-not-contact/actions";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -52,6 +62,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     performanceRecords,
     consultationRecordsRaw,
     opportunityFinderData,
+    dncRows,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -84,6 +95,10 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // agents, clients, and industries dataset the standalone Opportunity
     // Finder page loads, so the modal is never a lighter/different dataset.
     loadAdminOpportunityFinderData(),
+    // Do Not Contact dashboard card/modal (below) - every row regardless
+    // of source_crm, since a Growth CRM admin must also see (and be able
+    // to manage) a restriction added from the Lead Generation CRM.
+    getAllDncSuppressions(),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -284,6 +299,19 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
         onScheduleCallback={scheduleFollowUpAction}
         onCompleteFollowUp={completeFollowUpAction}
         hotCount={opportunityFinderHotCount}
+      />
+
+      <DoNotContactModalTrigger
+        rows={dncRows}
+        exportHref="/admin/crm/do-not-contact/export"
+        actions={{
+          addSuppression: addDncSuppressionAction,
+          removeSuppression: removeDncSuppressionAction,
+          reactivateSuppression: reactivateDncSuppressionAction,
+          editSuppression: editDncSuppressionAction,
+          importCsv: importDncCsvAction,
+          getAuditLog: getDncAuditLogAction,
+        }}
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/admin/crm/opportunity-finder?view=board" />

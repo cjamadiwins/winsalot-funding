@@ -45,12 +45,16 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
   // the prospect, call logs..."); a suppression failure here surfaces as
   // an error banner rather than silently dropping the restriction.
   if (outcome === DO_NOT_CALL_OUTCOME) {
+    // The reason the agent confirmed in the Call Log's Do Not Call modal
+    // (AgentCallLogClient) - falls back to the same default text if
+    // somehow blank rather than failing the save.
+    const dncReason = String(formData.get("dnc_reason") ?? "").trim() || "Requested Do Not Call during outbound call";
     const suppression = await addOrUpdateDncSuppression({
       businessName,
       phone,
       sourceCrm: "lead_generation",
       originalAssignment: client.name,
-      reason: "Requested Do Not Call during outbound call",
+      reason: dncReason,
       notes: extraDetails || null,
       addedByUserId: agent.id,
       addedByName: agent.full_name || agent.email,

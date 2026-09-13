@@ -30,14 +30,18 @@ const inputClass =
 const CHANNEL_LABELS: Record<DncChannel, string> = { phone: "Phone", sms: "SMS", email: "Email" };
 const CHANNELS: DncChannel[] = ["phone", "sms", "email"];
 
+// Renders as the body of a LargeModal (see DoNotContactModalTrigger) -
+// no page-level heading of its own; the modal's own header supplies the
+// title/subtitle so this starts straight into the filter bar/table, the
+// same "search+filters bar, then scrollable content" layout every other
+// LargeModal-hosted feature in this app uses (Opportunity Finder, Smart
+// Opportunities).
 export default function DoNotContactAdminClient({
   rows,
-  crmLabel,
   exportHref,
   actions,
 }: {
   rows: DncSuppressionRow[];
-  crmLabel: string;
   exportHref: string;
   actions: DoNotContactAdminActions;
 }) {
@@ -98,47 +102,13 @@ export default function DoNotContactAdminClient({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Do Not Contact — {crmLabel}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Shared across the Lead Generation CRM and Growth CRM — a restriction added in either CRM is recognized in both.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={exportHref}
-            className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
-          >
-            Export CSV
-          </a>
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
-          >
-            Import CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddModal(true)}
-            className="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700"
-          >
-            + Add to Do Not Contact
-          </button>
-        </div>
-      </div>
-
-      {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-      {message && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
-
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, business, phone, or email…"
-          className={`${inputClass} max-w-xs`}
+          className={`${inputClass} max-w-[220px]`}
         />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-lg border border-slate-300 px-2.5 py-2 text-[13px]">
           <option value="active">Active</option>
@@ -158,22 +128,70 @@ export default function DoNotContactAdminClient({
           <option value="growth">Growth CRM</option>
           <option value="lead_generation">Lead Generation CRM</option>
         </select>
+
+        {/* Admin-only actions (Item 5) - this entire component only ever
+            renders inside an admin-gated page, so no further role check
+            is needed here; the server actions themselves re-verify anyway. */}
+        <div className="ml-auto flex flex-wrap gap-2">
+          <a
+            href={exportHref}
+            className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
+          >
+            Export CSV
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="rounded-full border border-slate-300 px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
+          >
+            Import CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="rounded-full bg-red-600 px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-red-700"
+          >
+            + Add
+          </button>
+        </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="min-w-[980px] w-full text-left text-[13px]">
-          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+      {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {message && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
+
+      {/* `table-fixed` + a <colgroup> (rather than min-w-[…] + overflow-x-auto,
+          the convention every full-page admin table in this app uses) is
+          deliberate here: this table only ever renders inside the
+          Do Not Contact modal, and LargeModal's own contract is that no
+          child introduces its own horizontal scroll - long values truncate
+          with a `title` tooltip instead, so the table always fits the
+          modal's width on a normal desktop window. */}
+      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full table-fixed text-left text-[12.5px]">
+          <colgroup>
+            <col className="w-[19%]" />
+            <col className="w-[11%]" />
+            <col className="w-[15%]" />
+            <col className="w-[10%]" />
+            <col className="w-[14%]" />
+            <col className="w-[8%]" />
+            <col className="w-[9%]" />
+            <col className="w-[8%]" />
+            <col className="w-[6%]" />
+            <col className="w-[13%]" />
+          </colgroup>
+          <thead className="border-b border-slate-200 bg-slate-50 text-[10.5px] uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-3 py-2.5">Business / Contact</th>
-              <th className="px-3 py-2.5">Phone</th>
-              <th className="px-3 py-2.5">Email</th>
-              <th className="px-3 py-2.5">Blocked Channels</th>
-              <th className="px-3 py-2.5">Reason</th>
-              <th className="px-3 py-2.5">Source CRM</th>
-              <th className="px-3 py-2.5">Added By</th>
-              <th className="px-3 py-2.5">Date Added</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Actions</th>
+              <th className="px-2.5 py-2.5">Business / Contact</th>
+              <th className="px-2.5 py-2.5">Phone</th>
+              <th className="px-2.5 py-2.5">Email</th>
+              <th className="px-2.5 py-2.5">Channels</th>
+              <th className="px-2.5 py-2.5">Reason</th>
+              <th className="px-2.5 py-2.5">Source</th>
+              <th className="px-2.5 py-2.5">Agent</th>
+              <th className="px-2.5 py-2.5">Added</th>
+              <th className="px-2.5 py-2.5">Status</th>
+              <th className="px-2.5 py-2.5">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -186,47 +204,59 @@ export default function DoNotContactAdminClient({
             )}
             {pageRows.map((row) => (
               <tr key={row.id} className="align-top">
-                <td className="px-3 py-2.5 font-semibold text-slate-800">
+                <td className="px-2.5 py-2.5 font-semibold text-slate-800">
                   <div className="flex items-center gap-1.5">
-                    <span>{row.business_name || row.contact_name || "—"}</span>
-                    {row.status === "active" && <DncBadge suppression={row} />}
+                    <span className="truncate" title={row.business_name || row.contact_name || undefined}>
+                      {row.business_name || row.contact_name || "—"}
+                    </span>
+                    {row.status === "active" && <DncBadge suppression={row} className="shrink-0" />}
                   </div>
-                  {row.business_name && row.contact_name && <div className="text-[11px] font-normal text-slate-500">{row.contact_name}</div>}
+                  {row.business_name && row.contact_name && (
+                    <div className="truncate text-[11px] font-normal text-slate-500" title={row.contact_name}>
+                      {row.contact_name}
+                    </div>
+                  )}
                 </td>
-                <td className="px-3 py-2.5 text-slate-600">{row.phone || "—"}</td>
-                <td className="px-3 py-2.5 text-slate-600">{row.email || "—"}</td>
-                <td className="px-3 py-2.5">
+                <td className="truncate px-2.5 py-2.5 text-slate-600">{row.phone || "—"}</td>
+                <td className="truncate px-2.5 py-2.5 text-slate-600" title={row.email ?? undefined}>
+                  {row.email || "—"}
+                </td>
+                <td className="px-2.5 py-2.5">
                   <div className="flex flex-wrap gap-1">
                     {blockedChannelsOf(row).map((c) => (
-                      <span key={c} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-700">
+                      <span key={c} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
                         {CHANNEL_LABELS[c]}
                       </span>
                     ))}
                   </div>
                 </td>
-                <td className="max-w-[200px] px-3 py-2.5 text-slate-600">{row.reason}</td>
-                <td className="px-3 py-2.5 text-slate-600">{row.source_crm === "growth" ? "Growth" : "Lead Gen"}</td>
-                <td className="px-3 py-2.5 text-slate-600">{row.added_by_name || "—"}</td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{new Date(row.created_at).toLocaleDateString()}</td>
-                <td className="px-3 py-2.5">
-                  <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${row.status === "active" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-600"}`}>
+                <td className="truncate px-2.5 py-2.5 text-slate-600" title={row.reason}>
+                  {row.reason}
+                </td>
+                <td className="truncate px-2.5 py-2.5 text-slate-600">{row.source_crm === "growth" ? "Growth" : "Lead Gen"}</td>
+                <td className="truncate px-2.5 py-2.5 text-slate-600" title={row.added_by_name ?? undefined}>
+                  {row.added_by_name || "—"}
+                </td>
+                <td className="px-2.5 py-2.5 text-slate-600">{new Date(row.created_at).toLocaleDateString()}</td>
+                <td className="px-2.5 py-2.5">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.status === "active" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-600"}`}>
                     {row.status === "active" ? "Active" : "Removed"}
                   </span>
                 </td>
-                <td className="px-3 py-2.5">
+                <td className="px-2.5 py-2.5">
                   <div className="flex flex-wrap gap-1.5">
-                    <button type="button" onClick={() => openHistory(row)} className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
+                    <button type="button" onClick={() => openHistory(row)} className="text-[11.5px] font-semibold text-sky-600 hover:text-sky-700">
                       History
                     </button>
-                    <button type="button" onClick={() => setEditRow(row)} className="text-[12px] font-semibold text-slate-600 hover:text-slate-800">
+                    <button type="button" onClick={() => setEditRow(row)} className="text-[11.5px] font-semibold text-slate-600 hover:text-slate-800">
                       Edit
                     </button>
                     {row.status === "active" ? (
-                      <button type="button" onClick={() => setRemovingRow(row)} className="text-[12px] font-semibold text-rose-600 hover:text-rose-700">
+                      <button type="button" onClick={() => setRemovingRow(row)} className="text-[11.5px] font-semibold text-rose-600 hover:text-rose-700">
                         Remove
                       </button>
                     ) : (
-                      <button type="button" onClick={() => setReactivatingRow(row)} className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700">
+                      <button type="button" onClick={() => setReactivatingRow(row)} className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700">
                         Reactivate
                       </button>
                     )}

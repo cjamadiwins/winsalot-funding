@@ -42,6 +42,16 @@ import { GROWTH_CRM_GAUGE_SEGMENTS } from "@/lib/performance-gauge";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
 import LeadgenAppointmentRecordsModal from "@/components/leadgen/LeadgenAppointmentRecordsModal";
 import { buildAppointmentCardRecords, buildLeadCardRecords, latestLeadgenEmailByLeadId, sortAppointmentsUpcomingFirst, sortLeadsByMostUrgentFollowUp } from "@/lib/leadgen-dashboard-records";
+import { getAllDncSuppressions } from "@/lib/dnc-suppression";
+import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
+import {
+  addSuppressionAction as addDncSuppressionAction,
+  editSuppressionAction as editDncSuppressionAction,
+  getAuditLogAction as getDncAuditLogAction,
+  importDncCsvAction,
+  reactivateSuppressionAction as reactivateDncSuppressionAction,
+  removeSuppressionAction as removeDncSuppressionAction,
+} from "./do-not-contact/actions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -62,6 +72,7 @@ export default async function LeadgenAdminDashboardPage() {
     { data: pendingFollowUps },
     { data: recentEmails },
     opportunityFinderData,
+    dncRows,
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -107,6 +118,10 @@ export default async function LeadgenAdminDashboardPage() {
       // Opportunity Finder page loads, so the modal is never a
       // lighter/different dataset.
       loadLeadgenAdminOpportunityFinderData(),
+      // Do Not Contact dashboard card/modal (below) - every row regardless
+      // of source_crm, since a Lead Generation CRM admin must also see
+      // (and be able to manage) a restriction added from the Growth CRM.
+      getAllDncSuppressions(),
     ]);
 
   const allLeads = leads ?? [];
@@ -387,6 +402,19 @@ export default async function LeadgenAdminDashboardPage() {
         onScheduleCallback={scheduleFollowUpAction}
         onCompleteFollowUp={completeFollowUpAction}
         hotCount={opportunityFinderHotCount}
+      />
+
+      <DoNotContactModalTrigger
+        rows={dncRows}
+        exportHref="/leadgen/admin/do-not-contact/export"
+        actions={{
+          addSuppression: addDncSuppressionAction,
+          removeSuppression: removeDncSuppressionAction,
+          reactivateSuppression: reactivateDncSuppressionAction,
+          editSuppression: editDncSuppressionAction,
+          importCsv: importDncCsvAction,
+          getAuditLog: getDncAuditLogAction,
+        }}
       />
 
       <OpportunityPipelineSummaryCard stageCounts={pipelineStageCounts} boardHref="/leadgen/admin/opportunity-finder?view=board" />
