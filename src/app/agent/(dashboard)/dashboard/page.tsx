@@ -43,6 +43,8 @@ import { getBookedConsultationRecords, sortConsultationsUpcomingFirst } from "@/
 import { getActiveDncSuppressions } from "@/lib/dnc-suppression";
 import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
 import { addAgentDncSuppressionAction } from "../do-not-contact-actions";
+import { loadGrowthAgentSalesCoachData } from "@/lib/growth-sales-coach";
+import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -159,6 +161,20 @@ export default async function AgentDashboardPage() {
   const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
   const dialpadData = await loadDialpadAgentDashboardData(supabase);
 
+  // Winsalot Sales Coach & Operations Manager (below) - reuses the
+  // opportunities/consultations/performance already loaded above, plus its
+  // own small call-log and appointment-reminder reads. Personalized to this
+  // signed-in agent only - RLS scopes every read the same way the rest of
+  // this page already relies on.
+  const salesCoachData = await loadGrowthAgentSalesCoachData({
+    agentId: crmUser.id,
+    agentName: agentDisplayName,
+    supabase,
+    now: new Date(),
+    consultations: consultationRecordsRaw,
+    performance,
+  });
+
   // Weekly Agent Incentive - scoped to just this agent's own appointments
   // (getCrmIncentiveAppointments(crmUser.id) never even receives another
   // agent's rows over the wire, same pattern as getCrmPerformanceRecords
@@ -247,6 +263,8 @@ export default async function AgentDashboardPage() {
           </Link>
         </div>
       </div>
+
+      <SalesCoachAgentCard data={salesCoachData} />
 
       <PerformanceScoreCard
         className="mt-6"

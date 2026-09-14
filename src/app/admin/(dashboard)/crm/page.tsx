@@ -35,6 +35,9 @@ import {
   reactivateSuppressionAction as reactivateDncSuppressionAction,
   removeSuppressionAction as removeDncSuppressionAction,
 } from "./do-not-contact/actions";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { loadGrowthTeamSalesCoachData } from "@/lib/growth-sales-coach";
+import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -147,6 +150,20 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     styleClass: OPPORTUNITY_STAGE_STYLES[stage],
   }));
 
+  // Winsalot Sales Coach & Operations Manager - Team Overview (below) -
+  // reuses the opportunities/consultations/performance records already
+  // loaded above, plus its own small call-log and appointment-reminder
+  // reads. Service-role client, since this view must cover every active
+  // agent regardless of RLS scoping - same pattern as
+  // loadAdminOpportunityFinderData/getCrmPerformanceRecords above.
+  const salesCoachTeamData = await loadGrowthTeamSalesCoachData({
+    admin: getSupabaseAdmin(),
+    activeAgents,
+    now: new Date(),
+    consultations: consultationRecordsRaw,
+    performanceRecords,
+  });
+
   const performanceGaugeRows = activeAgents.map((agent) => {
     const performance = computeCrmAgentPerformance(performanceRecords, agent.id).current;
     return {
@@ -195,6 +212,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
           </Link>
         </div>
       </div>
+
+      <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/admin/crm/performance" />
 
       {deleted === "opportunity" && (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">

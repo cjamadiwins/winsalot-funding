@@ -51,6 +51,8 @@ import { buildLeadCardRecords, latestLeadgenEmailByLeadId } from "@/lib/leadgen-
 import { getActiveDncSuppressions } from "@/lib/dnc-suppression";
 import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigger";
 import { addAgentDncSuppressionAction } from "./do-not-contact-actions";
+import { loadLeadgenAgentSalesCoachData } from "@/lib/leadgen-sales-coach";
+import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -243,6 +245,19 @@ export default async function LeadgenAgentDashboardPage() {
   const opportunityFinderHotCount = myOpportunitiesRows.filter(
     (row) => row.score.finder_state === "active" && opportunityPriorityLevel(row.score.score) === "hot"
   ).length;
+  // Winsalot Sales Coach & Operations Manager (below) - reuses the
+  // appointments already loaded above, plus its own small call-log and
+  // appointment-reminder reads. Personalized to this signed-in agent only -
+  // RLS scopes every read the same way the rest of this page already
+  // relies on.
+  const salesCoachData = await loadLeadgenAgentSalesCoachData({
+    agentId: agent.id,
+    agentName: agentDisplayName,
+    supabase,
+    now: new Date(),
+    appointments: (appointments ?? []) as LeadgenPerformanceAppointment[],
+  });
+
   const leadDetailActions: LeadDetailActions = {
     updateLead: updateLeadAction,
     recordCallOutcome: recordCallOutcomeAction,
@@ -269,6 +284,8 @@ export default async function LeadgenAgentDashboardPage() {
         currentCampaignId={agent.current_campaign_id}
         agentFullName={agentDisplayName}
       />
+
+      <SalesCoachAgentCard data={salesCoachData} />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenLeadRecordsModal
