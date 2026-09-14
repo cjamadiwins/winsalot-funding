@@ -29,14 +29,23 @@ import {
 // Section 21: Green/On Track, Amber/Attention Needed, Red/Immediate
 // Attention Required - one small palette shared by the banner's icon
 // badge, status pill, and outer card accent so all three always agree.
+// Amber runs one shade deeper than green/red across the board (600 instead
+// of 500/100->700 instead of 100->700) since "Attention Needed" is the
+// state agents are most likely to skim past if it isn't distinct enough
+// from "On Track" - a deliberate, still-professional emphasis bump, not a
+// color-scheme change.
 const STATUS_STYLES: Record<SalesCoachStatusLevel, { accent: string; badgeBg: string; badgeText: string; pillBg: string; icon: typeof CheckCircle2 }> = {
   green: { accent: "border-l-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", pillBg: "bg-emerald-600", icon: CheckCircle2 },
-  amber: { accent: "border-l-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-700", pillBg: "bg-amber-500", icon: AlertTriangle },
+  amber: { accent: "border-l-amber-600", badgeBg: "bg-amber-200", badgeText: "text-amber-800", pillBg: "bg-amber-600", icon: AlertTriangle },
   red: { accent: "border-l-rose-500", badgeBg: "bg-rose-100", badgeText: "text-rose-700", pillBg: "bg-rose-600", icon: XCircle },
 };
 
+// Left accent border is a touch thicker than a standard card (5px vs. the
+// dashboard's usual 4px) and the card carries a subtle shadow - together
+// enough for the coach card to register a beat faster on first glance
+// without changing its footprint, colors, or the rest of its layout.
 function cardClassFor(level: SalesCoachStatusLevel): string {
-  return `mt-6 rounded-2xl border border-slate-200 border-l-4 ${STATUS_STYLES[level].accent} bg-[var(--crm-surface)] p-5`;
+  return `mt-6 rounded-2xl border border-slate-200 border-l-[5px] ${STATUS_STYLES[level].accent} bg-[var(--crm-surface)] p-5 shadow-sm`;
 }
 
 function StatusPill({ level }: { level: SalesCoachStatusLevel }) {
@@ -145,7 +154,7 @@ export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
 
       <div className="mt-3">
         <StatusPill level={level} />
-        <p className="mt-2 text-[13.5px] leading-relaxed text-slate-700">{statusMessage}</p>
+        <p className="mt-2 text-[13.5px] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
       </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
@@ -159,13 +168,13 @@ export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
             callLogReminder.level === "active"
               ? "border-emerald-200 bg-emerald-50"
               : callLogReminder.level === "strong"
-                ? "border-amber-300 bg-amber-50"
+                ? "border-amber-400 bg-amber-50"
                 : "border-sky-200 bg-sky-50"
           }`}
         >
           <p
             className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${
-              callLogReminder.level === "active" ? "text-emerald-700" : callLogReminder.level === "strong" ? "text-amber-700" : "text-sky-700"
+              callLogReminder.level === "active" ? "text-emerald-700" : callLogReminder.level === "strong" ? "text-amber-800" : "text-sky-700"
             }`}
           >
             <PhoneCall className="h-3.5 w-3.5" strokeWidth={2.3} />
@@ -260,7 +269,7 @@ export function SalesCoachAdminCard({ data, performanceHref }: { data: SalesCoac
 
       <div className="mt-3">
         <StatusPill level={level} />
-        <p className="mt-2 text-[13.5px] leading-relaxed text-slate-700">{statusMessage}</p>
+        <p className="mt-2 text-[13.5px] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
       </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
