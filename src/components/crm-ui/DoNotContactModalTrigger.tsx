@@ -44,7 +44,7 @@ export default function DoNotContactModalTrigger({
           <div>
             <div className="text-[16px] font-bold text-slate-900">Do Not Contact List</div>
             <div className="mt-0.5 text-[12.5px] text-slate-600">
-              {canManage ? "Shared with both CRMs — search, manage, and export restrictions." : "Shared with both CRMs — search and add restrictions."}
+              {canManage ? "Shared with both CRMs — Search, Manage, and Export restrictions." : "Shared with both CRMs — Search and Add restrictions."}
             </div>
           </div>
         </div>
