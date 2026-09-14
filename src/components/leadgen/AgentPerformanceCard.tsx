@@ -33,7 +33,7 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
       gaugeSize={380}
       strokeWidth={19}
       periodLabel={`Week of ${leadgenWeekRangeLabel(weekStart, weekEnd)}`}
-      resultsLine={`${bookedThisWeek}/${target} appointments booked`}
+      resultsLine={`${bookedThisWeek}/${target} Appointments Booked`}
       tiles={
         <>
           <PerformanceTile

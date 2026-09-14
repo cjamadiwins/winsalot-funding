@@ -35,7 +35,7 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
       gaugeSize={380}
       strokeWidth={19}
       periodLabel={`Week: ${crmWeeklyRangeLabel(current.periodStart, current.periodEnd)}`}
-      resultsLine={`${current.consultationsBooked} consultations · ${current.leadsAdded} leads added · ${current.emailsDelivered} emails delivered`}
+      resultsLine={`${current.consultationsBooked} Consultations · ${current.leadsAdded} Leads Added · ${current.emailsDelivered} Emails Delivered`}
       tiles={
         <>
           <PerformanceTile

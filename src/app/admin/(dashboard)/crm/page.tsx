@@ -171,7 +171,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       agentName: agent.full_name || agent.email,
       score: performance.overallPercentage,
       tier: crmPerformanceTier(performance.overallPercentage),
-      summary: `${performance.consultationsBooked} consultations · ${performance.leadsAdded} leads added`,
+      summary: `${performance.consultationsBooked} Consultations · ${performance.leadsAdded} Leads Added · ${performance.emailsDelivered} Emails Delivered`,
       periodLabel: crmWeeklyRangeLabel(performance.periodStart, performance.periodEnd),
     };
   });

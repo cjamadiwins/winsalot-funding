@@ -406,7 +406,7 @@ export default async function LeadgenAgentDashboardPage() {
         tier={performanceTier}
         segments={GROWTH_CRM_GAUGE_SEGMENTS}
         periodLabel={`Week of ${leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd)}`}
-        resultsLine={`${performance.bookedThisWeek}/${performance.target} appointments booked`}
+        resultsLine={`${performance.bookedThisWeek}/${performance.target} Appointments Booked`}
         reportHref="/leadgen/agent/performance"
         tiles={
           <>

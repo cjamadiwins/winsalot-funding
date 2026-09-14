@@ -273,7 +273,7 @@ export default async function AgentDashboardPage() {
         tier={performanceTier}
         segments={GROWTH_CRM_GAUGE_SEGMENTS}
         periodLabel={`Week: ${crmWeeklyRangeLabel(performance.current.periodStart, performance.current.periodEnd)}`}
-        resultsLine={`${performance.current.consultationsBooked} consultations · ${performance.current.leadsAdded} leads added · ${performance.current.emailsDelivered} emails delivered`}
+        resultsLine={`${performance.current.consultationsBooked} Consultations · ${performance.current.leadsAdded} Leads Added · ${performance.current.emailsDelivered} Emails Delivered`}
         reportHref="/agent/performance"
         tiles={
           <>

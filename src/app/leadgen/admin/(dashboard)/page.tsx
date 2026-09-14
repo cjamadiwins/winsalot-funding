@@ -263,7 +263,7 @@ export default async function LeadgenAdminDashboardPage() {
       agentName: agent.full_name,
       score: performance.percentage,
       tier: leadgenPerformanceTier(performance.percentage),
-      summary: `${performance.bookedThisWeek}/${performance.target} appointments booked`,
+      summary: `${performance.bookedThisWeek}/${performance.target} Appointments Booked`,
       periodLabel: leadgenWeekRangeLabel(performance.weekStart, performance.weekEnd),
     };
   });
