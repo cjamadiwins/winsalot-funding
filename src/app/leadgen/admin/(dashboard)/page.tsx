@@ -52,6 +52,8 @@ import {
   reactivateSuppressionAction as reactivateDncSuppressionAction,
   removeSuppressionAction as removeDncSuppressionAction,
 } from "./do-not-contact/actions";
+import { loadLeadgenTeamSalesCoachData } from "@/lib/leadgen-sales-coach";
+import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -243,6 +245,17 @@ export default async function LeadgenAdminDashboardPage() {
 
   const dialpadData = await loadDialpadDashboardData(admin);
 
+  // Winsalot Sales Coach & Operations Manager - Team Overview (below) -
+  // reuses the leads/appointments already loaded above, plus its own small
+  // call-log and appointment-reminder reads. Service-role client, since
+  // this view must cover every active agent regardless of RLS scoping.
+  const salesCoachTeamData = await loadLeadgenTeamSalesCoachData({
+    admin,
+    activeAgents: agents,
+    now,
+    appointments: allAppointments as LeadgenPerformanceAppointment[],
+  });
+
   const performanceGaugeRows = agents.map((agent) => {
     const performance = computeLeadgenAgentPerformance(allAppointments as LeadgenPerformanceAppointment[], agent.id);
     return {
@@ -288,6 +301,8 @@ export default async function LeadgenAdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/leadgen/admin/performance" />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <LeadgenLeadRecordsModal
