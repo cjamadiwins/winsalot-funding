@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { CrmLendingPartnerRow } from "@/lib/crm-lending-partners-types";
 import {
   LENDING_PARTNER_CONTACT_TYPES,
@@ -43,7 +43,18 @@ export default function AdminLendingPartnersClient({
     });
   }
 
-  const visiblePartners = partners.filter((p) => (showArchived ? true : !p.archived_at));
+  // usePagedRows resets to page 1 by comparing this array's *reference*
+  // across renders (see its own doc comment in RowsPerPagePager.tsx) - it
+  // expects a memoized array that only gets a new reference when the
+  // underlying data or filter actually changes. Without useMemo here,
+  // .filter() returns a brand-new array on every render (including the
+  // render usePagedRows' own setPage(1) triggers), so the reference never
+  // stabilizes and React throws "Too many re-renders" - this was the
+  // intermittent "This page couldn't load" crash on this page.
+  const visiblePartners = useMemo(
+    () => partners.filter((p) => (showArchived ? true : !p.archived_at)),
+    [partners, showArchived]
+  );
   const agentNameById = new Map(agents.map((a) => [a.id, a.full_name || a.email]));
   const { pageRows, page, pageCount, pageSize, setPage, setPageSize, totalCount, rangeStart, rangeEnd } = usePagedRows(visiblePartners);
 
@@ -177,13 +188,13 @@ export default function AdminLendingPartnersClient({
       <div className="mt-4 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)]">
         <table className="w-full table-fixed divide-y divide-[var(--color-border)] text-[13px]">
           <colgroup>
-            <col className="w-[20%]" />
-            <col className="w-[16%]" />
-            <col className="w-[14%]" />
-            <col className="w-[20%]" />
+            <col className="w-[18%]" />
+            <col className="w-[15%]" />
+            <col className="w-[13%]" />
+            <col className="w-[19%]" />
             <col className="w-[12%]" />
             <col className="w-[12%]" />
-            <col className="w-[6%]" />
+            <col className="w-[11%]" />
           </colgroup>
           <thead>
             <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
@@ -193,7 +204,7 @@ export default function AdminLendingPartnersClient({
               <th className="px-3 py-2">Email</th>
               <th className="px-3 py-2">Phone</th>
               <th className="px-3 py-2">Assigned Agent</th>
-              <th className="px-3 py-2" />
+              <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
@@ -229,8 +240,8 @@ export default function AdminLendingPartnersClient({
                 <td className="truncate px-3 py-2" title={p.assigned_agent_id ? agentNameById.get(p.assigned_agent_id) : undefined}>
                   {p.assigned_agent_id ? agentNameById.get(p.assigned_agent_id) ?? "-" : "-"}
                 </td>
-                <td className="px-3 py-2 text-right">
-                  <Link href={`/admin/crm/lending-partners/${p.id}`} className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <Link href={`/admin/crm/lending-partners/${p.id}`} className="whitespace-nowrap text-[12px] font-semibold text-sky-600 hover:text-sky-700">
                     View/Edit
                   </Link>
                 </td>
