@@ -127,7 +127,7 @@ export default function DialpadDashboardPreview({ audience, report, summaries, f
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-[13px] font-bold text-slate-900">Weekly performance chart</h3>
+            <h3 className="text-[13px] font-bold text-slate-900">Weekly Performance Chart</h3>
             <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-slate-600">
               <Legend color="bg-blue-500" label="Total" />
               <Legend color="bg-indigo-500" label="Placed" />
