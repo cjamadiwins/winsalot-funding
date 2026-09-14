@@ -8,6 +8,7 @@ import {
   LENDING_PARTNER_CONTACT_TYPE_LABELS,
   LENDING_PARTNER_CONTACT_TYPE_STYLES,
 } from "@/lib/crm-lending-partners-types";
+import RowsPerPagePager, { usePagedRows } from "@/components/crm-ui/RowsPerPagePager";
 
 type ActionResult = { error?: string; partnerId?: string };
 type AgentOption = { id: string; full_name: string; email: string };
@@ -44,6 +45,7 @@ export default function AdminLendingPartnersClient({
 
   const visiblePartners = partners.filter((p) => (showArchived ? true : !p.archived_at));
   const agentNameById = new Map(agents.map((a) => [a.id, a.full_name || a.email]));
+  const { pageRows, page, pageCount, pageSize, setPage, setPageSize, totalCount, rangeStart, rangeEnd } = usePagedRows(visiblePartners);
 
   return (
     <div>
@@ -164,47 +166,72 @@ export default function AdminLendingPartnersClient({
         </form>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)]">
-        <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
+      {/* `table-fixed` + a <colgroup> (the same convention
+          DoNotContactAdminClient uses) instead of min-w-[…] +
+          overflow-x-auto: long emails/company names truncate with a
+          `title` tooltip rather than wrapping or forcing the table wider
+          than the page, so this never scrolls sideways on a normal
+          desktop window. Row padding is tightened (px-3 py-2, was
+          px-4 py-3) purely to fit more rows per screen - no column
+          removed, no data logic touched. */}
+      <div className="mt-4 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)]">
+        <table className="w-full table-fixed divide-y divide-[var(--color-border)] text-[13px]">
+          <colgroup>
+            <col className="w-[20%]" />
+            <col className="w-[16%]" />
+            <col className="w-[14%]" />
+            <col className="w-[20%]" />
+            <col className="w-[12%]" />
+            <col className="w-[12%]" />
+            <col className="w-[6%]" />
+          </colgroup>
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-              <th className="px-4 py-3">Company</th>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">Assigned Agent</th>
-              <th className="px-4 py-3" />
+            <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              <th className="px-3 py-2">Company</th>
+              <th className="px-3 py-2">Contact</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Assigned Agent</th>
+              <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {visiblePartners.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
+                <td colSpan={7} className="px-3 py-6 text-center text-[var(--color-text-muted)]">
                   No lending partners match these filters.
                 </td>
               </tr>
             )}
-            {visiblePartners.map((p) => (
+            {pageRows.map((p) => (
               <tr key={p.id}>
-                <td className="px-4 py-3 font-medium text-[var(--color-ink-strong)]">
-                  <Link href={`/admin/crm/lending-partners/${p.id}`} className="hover:underline">
+                <td className="px-3 py-2 font-medium text-[var(--color-ink-strong)]">
+                  <Link href={`/admin/crm/lending-partners/${p.id}`} className="block truncate hover:underline" title={p.company_name}>
                     {p.company_name}
                   </Link>
-                  {p.archived_at && <div className="text-xs text-rose-600">Archived</div>}
+                  {p.archived_at && <div className="text-[11px] text-rose-600">Archived</div>}
                 </td>
-                <td className="px-4 py-3">{p.contact_name || "-"}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${LENDING_PARTNER_CONTACT_TYPE_STYLES[p.contact_type]}`}>
+                <td className="truncate px-3 py-2" title={p.contact_name || undefined}>
+                  {p.contact_name || "-"}
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LENDING_PARTNER_CONTACT_TYPE_STYLES[p.contact_type]}`}>
                     {LENDING_PARTNER_CONTACT_TYPE_LABELS[p.contact_type]}
                   </span>
                 </td>
-                <td className="px-4 py-3">{p.email || "-"}</td>
-                <td className="px-4 py-3">{p.phone || "-"}</td>
-                <td className="px-4 py-3">{p.assigned_agent_id ? agentNameById.get(p.assigned_agent_id) ?? "-" : "-"}</td>
-                <td className="px-4 py-3 text-right">
+                <td className="truncate px-3 py-2" title={p.email || undefined}>
+                  {p.email || "-"}
+                </td>
+                <td className="truncate px-3 py-2" title={p.phone || undefined}>
+                  {p.phone || "-"}
+                </td>
+                <td className="truncate px-3 py-2" title={p.assigned_agent_id ? agentNameById.get(p.assigned_agent_id) : undefined}>
+                  {p.assigned_agent_id ? agentNameById.get(p.assigned_agent_id) ?? "-" : "-"}
+                </td>
+                <td className="px-3 py-2 text-right">
                   <Link href={`/admin/crm/lending-partners/${p.id}`} className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
-                    View / Edit
+                    View/Edit
                   </Link>
                 </td>
               </tr>
@@ -212,6 +239,19 @@ export default function AdminLendingPartnersClient({
           </tbody>
         </table>
       </div>
+
+      {visiblePartners.length > 0 && (
+        <RowsPerPagePager
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          totalCount={totalCount}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+        />
+      )}
     </div>
   );
 }
