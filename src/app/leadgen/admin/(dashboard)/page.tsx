@@ -75,6 +75,7 @@ export default async function LeadgenAdminDashboardPage() {
     { data: recentEmails },
     opportunityFinderData,
     dncRows,
+    { data: openShifts },
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -89,7 +90,7 @@ export default async function LeadgenAdminDashboardPage() {
       admin.from("leadgen_clients").select("id, name"),
       admin
         .from("leadgen_users")
-        .select("id, full_name, role, current_campaign_id")
+        .select("id, full_name, role, current_campaign_id, scheduled_start_time")
         .eq("role", "agent")
         .eq("active", true)
         .neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
@@ -124,6 +125,9 @@ export default async function LeadgenAdminDashboardPage() {
       // of source_crm, since a Lead Generation CRM admin must also see
       // (and be able to manage) a restriction added from the Growth CRM.
       getAllDncSuppressions(),
+      // Sales Coach Team Overview status banner (below) - only who's
+      // currently clocked in matters here, not full shift history.
+      admin.from("leadgen_agent_attendance").select("agent_id").is("clock_out", null),
     ]);
 
   const allLeads = leads ?? [];
@@ -254,6 +258,7 @@ export default async function LeadgenAdminDashboardPage() {
     activeAgents: agents,
     now,
     appointments: allAppointments as LeadgenPerformanceAppointment[],
+    clockedInAgentIds: (openShifts ?? []).map((row) => row.agent_id),
   });
 
   const performanceGaugeRows = agents.map((agent) => {

@@ -92,12 +92,13 @@ describe("Growth CRM Sales Coach Team Overview - per-agent isolation", () => {
     const result = await loadGrowthTeamSalesCoachData({
       admin: supabase,
       activeAgents: [
-        { id: "henry", full_name: "Henry", email: "henry@example.com", role: "agent", active: true } as never,
-        { id: "goodness", full_name: "Goodness", email: "goodness@example.com", role: "agent", active: true } as never,
+        { id: "henry", full_name: "Henry", email: "henry@example.com", role: "agent", active: true, scheduled_start_time: null } as never,
+        { id: "goodness", full_name: "Goodness", email: "goodness@example.com", role: "agent", active: true, scheduled_start_time: null } as never,
       ],
       now,
       consultations: [],
       performanceRecords: [],
+      clockedInAgentIds: ["henry"],
     });
 
     const henry = result.agents.find((a) => a.agentId === "henry")!;
@@ -107,11 +108,13 @@ describe("Growth CRM Sales Coach Team Overview - per-agent isolation", () => {
     expect(henry.warmCount).toBe(0);
     expect(henry.followUpsOverdueCount).toBe(1);
     expect(henry.callLog.countToday).toBe(1);
+    expect(henry.presence.isClockedIn).toBe(true);
 
     expect(goodness.hotCount).toBe(0);
     expect(goodness.warmCount).toBe(1);
     expect(goodness.followUpsOverdueCount).toBe(0);
     expect(goodness.callLog.countToday).toBe(0);
+    expect(goodness.presence.isClockedIn).toBe(false);
 
     // Team totals are the sum of each agent's own count, never double-
     // counted or cross-attributed.
@@ -165,11 +168,12 @@ describe("Lead Generation CRM Sales Coach Team Overview - per-agent isolation", 
     const result = await loadLeadgenTeamSalesCoachData({
       admin: supabase,
       activeAgents: [
-        { id: "henry", full_name: "Henry" },
-        { id: "goodness", full_name: "Goodness" },
+        { id: "henry", full_name: "Henry", scheduled_start_time: null },
+        { id: "goodness", full_name: "Goodness", scheduled_start_time: null },
       ],
       now,
       appointments: [],
+      clockedInAgentIds: ["henry"],
     });
 
     const henry = result.agents.find((a) => a.agentId === "henry")!;
@@ -179,10 +183,12 @@ describe("Lead Generation CRM Sales Coach Team Overview - per-agent isolation", 
     expect(henry.warmCount).toBe(0);
     expect(henry.followUpsOverdueCount).toBe(1);
     expect(henry.callLog.countToday).toBe(1);
+    expect(henry.presence.isClockedIn).toBe(true);
 
     expect(goodness.hotCount).toBe(0);
     expect(goodness.warmCount).toBe(1);
     expect(goodness.followUpsOverdueCount).toBe(0);
     expect(goodness.callLog.countToday).toBe(0);
+    expect(goodness.presence.isClockedIn).toBe(false);
   });
 });

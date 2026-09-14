@@ -15,6 +15,7 @@ import {
 import {
   SALES_COACH_TIME_ZONE,
   computeTeamWeeklyTarget,
+  isPastExpectedClockIn,
   isStaleContact,
   zonedStartOfDayIso,
   type SalesCoachAgentData,
@@ -155,10 +156,16 @@ export type GrowthAgentCoachSourceData = {
   now: Date;
   consultations: ConsultationCardRecord[]; // this agent's own booked appointments (already loaded on the page)
   performance: CrmAgentPerformance; // computeCrmAgentPerformance(...) result, already computed on the page
+  // Section 21's status banner: whether this agent currently has an open
+  // agent_attendance shift (the same "openShift !== null" check the page's
+  // own AttendanceCard already makes), and their admin-set
+  // scheduled_start_time (crm_users.scheduled_start_time), if any.
+  isClockedIn: boolean;
+  scheduledStartTime: string | null;
 };
 
 export async function loadGrowthAgentSalesCoachData(input: GrowthAgentCoachSourceData): Promise<SalesCoachAgentData> {
-  const { agentId, agentName, supabase, now, consultations, performance } = input;
+  const { agentId, agentName, supabase, now, consultations, performance, isClockedIn, scheduledStartTime } = input;
   const hrefBase = "/agent/opportunities";
 
   const scoredOpportunities = await fetchScoredOpportunities(supabase);
@@ -201,6 +208,7 @@ export async function loadGrowthAgentSalesCoachData(input: GrowthAgentCoachSourc
   return {
     agentId,
     agentName,
+    presence: { isClockedIn, isPastExpectedClockIn: isPastExpectedClockIn(scheduledStartTime, now) },
     hot,
     warm,
     staleWarmOpportunities,
@@ -228,10 +236,17 @@ export type GrowthTeamCoachSourceData = {
   now: Date;
   consultations: ConsultationCardRecord[]; // every booked appointment (admin already loads this)
   performanceRecords: CrmPerformanceOpportunityRecord[]; // getCrmPerformanceRecords(), already loaded on the page
+  // Section 21's status banner: agent_attendance rows with clock_out still
+  // null right now, across every agent - the same "who's currently clocked
+  // in" set /admin/crm/attendance's own client derives from a full
+  // attendance read (AdminAttendanceClient.tsx), just pre-filtered
+  // server-side here since only the open rows matter for this banner.
+  clockedInAgentIds: string[];
 };
 
 export async function loadGrowthTeamSalesCoachData(input: GrowthTeamCoachSourceData): Promise<SalesCoachTeamData> {
-  const { admin, activeAgents, now, consultations, performanceRecords } = input;
+  const { admin, activeAgents, now, consultations, performanceRecords, clockedInAgentIds } = input;
+  const clockedInSet = new Set(clockedInAgentIds);
   const hrefBase = "/admin/crm/opportunities";
 
   const scoredOpportunities = await fetchScoredOpportunities(admin);
@@ -265,6 +280,10 @@ export async function loadGrowthTeamSalesCoachData(input: GrowthTeamCoachSourceD
     return {
       agentId: agent.id,
       agentName: agent.full_name || agent.email,
+      presence: {
+        isClockedIn: clockedInSet.has(agent.id),
+        isPastExpectedClockIn: isPastExpectedClockIn(agent.scheduled_start_time, now),
+      },
       hotCount,
       warmCount,
       followUpsOverdueCount: agentScored.filter((row) => isOverdue(row.crm_opportunities!)).length,

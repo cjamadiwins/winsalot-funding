@@ -66,6 +66,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     consultationRecordsRaw,
     opportunityFinderData,
     dncRows,
+    { data: openShifts },
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -102,6 +103,11 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // of source_crm, since a Growth CRM admin must also see (and be able
     // to manage) a restriction added from the Lead Generation CRM.
     getAllDncSuppressions(),
+    // Sales Coach Team Overview status banner (below) - only who's
+    // currently clocked in matters here, not full shift history, so this
+    // stays a narrow, cheap read rather than the full row set
+    // /admin/crm/attendance itself loads.
+    supabase.from("agent_attendance").select("agent_id").is("clock_out", null),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -162,6 +168,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     now: new Date(),
     consultations: consultationRecordsRaw,
     performanceRecords,
+    clockedInAgentIds: (openShifts ?? []).map((row) => row.agent_id),
   });
 
   const performanceGaugeRows = activeAgents.map((agent) => {

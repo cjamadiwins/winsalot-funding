@@ -173,6 +173,8 @@ export default async function AgentDashboardPage() {
     now: new Date(),
     consultations: consultationRecordsRaw,
     performance,
+    isClockedIn: openShift !== null,
+    scheduledStartTime: crmUser.scheduled_start_time,
   });
 
   // Weekly Agent Incentive - scoped to just this agent's own appointments

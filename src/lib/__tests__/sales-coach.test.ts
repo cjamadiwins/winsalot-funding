@@ -3,12 +3,17 @@ import {
   buildAgentCoachRecommendation,
   buildAgentHeadline,
   buildAgentRecommendedActions,
+  buildAgentStatusMessage,
   buildCallLogCoachingNote,
   buildCallLogReminder,
   buildTeamHeadline,
   buildTeamOperationsPriority,
   buildTeamRecommendedActions,
+  buildTeamStatusMessage,
+  computeAgentStatusLevel,
+  computeTeamStatusLevel,
   computeTeamWeeklyTarget,
+  isPastExpectedClockIn,
   isSalesCoachWorkingDay,
   isStaleContact,
   teamAgentMainPriority,
@@ -46,6 +51,7 @@ function agentData(overrides: Partial<SalesCoachAgentData> = {}): SalesCoachAgen
   return {
     agentId: "agent-1",
     agentName: "Henry",
+    presence: { isClockedIn: true, isPastExpectedClockIn: false },
     hot: [],
     warm: [],
     staleWarmOpportunities: [],
@@ -67,6 +73,7 @@ function teamAgent(overrides: Partial<SalesCoachTeamAgentSummary> = {}): SalesCo
   return {
     agentId: "agent-1",
     agentName: "Henry",
+    presence: { isClockedIn: true, isPastExpectedClockIn: false },
     hotCount: 0,
     warmCount: 0,
     followUpsOverdueCount: 0,
@@ -299,5 +306,125 @@ describe("team helpers", () => {
     expect(actions[0].label).toContain("Goodness");
     expect(actions[1].label).toContain("Goodness");
     expect(actions.length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("isPastExpectedClockIn", () => {
+  it("is never true when no schedule is configured", () => {
+    expect(isPastExpectedClockIn(null, MONDAY_AFTERNOON)).toBe(false);
+  });
+
+  it("is false within the grace window after the scheduled start", () => {
+    // MONDAY_MORNING is 09:00 Toronto; a 09:00 schedule with a 30-minute
+    // grace isn't "late" yet at exactly 09:00 or 09:29.
+    expect(isPastExpectedClockIn("09:00:00", MONDAY_MORNING)).toBe(false);
+    expect(isPastExpectedClockIn("09:00:00", new Date(MONDAY_MORNING.getTime() + 29 * 60_000))).toBe(false);
+  });
+
+  it("is true once the grace window has elapsed", () => {
+    expect(isPastExpectedClockIn("09:00:00", new Date(MONDAY_MORNING.getTime() + 31 * 60_000))).toBe(true);
+  });
+});
+
+describe("computeAgentStatusLevel / buildAgentStatusMessage", () => {
+  it("is Red when the agent hasn't clocked in during expected working hours", () => {
+    const data = agentData({ presence: { isClockedIn: false, isPastExpectedClockIn: true } });
+    expect(computeAgentStatusLevel(data, MONDAY_AFTERNOON)).toBe("red");
+    expect(buildAgentStatusMessage(data, "red", MONDAY_AFTERNOON)).toContain("not clocked in during your expected working hours");
+  });
+
+  it("is Red for multiple overdue follow-ups/callbacks even while clocked in", () => {
+    const data = agentData({ followUpsOverdue: [followUp(), followUp({ id: "opp-3" })] });
+    expect(computeAgentStatusLevel(data, MONDAY_MORNING)).toBe("red");
+    expect(buildAgentStatusMessage(data, "red", MONDAY_MORNING)).toContain("2 overdue follow-ups/callbacks");
+  });
+
+  it("is Red when a reminder failed to send", () => {
+    const data = agentData({ reminderIssues: [appointment({ reminderIssue: "24-hour reminder failed to send" })] });
+    expect(computeAgentStatusLevel(data, MONDAY_MORNING)).toBe("red");
+  });
+
+  it("is Amber when clocked in with no calls logged yet before the strong reminder hour", () => {
+    const data = agentData({ presence: { isClockedIn: true, isPastExpectedClockIn: false } });
+    expect(computeAgentStatusLevel(data, MONDAY_MORNING)).toBe("amber");
+    expect(buildAgentStatusMessage(data, "amber", MONDAY_MORNING)).toContain("no calls have been logged yet");
+  });
+
+  it("escalates to Red when clocked in with no calls logged well into the workday", () => {
+    const data = agentData({ presence: { isClockedIn: true, isPastExpectedClockIn: false } });
+    expect(computeAgentStatusLevel(data, MONDAY_AFTERNOON)).toBe("red");
+  });
+
+  it("is Amber for a single overdue follow-up/callback", () => {
+    const data = agentData({ followUpsOverdue: [followUp()], callLog: { countToday: 1, lastLoggedAt: MONDAY_MORNING.toISOString(), callbackOutcomesToday: 0 } });
+    expect(computeAgentStatusLevel(data, MONDAY_MORNING)).toBe("amber");
+  });
+
+  it("is Green when everything is on track", () => {
+    const data = agentData({
+      callLog: { countToday: 2, lastLoggedAt: MONDAY_MORNING.toISOString(), callbackOutcomesToday: 0 },
+      weeklyPerformance: { bookedThisWeek: 4, target: 4, remainingToTarget: 0, weekLabel: "x" },
+    });
+    expect(computeAgentStatusLevel(data, MONDAY_MORNING)).toBe("green");
+    expect(buildAgentStatusMessage(data, "green", MONDAY_MORNING)).toContain("on track");
+  });
+
+  it("does not flag a missed clock-in or quiet Call Log on a weekend", () => {
+    const data = agentData({ presence: { isClockedIn: false, isPastExpectedClockIn: true } });
+    expect(computeAgentStatusLevel(data, SATURDAY)).not.toBe("red");
+  });
+});
+
+describe("computeTeamStatusLevel / buildTeamStatusMessage", () => {
+  it("is Red when any agent hasn't clocked in during expected working hours", () => {
+    const data = teamData({
+      agents: [teamAgent({ agentId: "a", agentName: "Henry", presence: { isClockedIn: false, isPastExpectedClockIn: true } })],
+    });
+    expect(computeTeamStatusLevel(data, MONDAY_AFTERNOON)).toBe("red");
+    expect(buildTeamStatusMessage(data, "red", MONDAY_AFTERNOON)).toContain("Henry");
+    expect(buildTeamStatusMessage(data, "red", MONDAY_AFTERNOON)).toContain("not clocked in during expected working hours");
+  });
+
+  it("is Red once two or more agents have logged no calls", () => {
+    const data = teamData({
+      agents: [
+        teamAgent({ agentId: "a", agentName: "Henry", presence: { isClockedIn: true, isPastExpectedClockIn: false } }),
+        teamAgent({ agentId: "b", agentName: "Goodness", presence: { isClockedIn: true, isPastExpectedClockIn: false } }),
+      ],
+    });
+    expect(computeTeamStatusLevel(data, MONDAY_MORNING)).toBe("red");
+  });
+
+  it("is Amber with exactly one agent showing no Call Logs, naming both the quiet and overdue agent (admin example)", () => {
+    const data = teamData({
+      agents: [
+        teamAgent({ agentId: "a", agentName: "Goodness", presence: { isClockedIn: true, isPastExpectedClockIn: false }, followUpsOverdueCount: 0 }),
+        teamAgent({
+          agentId: "b",
+          agentName: "Henry",
+          presence: { isClockedIn: true, isPastExpectedClockIn: false },
+          followUpsOverdueCount: 1,
+          callLog: { countToday: 3, lastLoggedAt: MONDAY_MORNING.toISOString(), callbackOutcomesToday: 0 },
+        }),
+      ],
+      teamWeeklyBooked: 5,
+      teamWeeklyTarget: 8,
+    });
+    expect(computeTeamStatusLevel(data, MONDAY_MORNING)).toBe("amber");
+    const message = buildTeamStatusMessage(data, "amber", MONDAY_MORNING);
+    expect(message).toContain("Goodness has no Call Logs today");
+    expect(message).toContain("Henry has");
+    expect(message).toContain("overdue follow-up/callback");
+    expect(message).toContain("The team is at 5 of 8 appointments this week.");
+  });
+
+  it("is Green when the whole team is on track", () => {
+    const data = teamData({
+      agents: [teamAgent({ callLog: { countToday: 2, lastLoggedAt: MONDAY_MORNING.toISOString(), callbackOutcomesToday: 0 } })],
+      teamWeeklyBooked: 8,
+      teamWeeklyTarget: 8,
+    });
+    expect(computeTeamStatusLevel(data, MONDAY_MORNING)).toBe("green");
+    expect(buildTeamStatusMessage(data, "green", MONDAY_MORNING)).toContain("The team is on track.");
   });
 });

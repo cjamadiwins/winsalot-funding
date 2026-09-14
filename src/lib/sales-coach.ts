@@ -56,9 +56,22 @@ export type SalesCoachAction = {
   href: string;
 };
 
+// Whether the signed-in agent currently has an open attendance shift, and
+// whether "now" is past when they were expected to have clocked in (per
+// their admin-set scheduled_start_time, if any) - the two inputs the
+// Green/Amber/Red status banner needs beyond ordinary CRM activity.
+// Deliberately its own small type rather than folded into a boolean, since
+// "not clocked in" and "not clocked in AND it's now a problem" are
+// different questions (an agent due to start at 1pm isn't late at 9am).
+export type SalesCoachAgentPresence = {
+  isClockedIn: boolean;
+  isPastExpectedClockIn: boolean;
+};
+
 export type SalesCoachAgentData = {
   agentId: string;
   agentName: string;
+  presence: SalesCoachAgentPresence;
   hot: SalesCoachOpportunityRef[];
   warm: SalesCoachOpportunityRef[];
   // Warm opportunities with no contact recorded in the staleness window
@@ -87,6 +100,7 @@ export type SalesCoachAgentData = {
 export type SalesCoachTeamAgentSummary = {
   agentId: string;
   agentName: string;
+  presence: SalesCoachAgentPresence;
   hotCount: number;
   warmCount: number;
   followUpsOverdueCount: number;
@@ -131,6 +145,28 @@ export function isStaleContact(lastContactedAt: string | null, now: Date = new D
 
 export function computeTeamWeeklyTarget(perAgentWeeklyTarget: number, activeAgentCount: number): number {
   return perAgentWeeklyTarget * activeAgentCount;
+}
+
+// A grace window after an agent's admin-set scheduled_start_time before
+// "hasn't clocked in yet" becomes something the coach flags - a few minutes
+// of normal variation shouldn't read as a problem the moment the clock
+// ticks over. Separate from attendance-pay.ts's own SCHEDULED_SHIFT_MINUTES
+// (that file measures lateness *within* an existing shift record for
+// payroll; this measures "should they have a shift record open by now at
+// all," which has no existing equivalent - see growth-sales-coach.ts's
+// header comment).
+export const LATE_CLOCK_IN_GRACE_MINUTES = 30;
+
+// True once "now" is at least LATE_CLOCK_IN_GRACE_MINUTES past the agent's
+// own scheduled_start_time ("HH:MM[:SS]", admin-set, crm_users/leadgen_users)
+// today, in SALES_COACH_TIME_ZONE - false whenever no schedule is configured
+// for that agent, since there's nothing to be late against.
+export function isPastExpectedClockIn(scheduledStartTime: string | null, now: Date = new Date(), timeZone: string = SALES_COACH_TIME_ZONE): boolean {
+  if (!scheduledStartTime) return false;
+  const [hours, minutes] = scheduledStartTime.split(":").map(Number);
+  const startOfDayMs = new Date(zonedStartOfDayIso(now, timeZone)).getTime();
+  const expectedMs = startOfDayMs + (hours * 60 + minutes + LATE_CLOCK_IN_GRACE_MINUTES) * 60_000;
+  return now.getTime() >= expectedMs;
 }
 
 function pluralize(count: number, singular: string, plural: string = `${singular}s`): string {
@@ -486,4 +522,135 @@ export function buildTeamRecommendedActions(data: SalesCoachTeamData, opts: { pe
   }
 
   return actions;
+}
+
+// ---------------------------------------------------------------------------
+// Main Dashboard colour-coded status banner (section 21)
+// ---------------------------------------------------------------------------
+
+export type SalesCoachStatusLevel = "green" | "amber" | "red";
+
+export const SALES_COACH_STATUS_LABEL: Record<SalesCoachStatusLevel, string> = {
+  green: "On Track",
+  amber: "Attention Needed",
+  red: "Immediate Attention Required",
+};
+
+// Two or more overdue follow-ups/callbacks is "multiple" per the banner's
+// own Red example ("Multiple callbacks or follow-ups are overdue") - one
+// overdue item stays Amber ("becoming overdue").
+const MULTIPLE_OVERDUE_THRESHOLD = 2;
+
+function hasFailedReminder(reminderIssues: SalesCoachAppointmentRef[]): boolean {
+  return reminderIssues.some((item) => item.reminderIssue?.toLowerCase().includes("failed"));
+}
+
+// Highest-severity status this agent's real CRM activity supports right
+// now, in the order the banner's own spec lists its Red/Amber examples:
+// missed clock-in first (a working-hours problem, not a pipeline one),
+// then multiple overdue items, then a failed reminder, then "clocked in
+// but quiet" (which itself escalates from Amber to Red once the call-log
+// reminder has already escalated to "strong" - see buildCallLogReminder),
+// then the single-item/behind-target Amber cases.
+export function computeAgentStatusLevel(data: SalesCoachAgentData, now: Date = new Date()): SalesCoachStatusLevel {
+  const workingDay = isSalesCoachWorkingDay(now, SALES_COACH_TIME_ZONE);
+
+  if (workingDay && data.presence.isPastExpectedClockIn && !data.presence.isClockedIn) return "red";
+  if (data.followUpsOverdue.length >= MULTIPLE_OVERDUE_THRESHOLD) return "red";
+  if (hasFailedReminder(data.reminderIssues)) return "red";
+
+  if (workingDay && data.presence.isClockedIn && data.callLog.countToday === 0) {
+    const reminder = buildCallLogReminder(data.callLog, now);
+    return reminder?.level === "strong" ? "red" : "amber";
+  }
+
+  if (data.followUpsOverdue.length > 0) return "amber";
+  if (data.reminderIssues.length > 0) return "amber";
+  if (data.weeklyPerformance.remainingToTarget > 0) return "amber";
+
+  return "green";
+}
+
+// The banner's own short coaching message - kept separate from
+// buildAgentCoachRecommendation (used as the banner's "main issue or
+// priority" line) so the two never repeat each other verbatim.
+export function buildAgentStatusMessage(data: SalesCoachAgentData, level: SalesCoachStatusLevel, now: Date = new Date()): string {
+  const workingDay = isSalesCoachWorkingDay(now, SALES_COACH_TIME_ZONE);
+
+  if (level === "red") {
+    if (workingDay && data.presence.isPastExpectedClockIn && !data.presence.isClockedIn) {
+      return "You have not clocked in during your expected working hours. Please clock in, or let your admin know if your schedule has changed.";
+    }
+    if (data.followUpsOverdue.length >= MULTIPLE_OVERDUE_THRESHOLD) {
+      return `You have ${data.followUpsOverdue.length} overdue follow-ups/callbacks. Please complete these before starting any new outreach.`;
+    }
+    if (hasFailedReminder(data.reminderIssues)) {
+      return "An appointment reminder failed to send. Please review it now so your prospect isn't missed.";
+    }
+    return "You are logged in with activity today, but no calls have been logged. Please use Call Logs so your follow-ups, opportunities, and performance tracking remain accurate.";
+  }
+
+  if (level === "amber") {
+    if (data.presence.isClockedIn && data.callLog.countToday === 0) {
+      return "You are logged in today, but no calls have been logged yet. Please use Call Logs so your follow-ups, opportunities, and performance tracking remain accurate.";
+    }
+    if (data.followUpsOverdue.length > 0) {
+      return "You have an overdue follow-up/callback. Complete it soon before it affects your prospect's experience.";
+    }
+    if (data.reminderIssues.length > 0) {
+      return "An upcoming appointment reminder needs attention before it's due.";
+    }
+    return "You are behind your weekly appointment target, but there is still time this week to catch up.";
+  }
+
+  return "You're on track — Call Logs are active, there are no major overdue items, and your weekly performance is on pace.";
+}
+
+// Same severity ladder as computeAgentStatusLevel, applied across the team:
+// any agent missing their expected clock-in, or with multiple overdue items,
+// or a failed reminder, is Red for the whole team; two or more agents with
+// no Call Logs yet today is treated the same as one agent's own escalation
+// to Red (a pattern across the team, not just one person having a slow
+// morning); anything else that would make an individual agent Amber makes
+// the team Amber too.
+export function computeTeamStatusLevel(data: SalesCoachTeamData, now: Date = new Date()): SalesCoachStatusLevel {
+  const workingDay = isSalesCoachWorkingDay(now, SALES_COACH_TIME_ZONE);
+
+  const missedClockIn = data.agents.some((agent) => workingDay && agent.presence.isPastExpectedClockIn && !agent.presence.isClockedIn);
+  if (missedClockIn) return "red";
+  if (data.agents.some((agent) => agent.followUpsOverdueCount >= MULTIPLE_OVERDUE_THRESHOLD)) return "red";
+  if (hasFailedReminder(data.teamReminderIssues)) return "red";
+
+  const noCallsYet = workingDay ? data.agents.filter((agent) => agent.presence.isClockedIn && agent.callLog.countToday === 0) : [];
+  if (noCallsYet.length >= MULTIPLE_OVERDUE_THRESHOLD) return "red";
+  if (noCallsYet.length === 1) return "amber";
+
+  if (data.teamFollowUpsOverdue > 0) return "amber";
+  if (data.teamReminderIssues.length > 0) return "amber";
+  if (data.teamWeeklyBooked < data.teamWeeklyTarget) return "amber";
+
+  return "green";
+}
+
+export function buildTeamStatusMessage(data: SalesCoachTeamData, level: SalesCoachStatusLevel, now: Date = new Date()): string {
+  const workingDay = isSalesCoachWorkingDay(now, SALES_COACH_TIME_ZONE);
+  const missedClockIn = data.agents.filter((agent) => workingDay && agent.presence.isPastExpectedClockIn && !agent.presence.isClockedIn);
+  if (level === "red" && missedClockIn.length > 0) {
+    const names = missedClockIn.map((agent) => agent.agentName);
+    return `${joinClauses(names)} ${missedClockIn.length === 1 ? "has" : "have"} not clocked in during expected working hours.`;
+  }
+
+  const clauses: string[] = [];
+  const noCallsYet = workingDay ? data.agents.filter((agent) => agent.callLog.countToday === 0) : [];
+  if (noCallsYet[0]) clauses.push(`${noCallsYet[0].agentName} has no Call Logs today`);
+
+  const byOverdue = [...data.agents].filter((agent) => agent.followUpsOverdueCount > 0).sort((a, b) => b.followUpsOverdueCount - a.followUpsOverdueCount);
+  if (byOverdue[0] && byOverdue[0].agentName !== noCallsYet[0]?.agentName) {
+    clauses.push(`${byOverdue[0].agentName} has ${pluralize(byOverdue[0].followUpsOverdueCount, "overdue follow-up/callback", "overdue follow-ups/callbacks")}`);
+  }
+
+  clauses.push(`The team is at ${data.teamWeeklyBooked} of ${data.teamWeeklyTarget} appointments this week.`);
+
+  if (level === "green") return `The team is on track. ${clauses[clauses.length - 1]}`;
+  return clauses.join(" ");
 }
