@@ -14,6 +14,7 @@ import {
 } from "./leadgen-performance";
 import {
   computeTeamWeeklyTarget,
+  isPastExpectedClockIn,
   isStaleContact,
   zonedStartOfDayIso,
   type SalesCoachAgentData,
@@ -142,10 +143,16 @@ export type LeadgenAgentCoachSourceData = {
   supabase: SupabaseClient;
   now: Date;
   appointments: LeadgenPerformanceAppointment[]; // this agent's own credited appointments (already loaded on the page)
+  // Section 21's status banner: whether this agent currently has an open
+  // leadgen_agent_attendance shift (the same "openShift !== null" check the
+  // page's own LeadgenAttendanceCard already makes), and their admin-set
+  // scheduled_start_time (leadgen_users.scheduled_start_time), if any.
+  isClockedIn: boolean;
+  scheduledStartTime: string | null;
 };
 
 export async function loadLeadgenAgentSalesCoachData(input: LeadgenAgentCoachSourceData): Promise<SalesCoachAgentData> {
-  const { agentId, agentName, supabase, now, appointments } = input;
+  const { agentId, agentName, supabase, now, appointments, isClockedIn, scheduledStartTime } = input;
   const hrefBase = "/leadgen/agent/leads";
 
   const scoredLeads = await fetchScoredLeads(supabase);
@@ -196,6 +203,7 @@ export async function loadLeadgenAgentSalesCoachData(input: LeadgenAgentCoachSou
   return {
     agentId,
     agentName,
+    presence: { isClockedIn, isPastExpectedClockIn: isPastExpectedClockIn(scheduledStartTime, now) },
     hot,
     warm,
     staleWarmOpportunities,
@@ -219,13 +227,17 @@ export async function loadLeadgenAgentSalesCoachData(input: LeadgenAgentCoachSou
 
 export type LeadgenTeamCoachSourceData = {
   admin: SupabaseClient; // service-role client
-  activeAgents: Pick<LeadgenUserRow, "id" | "full_name">[];
+  activeAgents: Pick<LeadgenUserRow, "id" | "full_name" | "scheduled_start_time">[];
   now: Date;
   appointments: LeadgenPerformanceAppointment[]; // every appointment (admin already loads this)
+  // Section 21's status banner: leadgen_agent_attendance rows with
+  // clock_out still null right now, across every agent.
+  clockedInAgentIds: string[];
 };
 
 export async function loadLeadgenTeamSalesCoachData(input: LeadgenTeamCoachSourceData): Promise<SalesCoachTeamData> {
-  const { admin, activeAgents, now, appointments } = input;
+  const { admin, activeAgents, now, appointments, clockedInAgentIds } = input;
+  const clockedInSet = new Set(clockedInAgentIds);
   const hrefBase = "/leadgen/admin/leads";
 
   const scoredLeads = await fetchScoredLeads(admin);
@@ -263,6 +275,10 @@ export async function loadLeadgenTeamSalesCoachData(input: LeadgenTeamCoachSourc
     return {
       agentId: agent.id,
       agentName: agent.full_name,
+      presence: {
+        isClockedIn: clockedInSet.has(agent.id),
+        isPastExpectedClockIn: isPastExpectedClockIn(agent.scheduled_start_time, now),
+      },
       hotCount,
       warmCount,
       followUpsOverdueCount: agentScored.filter((row) => isLeadgenNextFollowUpOverdue(row.leadgen_leads!.next_follow_up_at)).length,

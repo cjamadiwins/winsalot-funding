@@ -2,25 +2,51 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, PhoneCall, ChevronRight, Users2 } from "lucide-react";
+import { PhoneCall, ChevronRight, Users2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import Modal from "@/components/Modal";
 import {
   buildAgentCoachRecommendation,
   buildAgentHeadline,
   buildAgentRecommendedActions,
+  buildAgentStatusMessage,
   buildCallLogCoachingNote,
   buildCallLogReminder,
   buildTeamHeadline,
   buildTeamOperationsPriority,
   buildTeamRecommendedActions,
+  buildTeamStatusMessage,
+  computeAgentStatusLevel,
+  computeTeamStatusLevel,
   describeAgentCallLogStatus,
+  SALES_COACH_STATUS_LABEL,
   teamAgentMainPriority,
   type SalesCoachAction,
   type SalesCoachAgentData,
+  type SalesCoachStatusLevel,
   type SalesCoachTeamData,
 } from "@/lib/sales-coach";
 
-const CARD_CLASS = "mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5";
+// Section 21: Green/On Track, Amber/Attention Needed, Red/Immediate
+// Attention Required - one small palette shared by the banner's icon
+// badge, status pill, and outer card accent so all three always agree.
+const STATUS_STYLES: Record<SalesCoachStatusLevel, { accent: string; badgeBg: string; badgeText: string; pillBg: string; icon: typeof CheckCircle2 }> = {
+  green: { accent: "border-l-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", pillBg: "bg-emerald-600", icon: CheckCircle2 },
+  amber: { accent: "border-l-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-700", pillBg: "bg-amber-500", icon: AlertTriangle },
+  red: { accent: "border-l-rose-500", badgeBg: "bg-rose-100", badgeText: "text-rose-700", pillBg: "bg-rose-600", icon: XCircle },
+};
+
+function cardClassFor(level: SalesCoachStatusLevel): string {
+  return `mt-6 rounded-2xl border border-slate-200 border-l-4 ${STATUS_STYLES[level].accent} bg-[var(--crm-surface)] p-5`;
+}
+
+function StatusPill({ level }: { level: SalesCoachStatusLevel }) {
+  const style = STATUS_STYLES[level];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold text-white ${style.pillBg}`}>
+      {level === "green" ? "Green" : level === "amber" ? "Amber" : "Red"} — {SALES_COACH_STATUS_LABEL[level]}
+    </span>
+  );
+}
 
 function ActionList({ actions }: { actions: SalesCoachAction[] }) {
   if (actions.length === 0) {
@@ -43,12 +69,24 @@ function ActionList({ actions }: { actions: SalesCoachAction[] }) {
   );
 }
 
-function CardHeader({ title, subtitle, onViewDetails }: { title: string; subtitle: string; onViewDetails: () => void }) {
+function CardHeader({
+  title,
+  subtitle,
+  level,
+  onViewDetails,
+}: {
+  title: string;
+  subtitle: string;
+  level: SalesCoachStatusLevel;
+  onViewDetails: () => void;
+}) {
+  const style = STATUS_STYLES[level];
+  const StatusIcon = style.icon;
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex items-start gap-2.5">
-        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-          <Sparkles className="h-4 w-4" strokeWidth={2.3} />
+        <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${style.badgeBg} ${style.badgeText}`}>
+          <StatusIcon className="h-4 w-4" strokeWidth={2.3} />
         </span>
         <div>
           <h2 className="text-[15px] font-bold text-slate-900">{title}</h2>
@@ -88,17 +126,27 @@ function WeeklyProgressBar({ booked, target, label }: { booked: number; target: 
 // modal (section 10) rather than a separate page.
 export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const headline = buildAgentHeadline(data);
+  const now = new Date();
+  const level = computeAgentStatusLevel(data, now);
+  const statusMessage = buildAgentStatusMessage(data, level, now);
   const recommendation = buildAgentCoachRecommendation(data);
   const actions = buildAgentRecommendedActions(data);
-  const callLogReminder = buildCallLogReminder(data.callLog, new Date());
+  const callLogReminder = buildCallLogReminder(data.callLog, now);
   const callLogNote = buildCallLogCoachingNote(data.callLog);
 
   return (
-    <section className={CARD_CLASS}>
-      <CardHeader title="Winsalot Sales Coach & Operations Manager" subtitle="Powered by your live CRM activity" onViewDetails={() => setDetailsOpen(true)} />
+    <section className={cardClassFor(level)}>
+      <CardHeader
+        title="Winsalot Sales Coach & Operations Manager"
+        subtitle="Powered by your live CRM activity"
+        level={level}
+        onViewDetails={() => setDetailsOpen(true)}
+      />
 
-      <p className="mt-3 text-[13.5px] leading-relaxed text-slate-700">{headline}</p>
+      <div className="mt-3">
+        <StatusPill level={level} />
+        <p className="mt-2 text-[13.5px] leading-relaxed text-slate-700">{statusMessage}</p>
+      </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Coach Recommendation</p>
@@ -154,7 +202,9 @@ function DetailRow({ label, value }: { label: string; value: number | string }) 
 function AgentDetails({ data }: { data: SalesCoachAgentData }) {
   return (
     <div className="text-[13.5px]">
-      <div className="rounded-xl border border-slate-200 p-3.5">
+      <p className="text-slate-700">{buildAgentHeadline(data)}</p>
+
+      <div className="mt-3 rounded-xl border border-slate-200 p-3.5">
         <DetailRow label="Hot Opportunities" value={data.hot.length} />
         <DetailRow label="Warm Opportunities" value={data.warm.length} />
         <DetailRow label="Follow-ups/Callbacks Due Today" value={data.followUpsDueToday.length} />
@@ -193,19 +243,25 @@ function AgentDetails({ data }: { data: SalesCoachAgentData }) {
 // agent's own detail from here.
 export function SalesCoachAdminCard({ data, performanceHref }: { data: SalesCoachTeamData; performanceHref: string }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const headline = buildTeamHeadline(data);
+  const now = new Date();
+  const level = computeTeamStatusLevel(data, now);
+  const statusMessage = buildTeamStatusMessage(data, level, now);
   const priority = buildTeamOperationsPriority(data);
   const actions = buildTeamRecommendedActions(data, { performanceHref });
 
   return (
-    <section className={CARD_CLASS}>
+    <section className={cardClassFor(level)}>
       <CardHeader
         title="Winsalot Sales Coach & Operations Manager — Team Overview"
         subtitle="Powered by your live CRM activity"
+        level={level}
         onViewDetails={() => setDetailsOpen(true)}
       />
 
-      <p className="mt-3 text-[13.5px] leading-relaxed text-slate-700">{headline}</p>
+      <div className="mt-3">
+        <StatusPill level={level} />
+        <p className="mt-2 text-[13.5px] leading-relaxed text-slate-700">{statusMessage}</p>
+      </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Operations Priority</p>
@@ -229,7 +285,9 @@ export function SalesCoachAdminCard({ data, performanceHref }: { data: SalesCoac
 function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; performanceHref: string }) {
   return (
     <div className="text-[13.5px]">
-      <div className="rounded-xl border border-slate-200 p-3.5">
+      <p className="text-slate-700">{buildTeamHeadline(data)}</p>
+
+      <div className="mt-3 rounded-xl border border-slate-200 p-3.5">
         <DetailRow label="Team Hot Opportunities" value={data.teamHot} />
         <DetailRow label="Team Warm Opportunities" value={data.teamWarm} />
         <DetailRow label="Overdue Follow-ups/Callbacks" value={data.teamFollowUpsOverdue} />
@@ -251,7 +309,12 @@ function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; per
               <Link href={agent.agentHref} className="font-semibold text-sky-700 hover:text-sky-800">
                 {agent.agentName}
               </Link>
-              <span className="text-[12px] text-slate-500">{describeAgentCallLogStatus(agent.callLog)}</span>
+              <span className="flex items-center gap-2">
+                {agent.presence.isPastExpectedClockIn && !agent.presence.isClockedIn && (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">Not Clocked In</span>
+                )}
+                <span className="text-[12px] text-slate-500">{describeAgentCallLogStatus(agent.callLog)}</span>
+              </span>
             </div>
             <p className="mt-1 text-[12.5px] text-slate-600">{teamAgentMainPriority(agent)}</p>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500">

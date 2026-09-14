@@ -256,6 +256,8 @@ export default async function LeadgenAgentDashboardPage() {
     supabase,
     now: new Date(),
     appointments: (appointments ?? []) as LeadgenPerformanceAppointment[],
+    isClockedIn: openShift !== null,
+    scheduledStartTime: agent.scheduled_start_time,
   });
 
   const leadDetailActions: LeadDetailActions = {
