@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import { LENDING_PARTNER_CONTACT_TYPES, isLendingPartnerContactType, type LendingPartnerContactType } from "@/lib/crm-lending-partners-types";
+import { isLendingPartnerContactType, type LendingPartnerContactType } from "@/lib/crm-lending-partners-types";
 import type { CrmUserRow } from "@/lib/crm-types";
 
 type ActionResult = { error?: string; partnerId?: string };
@@ -174,5 +174,3 @@ export async function unarchiveLendingPartnerAction(partnerId: string): Promise<
   revalidatePath(`/admin/crm/lending-partners/${partnerId}`);
   return { partnerId };
 }
-
-export { LENDING_PARTNER_CONTACT_TYPES };
