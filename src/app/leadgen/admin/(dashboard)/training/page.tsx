@@ -3,8 +3,18 @@ import BrentsEssentialsTrainingContent from "@/components/leadgen/BrentsEssentia
 import MantraCollabTrainingContent from "@/components/leadgen/MantraCollabTrainingContent";
 import CallLogTrainingContent from "@/components/leadgen/CallLogTrainingContent";
 import ConnectProposeCloseCourse from "@/components/ConnectProposeCloseCourse";
+import ColdCallingTrainingSection from "@/components/crm-training/ColdCallingTrainingSection";
+import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
+import { fetchOwnSharedTrainingCompletion, fetchSharedTrainingCompletionsForCrm } from "@/lib/shared-training-data";
+import { COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION } from "@/lib/shared-training-types";
 
-export default function LeadgenAdminTrainingPage() {
+export default async function LeadgenAdminTrainingPage() {
+  const admin = await requireLeadgenAdmin();
+  const [coldCallingCompletion, coldCallingCompletions] = await Promise.all([
+    fetchOwnSharedTrainingCompletion("leadgen", COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION, admin.id),
+    fetchSharedTrainingCompletionsForCrm("leadgen", COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION),
+  ]);
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
@@ -16,6 +26,12 @@ export default function LeadgenAdminTrainingPage() {
           <Link href="#brents-essentials" className="rounded-lg border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50">Open Brent&apos;s Essentials Training</Link>
         </div>
       </section>
+      <ColdCallingTrainingSection
+        crm="leadgen"
+        role="admin"
+        initialCompletion={coldCallingCompletion}
+        allCompletions={coldCallingCompletions}
+      />
       <ConnectProposeCloseCourse crm="leadgen" />
       <CallLogTrainingContent />
       <MantraCollabTrainingContent />

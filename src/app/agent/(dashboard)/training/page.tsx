@@ -3,11 +3,20 @@ import { requireCrmUser } from "@/lib/crm-auth";
 import type { CrmTrainingMaterialRow } from "@/lib/crm-types";
 import ConnectProposeCloseCourse from "@/components/ConnectProposeCloseCourse";
 import WebDesignProspectingTrainingContent from "@/components/WebDesignProspectingTrainingContent";
+import ColdCallingTrainingSection from "@/components/crm-training/ColdCallingTrainingSection";
+import { fetchOwnSharedTrainingCompletion } from "@/lib/shared-training-data";
+import { COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION } from "@/lib/shared-training-types";
 import TrainingList from "./TrainingList";
 
 export default async function AgentTrainingPage() {
-  await requireCrmUser();
+  const user = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
+  const coldCallingCompletion = await fetchOwnSharedTrainingCompletion(
+    "growth",
+    COLD_CALLING_TRAINING_KEY,
+    COLD_CALLING_TRAINING_VERSION,
+    user.id
+  );
 
   // RLS (crm_training_materials_select_members) permits any active CRM
   // member - agent or admin - to read every training material.
@@ -38,6 +47,10 @@ export default async function AgentTrainingPage() {
           <TrainingList materials={(materials ?? []) as CrmTrainingMaterialRow[]} />
         </div>
       )}
+
+      <div className="mt-10">
+        <ColdCallingTrainingSection crm="growth" role="agent" initialCompletion={coldCallingCompletion} />
+      </div>
 
       <div className="mt-10">
         <ConnectProposeCloseCourse crm="growth" />
