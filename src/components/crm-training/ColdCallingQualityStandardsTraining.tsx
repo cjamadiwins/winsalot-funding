@@ -15,6 +15,13 @@
 import { useState } from "react";
 import Image from "next/image";
 import { X } from "lucide-react";
+// The training graphic already lives in this repo (added directly to main
+// as Training_Winsalot_Corp.png, repo root) - imported in place here as a
+// static asset rather than duplicated into /public, so there is exactly
+// one copy of the file. A static import lets next/image read its real
+// width/height automatically, so the rendered aspect ratio always matches
+// the source file with no manual/guessed dimensions to keep in sync.
+import trainingImage from "../../../Training_Winsalot_Corp.png";
 import {
   COLD_CALLING_TRAINING_KEY,
   COLD_CALLING_TRAINING_VERSION,
@@ -25,14 +32,8 @@ import {
 import { submitSharedTrainingCompletionAction } from "@/lib/shared-training-actions";
 import { COLD_CALLING_TRAINING_REMINDERS } from "@/lib/sales-coach";
 
-const TRAINING_IMAGE_SRC = "/training/winsalot-cold-calling-quality-standards.png";
 const TRAINING_IMAGE_ALT =
   "Winsalot Cold Calling Quality Standards—five essentials for better outbound calls.";
-// Actual pixel dimensions of the attached PNG - required by next/image for
-// a non-fill layout so it can reserve the right aspect ratio without
-// cropping or distorting the source image.
-const TRAINING_IMAGE_WIDTH = 1024;
-const TRAINING_IMAGE_HEIGHT = 1536;
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
@@ -243,10 +244,8 @@ export default function ColdCallingQualityStandardsTraining({
           aria-label="View the Winsalot Cold Calling Quality Standards image at full size"
         >
           <Image
-            src={TRAINING_IMAGE_SRC}
+            src={trainingImage}
             alt={TRAINING_IMAGE_ALT}
-            width={TRAINING_IMAGE_WIDTH}
-            height={TRAINING_IMAGE_HEIGHT}
             className="h-auto w-full object-contain"
             sizes="(max-width: 640px) 100vw, 640px"
           />
@@ -271,10 +270,8 @@ export default function ColdCallingQualityStandardsTraining({
             <X className="h-5 w-5" />
           </button>
           <Image
-            src={TRAINING_IMAGE_SRC}
+            src={trainingImage}
             alt={TRAINING_IMAGE_ALT}
-            width={TRAINING_IMAGE_WIDTH}
-            height={TRAINING_IMAGE_HEIGHT}
             className="max-h-full max-w-full object-contain"
             onClick={(event) => event.stopPropagation()}
           />
