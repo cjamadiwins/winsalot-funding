@@ -3,11 +3,18 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmTrainingMaterialRow } from "@/lib/crm-types";
 import ConnectProposeCloseCourse from "@/components/ConnectProposeCloseCourse";
 import WebDesignProspectingTrainingContent from "@/components/WebDesignProspectingTrainingContent";
+import ColdCallingTrainingSection from "@/components/crm-training/ColdCallingTrainingSection";
+import { fetchOwnSharedTrainingCompletion, fetchSharedTrainingCompletionsForCrm } from "@/lib/shared-training-data";
+import { COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION } from "@/lib/shared-training-types";
 import TrainingClient from "./TrainingClient";
 
 export default async function AdminCrmTrainingPage() {
-  await requireCrmAdmin();
+  const admin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
+  const [coldCallingCompletion, coldCallingCompletions] = await Promise.all([
+    fetchOwnSharedTrainingCompletion("growth", COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION, admin.id),
+    fetchSharedTrainingCompletionsForCrm("growth", COLD_CALLING_TRAINING_KEY, COLD_CALLING_TRAINING_VERSION),
+  ]);
 
   const { data: materials, error } = await supabase
     .from("crm_training_materials")
@@ -34,6 +41,15 @@ export default async function AdminCrmTrainingPage() {
           <TrainingClient materials={(materials ?? []) as CrmTrainingMaterialRow[]} />
         </div>
       )}
+
+      <div className="mt-10">
+        <ColdCallingTrainingSection
+          crm="growth"
+          role="admin"
+          initialCompletion={coldCallingCompletion}
+          allCompletions={coldCallingCompletions}
+        />
+      </div>
 
       <div className="mt-10">
         <ConnectProposeCloseCourse crm="growth" />

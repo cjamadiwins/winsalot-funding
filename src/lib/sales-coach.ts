@@ -654,3 +654,19 @@ export function buildTeamStatusMessage(data: SalesCoachTeamData, level: SalesCoa
   if (level === "green") return `The team is on track. ${clauses[clauses.length - 1]}`;
   return clauses.join(" ");
 }
+
+// Reminder copy for the "Winsalot Cold Calling Quality Standards" training
+// manual (shared by both CRMs' Training sections). Purely additive: these
+// are static strings, not a new coaching system - they reuse this existing
+// Sales Coach module as their home rather than a separate config table, but
+// deliberately don't feed into buildAgentCoachRecommendation/buildAgent
+// StatusMessage/etc. above, since those are computed from live CRM signals
+// (call logs, follow-ups, weekly targets) and this task's brief is not to
+// change what drives those existing recommendations or dashboard figures.
+export const COLD_CALLING_TRAINING_REMINDERS: readonly string[] = [
+  "Listen before presenting a solution.",
+  "Scripts guide the conversation—they should not sound read word-for-word.",
+  "Every call attempt must be recorded in the CRM.",
+  "Confirm the next step before ending the call.",
+  "Immediately record and honour every Do Not Call request.",
+];
