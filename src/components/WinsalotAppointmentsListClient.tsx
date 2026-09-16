@@ -43,9 +43,11 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   smsReminder1h: string;
   smsReminder24hError: string | null;
   smsReminder1hError: string | null;
-  // "Follow-Up Email: Sent / Delivered / Failed" - only ever set once
-  // "Complete Consultation" has actually been clicked (see
-  // src/lib/winsalot-consultation-completion.ts); "Not Sent" otherwise.
+  // "Consultation Follow-Up: Sent / Delivered / Failed" - set once the
+  // follow-up email has actually gone out, whether automatically (via
+  // "Complete Consultation") or via the admin-only manual Send/Resend
+  // action below (see src/lib/winsalot-consultation-completion.ts);
+  // "Not Sent" otherwise.
   followUpEmailStatus: WinsalotFollowUpEmailDisplayStatus;
   followUpEmailError: string | null;
 };
@@ -73,6 +75,12 @@ export type WinsalotAppointmentActions = {
   // AgentAppointmentsClient always pass these.
   complete?: (id: string) => Promise<{ error?: string; outcome?: "completed" | "already_completed"; followUpEmailStatus?: string }>;
   markNoShow?: (id: string) => Promise<{ error?: string }>;
+  // Consultation Follow-Up Email - admin-only "Preview before sending" /
+  // "Send immediately" / "Resend if necessary" (see
+  // src/lib/winsalot-consultation-completion.ts). Available on every
+  // consultation regardless of status - undefined for the agent view.
+  previewFollowUpEmail?: (id: string) => Promise<{ subject: string; text: string } | { error: string }>;
+  sendFollowUpEmail?: (id: string) => Promise<{ error?: string; message?: string }>;
   // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
   // quick actions) - undefined for the agent view, where the incentive
   // badge is still shown read-only but no review controls render.
@@ -125,7 +133,7 @@ export default function WinsalotAppointmentsListClient({
 }) {
   const [isPending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"view" | "edit" | "reschedule" | "cancel" | null>(null);
+  const [mode, setMode] = useState<"view" | "edit" | "reschedule" | "cancel" | "followup" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offeredSlots, setOfferedSlots] = useState<{ slotIsos: string[]; businessTimezone: string } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -143,8 +151,15 @@ export default function WinsalotAppointmentsListClient({
   // "Complete Consultation" / "Mark No Show" result messages, tracked per
   // appointment id the same way emailMessage is above.
   const [completeMessage, setCompleteMessage] = useState<{ id: string; text: string } | null>(null);
+  // Consultation Follow-Up Email preview - fetched fresh each time the
+  // panel opens (never cached across appointments) so "Preview" always
+  // shows exactly what "Send"/"Resend" would actually send, including
+  // whichever CTA (client dashboard button vs. reply-to fallback) applies
+  // right now.
+  const [followUpPreview, setFollowUpPreview] = useState<{ subject: string; text: string } | { error: string } | null>(null);
+  const [followUpMessage, setFollowUpMessage] = useState<{ id: string; text: string } | null>(null);
 
-  function openRow(appt: WinsalotAppointmentListRow, nextMode: "view" | "edit" | "reschedule" | "cancel") {
+  function openRow(appt: WinsalotAppointmentListRow, nextMode: "view" | "edit" | "reschedule" | "cancel" | "followup") {
     setError(null);
     setExpandedId(appt.id);
     setMode(nextMode);
@@ -156,12 +171,34 @@ export default function WinsalotAppointmentsListClient({
         setOfferedSlots(slots);
       });
     }
+    if (nextMode === "followup" && actions.previewFollowUpEmail) {
+      setFollowUpPreview(null);
+      setFollowUpMessage(null);
+      startTransition(async () => {
+        const preview = await actions.previewFollowUpEmail!(appt.id);
+        setFollowUpPreview(preview);
+      });
+    }
   }
 
   function closeRow() {
     setExpandedId(null);
     setMode(null);
     setError(null);
+  }
+
+  function handleSendFollowUpEmail(appt: WinsalotAppointmentListRow) {
+    if (!actions.sendFollowUpEmail) return;
+    const already = appt.followUpEmailStatus !== "Not Sent";
+    if (!confirm(already ? `Resend the consultation follow-up email to ${appt.email}?` : `Send the consultation follow-up email to ${appt.email}?`)) return;
+    startTransition(async () => {
+      const result = await actions.sendFollowUpEmail!(appt.id);
+      if (result.error) setFollowUpMessage({ id: appt.id, text: result.error });
+      else {
+        setFollowUpMessage({ id: appt.id, text: result.message ?? "Follow-up email sent." });
+        closeRow();
+      }
+    });
   }
 
   function handleReschedule(id: string) {
@@ -346,14 +383,6 @@ export default function WinsalotAppointmentsListClient({
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${SMS_STATUS_STYLE[appt.smsReminder1h] ?? SMS_STATUS_STYLE.default}`} title={appt.smsReminder1hError ?? undefined}>
                     SMS 1h: {appt.smsReminder1h}
                   </span>
-                  {appt.status === "completed" && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.followUpEmailStatus] ?? "bg-slate-100 text-slate-600"}`}
-                      title={appt.followUpEmailError ?? undefined}
-                    >
-                      Follow-Up Email: {appt.followUpEmailStatus}
-                    </span>
-                  )}
                 </p>
                 {appt.status === "cancelled" && (
                   <p className="mt-1 text-[12.5px] text-rose-600">
@@ -371,7 +400,24 @@ export default function WinsalotAppointmentsListClient({
                     Marked No Show on {appt.no_show_at ? new Date(appt.no_show_at).toLocaleString() : "—"} by {appt.no_show_by_name || "—"}
                   </p>
                 )}
+                {/* "Consultation Follow-Up: Sent — [date/time]" / "Not Sent" - always
+                    shown (not just once Completed), tracked entirely independently
+                    of the appointment reminder badges above. */}
+                <p
+                  className={`mt-1 text-[12.5px] font-medium ${
+                    appt.followUpEmailStatus === "Not Sent"
+                      ? "text-slate-500"
+                      : appt.followUpEmailStatus === "Failed" || appt.followUpEmailStatus === "Bounced"
+                        ? "text-rose-600"
+                        : "text-emerald-700"
+                  }`}
+                  title={appt.followUpEmailError ?? undefined}
+                >
+                  Consultation Follow-Up: {appt.followUpEmailStatus}
+                  {appt.follow_up_email_sent_at && appt.followUpEmailStatus !== "Not Sent" ? ` — ${new Date(appt.follow_up_email_sent_at).toLocaleString()}` : ""}
+                </p>
                 {completeMessage?.id === appt.id && <p className="mt-1 text-[12.5px] font-medium text-slate-700">{completeMessage.text}</p>}
+                {followUpMessage?.id === appt.id && <p className="mt-1 text-[12.5px] font-medium text-slate-700">{followUpMessage.text}</p>}
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -383,6 +429,11 @@ export default function WinsalotAppointmentsListClient({
                 <button type="button" onClick={() => openRow(appt, "edit")} className="text-xs font-semibold text-slate-600 hover:text-slate-800">
                   Edit
                 </button>
+                {isAdmin && actions.previewFollowUpEmail && actions.sendFollowUpEmail && (
+                  <button type="button" onClick={() => openRow(appt, "followup")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                    {appt.followUpEmailStatus === "Not Sent" ? "Send Follow-Up Email" : "Resend Follow-Up Email"}
+                  </button>
+                )}
                 {appt.status === "booked" && (
                   <>
                     {actions.complete && (
@@ -569,6 +620,36 @@ export default function WinsalotAppointmentsListClient({
                   </button>
                   <button type="button" onClick={closeRow} className="text-xs font-semibold text-slate-500">
                     Keep Appointment
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isExpanded && mode === "followup" && (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                {!followUpPreview ? (
+                  <p className="text-xs text-slate-500">Loading preview…</p>
+                ) : "error" in followUpPreview ? (
+                  <p className="text-xs font-medium text-rose-600">{followUpPreview.error}</p>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Subject</p>
+                    <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{followUpPreview.subject}</p>
+                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Body</p>
+                    <pre className="mt-0.5 max-h-64 overflow-y-auto whitespace-pre-wrap font-sans text-[12.5px] leading-relaxed text-slate-700">{followUpPreview.text}</pre>
+                  </div>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isPending || !followUpPreview || "error" in followUpPreview}
+                    onClick={() => handleSendFollowUpEmail(appt)}
+                    className="rounded-full bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    {appt.followUpEmailStatus === "Not Sent" ? "Send Follow-Up Email" : "Resend Follow-Up Email"}
+                  </button>
+                  <button type="button" onClick={closeRow} className="text-xs font-semibold text-slate-500">
+                    Cancel
                   </button>
                 </div>
               </div>

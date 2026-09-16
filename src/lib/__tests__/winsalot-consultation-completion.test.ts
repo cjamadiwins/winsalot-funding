@@ -55,11 +55,17 @@ const baseAppointment: WinsalotAppointmentRow = {
 // A minimal, stateful fake of the service-role client covering exactly the
 // call shapes performWinsalotCompletion/performWinsalotNoShow/the follow-up
 // email sender use against winsalot_appointments/crm_activities/
-// crm_lead_emails - a real Postgres compare-and-swap update (`.eq("status",
-// "booked")` only actually applying while that's still true) is what
-// "one time only" ultimately relies on, so this fake models that instead of
-// just recording calls.
-function makeFakeAdmin(initial: WinsalotAppointmentRow) {
+// crm_lead_emails/crm_clients/leadgen_users - a real Postgres compare-and-
+// swap update (`.eq("status", "booked")` only actually applying while
+// that's still true) is what "one time only" ultimately relies on, so this
+// fake models that instead of just recording calls.
+//
+// activeClient, when set, makes resolveActiveClientDashboardLink resolve a
+// real dashboard link for the appointment's email (an Active crm_clients
+// row linked to a leadgen_client_id with one active leadgen_users portal
+// login) - omitted/undefined means "no matching client", the default and
+// far more common case in these tests.
+function makeFakeAdmin(initial: WinsalotAppointmentRow, activeClient?: boolean) {
   let appt: WinsalotAppointmentRow = { ...initial };
   const crmActivityInserts: Record<string, unknown>[] = [];
   const crmLeadEmailInserts: Record<string, unknown>[] = [];
@@ -114,6 +120,36 @@ function makeFakeAdmin(initial: WinsalotAppointmentRow) {
             crmLeadEmailInserts.push(row);
             return { select: () => ({ maybeSingle: async () => ({ data: { id: "crm-lead-email-1" }, error: null }) }) };
           },
+        };
+      }
+      if (table === "crm_clients") {
+        return {
+          select: () => ({
+            ilike: () => ({
+              eq: () => ({
+                not: () => ({
+                  limit: () => ({
+                    maybeSingle: async () => ({ data: activeClient ? { leadgen_client_id: "leadgen-client-1" } : null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "leadgen_users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                eq: () => ({
+                  limit: () => ({
+                    maybeSingle: async () => ({ data: activeClient ? { id: "portal-user-1" } : null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
         };
       }
       throw new Error(`Unexpected table: ${table}`);
@@ -215,5 +251,86 @@ describe("performWinsalotNoShow", () => {
     expect(appt.no_show_by_name).toBe("Taylor Admin");
     expect(appt.no_show_at).not.toBeNull();
     expect(emailsSendMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("consultation follow-up email content", () => {
+  beforeEach(() => {
+    emailsSendMock.mockClear();
+  });
+
+  it("includes the client dashboard button for a recipient who is already an active, portal-enabled client", async () => {
+    const { admin } = makeFakeAdmin(baseAppointment, true);
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const { getWinsalotFollowUpEmailPreview } = await import("@/lib/winsalot-consultation-completion");
+
+    const preview = await getWinsalotFollowUpEmailPreview("appt-1");
+
+    expect(preview.error).toBeUndefined();
+    expect("text" in preview && preview.text).toContain("Go to My Client Dashboard");
+    expect("text" in preview && preview.text).toContain("/client/dashboard");
+    expect(emailsSendMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a reply-to prompt, with no dashboard link, for a prospect who isn't an active client yet", async () => {
+    const { admin } = makeFakeAdmin(baseAppointment, false);
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const { getWinsalotFollowUpEmailPreview } = await import("@/lib/winsalot-consultation-completion");
+
+    const preview = await getWinsalotFollowUpEmailPreview("appt-1");
+
+    expect("text" in preview && preview.text).not.toContain("/client/dashboard");
+    expect("text" in preview && preview.text).toContain("reply to this email");
+    expect("subject" in preview && preview.subject).toBe("Thank you for speaking with Winsalot Corp");
+  });
+});
+
+describe("sendManualWinsalotFollowUpEmail / getWinsalotFollowUpEmailPreview", () => {
+  beforeEach(() => {
+    emailsSendMock.mockClear();
+  });
+
+  it("previewing never sends anything or changes tracked status", async () => {
+    const { admin, getAppointment } = makeFakeAdmin(baseAppointment);
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const { getWinsalotFollowUpEmailPreview } = await import("@/lib/winsalot-consultation-completion");
+
+    await getWinsalotFollowUpEmailPreview("appt-1");
+
+    expect(emailsSendMock).not.toHaveBeenCalled();
+    expect(getAppointment().follow_up_email_status).toBe("not_sent");
+  });
+
+  it("an admin can send the follow-up email for a cancelled consultation as an explicit manual choice", async () => {
+    const { admin, getAppointment, crmActivityInserts } = makeFakeAdmin({ ...baseAppointment, status: "cancelled" });
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const { sendManualWinsalotFollowUpEmail } = await import("@/lib/winsalot-consultation-completion");
+
+    const result = await sendManualWinsalotFollowUpEmail("appt-1", "Taylor Admin");
+
+    expect(result.status).toBe("sent");
+    expect(emailsSendMock).toHaveBeenCalledTimes(1);
+    expect(getAppointment().follow_up_email_status).toBe("sent");
+    expect(crmActivityInserts.some((a) => String(a.notes).includes("by Taylor Admin"))).toBe(true);
+  });
+
+  it("an admin can resend the follow-up email after it already went out once", async () => {
+    const { admin, getAppointment } = makeFakeAdmin(baseAppointment);
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const { performWinsalotCompletion, sendManualWinsalotFollowUpEmail } = await import("@/lib/winsalot-consultation-completion");
+
+    await performWinsalotCompletion("appt-1", { userId: "user-1", name: "Taylor Admin" });
+    expect(emailsSendMock).toHaveBeenCalledTimes(1);
+
+    const resendResult = await sendManualWinsalotFollowUpEmail("appt-1", "Jordan Ops");
+
+    expect(resendResult.status).toBe("sent");
+    expect(emailsSendMock).toHaveBeenCalledTimes(2);
+    expect(getAppointment().status).toBe("completed");
   });
 });

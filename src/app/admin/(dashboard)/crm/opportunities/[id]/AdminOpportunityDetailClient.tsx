@@ -22,6 +22,18 @@ import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import { WINSALOT_APPOINTMENT_STATUS_LABELS, WINSALOT_APPOINTMENT_STATUS_STYLES, type WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+
+// This page reads winsalot_appointments' raw follow_up_email_status column
+// directly (sending/sent/failed) rather than the richer Delivered/Bounced-
+// aware display status from fetchWinsalotFollowUpStatusMap - that needs a
+// crm_lead_emails join this read-only summary doesn't otherwise fetch. The
+// full Sent/Delivered/Failed breakdown, plus Send/Preview/Resend, lives on
+// the consultation/appointment management area (/admin/crm/appointments).
+const FOLLOW_UP_RAW_STATUS_LABELS: Record<"sending" | "sent" | "failed", string> = {
+  sending: "Sending",
+  sent: "Sent",
+  failed: "Failed",
+};
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
@@ -486,10 +498,13 @@ export default function AdminOpportunityDetailClient({
                 {appt.cancelled_reason && <p className="mt-1 text-xs text-rose-600">Cancelled: {appt.cancelled_reason}</p>}
                 {appt.status === "completed" && (
                   <p className="mt-1 text-xs text-emerald-700">
-                    Completed On {appt.completed_at ? new Date(appt.completed_at).toLocaleString() : "—"} · Completed By {appt.completed_by_name || "—"} · Follow-Up Email:{" "}
-                    {appt.follow_up_email_status === "not_sent" ? "Not Sent" : appt.follow_up_email_status}
+                    Completed On {appt.completed_at ? new Date(appt.completed_at).toLocaleString() : "—"} · Completed By {appt.completed_by_name || "—"}
                   </p>
                 )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Consultation Follow-Up: {appt.follow_up_email_status === "not_sent" ? "Not Sent" : FOLLOW_UP_RAW_STATUS_LABELS[appt.follow_up_email_status]}
+                  {appt.follow_up_email_sent_at && appt.follow_up_email_status !== "not_sent" ? ` — ${new Date(appt.follow_up_email_sent_at).toLocaleString()}` : ""}
+                </p>
               </li>
             ))}
           </ul>
