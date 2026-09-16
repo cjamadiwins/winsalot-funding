@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getResendClient } from "./resend";
 import { getEmailSender, getEmailReplyTo } from "./email-senders";
-import { LEADGEN_PRODUCTION_ORIGIN } from "./client-portal-shared";
+import { getSiteUrl } from "./site-url";
 import { buildWinsalotFollowUpEmail, type WinsalotEmailBody } from "./winsalot-consultation-emails";
 import {
   winsalotFollowUpEmailDisplayStatus,
@@ -13,59 +13,17 @@ import {
 } from "./winsalot-consultation-types";
 import type { CrmLeadEmailRow } from "./crm-types";
 
-// Resolves the "Go to My Client Dashboard" link for the follow-up email's
-// CTA - only when this prospect's email matches an existing, `Active`
-// Growth CRM client (crm_clients) that's actually linked to a Lead
-// Generation CRM client with at least one active portal login
-// (leadgen_users, role='client'). Every one of those has to hold, not
-// just an Active crm_clients status: `/client/dashboard` itself is gated
-// by requireLeadgenPortalClient() (src/lib/leadgen-auth.ts), so sending
-// someone a dashboard link they can't actually log into would be worse
-// than not sending one - a prospect who isn't fully provisioned yet
-// always gets the reply-to fallback instead (see buildWinsalotFollowUpEmail).
-// Read-only - never touches auth, permissions, or dashboard behavior.
-//
-// Built from LEADGEN_PRODUCTION_ORIGIN (https://leads.winsalotcorp.com),
-// not this deployment's own getSiteUrl() - the client portal's session
-// cookie (sb-leadgen-auth, src/lib/hosts.ts's authCookieName) is scoped to
-// the Lead Gen CRM's own domain, so a client only ever actually signs in
-// there, exactly like every other client-facing portal link in this
-// codebase (client-portal-emails.ts's invite/reset links use this same
-// origin) - never growth.winsalotcorp.com, even though this Growth CRM
-// email is what triggers the send and /client/dashboard's page code also
-// happens to live in this same repo.
-async function resolveActiveClientDashboardLink(admin: SupabaseClient, email: string): Promise<string | null> {
-  const { data: client } = await admin
-    .from("crm_clients")
-    .select("leadgen_client_id")
-    .ilike("email", email)
-    .eq("status", "Active")
-    .not("leadgen_client_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-
-  const leadgenClientId = client?.leadgen_client_id as string | undefined;
-  if (!leadgenClientId) return null;
-
-  const { data: portalUser } = await admin
-    .from("leadgen_users")
-    .select("id")
-    .eq("client_id", leadgenClientId)
-    .eq("role", "client")
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle();
-
-  return portalUser ? `${LEADGEN_PRODUCTION_ORIGIN}/client/dashboard` : null;
-}
-
 // Builds the follow-up email's actual content for a given appointment -
 // shared by the real send below and getWinsalotFollowUpEmailPreview, so
 // "preview" can never show something different from what "send" actually
-// sends.
-async function buildFollowUpEmailForAppointment(admin: SupabaseClient, appt: WinsalotAppointmentRow): Promise<WinsalotEmailBody> {
-  const clientDashboardUrl = await resolveActiveClientDashboardLink(admin, appt.email);
-  return buildWinsalotFollowUpEmail({ contactName: appt.contact_name, clientDashboardUrl });
+// sends. The CTA always links to the public, unauthenticated "Continue
+// With Winsalot Corp" next-step page (/continue-with-winsalot -
+// src/lib/winsalot-continue-request.ts) - never the protected client
+// dashboard or any other authenticated page, and the same page for every
+// recipient regardless of whether they're already a client, so this
+// function needs no lookup against crm_clients/leadgen_users at all.
+function buildFollowUpEmailForAppointment(appt: WinsalotAppointmentRow): WinsalotEmailBody {
+  return buildWinsalotFollowUpEmail({ contactName: appt.contact_name, continueUrl: `${getSiteUrl()}/continue-with-winsalot` });
 }
 
 // "Complete Consultation" / "Mark No Show" - available to an admin or the
@@ -114,7 +72,7 @@ export type WinsalotFollowUpSendResult = { status: "sent" | "failed"; error?: st
 export async function sendWinsalotFollowUpEmail(admin: SupabaseClient, appt: WinsalotAppointmentRow, actorName?: string): Promise<WinsalotFollowUpSendResult> {
   await admin.from("winsalot_appointments").update({ follow_up_email_status: "sending" }).eq("id", appt.id);
 
-  const email = await buildFollowUpEmailForAppointment(admin, appt);
+  const email = buildFollowUpEmailForAppointment(appt);
 
   try {
     const resend = getResendClient();
@@ -322,14 +280,13 @@ export type WinsalotFollowUpPreviewResult = { subject: string; text: string; err
 
 // Renders exactly what a send would send, without sending it or touching
 // follow_up_email_status - a plain-text preview (not the HTML) is enough
-// for an admin to sanity-check the content and confirm whether the
-// dashboard button or the reply-to fallback will show.
+// for an admin to sanity-check the content and confirm the CTA link.
 export async function getWinsalotFollowUpEmailPreview(appointmentId: string): Promise<WinsalotFollowUpPreviewResult> {
   const admin = getSupabaseAdmin();
   const { data: appointment } = await admin.from("winsalot_appointments").select("*").eq("id", appointmentId).maybeSingle();
   if (!appointment) return { error: "Appointment not found." };
 
-  const email = await buildFollowUpEmailForAppointment(admin, appointment as WinsalotAppointmentRow);
+  const email = buildFollowUpEmailForAppointment(appointment as WinsalotAppointmentRow);
   return { subject: email.subject, text: email.text };
 }
 

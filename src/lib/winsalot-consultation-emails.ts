@@ -284,13 +284,14 @@ function bulletListHtml(lines: string[]): string {
 
 export type FollowUpEmailParams = {
   contactName: string;
-  // Absolute URL to the client dashboard, only when this recipient is
-  // already resolvable to an active, portal-enabled client (see
-  // winsalot-consultation-completion.ts's resolveActiveClientDashboardLink)
-  // - shows the "Go to My Client Dashboard" button instead of "Continue
-  // With Winsalot Corp" when set. Null for every prospect who hasn't
-  // become a client yet - see the button/no-button branch below.
-  clientDashboardUrl: string | null;
+  // Absolute URL to the public, unauthenticated "Continue With Winsalot
+  // Corp" next-step page (/continue-with-winsalot - see
+  // src/lib/winsalot-continue-request.ts). Always present and always the
+  // same page for every recipient, client or prospect alike - this email
+  // must never link straight to the protected client dashboard or any
+  // other authenticated page (see winsalot-consultation-completion.ts's
+  // buildFollowUpEmailForAppointment for how it's built).
+  continueUrl: string;
 };
 
 // One-time consultation follow-up email - sent only once "Complete
@@ -335,9 +336,8 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "If you decide to move forward, we will complete your onboarding and set up your campaign based on your target market, services, and ideal customer.",
   ];
 
-  const ctaLine = params.clientDashboardUrl
-    ? "Go to My Client Dashboard:"
-    : "Just reply to this email and we'll take it from there.";
+  const nextStepLines = ["If you'd like to move forward with Winsalot Corp, click the button below to continue with the next step."];
+  const replyLine = "You can also reply directly to this email if you have any questions.";
 
   const textLines = [
     ...introLines,
@@ -345,7 +345,11 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "",
     ...closingLines,
     "",
-    params.clientDashboardUrl ? `${ctaLine} ${params.clientDashboardUrl}` : ctaLine,
+    ...nextStepLines,
+    "",
+    `Continue With Winsalot Corp: ${params.continueUrl}`,
+    "",
+    replyLine,
     "",
     "Best regards,",
     "Winsalot Corp",
@@ -354,9 +358,11 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "winsalotcorp.com",
   ];
 
-  const ctaHtml = params.clientDashboardUrl
-    ? ctaButtonHtml(params.clientDashboardUrl, "Go to My Client Dashboard")
-    : paragraphsHtml(["Just reply to this email and we'll take it from there."]);
+  const ctaHtml = `
+    ${paragraphsHtml(nextStepLines)}
+    ${ctaButtonHtml(params.continueUrl, "Continue With Winsalot Corp")}
+    ${paragraphsHtml([replyLine])}
+  `;
 
   const bodyHtml = `
     ${paragraphsHtml(introLines)}
