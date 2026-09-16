@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveIntakeToken } from "@/lib/crm-agreement-tokens";
+import { LEADGEN_PRODUCTION_ORIGIN } from "@/lib/client-portal-shared";
 import {
   agreedTargetLabel,
   AGREED_TARGET_NOTICE,
@@ -16,6 +17,22 @@ export const metadata: Metadata = {
   title: "Winsalot Corp Client Intake Form",
   description: "Complete your Winsalot Corp client intake form.",
 };
+
+const CLIENT_DASHBOARD_URL = `${LEADGEN_PRODUCTION_ORIGIN}/client/dashboard`;
+
+const CLIENT_SERVICE_BENEFITS = [
+  "Dedicated outbound prospecting for your business",
+  "Qualified B2B appointment setting",
+  "Targeted outreach based on your preferred industry and customer profile",
+  "Call activity and follow-up tracking",
+  "Appointment tracking",
+  "Call logs and campaign activity visibility",
+  "Monthly performance reporting",
+  "Ongoing campaign optimization",
+  "Access to your client dashboard",
+  "Visibility into leads, appointments, and campaign progress",
+  "Support from Winsalot Corp throughout the campaign",
+] as const;
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -85,6 +102,36 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
           <p className="mt-1 text-[12.5px] text-slate-500">{isPilot ? PILOT_TARGET_NOTICE : AGREED_TARGET_NOTICE}</p>
         </div>
       </div>
+
+      <section className="mt-8 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm sm:p-6" aria-labelledby="client-benefits-title">
+        <h2 id="client-benefits-title" className="text-xl font-bold text-slate-900">
+          What You Get With Winsalot Corp
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Your campaign includes structured outreach, transparent activity tracking, and ongoing support from our team.
+        </p>
+
+        <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {CLIENT_SERVICE_BENEFITS.map((benefit) => (
+            <li key={benefit} className="flex items-start gap-2.5 text-sm leading-5 text-slate-700">
+              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-bold text-white">
+                ✓
+              </span>
+              <span>{benefit}</span>
+            </li>
+          ))}
+        </ul>
+
+        <a
+          href={CLIENT_DASHBOARD_URL}
+          className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-sky-600 px-5 py-3 text-center text-[15px] font-semibold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 sm:w-auto"
+        >
+          Go to My Client Dashboard
+        </a>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          If you are not signed in, you will be asked to use the existing Client Portal login or setup process.
+        </p>
+      </section>
 
       <ClientIntakeFormClient token={token} questions={questions} campaignStartDate={typedAgreement.campaign_start_date} />
     </div>
