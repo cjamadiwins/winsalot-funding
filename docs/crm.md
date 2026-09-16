@@ -59,6 +59,25 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   their own assigned appointments via RLS); Delete is admin-only. Rescheduling notifies the
   prospect by email; cancelling always records who cancelled it and why
   (`cancelled_by_role`/`cancelled_by_user_id`/`cancelled_reason`).
+- **Complete Consultation / Mark No Show** (migration `0160_winsalot_consultation_completion.sql`,
+  `src/lib/winsalot-consultation-completion.ts`): a **Complete Consultation** button, shown right
+  on the appointment card at `/admin/crm/appointments` and `/agent/appointments` for admins and the
+  assigned agent alike, sets `status` to `Completed`, stamps `completed_at`/`completed_by_user_id`/
+  `completed_by_name`, and triggers a one-time consultation follow-up email
+  (`buildWinsalotFollowUpEmail`) — never on a timer, never just because the appointment's start
+  time passed, only ever from this explicit action. The status transition is a guarded
+  compare-and-swap update (`.eq("status", "booked")`) rather than a plain write, so the database
+  itself — not just a disabled button — guarantees the follow-up email is sent exactly once even
+  if the button is clicked twice or by two people at once; a second attempt is a silent no-op
+  (`already_completed`), never a second send. `follow_up_email_status` (`not_sent` / `sending` /
+  `sent` / `failed`), refined to `Delivered`/`Bounced` once the Resend webhook reports on the
+  tracked `crm_lead_emails` row (`email_type = 'consultation_follow_up'`), is shown on the
+  appointment card as soon as it's been sent. A parallel **Mark No Show** action sets `status` to
+  `No Show` (`no_show_at`/`no_show_by_user_id`/`no_show_by_name`) and never sends the follow-up
+  email. Both actions, like Reschedule/Cancel, are only offered while an appointment is still
+  `Scheduled` (`booked`) — a cancelled, completed, or no-show consultation can't be re-completed,
+  re-shown-no-show, rescheduled, or cancelled again. Neither action is available on the Lead
+  Generation CRM.
 - **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
   notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
   prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,

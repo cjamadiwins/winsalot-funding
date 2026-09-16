@@ -67,9 +67,10 @@ export function crmMondayOf(dateKey: string): string {
 // "Do not count the same appointment twice" (brief) - filters to
 // exactly what the given agent was credited with booking (the same
 // assigned_agent_id rule the appointment list views use), and excludes
-// cancelled appointments (isWinsalotAppointmentCountable) - a cancelled
-// appointment can never qualify for an incentive bonus, even if it was
-// reviewed as Qualified before it was cancelled.
+// cancelled/no-show appointments (isWinsalotAppointmentCountable) - an
+// appointment that was cancelled, or never actually happened, can never
+// qualify for an incentive bonus, even if it was reviewed as Qualified
+// beforehand.
 function creditedTo(appointments: CrmIncentiveAppointment[], agentId: string): CrmIncentiveAppointment[] {
   return appointments.filter((appointment) => appointment.assignedAgentId === agentId && isWinsalotAppointmentCountable(appointment.status));
 }

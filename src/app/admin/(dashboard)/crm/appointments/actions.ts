@@ -11,6 +11,7 @@ import {
   performWinsalotReschedule,
   type WinsalotAppointmentEditInput,
 } from "@/lib/winsalot-consultation-book";
+import { performWinsalotCompletion, performWinsalotNoShow } from "@/lib/winsalot-consultation-completion";
 import { describeManualSmsOutcome } from "@/lib/appointment-sms";
 import { sendManualWinsalotAppointmentEmail, sendManualWinsalotAppointmentSms } from "@/lib/winsalot-consultation-reminders";
 import type { WinsalotAppointmentIncentiveStatus, WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
@@ -41,6 +42,27 @@ export async function cancelAppointmentAction(appointmentId: string, reason: str
 export async function editAppointmentAction(appointmentId: string, input: WinsalotAppointmentEditInput) {
   await requireCrmAdmin();
   const result = await performWinsalotAppointmentEdit(appointmentId, input);
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/agent/appointments");
+  return result;
+}
+
+// "Complete Consultation" - available to admin or the assigned agent (see
+// the agent-side counterpart in ../../../../agent/(dashboard)/appointments/actions.ts).
+// Sets status to Completed, records who/when, and triggers the one-time
+// follow-up email - all inside performWinsalotCompletion's single guarded
+// update, so a duplicate click here can never send a second email.
+export async function completeAppointmentAction(appointmentId: string) {
+  const crmUser = await requireCrmAdmin();
+  const result = await performWinsalotCompletion(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/agent/appointments");
+  return result;
+}
+
+export async function markNoShowAction(appointmentId: string) {
+  const crmUser = await requireCrmAdmin();
+  const result = await performWinsalotNoShow(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
   return result;

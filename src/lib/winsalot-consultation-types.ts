@@ -5,8 +5,32 @@
 
 import type { CrmLeadEmailRow, OpportunityType } from "./crm-types";
 
-export const WINSALOT_APPOINTMENT_STATUSES = ["booked", "cancelled"] as const;
+// 'booked' displays as "Scheduled" in the UI (see WINSALOT_APPOINTMENT_STATUS_LABELS
+// below) - kept as the underlying value to avoid a data migration and to
+// keep every existing `.eq("status", "booked")` query (availability,
+// double-booking checks, the reminder job) unchanged. A rescheduled
+// appointment stays 'booked' - it's still scheduled, just moved to a new
+// time - so there is no separate 'rescheduled' value; the move itself is
+// recorded as a 'consultation_rescheduled' activity-timeline entry
+// instead. 'completed'/'no_show' are only ever set by a staff member
+// explicitly clicking "Complete Consultation" / "Mark No Show" - never
+// automatically, and never just because the appointment's time passed.
+export const WINSALOT_APPOINTMENT_STATUSES = ["booked", "completed", "no_show", "cancelled"] as const;
 export type WinsalotAppointmentStatus = (typeof WINSALOT_APPOINTMENT_STATUSES)[number];
+
+export const WINSALOT_APPOINTMENT_STATUS_LABELS: Record<WinsalotAppointmentStatus, string> = {
+  booked: "Scheduled",
+  completed: "Completed",
+  no_show: "No Show",
+  cancelled: "Cancelled",
+};
+
+export const WINSALOT_APPOINTMENT_STATUS_STYLES: Record<WinsalotAppointmentStatus, string> = {
+  booked: "bg-sky-100 text-sky-700",
+  completed: "bg-emerald-100 text-emerald-700",
+  no_show: "bg-amber-100 text-amber-800",
+  cancelled: "bg-rose-100 text-rose-700",
+};
 
 export const WINSALOT_APPOINTMENT_BOOKED_BY = ["agent", "self"] as const;
 export type WinsalotAppointmentBookedBy = (typeof WINSALOT_APPOINTMENT_BOOKED_BY)[number];
@@ -47,9 +71,11 @@ export const WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE = "bg-slate-100 text-s
 
 // "Do not count the same appointment twice" / "cancelled appointments
 // never qualify" - the exact isLeadgenAppointmentCountable rule, applied
-// to this CRM's own simpler two-state `status` column.
+// to this CRM's own `status` column. A no-show consultation didn't
+// actually happen either, so it's excluded from the Weekly Incentive the
+// same way a cancelled one is.
 export function isWinsalotAppointmentCountable(status: WinsalotAppointmentStatus): boolean {
-  return status !== "cancelled";
+  return status !== "cancelled" && status !== "no_show";
 }
 
 export type WinsalotAppointmentRow = {
@@ -90,6 +116,18 @@ export type WinsalotAppointmentRow = {
   cancelled_by_role: WinsalotAppointmentCancelledByRole | null;
   cancelled_by_user_id: string | null;
   cancelled_reason: string | null;
+
+  completed_at: string | null;
+  completed_by_user_id: string | null;
+  completed_by_name: string | null;
+
+  no_show_at: string | null;
+  no_show_by_user_id: string | null;
+  no_show_by_name: string | null;
+
+  follow_up_email_status: WinsalotFollowUpEmailStatus;
+  follow_up_email_sent_at: string | null;
+  follow_up_crm_lead_email_id: string | null;
 
   admin_notified_at: string | null;
 
@@ -185,6 +223,41 @@ export function winsalotReminderDisplayStatus(
   if (reminder.status === "failed") return "Failed";
   if (reminder.status === "sent") return "Sent";
   return "Sending";
+}
+
+// One-time consultation follow-up email (migration 0160) - only ever
+// triggered by the "Complete Consultation" action, never by the automatic
+// 24h/1h reminder job above and never for a cancelled/no-show appointment.
+// 'not_sent' is the only state a still-booked appointment can be in.
+export const WINSALOT_FOLLOW_UP_EMAIL_STATUSES = ["not_sent", "sending", "sent", "failed"] as const;
+export type WinsalotFollowUpEmailStatus = (typeof WINSALOT_FOLLOW_UP_EMAIL_STATUSES)[number];
+
+export type WinsalotFollowUpEmailDisplayStatus = "Not Sent" | "Sending" | "Sent" | "Delivered" | "Bounced" | "Failed";
+
+// Same "prefer the tracked crm_lead_emails row's Resend-webhook status
+// over our own initial API-accepted state" pattern as
+// winsalotReminderDisplayStatus above - "Follow-Up Email: Sent /
+// Delivered / Failed" per the brief.
+export function winsalotFollowUpEmailDisplayStatus(
+  status: WinsalotFollowUpEmailStatus,
+  linkedEmail: CrmLeadEmailRow | null
+): WinsalotFollowUpEmailDisplayStatus {
+  if (linkedEmail) {
+    if (linkedEmail.status === "delivered") return "Delivered";
+    if (linkedEmail.status === "bounced" || linkedEmail.status === "complained") return "Bounced";
+    if (linkedEmail.status === "failed") return "Failed";
+    if (["sent", "opened", "clicked", "delayed"].includes(linkedEmail.status)) return "Sent";
+  }
+  if (status === "failed") return "Failed";
+  if (status === "sent") return "Sent";
+  if (status === "sending") return "Sending";
+  return "Not Sent";
+}
+
+export function winsalotFollowUpEmailErrorDetail(linkedEmail: CrmLeadEmailRow | null): string | null {
+  if (linkedEmail?.status === "bounced" || linkedEmail?.status === "complained") return linkedEmail.bounce_reason ?? null;
+  if (linkedEmail?.status === "failed") return linkedEmail.failure_reason ?? null;
+  return null;
 }
 
 export function winsalotReminderErrorDetail(

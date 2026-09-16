@@ -224,6 +224,40 @@ export function buildWinsalotCancellationEmail(params: {
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
 }
 
+// One-time consultation follow-up email - sent only once "Complete
+// Consultation" is clicked (never for a cancelled/no-show appointment,
+// never on a timer). Deliberately plain, personal copy matching the rest
+// of this file - see winsalot-consultation-completion.ts for the send/
+// dedup logic itself.
+export function buildWinsalotFollowUpEmail(params: ConsultationEmailParams): WinsalotEmailBody {
+  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
+  const subject = "Thanks for speaking with Winsalot Corp.";
+
+  const lines = [
+    `Hi ${params.contactName},`,
+    "",
+    `Thank you for taking the time to speak with us today about ${params.businessName}'s goals. It was great learning more about your business during our ${appointmentTypeLabel}.`,
+    "",
+    "We'll be in touch shortly with next steps. In the meantime, if any questions come up, just reply to this email.",
+    "",
+    "Best regards,",
+    "Winsalot Corp",
+    "647-300-1270",
+    "info@winsalotcorp.com",
+    "winsalotcorp.com",
+  ];
+
+  const bodyHtml = paragraphsHtml([
+    `Hi ${params.contactName},`,
+    "",
+    `Thank you for taking the time to speak with us today about ${params.businessName}'s goals. It was great learning more about your business during our ${appointmentTypeLabel}.`,
+    "",
+    "We'll be in touch shortly with next steps. In the meantime, if any questions come up, just reply to this email.",
+  ]);
+
+  return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
+}
+
 export function buildWinsalotReminderEmail(
   params: ConsultationEmailParams & { reminderType: "24_hour_reminder" | "1_hour_reminder" }
 ): WinsalotEmailBody {

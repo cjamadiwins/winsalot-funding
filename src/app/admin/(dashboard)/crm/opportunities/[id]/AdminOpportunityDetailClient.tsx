@@ -21,7 +21,7 @@ import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_
 import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
-import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+import { WINSALOT_APPOINTMENT_STATUS_LABELS, WINSALOT_APPOINTMENT_STATUS_STYLES, type WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
@@ -475,12 +475,8 @@ export default function AdminOpportunityDetailClient({
               <li key={appt.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-slate-900">{new Date(appt.appointment_start_at).toLocaleString()}</span>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      appt.status === "cancelled" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {appt.status}
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${WINSALOT_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                    {WINSALOT_APPOINTMENT_STATUS_LABELS[appt.status]}
                   </span>
                 </div>
                 <p className="mt-1 text-slate-600">
@@ -488,6 +484,12 @@ export default function AdminOpportunityDetailClient({
                   {appt.incentive_status ? ` · ${appt.incentive_status}` : ""}
                 </p>
                 {appt.cancelled_reason && <p className="mt-1 text-xs text-rose-600">Cancelled: {appt.cancelled_reason}</p>}
+                {appt.status === "completed" && (
+                  <p className="mt-1 text-xs text-emerald-700">
+                    Completed On {appt.completed_at ? new Date(appt.completed_at).toLocaleString() : "—"} · Completed By {appt.completed_by_name || "—"} · Follow-Up Email:{" "}
+                    {appt.follow_up_email_status === "not_sent" ? "Not Sent" : appt.follow_up_email_status}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
