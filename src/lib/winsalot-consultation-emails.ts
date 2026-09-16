@@ -164,6 +164,42 @@ export function buildWinsalotInternalBookingNotification(
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
 }
 
+// Internal admin notification for the public "Continue With Winsalot
+// Corp" next-step page (/continue-with-winsalot) - fires once per
+// submission (see notifyOfWinsalotContinueRequest's admin_notified_at
+// claim in src/lib/winsalot-continue-request.ts). Never sent to the
+// prospect themselves - this is the same "Winsalot admin notification"
+// channel buildWinsalotInternalBookingNotification above already uses.
+export function buildWinsalotContinueRequestNotification(params: {
+  contactName: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  serviceType: OpportunityType;
+  notes: string | null;
+  crmLink: string;
+}): WinsalotEmailBody {
+  const serviceLabel = winsalotServiceTypeLabel(params.serviceType);
+  const subject = `${params.businessName} wants to continue with Winsalot Corp`;
+
+  const lines = [
+    "Hi there,",
+    "",
+    `${params.contactName} at ${params.businessName} clicked "Continue With Winsalot Corp" after their consultation and wants to move forward.`,
+    "",
+    `Contact: ${params.contactName}`,
+    `Business: ${params.businessName}`,
+    `Email: ${params.email}`,
+    `Phone: ${params.phone}`,
+    `Service Interest: ${serviceLabel}`,
+  ];
+  if (params.notes) lines.push(`Notes: ${params.notes}`);
+  lines.push("", `Open in CRM: ${params.crmLink}`);
+
+  const bodyHtml = paragraphsHtml(lines);
+  return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
+}
+
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
