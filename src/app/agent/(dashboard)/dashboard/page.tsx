@@ -235,10 +235,10 @@ export default async function AgentDashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-[24px] font-bold text-[var(--color-ink-strong)]">
-            Dashboard
+            Welcome, {agentDisplayName}
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Welcome back, {agentDisplayName}.
+            Dashboard
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
