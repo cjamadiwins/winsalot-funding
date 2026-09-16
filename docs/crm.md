@@ -78,6 +78,43 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   `Scheduled` (`booked`) — a cancelled, completed, or no-show consultation can't be re-completed,
   re-shown-no-show, rescheduled, or cancelled again. Neither action is available on the Lead
   Generation CRM.
+- **Consultation Follow-Up Email content and manual Send/Preview/Resend** (same migration and
+  module as above; `buildWinsalotFollowUpEmail` in `src/lib/winsalot-consultation-emails.ts`):
+  subject **"Thank you for speaking with Winsalot Corp"**, describing what a Winsalot Corp
+  campaign can include (outbound prospecting, targeted outreach, qualified B2B appointment
+  setting, call/appointment/campaign tracking, monthly reporting, ongoing optimization, dashboard
+  access, ongoing support) — deliberately never promising closed sales, specific revenue, or
+  guaranteed results. Its call-to-action is resolved fresh on every send:
+  - **Already an active, portal-enabled client** (`resolveActiveClientDashboardLink`: the
+    recipient's email matches an `Active` `crm_clients` row that's linked to a Lead Generation CRM
+    client with at least one active `leadgen_users` portal login — i.e., they could actually sign
+    in) → a **"Go to My Client Dashboard"** button linking `https://leads.winsalotcorp.com/client/dashboard`
+    (`LEADGEN_PRODUCTION_ORIGIN`, the same origin every other client-portal email link in this
+    codebase already uses — the portal's session cookie is scoped to that domain, not this Growth
+    CRM's own `growth.winsalotcorp.com`, even though `/client/dashboard`'s page code happens to
+    live in this same repo).
+  - **Everyone else** (a prospect who hasn't become a client yet) → no link at all, just a plain
+    "reply to this email and we'll take it from there" line. There's no ready-made public "next
+    step" page a token can be minted for at consultation-completion time (the agreement-sign flow
+    requires a `crm_client_agreements` row that doesn't exist yet), so this never risks sending a
+    prospect into a protected page they can't use or a half-built flow.
+  - Same visual language (plain personal copy, no promotional banner/button graphics beyond the
+    one CTA) and mobile-friendly layout (stacked `<p>` bullets, no `<ul>`, max-width table shell)
+    as every other email in this file — it never touches the reminder emails, booking
+    confirmation, or any other template.
+  - **Admin-only manual actions** on the appointment card, independent of the automatic one-time
+    trigger above and available regardless of the consultation's status (including cancelled/no-
+    show, since sending there is always the admin's explicit choice): **Preview** renders the
+    exact subject/body a send would produce without sending or touching tracking
+    (`getWinsalotFollowUpEmailPreview`); **Send Follow-Up Email** / **Resend Follow-Up Email**
+    (`sendConsultationFollowUpEmailAction` → `sendManualWinsalotFollowUpEmail`) sends it through
+    the same `sendWinsalotFollowUpEmail` the automatic trigger uses, so tracking/status/email
+    delivery pipeline are always the same code path either way — never duplicate logic. A manual
+    resend is a deliberate click, not a second automatic send, so it doesn't conflict with the
+    "exactly once" guarantee on the Complete Consultation button itself.
+  - The appointment card always shows a **"Consultation Follow-Up:"** line — `Not Sent` before any
+    send, or `Sent` / `Delivered` / `Bounced` / `Failed` with the send date/time once one has gone
+    out — independent of, and never shown inside, the appointment reminder badges above it.
 - **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
   notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
   prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,

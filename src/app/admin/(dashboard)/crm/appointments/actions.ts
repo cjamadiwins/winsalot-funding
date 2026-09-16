@@ -11,7 +11,12 @@ import {
   performWinsalotReschedule,
   type WinsalotAppointmentEditInput,
 } from "@/lib/winsalot-consultation-book";
-import { performWinsalotCompletion, performWinsalotNoShow } from "@/lib/winsalot-consultation-completion";
+import {
+  getWinsalotFollowUpEmailPreview,
+  performWinsalotCompletion,
+  performWinsalotNoShow,
+  sendManualWinsalotFollowUpEmail,
+} from "@/lib/winsalot-consultation-completion";
 import { describeManualSmsOutcome } from "@/lib/appointment-sms";
 import { sendManualWinsalotAppointmentEmail, sendManualWinsalotAppointmentSms } from "@/lib/winsalot-consultation-reminders";
 import type { WinsalotAppointmentIncentiveStatus, WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
@@ -66,6 +71,28 @@ export async function markNoShowAction(appointmentId: string) {
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
   return result;
+}
+
+// "Consultation Follow-Up Email" - admin-only "Preview before sending" /
+// "Send immediately" / "Resend if necessary", available on any
+// consultation regardless of status (including a cancelled or no-show
+// one - per the brief, sending it there is always the admin's explicit
+// choice, never automatic). Preview never sends anything; send always
+// goes through the same sendWinsalotFollowUpEmail the automatic Complete
+// Consultation trigger uses, so status/tracking stay consistent either
+// way.
+export async function previewConsultationFollowUpEmailAction(appointmentId: string) {
+  await requireCrmAdmin();
+  return getWinsalotFollowUpEmailPreview(appointmentId);
+}
+
+export async function sendConsultationFollowUpEmailAction(appointmentId: string): Promise<ActionResult> {
+  const adminUser = await requireCrmAdmin();
+  const result = await sendManualWinsalotFollowUpEmail(appointmentId, adminUser.full_name || adminUser.email);
+  revalidatePath("/admin/crm/appointments");
+  revalidatePath("/agent/appointments");
+  if (result.status === "failed") return { error: result.error ?? "Failed to send the follow-up email." };
+  return { message: "Follow-up email sent." };
 }
 
 // Shared by resendAppointmentNotificationAction/sendAppointmentReminderAction

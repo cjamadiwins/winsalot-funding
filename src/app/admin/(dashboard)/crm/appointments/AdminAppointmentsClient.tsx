@@ -12,10 +12,12 @@ import {
   editAppointmentAction,
   getOfferedSlotsAction,
   markNoShowAction,
+  previewConsultationFollowUpEmailAction,
   rescheduleAppointmentAction,
   resendAppointmentNotificationAction,
   reviewCrmAppointmentIncentiveAction,
   sendAppointmentReminderAction,
+  sendConsultationFollowUpEmailAction,
 } from "./actions";
 import { bookConsultationAction, getConsultationOfferedSlotsAction } from "../opportunities/[id]/actions";
 
@@ -115,6 +117,8 @@ export default function AdminAppointmentsClient({
           edit: editAppointmentAction,
           complete: completeAppointmentAction,
           markNoShow: markNoShowAction,
+          previewFollowUpEmail: previewConsultationFollowUpEmailAction,
+          sendFollowUpEmail: sendConsultationFollowUpEmailAction,
           remove: deleteAppointmentAction,
           reviewIncentive: reviewCrmAppointmentIncentiveAction,
           resend: resendAppointmentNotificationAction,

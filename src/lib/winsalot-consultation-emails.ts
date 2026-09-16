@@ -224,21 +224,92 @@ export function buildWinsalotCancellationEmail(params: {
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
 }
 
+// Extracts a first name for the greeting ("Hi [First Name],") - this one
+// email is the only place in this file that personalizes by first name
+// rather than the full contact name, per the brief's exact copy. Falls
+// back to the full (trimmed) name if it's already just one word.
+function firstNameOf(fullName: string): string {
+  const trimmed = fullName.trim();
+  return trimmed.split(/\s+/)[0] || trimmed;
+}
+
+// A plain, mobile-friendly bullet list - stacked <p> lines rather than a
+// <ul> (some email clients, notably older Outlook, mangle list
+// indentation/markers), each with a leading "•" exactly like the plain
+// text version, so the two never visually diverge.
+function bulletListHtml(lines: string[]): string {
+  return lines
+    .map(
+      (line) =>
+        `<p style="margin:0 0 6px 18px; font-size:15px; line-height:1.5; color:#111827; text-indent:-18px;">&#8226;&nbsp;&nbsp;${escapeHtml(line)}</p>`
+    )
+    .join("\n");
+}
+
+export type FollowUpEmailParams = {
+  contactName: string;
+  // Absolute URL to the client dashboard, only when this recipient is
+  // already resolvable to an active, portal-enabled client (see
+  // winsalot-consultation-completion.ts's resolveActiveClientDashboardLink)
+  // - shows the "Go to My Client Dashboard" button instead of "Continue
+  // With Winsalot Corp" when set. Null for every prospect who hasn't
+  // become a client yet - see the button/no-button branch below.
+  clientDashboardUrl: string | null;
+};
+
 // One-time consultation follow-up email - sent only once "Complete
 // Consultation" is clicked (never for a cancelled/no-show appointment,
-// never on a timer). Deliberately plain, personal copy matching the rest
-// of this file - see winsalot-consultation-completion.ts for the send/
-// dedup logic itself.
-export function buildWinsalotFollowUpEmail(params: ConsultationEmailParams): WinsalotEmailBody {
-  const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
-  const subject = "Thanks for speaking with Winsalot Corp.";
+// never on a timer) unless an admin explicitly chooses to send/resend it
+// from the appointment record. Deliberately plain, personal copy matching
+// the rest of this file - see winsalot-consultation-completion.ts for the
+// send/tracking/dedup logic itself. Never promises closed sales, specific
+// revenue, or guaranteed results - only describes what a campaign can
+// include and the next step.
+export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): WinsalotEmailBody {
+  const firstName = firstNameOf(params.contactName);
+  const subject = "Thank you for speaking with Winsalot Corp";
 
-  const lines = [
-    `Hi ${params.contactName},`,
+  const campaignBullets = [
+    "Dedicated outbound prospecting for your business",
+    "Targeted outreach based on your ideal customer profile",
+    "Qualified B2B appointment setting",
+    "Follow-up with interested prospects",
+    "Call activity and campaign tracking",
+    "Appointment tracking",
+    "Call logs and campaign visibility",
+    "Monthly performance reporting",
+    "Ongoing campaign optimization",
+    "Access to your client dashboard to monitor leads, appointments, and campaign progress",
+    "Ongoing support from the Winsalot Corp team",
+  ];
+
+  const introLines = [
+    `Hi ${firstName},`,
     "",
-    `Thank you for taking the time to speak with us today about ${params.businessName}'s goals. It was great learning more about your business during our ${appointmentTypeLabel}.`,
+    "Thank you for taking the time to speak with Winsalot Corp.",
     "",
-    "We'll be in touch shortly with next steps. In the meantime, if any questions come up, just reply to this email.",
+    "As discussed, our goal is to help your business consistently connect with qualified potential customers through targeted B2B outreach and appointment setting.",
+    "",
+    "When you work with Winsalot Corp, your campaign can include:",
+  ];
+
+  const closingLines = [
+    "Our focus is to give you a structured and transparent prospecting system while helping your team spend more time speaking with potential customers.",
+    "",
+    "If you decide to move forward, we will complete your onboarding and set up your campaign based on your target market, services, and ideal customer.",
+  ];
+
+  const ctaLine = params.clientDashboardUrl
+    ? "Go to My Client Dashboard:"
+    : "Just reply to this email and we'll take it from there.";
+
+  const textLines = [
+    ...introLines,
+    ...campaignBullets.map((line) => `• ${line}`),
+    "",
+    ...closingLines,
+    "",
+    params.clientDashboardUrl ? `${ctaLine} ${params.clientDashboardUrl}` : ctaLine,
     "",
     "Best regards,",
     "Winsalot Corp",
@@ -247,15 +318,18 @@ export function buildWinsalotFollowUpEmail(params: ConsultationEmailParams): Win
     "winsalotcorp.com",
   ];
 
-  const bodyHtml = paragraphsHtml([
-    `Hi ${params.contactName},`,
-    "",
-    `Thank you for taking the time to speak with us today about ${params.businessName}'s goals. It was great learning more about your business during our ${appointmentTypeLabel}.`,
-    "",
-    "We'll be in touch shortly with next steps. In the meantime, if any questions come up, just reply to this email.",
-  ]);
+  const ctaHtml = params.clientDashboardUrl
+    ? ctaButtonHtml(params.clientDashboardUrl, "Go to My Client Dashboard")
+    : paragraphsHtml(["Just reply to this email and we'll take it from there."]);
 
-  return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
+  const bodyHtml = `
+    ${paragraphsHtml(introLines)}
+    ${bulletListHtml(campaignBullets)}
+    ${paragraphsHtml(["", ...closingLines])}
+    ${ctaHtml}
+  `;
+
+  return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
 }
 
 export function buildWinsalotReminderEmail(

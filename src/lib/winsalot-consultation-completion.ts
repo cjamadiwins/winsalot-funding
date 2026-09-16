@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getResendClient } from "./resend";
 import { getEmailSender, getEmailReplyTo } from "./email-senders";
-import { buildWinsalotFollowUpEmail } from "./winsalot-consultation-emails";
+import { LEADGEN_PRODUCTION_ORIGIN } from "./client-portal-shared";
+import { buildWinsalotFollowUpEmail, type WinsalotEmailBody } from "./winsalot-consultation-emails";
 import {
   winsalotFollowUpEmailDisplayStatus,
   winsalotFollowUpEmailErrorDetail,
@@ -11,6 +12,61 @@ import {
   type WinsalotFollowUpEmailDisplayStatus,
 } from "./winsalot-consultation-types";
 import type { CrmLeadEmailRow } from "./crm-types";
+
+// Resolves the "Go to My Client Dashboard" link for the follow-up email's
+// CTA - only when this prospect's email matches an existing, `Active`
+// Growth CRM client (crm_clients) that's actually linked to a Lead
+// Generation CRM client with at least one active portal login
+// (leadgen_users, role='client'). Every one of those has to hold, not
+// just an Active crm_clients status: `/client/dashboard` itself is gated
+// by requireLeadgenPortalClient() (src/lib/leadgen-auth.ts), so sending
+// someone a dashboard link they can't actually log into would be worse
+// than not sending one - a prospect who isn't fully provisioned yet
+// always gets the reply-to fallback instead (see buildWinsalotFollowUpEmail).
+// Read-only - never touches auth, permissions, or dashboard behavior.
+//
+// Built from LEADGEN_PRODUCTION_ORIGIN (https://leads.winsalotcorp.com),
+// not this deployment's own getSiteUrl() - the client portal's session
+// cookie (sb-leadgen-auth, src/lib/hosts.ts's authCookieName) is scoped to
+// the Lead Gen CRM's own domain, so a client only ever actually signs in
+// there, exactly like every other client-facing portal link in this
+// codebase (client-portal-emails.ts's invite/reset links use this same
+// origin) - never growth.winsalotcorp.com, even though this Growth CRM
+// email is what triggers the send and /client/dashboard's page code also
+// happens to live in this same repo.
+async function resolveActiveClientDashboardLink(admin: SupabaseClient, email: string): Promise<string | null> {
+  const { data: client } = await admin
+    .from("crm_clients")
+    .select("leadgen_client_id")
+    .ilike("email", email)
+    .eq("status", "Active")
+    .not("leadgen_client_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+
+  const leadgenClientId = client?.leadgen_client_id as string | undefined;
+  if (!leadgenClientId) return null;
+
+  const { data: portalUser } = await admin
+    .from("leadgen_users")
+    .select("id")
+    .eq("client_id", leadgenClientId)
+    .eq("role", "client")
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
+
+  return portalUser ? `${LEADGEN_PRODUCTION_ORIGIN}/client/dashboard` : null;
+}
+
+// Builds the follow-up email's actual content for a given appointment -
+// shared by the real send below and getWinsalotFollowUpEmailPreview, so
+// "preview" can never show something different from what "send" actually
+// sends.
+async function buildFollowUpEmailForAppointment(admin: SupabaseClient, appt: WinsalotAppointmentRow): Promise<WinsalotEmailBody> {
+  const clientDashboardUrl = await resolveActiveClientDashboardLink(admin, appt.email);
+  return buildWinsalotFollowUpEmail({ contactName: appt.contact_name, clientDashboardUrl });
+}
 
 // "Complete Consultation" / "Mark No Show" - available to an admin or the
 // assigned agent from the consultation/appointment management area
@@ -32,28 +88,28 @@ export type WinsalotCompletionResult = {
   followUpEmailStatus?: WinsalotFollowUpEmailDisplayStatus;
 };
 
-// Trigger the one-time consultation follow-up email. Never throws - a
-// send failure is recorded on the appointment row (follow_up_email_status
-// = 'failed') and returned to the caller, but never rolls back the
-// completion itself: the consultation did happen and was marked
-// completed by a real staff action, and that fact must never be lost just
-// because Resend/the network had a bad moment. Failure is retried
-// automatically the next time the send is invoked... except this send is
-// deliberately never retried automatically (per the brief: "trigger...
-// automatically one time only"), so a failed follow-up email is a signal
-// for staff to notice on the appointment record and resend manually as a
-// separate action.
-async function sendWinsalotFollowUpEmail(admin: SupabaseClient, appt: WinsalotAppointmentRow): Promise<{ status: "sent" | "failed"; error?: string }> {
+export type WinsalotFollowUpSendResult = { status: "sent" | "failed"; error?: string };
+
+// Sends the consultation follow-up email and records it - shared by both
+// call sites:
+//  - performWinsalotCompletion below, which only ever calls this once per
+//    appointment (guarded by its own compare-and-swap update), for the
+//    automatic "one time only" send.
+//  - sendManualWinsalotFollowUpEmail, an explicit admin action that can
+//    call this for any appointment in any status ("Send immediately" /
+//    "Resend if necessary" / sending it anyway for a cancelled/no-show
+//    consultation) - never automatic, always a deliberate click.
+// Never throws - a send failure is recorded on the appointment row
+// (follow_up_email_status = 'failed') and returned to the caller, but
+// never rolls back a completion that already happened: the consultation
+// did happen and was marked completed by a real staff action, and that
+// fact must never be lost just because Resend/the network had a bad
+// moment. actorName, when given, credits a manual send/resend in the
+// activity note the same way the manual reminder/resend actions do.
+export async function sendWinsalotFollowUpEmail(admin: SupabaseClient, appt: WinsalotAppointmentRow, actorName?: string): Promise<WinsalotFollowUpSendResult> {
   await admin.from("winsalot_appointments").update({ follow_up_email_status: "sending" }).eq("id", appt.id);
 
-  const email = buildWinsalotFollowUpEmail({
-    contactName: appt.contact_name,
-    businessName: appt.business_name,
-    serviceType: appt.service_type,
-    appointmentType: appt.appointment_type,
-    startUtcIso: appt.appointment_start_at,
-    timezone: appt.prospect_timezone || appt.business_timezone,
-  });
+  const email = await buildFollowUpEmailForAppointment(admin, appt);
 
   try {
     const resend = getResendClient();
@@ -96,7 +152,7 @@ async function sendWinsalotFollowUpEmail(admin: SupabaseClient, appt: WinsalotAp
         opportunity_id: appt.opportunity_id,
         agent_id: appt.assigned_agent_id,
         activity_type: "email",
-        notes: `Consultation follow-up email sent to ${appt.email}.`,
+        notes: actorName ? `Consultation follow-up email sent to ${appt.email} by ${actorName}.` : `Consultation follow-up email sent to ${appt.email}.`,
         occurred_at: sentAt,
       });
     }
@@ -230,6 +286,41 @@ export async function performWinsalotNoShow(appointmentId: string, actor: Winsal
   }
 
   return {};
+}
+
+// ---------------------------------------------------------------------
+// Manual "Send Follow-Up Email" (admin-only, from the consultation/
+// appointment record) - "Send immediately", "Preview before sending",
+// and "Resend if necessary" all go through these two functions. Neither
+// is gated on the appointment's status: the automatic one-time send
+// above only ever fires from a Completed transition, but an admin can
+// deliberately send (or resend) this email for any consultation,
+// including a cancelled or no-show one, exactly per the brief - "unless
+// Admin manually chooses to send it." Authorization (requireCrmAdmin)
+// lives in the Server Action that calls these, not here.
+// ---------------------------------------------------------------------
+
+export type WinsalotFollowUpPreviewResult = { subject: string; text: string; error?: undefined } | { error: string };
+
+// Renders exactly what a send would send, without sending it or touching
+// follow_up_email_status - a plain-text preview (not the HTML) is enough
+// for an admin to sanity-check the content and confirm whether the
+// dashboard button or the reply-to fallback will show.
+export async function getWinsalotFollowUpEmailPreview(appointmentId: string): Promise<WinsalotFollowUpPreviewResult> {
+  const admin = getSupabaseAdmin();
+  const { data: appointment } = await admin.from("winsalot_appointments").select("*").eq("id", appointmentId).maybeSingle();
+  if (!appointment) return { error: "Appointment not found." };
+
+  const email = await buildFollowUpEmailForAppointment(admin, appointment as WinsalotAppointmentRow);
+  return { subject: email.subject, text: email.text };
+}
+
+export async function sendManualWinsalotFollowUpEmail(appointmentId: string, actorName: string): Promise<WinsalotFollowUpSendResult & { error?: string }> {
+  const admin = getSupabaseAdmin();
+  const { data: appointment } = await admin.from("winsalot_appointments").select("*").eq("id", appointmentId).maybeSingle();
+  if (!appointment) return { status: "failed", error: "Appointment not found." };
+
+  return sendWinsalotFollowUpEmail(admin, appointment as WinsalotAppointmentRow, actorName);
 }
 
 export type WinsalotFollowUpStatusEntry = {
