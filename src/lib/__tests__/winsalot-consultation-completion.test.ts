@@ -341,3 +341,45 @@ describe("sendManualWinsalotFollowUpEmail / getWinsalotFollowUpEmailPreview", ()
     expect(getAppointment().status).toBe("completed");
   });
 });
+
+describe("fetchWinsalotFollowUpStatusMap", () => {
+  it("shows Not Sent with no recipient for an appointment that was never sent a follow-up", async () => {
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue({
+      from: (table: string) => {
+        if (table === "crm_lead_emails") return { select: () => ({ in: async () => ({ data: [] }) }) };
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    } as never);
+    const { fetchWinsalotFollowUpStatusMap } = await import("@/lib/winsalot-consultation-completion");
+
+    const result = await fetchWinsalotFollowUpStatusMap([{ id: "appt-1", follow_up_email_status: "not_sent", follow_up_crm_lead_email_id: null }]);
+
+    expect(result["appt-1"]).toEqual({ followUpEmailStatus: "Not Sent", followUpEmailError: null, followUpEmailRecipient: null });
+  });
+
+  it("upgrades Sent to Delivered and reports the recipient once the Resend webhook confirms delivery", async () => {
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValue({
+      from: (table: string) => {
+        if (table === "crm_lead_emails") {
+          return {
+            select: () => ({
+              in: async () => ({
+                data: [{ id: "tracked-email-1", to_email: "jordan@example.com", status: "delivered", bounce_reason: null, failure_reason: null }],
+              }),
+            }),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    } as never);
+    const { fetchWinsalotFollowUpStatusMap } = await import("@/lib/winsalot-consultation-completion");
+
+    const result = await fetchWinsalotFollowUpStatusMap([
+      { id: "appt-1", follow_up_email_status: "sent", follow_up_crm_lead_email_id: "tracked-email-1" },
+    ]);
+
+    expect(result["appt-1"]).toEqual({ followUpEmailStatus: "Delivered", followUpEmailError: null, followUpEmailRecipient: "jordan@example.com" });
+  });
+});

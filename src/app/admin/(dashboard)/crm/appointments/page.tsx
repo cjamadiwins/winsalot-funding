@@ -64,6 +64,7 @@ export default async function AdminAppointmentsPage({
     smsReminder1hError: smsReminderStatusMap[row.id]?.errorDetail1h ?? null,
     followUpEmailStatus: followUpStatusMap[row.id]?.followUpEmailStatus ?? "Not Sent",
     followUpEmailError: followUpStatusMap[row.id]?.followUpEmailError ?? null,
+    followUpEmailRecipient: followUpStatusMap[row.id]?.followUpEmailRecipient ?? null,
   }));
 
   return (

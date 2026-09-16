@@ -124,8 +124,17 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
     resend is a deliberate click, not a second automatic send, so it doesn't conflict with the
     "exactly once" guarantee on the Complete Consultation button itself.
   - The appointment card always shows a **"Consultation Follow-Up:"** line — `Not Sent` before any
-    send, or `Sent` / `Delivered` / `Bounced` / `Failed` with the send date/time once one has gone
-    out — independent of, and never shown inside, the appointment reminder badges above it.
+    send, or `Sent` / `Delivered` / `Bounced` / `Failed` with the send date/time and the actual
+    recipient address (from the tracked `crm_lead_emails.to_email`, not the appointment's possibly
+    since-edited `email` field) once one has gone out — independent of, and never shown inside, the
+    appointment reminder badges above it. `Sent` upgrades to `Delivered` automatically the moment
+    the shared Resend webhook (`/api/webhooks/resend`, unmodified — it already matches any
+    `crm_lead_emails` row by `resend_email_id` regardless of `email_type`) reports the delivery
+    event; a send failure is recorded as `Failed` without ever rolling back the consultation's own
+    `Completed` status. The exact same status/recipient (via `fetchWinsalotFollowUpStatusMap`) is
+    also shown on the linked opportunity's own detail page
+    (`/admin/crm/opportunities/[id]`'s Appointments section), not just on
+    `/admin/crm/appointments` — both read from the one shared function, so they can never disagree.
 - **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
   notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
   prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,

@@ -22,6 +22,7 @@ import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import { WINSALOT_APPOINTMENT_STATUS_LABELS, WINSALOT_APPOINTMENT_STATUS_STYLES, type WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+import type { WinsalotFollowUpStatusEntry } from "@/lib/winsalot-consultation-completion";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
@@ -55,18 +56,6 @@ const inputClasses =
 const buttonClasses =
   "rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60";
 
-// This page reads winsalot_appointments' raw follow_up_email_status column
-// directly (sending/sent/failed) rather than the richer Delivered/Bounced-
-// aware display status from fetchWinsalotFollowUpStatusMap - that needs a
-// crm_lead_emails join this read-only summary doesn't otherwise fetch. The
-// full Sent/Delivered/Failed breakdown, plus Send/Preview/Resend, lives on
-// the consultation/appointment management area (/admin/crm/appointments).
-const FOLLOW_UP_RAW_STATUS_LABELS: Record<"sending" | "sent" | "failed", string> = {
-  sending: "Sending",
-  sent: "Sent",
-  failed: "Failed",
-};
-
 export default function AdminOpportunityDetailClient({
   opportunity,
   activities,
@@ -79,6 +68,7 @@ export default function AdminOpportunityDetailClient({
   dncSuppression = null,
   bookingUrl,
   appointments,
+  followUpStatusByAppointmentId,
   score,
   onBack,
 }: {
@@ -96,6 +86,10 @@ export default function AdminOpportunityDetailClient({
   dncSuppression?: DncSuppressionRow | null;
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
+  // Webhook-aware Consultation Follow-Up status (Not Sent/Sending/Sent/
+  // Delivered/Bounced/Failed + recipient) per appointment id - see
+  // admin-opportunity-detail-data.ts.
+  followUpStatusByAppointmentId: Record<string, WinsalotFollowUpStatusEntry>;
   score: CrmOpportunityScoreRow | null;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
@@ -541,8 +535,11 @@ export default function AdminOpportunityDetailClient({
                   </p>
                 )}
                 <p className="mt-1 text-xs text-slate-500">
-                  Consultation Follow-Up: {appt.follow_up_email_status === "not_sent" ? "Not Sent" : FOLLOW_UP_RAW_STATUS_LABELS[appt.follow_up_email_status]}
+                  Consultation Follow-Up: {followUpStatusByAppointmentId[appt.id]?.followUpEmailStatus ?? "Not Sent"}
                   {appt.follow_up_email_sent_at && appt.follow_up_email_status !== "not_sent" ? ` — ${new Date(appt.follow_up_email_sent_at).toLocaleString()}` : ""}
+                  {followUpStatusByAppointmentId[appt.id]?.followUpEmailRecipient
+                    ? ` · Recipient: ${followUpStatusByAppointmentId[appt.id]!.followUpEmailRecipient}`
+                    : ""}
                 </p>
                 {appt.status === "booked" && (
                   <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-100 pt-2">

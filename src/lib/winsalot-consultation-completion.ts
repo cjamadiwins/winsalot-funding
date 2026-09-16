@@ -344,6 +344,11 @@ export async function sendManualWinsalotFollowUpEmail(appointmentId: string, act
 export type WinsalotFollowUpStatusEntry = {
   followUpEmailStatus: WinsalotFollowUpEmailDisplayStatus;
   followUpEmailError: string | null;
+  // The address the follow-up was actually sent to, from the tracked
+  // crm_lead_emails row itself - not the appointment's current `email`
+  // field, which could have been edited since the send. Null until a send
+  // has actually happened (Not Sent).
+  followUpEmailRecipient: string | null;
 };
 
 // Display status for the admin/agent appointment list - mirrors
@@ -367,6 +372,7 @@ export async function fetchWinsalotFollowUpStatusMap(
     result[appt.id] = {
       followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(appt.follow_up_email_status, linkedEmail),
       followUpEmailError: winsalotFollowUpEmailErrorDetail(linkedEmail),
+      followUpEmailRecipient: linkedEmail?.to_email ?? null,
     };
   }
   return result;

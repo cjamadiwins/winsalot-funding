@@ -50,6 +50,9 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   // "Not Sent" otherwise.
   followUpEmailStatus: WinsalotFollowUpEmailDisplayStatus;
   followUpEmailError: string | null;
+  // The address the follow-up was actually sent to (from the tracked
+  // crm_lead_emails row) - null until a send has happened.
+  followUpEmailRecipient: string | null;
 };
 
 export type WinsalotAppointmentActions = {
@@ -415,6 +418,7 @@ export default function WinsalotAppointmentsListClient({
                 >
                   Consultation Follow-Up: {appt.followUpEmailStatus}
                   {appt.follow_up_email_sent_at && appt.followUpEmailStatus !== "Not Sent" ? ` — ${new Date(appt.follow_up_email_sent_at).toLocaleString()}` : ""}
+                  {appt.followUpEmailRecipient ? ` · Recipient: ${appt.followUpEmailRecipient}` : ""}
                 </p>
                 {completeMessage?.id === appt.id && <p className="mt-1 text-[12.5px] font-medium text-slate-700">{completeMessage.text}</p>}
                 {followUpMessage?.id === appt.id && <p className="mt-1 text-[12.5px] font-medium text-slate-700">{followUpMessage.text}</p>}
