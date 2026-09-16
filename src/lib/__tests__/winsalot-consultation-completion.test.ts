@@ -60,12 +60,7 @@ const baseAppointment: WinsalotAppointmentRow = {
 // that's still true) is what "one time only" ultimately relies on, so this
 // fake models that instead of just recording calls.
 //
-// activeClient, when set, makes resolveActiveClientDashboardLink resolve a
-// real dashboard link for the appointment's email (an Active crm_clients
-// row linked to a leadgen_client_id with one active leadgen_users portal
-// login) - omitted/undefined means "no matching client", the default and
-// far more common case in these tests.
-function makeFakeAdmin(initial: WinsalotAppointmentRow, activeClient?: boolean) {
+function makeFakeAdmin(initial: WinsalotAppointmentRow) {
   let appt: WinsalotAppointmentRow = { ...initial };
   const crmActivityInserts: Record<string, unknown>[] = [];
   const crmLeadEmailInserts: Record<string, unknown>[] = [];
@@ -122,36 +117,6 @@ function makeFakeAdmin(initial: WinsalotAppointmentRow, activeClient?: boolean) 
           },
         };
       }
-      if (table === "crm_clients") {
-        return {
-          select: () => ({
-            ilike: () => ({
-              eq: () => ({
-                not: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => ({ data: activeClient ? { leadgen_client_id: "leadgen-client-1" } : null }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "leadgen_users") {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                eq: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => ({ data: activeClient ? { id: "portal-user-1" } : null }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
       throw new Error(`Unexpected table: ${table}`);
     },
   };
@@ -190,7 +155,16 @@ describe("performWinsalotCompletion", () => {
     expect(appt.follow_up_email_status).toBe("sent");
 
     expect(emailsSendMock).toHaveBeenCalledTimes(1);
-    expect(emailsSendMock.mock.calls[0][0].to).toBe(baseAppointment.email);
+    const sentEmail = emailsSendMock.mock.calls[0][0];
+    expect(sentEmail.to).toBe(baseAppointment.email);
+    // The Reply-To address stays active alongside the new CTA button, and
+    // the CTA always links to the public /continue-with-winsalot page -
+    // never a protected, authenticated page.
+    expect(sentEmail.replyTo).toBeTruthy();
+    expect(sentEmail.text).toContain("Continue With Winsalot Corp: ");
+    expect(sentEmail.text).toContain("/continue-with-winsalot");
+    expect(sentEmail.text).not.toContain("/client/dashboard");
+    expect(sentEmail.html).toContain("/continue-with-winsalot");
     expect(crmLeadEmailInserts).toHaveLength(1);
     expect(crmLeadEmailInserts[0].email_type).toBe("consultation_follow_up");
     expect(crmActivityInserts.some((a) => a.activity_type === "consultation_completed")).toBe(true);
@@ -266,8 +240,8 @@ describe("consultation follow-up email content", () => {
     emailsSendMock.mockClear();
   });
 
-  it("includes the client dashboard button for a recipient who is already an active, portal-enabled client", async () => {
-    const { admin } = makeFakeAdmin(baseAppointment, true);
+  it("always includes the public Continue With Winsalot Corp CTA, never a protected client dashboard link", async () => {
+    const { admin } = makeFakeAdmin(baseAppointment);
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
     vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
     const { getWinsalotFollowUpEmailPreview } = await import("@/lib/winsalot-consultation-completion");
@@ -275,22 +249,14 @@ describe("consultation follow-up email content", () => {
     const preview = await getWinsalotFollowUpEmailPreview("appt-1");
 
     expect(preview.error).toBeUndefined();
-    expect("text" in preview && preview.text).toContain("Go to My Client Dashboard");
-    expect("text" in preview && preview.text).toContain("/client/dashboard");
-    expect(emailsSendMock).not.toHaveBeenCalled();
-  });
-
-  it("falls back to a reply-to prompt, with no dashboard link, for a prospect who isn't an active client yet", async () => {
-    const { admin } = makeFakeAdmin(baseAppointment, false);
-    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
-    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
-    const { getWinsalotFollowUpEmailPreview } = await import("@/lib/winsalot-consultation-completion");
-
-    const preview = await getWinsalotFollowUpEmailPreview("appt-1");
-
+    expect("text" in preview && preview.text).toContain("Continue With Winsalot Corp: ");
+    expect("text" in preview && preview.text).toContain("/continue-with-winsalot");
     expect("text" in preview && preview.text).not.toContain("/client/dashboard");
-    expect("text" in preview && preview.text).toContain("reply to this email");
+    // The Reply-To address stays active regardless of the CTA - a prospect
+    // can always reply directly if they prefer.
+    expect("text" in preview && preview.text).toContain("reply directly to this email");
     expect("subject" in preview && preview.subject).toBe("Thank you for speaking with Winsalot Corp");
+    expect(emailsSendMock).not.toHaveBeenCalled();
   });
 });
 

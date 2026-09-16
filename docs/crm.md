@@ -95,24 +95,25 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   campaign can include (outbound prospecting, targeted outreach, qualified B2B appointment
   setting, call/appointment/campaign tracking, monthly reporting, ongoing optimization, dashboard
   access, ongoing support) — deliberately never promising closed sales, specific revenue, or
-  guaranteed results. Its call-to-action is resolved fresh on every send:
-  - **Already an active, portal-enabled client** (`resolveActiveClientDashboardLink`: the
-    recipient's email matches an `Active` `crm_clients` row that's linked to a Lead Generation CRM
-    client with at least one active `leadgen_users` portal login — i.e., they could actually sign
-    in) → a **"Go to My Client Dashboard"** button linking `https://leads.winsalotcorp.com/client/dashboard`
-    (`LEADGEN_PRODUCTION_ORIGIN`, the same origin every other client-portal email link in this
-    codebase already uses — the portal's session cookie is scoped to that domain, not this Growth
-    CRM's own `growth.winsalotcorp.com`, even though `/client/dashboard`'s page code happens to
-    live in this same repo).
-  - **Everyone else** (a prospect who hasn't become a client yet) → no link at all, just a plain
-    "reply to this email and we'll take it from there" line. There's no ready-made public "next
-    step" page a token can be minted for at consultation-completion time (the agreement-sign flow
-    requires a `crm_client_agreements` row that doesn't exist yet), so this never risks sending a
-    prospect into a protected page they can't use or a half-built flow.
+  guaranteed results. Its call-to-action is the same for every recipient, client or prospect
+  alike: a **"Continue With Winsalot Corp"** button linking to the public, unauthenticated
+  `/continue-with-winsalot` page (`getSiteUrl()` + `/continue-with-winsalot` —
+  `buildFollowUpEmailForAppointment` in `src/lib/winsalot-consultation-completion.ts`), preceded by
+  "If you'd like to move forward with Winsalot Corp, click the button below to continue with the
+  next step." and followed by "You can also reply directly to this email if you have any
+  questions." — the email's `Reply-To` header (`getEmailReplyTo()`) is unchanged, so a prospect who
+  prefers to just reply can still do that. This deliberately never links to the protected client
+  dashboard or any other authenticated page — even for a recipient who's already an active,
+  portal-enabled client — since `/continue-with-winsalot` itself is always safe to open without a
+  session (see the next bullet). An earlier version of this CTA resolved a `crm_clients`/
+  `leadgen_users` lookup to conditionally show a `https://leads.winsalotcorp.com/client/dashboard`
+  link for already-active clients instead; that lookup (`resolveActiveClientDashboardLink`) was
+  removed once `/continue-with-winsalot` existed as a safe universal destination.
   - Same visual language (plain personal copy, no promotional banner/button graphics beyond the
-    one CTA) and mobile-friendly layout (stacked `<p>` bullets, no `<ul>`, max-width table shell)
-    as every other email in this file — it never touches the reminder emails, booking
-    confirmation, or any other template.
+    one CTA) and mobile-friendly layout (stacked `<p>` bullets, no `<ul>`, max-width table shell,
+    a plain inline text link rather than a button graphic — renders correctly in every mail client
+    on both desktop and mobile) as every other email in this file — it never touches the reminder
+    emails, booking confirmation, or any other template.
   - **Admin-only manual actions** on the appointment card, independent of the automatic one-time
     trigger above and available regardless of the consultation's status (including cancelled/no-
     show, since sending there is always the admin's explicit choice): **Preview** renders the
@@ -160,10 +161,10 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   `admin_notified_at` so a retried submission can never send a second round of notifications. The
   prospect then sees a confirmation message ("Thank you. Your request has been received...") —
   never the client dashboard or any other protected page. Rate-limited by IP
-  (`src/lib/rate-limit.ts`) and validated server-side like every other public Winsalot form. Built
-  to be link-ready for a future consultation follow-up email CTA, but **not yet wired to
-  `buildWinsalotFollowUpEmail`'s CTA logic** — that email still resolves its own CTA exactly as
-  described above until a separate change connects the two.
+  (`src/lib/rate-limit.ts`) and validated server-side like every other public Winsalot form. Now
+  the destination of the consultation follow-up email's own **"Continue With Winsalot Corp"** CTA
+  (see the follow-up email bullet above) — the same page, reachable both from that email and by a
+  prospect navigating there directly.
 - **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
   notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
   prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,
