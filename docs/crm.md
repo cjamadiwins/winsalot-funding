@@ -135,6 +135,35 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
     also shown on the linked opportunity's own detail page
     (`/admin/crm/opportunities/[id]`'s Appointments section), not just on
     `/admin/crm/appointments` — both read from the one shared function, so they can never disagree.
+- **"Continue With Winsalot Corp" next-step page** (migration
+  `0161_winsalot_continue_requests.sql`, `src/lib/winsalot-continue-request.ts`): a public,
+  unauthenticated page at `/continue-with-winsalot`
+  (`https://growth.winsalotcorp.com/continue-with-winsalot`) for a prospect who's already had a
+  consultation and wants to move forward. States what happens next (confirm business info,
+  confirm the service/campaign package, target market, review the service agreement, payment/
+  deposit, dashboard access) and collects contact name, business name, email, phone, service
+  interest, and optional notes behind a **"Continue With Winsalot Corp"** button. There is
+  deliberately no self-service path past this — `crm_clients`/`crm_client_agreements` creation is
+  still only ever an admin's own deliberate action (migration `0097`/`0145`; see the follow-up
+  email's own CTA note above for why), so the page never creates a client or agreement record and
+  never exposes any protected client page to an unauthenticated visitor. Instead it's a
+  **collect + notify + confirm** fallback: `performWinsalotContinueRequest` resolves/creates the
+  matching prospect record (a separate, intentionally-duplicated reimplementation of
+  `performWinsalotBooking`'s own "match an open opportunity by email, else the newest closed one,
+  else create a new `New Prospect` opportunity" logic — kept separate so this page can never
+  regress the production-critical booking path), saves the request to
+  `winsalot_continue_requests`, logs a `continue_request_submitted` entry on the prospect's
+  Activity Timeline when a prospect record exists, and notifies admins both in-app (via the
+  existing generic `crm_notifications`/`notifyAdmins`, already rendered by every admin's
+  `<NotificationBell>` — no new UI needed) and by email
+  (`buildWinsalotContinueRequestNotification` to `NOTIFICATION_EMAIL`) — claimed once via
+  `admin_notified_at` so a retried submission can never send a second round of notifications. The
+  prospect then sees a confirmation message ("Thank you. Your request has been received...") —
+  never the client dashboard or any other protected page. Rate-limited by IP
+  (`src/lib/rate-limit.ts`) and validated server-side like every other public Winsalot form. Built
+  to be link-ready for a future consultation follow-up email CTA, but **not yet wired to
+  `buildWinsalotFollowUpEmail`'s CTA logic** — that email still resolves its own CTA exactly as
+  described above until a separate change connects the two.
 - **Emails**: booking confirmation to the prospect, the assigned agent, and the Winsalot admin
   notification address (`NOTIFICATION_EMAIL`); automatic 24-hour and 1-hour reminders to the
   prospect; reschedule and cancellation notices. Reschedule/cancel links use secure, expiring,
