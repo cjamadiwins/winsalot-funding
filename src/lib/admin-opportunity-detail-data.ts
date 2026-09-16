@@ -8,6 +8,7 @@ import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow, CrmUserRow, Lat
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
+import { fetchWinsalotFollowUpStatusMap, type WinsalotFollowUpStatusEntry } from "@/lib/winsalot-consultation-completion";
 
 export type AdminOpportunityDetailData = {
   opportunity: CrmOpportunityRow;
@@ -22,6 +23,13 @@ export type AdminOpportunityDetailData = {
   dncSuppression: DncSuppressionRow | null;
   bookingUrl: string;
   appointments: WinsalotAppointmentRow[];
+  // Webhook-aware Consultation Follow-Up status (Not Sent/Sending/Sent/
+  // Delivered/Bounced/Failed) per appointment id - same derivation
+  // fetchWinsalotFollowUpStatusMap already provides for
+  // /admin/crm/appointments, reused here so this page's Appointments
+  // section shows the identical status instead of the raw, webhook-unaware
+  // column value.
+  followUpStatusByAppointmentId: Record<string, WinsalotFollowUpStatusEntry>;
   score: CrmOpportunityScoreRow | null;
 };
 
@@ -80,6 +88,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
 
   const suppression = opportunity.email ? await getEmailSuppression(opportunity.email) : null;
   const dncSuppression = await checkDncSuppression({ phone: opportunity.phone, email: opportunity.email });
+  const followUpStatusByAppointmentId = await fetchWinsalotFollowUpStatusMap((appointments ?? []) as WinsalotAppointmentRow[]);
 
   return {
     opportunity: opportunity as CrmOpportunityRow,
@@ -93,6 +102,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     dncSuppression,
     bookingUrl: getWinsalotBookingUrlBase(),
     appointments: (appointments ?? []) as WinsalotAppointmentRow[],
+    followUpStatusByAppointmentId,
     score: score as CrmOpportunityScoreRow | null,
   };
 }

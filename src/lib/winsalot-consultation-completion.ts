@@ -86,6 +86,11 @@ export type WinsalotCompletionResult = {
   // and never a reason to resend the follow-up email.
   outcome?: "completed" | "already_completed";
   followUpEmailStatus?: WinsalotFollowUpEmailDisplayStatus;
+  // The linked opportunity, when there is one - callers use this to
+  // revalidate that opportunity's own detail page (where the same
+  // appointment is also shown, e.g. /admin/crm/opportunities/[id]'s
+  // Appointments section) alongside the appointment management pages.
+  opportunityId?: string | null;
 };
 
 export type WinsalotFollowUpSendResult = { status: "sent" | "failed"; error?: string };
@@ -188,7 +193,11 @@ export async function performWinsalotCompletion(appointmentId: string, actor: Wi
   const currentAppt = current as WinsalotAppointmentRow;
 
   if (currentAppt.status === "completed") {
-    return { outcome: "already_completed", followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(currentAppt.follow_up_email_status, null) };
+    return {
+      outcome: "already_completed",
+      followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(currentAppt.follow_up_email_status, null),
+      opportunityId: currentAppt.opportunity_id,
+    };
   }
   if (currentAppt.status === "cancelled") return { error: "This consultation was cancelled and cannot be marked completed." };
   if (currentAppt.status === "no_show") return { error: "This consultation was marked No Show and cannot be marked completed." };
@@ -216,9 +225,17 @@ export async function performWinsalotCompletion(appointmentId: string, actor: Wi
   if (!updated) {
     // Raced with another completion (or a cancellation) between the read
     // above and this write.
-    const { data: recheck } = await admin.from("winsalot_appointments").select("status, follow_up_email_status").eq("id", appointmentId).maybeSingle();
+    const { data: recheck } = await admin
+      .from("winsalot_appointments")
+      .select("status, follow_up_email_status, opportunity_id")
+      .eq("id", appointmentId)
+      .maybeSingle();
     if (recheck?.status === "completed") {
-      return { outcome: "already_completed", followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(recheck.follow_up_email_status, null) };
+      return {
+        outcome: "already_completed",
+        followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(recheck.follow_up_email_status, null),
+        opportunityId: recheck.opportunity_id as string | null,
+      };
     }
     return { error: "This consultation is no longer in a state that can be marked completed." };
   }
@@ -240,10 +257,11 @@ export async function performWinsalotCompletion(appointmentId: string, actor: Wi
     outcome: "completed",
     followUpEmailStatus: followUp.status === "sent" ? "Sent" : "Failed",
     error: followUp.status === "failed" ? `Consultation marked completed, but the follow-up email failed to send: ${followUp.error}` : undefined,
+    opportunityId: appt.opportunity_id,
   };
 }
 
-export type WinsalotNoShowResult = { error?: string };
+export type WinsalotNoShowResult = { error?: string; opportunityId?: string | null };
 
 // "Cancelled and No-Show consultations should not trigger the automatic
 // [follow-up] email" - this action never calls sendWinsalotFollowUpEmail.
@@ -255,7 +273,7 @@ export async function performWinsalotNoShow(appointmentId: string, actor: Winsal
 
   if (appt.status === "completed") return { error: "This consultation was already marked completed." };
   if (appt.status === "cancelled") return { error: "This consultation was already cancelled." };
-  if (appt.status === "no_show") return {};
+  if (appt.status === "no_show") return { opportunityId: appt.opportunity_id };
 
   const nowIso = new Date().toISOString();
   const { error: updateError } = await admin
@@ -285,7 +303,7 @@ export async function performWinsalotNoShow(appointmentId: string, actor: Winsal
     });
   }
 
-  return {};
+  return { opportunityId: appt.opportunity_id };
 }
 
 // ---------------------------------------------------------------------
@@ -326,6 +344,11 @@ export async function sendManualWinsalotFollowUpEmail(appointmentId: string, act
 export type WinsalotFollowUpStatusEntry = {
   followUpEmailStatus: WinsalotFollowUpEmailDisplayStatus;
   followUpEmailError: string | null;
+  // The address the follow-up was actually sent to, from the tracked
+  // crm_lead_emails row itself - not the appointment's current `email`
+  // field, which could have been edited since the send. Null until a send
+  // has actually happened (Not Sent).
+  followUpEmailRecipient: string | null;
 };
 
 // Display status for the admin/agent appointment list - mirrors
@@ -349,6 +372,7 @@ export async function fetchWinsalotFollowUpStatusMap(
     result[appt.id] = {
       followUpEmailStatus: winsalotFollowUpEmailDisplayStatus(appt.follow_up_email_status, linkedEmail),
       followUpEmailError: winsalotFollowUpEmailErrorDetail(linkedEmail),
+      followUpEmailRecipient: linkedEmail?.to_email ?? null,
     };
   }
   return result;
