@@ -23,7 +23,7 @@ import {
   PhoneCall,
   Target,
 } from "lucide-react";
-import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
+import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
@@ -95,6 +95,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
               notifications={(notifications ?? []) as LeadgenNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
+              clearAllAction={clearAllNotificationsAction}
             />
           </>
         }

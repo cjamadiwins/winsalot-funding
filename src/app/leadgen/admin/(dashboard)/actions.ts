@@ -387,6 +387,15 @@ export async function markAllNotificationsReadAction() {
   revalidatePath("/leadgen/admin", "layout");
 }
 
+// Deletes only this admin's Lead Generation notification rows. It never
+// touches the prospect, appointment, client, call-log, or other linked row.
+export async function clearAllNotificationsAction() {
+  const leadgenUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+  await supabase.from("leadgen_notifications").delete().eq("user_id", leadgenUser.id);
+  revalidatePath("/leadgen/admin", "layout");
+}
+
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
   return value ? value : null;

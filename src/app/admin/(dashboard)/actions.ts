@@ -34,6 +34,15 @@ export async function markAllNotificationsReadAction() {
   revalidatePath("/admin", "layout");
 }
 
+// Deletes only this admin's notification rows. The linked CRM records are
+// stored in separate tables and are never touched by this action.
+export async function clearAllNotificationsAction() {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  await supabase.from("crm_notifications").delete().eq("user_id", crmUser.id);
+  revalidatePath("/admin", "layout");
+}
+
 export async function signOutAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();

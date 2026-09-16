@@ -39,6 +39,15 @@ export async function markAllNotificationsReadAction() {
   revalidatePath("/agent", "layout");
 }
 
+// Deletes only this agent's notification rows; no linked CRM record is
+// deleted or changed.
+export async function clearAllNotificationsAction() {
+  const crmUser = await requireCrmUser();
+  const supabase = await createSupabaseServerClient();
+  await supabase.from("crm_notifications").delete().eq("user_id", crmUser.id);
+  revalidatePath("/agent", "layout");
+}
+
 // Daily Opportunity Finder queue action. Authentication is rechecked here
 // and the session client keeps RLS in force, so an agent cannot mark another
 // agent's score row handled even if they submit a different id directly.

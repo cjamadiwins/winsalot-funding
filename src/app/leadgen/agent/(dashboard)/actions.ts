@@ -107,6 +107,15 @@ export async function markAllNotificationsReadAction() {
   revalidatePath("/leadgen/agent", "layout");
 }
 
+// Deletes only this agent's Lead Generation notification rows. Linked CRM
+// data remains unchanged.
+export async function clearAllNotificationsAction() {
+  const leadgenUser = await requireLeadgenAgent();
+  const supabase = await createSupabaseServerClient();
+  await supabase.from("leadgen_notifications").delete().eq("user_id", leadgenUser.id);
+  revalidatePath("/leadgen/agent", "layout");
+}
+
 // Uses the authenticated Lead CRM client and its existing score-table RLS;
 // only a score attached to this agent's assigned lead can be updated.
 export async function markLeadgenOpportunityHandledTodayAction(scoreId: string): Promise<{ error?: string }> {

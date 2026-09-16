@@ -31,14 +31,28 @@ export default function NotificationBell({
   notifications,
   markReadAction,
   markAllReadAction,
+  clearAllAction,
 }: {
   notifications: NotificationLike[];
   markReadAction: (id: string) => Promise<void>;
   markAllReadAction: () => Promise<void>;
+  clearAllAction: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  function handleClearAll() {
+    const confirmed = window.confirm(
+      "Clear all notifications? This will remove the notifications from your panel but will not delete any CRM records."
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      await clearAllAction();
+      setOpen(false);
+    });
+  }
 
   return (
     <div className="relative">
@@ -60,18 +74,26 @@ export default function NotificationBell({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-[var(--crm-surface)] shadow-lg">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
               <span className="text-sm font-semibold text-slate-900">Notifications</span>
-              {unreadCount > 0 && (
+              <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  disabled={isPending}
+                  disabled={isPending || unreadCount === 0}
                   onClick={() => startTransition(() => markAllReadAction())}
-                  className="text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-60"
+                  className="text-xs font-medium text-sky-600 hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-400"
                 >
-                  Mark all read
+                  Mark all as read
                 </button>
-              )}
+                <button
+                  type="button"
+                  disabled={isPending || notifications.length === 0}
+                  onClick={handleClearAll}
+                  className="text-xs font-medium text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
 
             <div className="max-h-96 overflow-y-auto">

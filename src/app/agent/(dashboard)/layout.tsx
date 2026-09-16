@@ -26,6 +26,7 @@ import {
   agentSignOutAction,
   markNotificationReadAction,
   markAllNotificationsReadAction,
+  clearAllNotificationsAction,
 } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
@@ -92,6 +93,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
               notifications={(notifications ?? []) as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
+              clearAllAction={clearAllNotificationsAction}
             />
           </>
         }

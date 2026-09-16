@@ -31,7 +31,7 @@ import {
   Heart,
   Landmark,
 } from "lucide-react";
-import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction } from "./actions";
+import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
@@ -136,6 +136,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               notifications={(notifications ?? []) as CrmNotificationRow[]}
               markReadAction={markNotificationReadAction}
               markAllReadAction={markAllNotificationsReadAction}
+              clearAllAction={clearAllNotificationsAction}
             />
           </>
         }
