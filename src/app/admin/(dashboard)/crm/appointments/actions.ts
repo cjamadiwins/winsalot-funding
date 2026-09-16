@@ -62,6 +62,10 @@ export async function completeAppointmentAction(appointmentId: string) {
   const result = await performWinsalotCompletion(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
+  // The same appointment is also shown (read-only) on its linked
+  // opportunity's own detail page - without this, completing it from
+  // there wouldn't reflect the new status until an unrelated navigation.
+  if (result.opportunityId) revalidatePath(`/admin/crm/opportunities/${result.opportunityId}`);
   return result;
 }
 
@@ -70,6 +74,7 @@ export async function markNoShowAction(appointmentId: string) {
   const result = await performWinsalotNoShow(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/admin/crm/appointments");
   revalidatePath("/agent/appointments");
+  if (result.opportunityId) revalidatePath(`/admin/crm/opportunities/${result.opportunityId}`);
   return result;
 }
 

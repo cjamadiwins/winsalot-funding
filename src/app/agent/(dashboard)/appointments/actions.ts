@@ -78,6 +78,10 @@ export async function completeAppointmentAction(appointmentId: string) {
   const result = await performWinsalotCompletion(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/agent/appointments");
   revalidatePath("/admin/crm/appointments");
+  if (result.opportunityId) {
+    revalidatePath(`/admin/crm/opportunities/${result.opportunityId}`);
+    revalidatePath(`/agent/opportunities/${result.opportunityId}`);
+  }
   return result;
 }
 
@@ -89,5 +93,9 @@ export async function markNoShowAction(appointmentId: string) {
   const result = await performWinsalotNoShow(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/agent/appointments");
   revalidatePath("/admin/crm/appointments");
+  if (result.opportunityId) {
+    revalidatePath(`/admin/crm/opportunities/${result.opportunityId}`);
+    revalidatePath(`/agent/opportunities/${result.opportunityId}`);
+  }
   return result;
 }

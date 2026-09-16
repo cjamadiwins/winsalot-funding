@@ -77,7 +77,18 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   email. Both actions, like Reschedule/Cancel, are only offered while an appointment is still
   `Scheduled` (`booked`) — a cancelled, completed, or no-show consultation can't be re-completed,
   re-shown-no-show, rescheduled, or cancelled again. Neither action is available on the Lead
-  Generation CRM.
+  Generation CRM. **Also directly on the linked opportunity's own detail page**
+  (`/admin/crm/opportunities/[id]`'s read-only Appointments section) — not only on the dedicated
+  `/admin/crm/appointments` management page — since that's where a consultation is just as often
+  actually seen while working a prospect. Both call the exact same `completeAppointmentAction`/
+  `markNoShowAction` Server Actions (imported directly from
+  `crm/appointments/actions.ts` into `AdminOpportunityDetailClient.tsx`), which now also
+  revalidate the opportunity's own path (`performWinsalotCompletion`/`performWinsalotNoShow`
+  return the linked `opportunityId` for exactly this) so the status updates immediately wherever
+  it's completed from — never a second, duplicate implementation of the completion logic. This is
+  deliberately separate from, and never touches, the unrelated **Scheduled Callbacks** "Mark
+  Completed" button on the same page (`crm_followups`/`completeFollowUpAction` — a Follow-Up
+  Calendar callback reminder, not a consultation).
 - **Consultation Follow-Up Email content and manual Send/Preview/Resend** (same migration and
   module as above; `buildWinsalotFollowUpEmail` in `src/lib/winsalot-consultation-emails.ts`):
   subject **"Thank you for speaking with Winsalot Corp"**, describing what a Winsalot Corp

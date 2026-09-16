@@ -177,6 +177,11 @@ describe("performWinsalotCompletion", () => {
     expect(result.error).toBeUndefined();
     expect(result.outcome).toBe("completed");
     expect(result.followUpEmailStatus).toBe("Sent");
+    // Lets a caller revalidate the linked opportunity's own detail page
+    // (e.g. /admin/crm/opportunities/[id]'s Appointments section, which
+    // shows this same appointment) alongside the appointment management
+    // pages - see completeAppointmentAction.
+    expect(result.opportunityId).toBe("opportunity-1");
 
     const appt = getAppointment();
     expect(appt.status).toBe("completed");
@@ -203,6 +208,7 @@ describe("performWinsalotCompletion", () => {
     expect(first.outcome).toBe("completed");
     expect(second.outcome).toBe("already_completed");
     expect(second.error).toBeUndefined();
+    expect(second.opportunityId).toBe("opportunity-1");
     expect(emailsSendMock).toHaveBeenCalledTimes(1);
     expect(getAppointment().status).toBe("completed");
   });
@@ -246,6 +252,7 @@ describe("performWinsalotNoShow", () => {
     const result = await performWinsalotNoShow("appt-1", { userId: "user-1", name: "Taylor Admin" });
 
     expect(result.error).toBeUndefined();
+    expect(result.opportunityId).toBe("opportunity-1");
     const appt = getAppointment();
     expect(appt.status).toBe("no_show");
     expect(appt.no_show_by_name).toBe("Taylor Admin");

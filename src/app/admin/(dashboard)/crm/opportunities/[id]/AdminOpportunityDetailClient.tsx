@@ -22,18 +22,6 @@ import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import { WINSALOT_APPOINTMENT_STATUS_LABELS, WINSALOT_APPOINTMENT_STATUS_STYLES, type WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
-
-// This page reads winsalot_appointments' raw follow_up_email_status column
-// directly (sending/sent/failed) rather than the richer Delivered/Bounced-
-// aware display status from fetchWinsalotFollowUpStatusMap - that needs a
-// crm_lead_emails join this read-only summary doesn't otherwise fetch. The
-// full Sent/Delivered/Failed breakdown, plus Send/Preview/Resend, lives on
-// the consultation/appointment management area (/admin/crm/appointments).
-const FOLLOW_UP_RAW_STATUS_LABELS: Record<"sending" | "sent" | "failed", string> = {
-  sending: "Sending",
-  sent: "Sent",
-  failed: "Failed",
-};
 import EmailStatusPanel from "@/components/EmailStatusPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
@@ -56,11 +44,28 @@ import {
   rescheduleFollowUpAction,
   scheduleFollowUpAction,
 } from "../../followup-actions";
+// "Complete Consultation" / "Mark No Show" - the same actions
+// /admin/crm/appointments uses, surfaced directly on this page's own
+// Appointments section too, so completing a consultation never requires
+// navigating to a separate management page first.
+import { completeAppointmentAction, markNoShowAction } from "../../appointments/actions";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 const buttonClasses =
   "rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60";
+
+// This page reads winsalot_appointments' raw follow_up_email_status column
+// directly (sending/sent/failed) rather than the richer Delivered/Bounced-
+// aware display status from fetchWinsalotFollowUpStatusMap - that needs a
+// crm_lead_emails join this read-only summary doesn't otherwise fetch. The
+// full Sent/Delivered/Failed breakdown, plus Send/Preview/Resend, lives on
+// the consultation/appointment management area (/admin/crm/appointments).
+const FOLLOW_UP_RAW_STATUS_LABELS: Record<"sending" | "sent" | "failed", string> = {
+  sending: "Sending",
+  sent: "Sent",
+  failed: "Failed",
+};
 
 export default function AdminOpportunityDetailClient({
   opportunity,
@@ -109,6 +114,9 @@ export default function AdminOpportunityDetailClient({
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  // "Complete Consultation" / "Mark No Show" result message, tracked per
+  // appointment id (there can be more than one appointment on this page).
+  const [appointmentMessage, setAppointmentMessage] = useState<{ id: string; text: string } | null>(null);
 
   function runAction(fn: () => Promise<unknown>) {
     setError(null);
@@ -127,6 +135,32 @@ export default function AdminOpportunityDetailClient({
         unstable_rethrow(err);
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
+    });
+  }
+
+  // "Complete Consultation" - same performWinsalotCompletion/
+  // completeAppointmentAction the appointment management area
+  // (/admin/crm/appointments) uses; the "only ever once" guarantee lives
+  // in that shared, guarded database update, not here. A single confirm
+  // dialog (this sends an email and can't be undone) is enough friction
+  // for an accidental click.
+  function handleCompleteAppointment(appt: WinsalotAppointmentRow) {
+    if (!confirm(`Mark this consultation as completed? This sends a one-time follow-up email to ${appt.email}.`)) return;
+    setAppointmentMessage(null);
+    startTransition(async () => {
+      const result = await completeAppointmentAction(appt.id);
+      if (result.error) setAppointmentMessage({ id: appt.id, text: result.error });
+      else if (result.outcome === "already_completed") setAppointmentMessage({ id: appt.id, text: "This consultation was already marked completed." });
+      else if (result.followUpEmailStatus) setAppointmentMessage({ id: appt.id, text: `Marked Completed. Follow-up email: ${result.followUpEmailStatus}.` });
+    });
+  }
+
+  function handleMarkAppointmentNoShow(appt: WinsalotAppointmentRow) {
+    if (!confirm("Mark this consultation as No Show? No follow-up email is sent for a no-show.")) return;
+    setAppointmentMessage(null);
+    startTransition(async () => {
+      const result = await markNoShowAction(appt.id);
+      if (result.error) setAppointmentMessage({ id: appt.id, text: result.error });
     });
   }
 
@@ -501,10 +535,39 @@ export default function AdminOpportunityDetailClient({
                     Completed On {appt.completed_at ? new Date(appt.completed_at).toLocaleString() : "—"} · Completed By {appt.completed_by_name || "—"}
                   </p>
                 )}
+                {appt.status === "no_show" && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Marked No Show on {appt.no_show_at ? new Date(appt.no_show_at).toLocaleString() : "—"} by {appt.no_show_by_name || "—"}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-slate-500">
                   Consultation Follow-Up: {appt.follow_up_email_status === "not_sent" ? "Not Sent" : FOLLOW_UP_RAW_STATUS_LABELS[appt.follow_up_email_status]}
                   {appt.follow_up_email_sent_at && appt.follow_up_email_status !== "not_sent" ? ` — ${new Date(appt.follow_up_email_sent_at).toLocaleString()}` : ""}
                 </p>
+                {appt.status === "booked" && (
+                  <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-100 pt-2">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleCompleteAppointment(appt)}
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Complete Consultation
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleMarkAppointmentNoShow(appt)}
+                      className="text-xs font-semibold text-amber-700 hover:text-amber-800"
+                    >
+                      Mark No Show
+                    </button>
+                    <Link href="/admin/crm/appointments" className="text-xs font-semibold text-sky-600 hover:text-sky-700">
+                      Reschedule / Cancel / More…
+                    </Link>
+                  </div>
+                )}
+                {appointmentMessage?.id === appt.id && <p className="mt-1.5 text-xs font-medium text-slate-700">{appointmentMessage.text}</p>}
               </li>
             ))}
           </ul>
