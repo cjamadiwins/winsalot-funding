@@ -188,7 +188,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Good afternoon, Winsalot Corp.
+            Good Afternoon, Winsalot Corp.
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
