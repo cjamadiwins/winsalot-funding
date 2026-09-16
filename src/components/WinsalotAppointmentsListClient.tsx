@@ -8,11 +8,14 @@ import {
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_LABEL,
   WINSALOT_APPOINTMENT_INCENTIVE_PENDING_STYLE,
   WINSALOT_APPOINTMENT_INCENTIVE_STATUS_STYLES,
+  WINSALOT_APPOINTMENT_STATUS_LABELS,
+  WINSALOT_APPOINTMENT_STATUS_STYLES,
   WINSALOT_APPOINTMENT_TYPES,
   isWinsalotAppointmentCountable,
   type WinsalotAppointmentIncentiveStatus,
   type WinsalotAppointmentRow,
   type WinsalotAppointmentType,
+  type WinsalotFollowUpEmailDisplayStatus,
   type WinsalotReminderDisplayStatus,
 } from "@/lib/winsalot-consultation-types";
 import WinsalotSlotPicker from "./WinsalotSlotPicker";
@@ -40,6 +43,11 @@ export type WinsalotAppointmentListRow = WinsalotAppointmentRow & {
   smsReminder1h: string;
   smsReminder24hError: string | null;
   smsReminder1hError: string | null;
+  // "Follow-Up Email: Sent / Delivered / Failed" - only ever set once
+  // "Complete Consultation" has actually been clicked (see
+  // src/lib/winsalot-consultation-completion.ts); "Not Sent" otherwise.
+  followUpEmailStatus: WinsalotFollowUpEmailDisplayStatus;
+  followUpEmailError: string | null;
 };
 
 export type WinsalotAppointmentActions = {
@@ -59,6 +67,12 @@ export type WinsalotAppointmentActions = {
     }
   ) => Promise<{ error?: string }>;
   remove?: (id: string) => Promise<{ error?: string }>;
+  // "Complete Consultation" / "Mark No Show" - available to admin and the
+  // assigned agent alike (unlike remove/reviewIncentive/resend/sendReminder
+  // below, which stay admin-only), so both AdminAppointmentsClient and
+  // AgentAppointmentsClient always pass these.
+  complete?: (id: string) => Promise<{ error?: string; outcome?: "completed" | "already_completed"; followUpEmailStatus?: string }>;
+  markNoShow?: (id: string) => Promise<{ error?: string }>;
   // Admin-only Weekly Incentive review ("Verify as Qualified" / "Reject"
   // quick actions) - undefined for the agent view, where the incentive
   // badge is still shown read-only but no review controls render.
@@ -126,6 +140,9 @@ export default function WinsalotAppointmentsListClient({
   const [emailActionId, setEmailActionId] = useState<string | null>(null);
   const [emailMode, setEmailMode] = useState<"resend" | "reminder" | null>(null);
   const [emailMessage, setEmailMessage] = useState<{ id: string; text: string } | null>(null);
+  // "Complete Consultation" / "Mark No Show" result messages, tracked per
+  // appointment id the same way emailMessage is above.
+  const [completeMessage, setCompleteMessage] = useState<{ id: string; text: string } | null>(null);
 
   function openRow(appt: WinsalotAppointmentListRow, nextMode: "view" | "edit" | "reschedule" | "cancel") {
     setError(null);
@@ -234,6 +251,33 @@ export default function WinsalotAppointmentsListClient({
     });
   }
 
+  // "Easy to use without opening several pages" - one click, a single
+  // confirm dialog (since it fires an email and can't be undone), no
+  // separate modal/form. The actual "only once" guarantee lives in
+  // performWinsalotCompletion's guarded database update, not here - this
+  // confirm is just to stop an accidental click, not a safety mechanism.
+  function handleComplete(appt: WinsalotAppointmentListRow) {
+    if (!actions.complete) return;
+    if (!confirm(`Mark the consultation with ${appt.business_name} as completed? This sends a one-time follow-up email to ${appt.email}.`)) return;
+    setCompleteMessage(null);
+    startTransition(async () => {
+      const result = await actions.complete!(appt.id);
+      if (result.error) setCompleteMessage({ id: appt.id, text: result.error });
+      else if (result.outcome === "already_completed") setCompleteMessage({ id: appt.id, text: "This consultation was already marked completed." });
+      else if (result.followUpEmailStatus) setCompleteMessage({ id: appt.id, text: `Marked Completed. Follow-up email: ${result.followUpEmailStatus}.` });
+    });
+  }
+
+  function handleMarkNoShow(appt: WinsalotAppointmentListRow) {
+    if (!actions.markNoShow) return;
+    if (!confirm(`Mark the consultation with ${appt.business_name} as No Show? No follow-up email is sent for a no-show.`)) return;
+    setCompleteMessage(null);
+    startTransition(async () => {
+      const result = await actions.markNoShow!(appt.id);
+      if (result.error) setCompleteMessage({ id: appt.id, text: result.error });
+    });
+  }
+
   function openEmailAction(appt: WinsalotAppointmentListRow, nextMode: "resend" | "reminder") {
     setEmailMessage(null);
     setEmailActionId(appt.id);
@@ -261,12 +305,8 @@ export default function WinsalotAppointmentsListClient({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-900">{appt.business_name}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      appt.status === "cancelled" ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"
-                    }`}
-                  >
-                    {appt.status === "cancelled" ? "Cancelled" : "Booked"}
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${WINSALOT_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                    {WINSALOT_APPOINTMENT_STATUS_LABELS[appt.status]}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                     {appt.booked_by === "self" ? "Self-booked" : "Agent-booked"}
@@ -306,6 +346,14 @@ export default function WinsalotAppointmentsListClient({
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${SMS_STATUS_STYLE[appt.smsReminder1h] ?? SMS_STATUS_STYLE.default}`} title={appt.smsReminder1hError ?? undefined}>
                     SMS 1h: {appt.smsReminder1h}
                   </span>
+                  {appt.status === "completed" && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-semibold ${REMINDER_STYLE[appt.followUpEmailStatus] ?? "bg-slate-100 text-slate-600"}`}
+                      title={appt.followUpEmailError ?? undefined}
+                    >
+                      Follow-Up Email: {appt.followUpEmailStatus}
+                    </span>
+                  )}
                 </p>
                 {appt.status === "cancelled" && (
                   <p className="mt-1 text-[12.5px] text-rose-600">
@@ -313,6 +361,17 @@ export default function WinsalotAppointmentsListClient({
                     {appt.cancelled_reason ? ` — ${appt.cancelled_reason}` : ""}
                   </p>
                 )}
+                {appt.status === "completed" && (
+                  <p className="mt-1 text-[12.5px] text-emerald-700">
+                    Completed On {appt.completed_at ? new Date(appt.completed_at).toLocaleString() : "—"} · Completed By {appt.completed_by_name || "—"}
+                  </p>
+                )}
+                {appt.status === "no_show" && (
+                  <p className="mt-1 text-[12.5px] text-amber-700">
+                    Marked No Show on {appt.no_show_at ? new Date(appt.no_show_at).toLocaleString() : "—"} by {appt.no_show_by_name || "—"}
+                  </p>
+                )}
+                {completeMessage?.id === appt.id && <p className="mt-1 text-[12.5px] font-medium text-slate-700">{completeMessage.text}</p>}
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -324,8 +383,23 @@ export default function WinsalotAppointmentsListClient({
                 <button type="button" onClick={() => openRow(appt, "edit")} className="text-xs font-semibold text-slate-600 hover:text-slate-800">
                   Edit
                 </button>
-                {appt.status !== "cancelled" && (
+                {appt.status === "booked" && (
                   <>
+                    {actions.complete && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleComplete(appt)}
+                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Complete Consultation
+                      </button>
+                    )}
+                    {actions.markNoShow && (
+                      <button type="button" disabled={isPending} onClick={() => handleMarkNoShow(appt)} className="text-xs font-semibold text-amber-700 hover:text-amber-800">
+                        Mark No Show
+                      </button>
+                    )}
                     <button type="button" onClick={() => openRow(appt, "reschedule")} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
                       Reschedule
                     </button>

@@ -305,6 +305,8 @@ export async function performWinsalotReschedule(
   if (!appointment) return { error: "Appointment not found." };
   const appt = appointment as WinsalotAppointmentRow;
   if (appt.status === "cancelled") return { error: "This consultation has already been cancelled." };
+  if (appt.status === "completed") return { error: "This consultation has already been completed and cannot be rescheduled." };
+  if (appt.status === "no_show") return { error: "This consultation was marked No Show and cannot be rescheduled." };
 
   const [settings, blackouts, { data: otherAppointments }] = await Promise.all([
     fetchWinsalotAvailabilitySettings(admin),
@@ -369,6 +371,7 @@ export async function performWinsalotCancellation(
   if (!appointment) return { error: "Appointment not found." };
   const appt = appointment as WinsalotAppointmentRow;
   if (appt.status === "cancelled") return { error: "This consultation has already been cancelled." };
+  if (appt.status === "completed") return { error: "This consultation has already been completed and cannot be cancelled." };
 
   const { error: updateError } = await admin
     .from("winsalot_appointments")

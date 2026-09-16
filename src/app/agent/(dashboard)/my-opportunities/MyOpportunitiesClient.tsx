@@ -22,6 +22,8 @@ import { setMyOpportunityStatusAction } from "./actions";
 
 const APPOINTMENT_STATUS_STYLES: Record<string, string> = {
   booked: "bg-emerald-100 text-emerald-800",
+  completed: "bg-emerald-100 text-emerald-800",
+  no_show: "bg-amber-100 text-amber-800",
   cancelled: "bg-rose-100 text-rose-800",
 };
 

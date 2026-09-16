@@ -10,6 +10,7 @@ import {
   performWinsalotReschedule,
   type WinsalotAppointmentEditInput,
 } from "@/lib/winsalot-consultation-book";
+import { performWinsalotCompletion, performWinsalotNoShow } from "@/lib/winsalot-consultation-completion";
 
 // Every action below first re-confirms ownership through the *session*
 // client (RLS-scoped by winsalot_appointments_agent_select_own to
@@ -59,6 +60,33 @@ export async function editAppointmentAction(appointmentId: string, input: Winsal
   if (ownership.error) return ownership;
 
   const result = await performWinsalotAppointmentEdit(appointmentId, input);
+  revalidatePath("/agent/appointments");
+  revalidatePath("/admin/crm/appointments");
+  return result;
+}
+
+// "Complete Consultation" - the assigned agent's own counterpart to the
+// admin action in admin/crm/appointments/actions.ts. assertOwnAppointment
+// (session-client, RLS-scoped) is what actually stops an agent from
+// completing another agent's consultation by id before the shared,
+// service-role performWinsalotCompletion ever runs.
+export async function completeAppointmentAction(appointmentId: string) {
+  const crmUser = await requireCrmUser();
+  const ownership = await assertOwnAppointment(appointmentId, crmUser.id);
+  if (ownership.error) return ownership;
+
+  const result = await performWinsalotCompletion(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
+  revalidatePath("/agent/appointments");
+  revalidatePath("/admin/crm/appointments");
+  return result;
+}
+
+export async function markNoShowAction(appointmentId: string) {
+  const crmUser = await requireCrmUser();
+  const ownership = await assertOwnAppointment(appointmentId, crmUser.id);
+  if (ownership.error) return ownership;
+
+  const result = await performWinsalotNoShow(appointmentId, { userId: crmUser.id, name: crmUser.full_name || crmUser.email });
   revalidatePath("/agent/appointments");
   revalidatePath("/admin/crm/appointments");
   return result;

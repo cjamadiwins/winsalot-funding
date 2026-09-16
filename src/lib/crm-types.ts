@@ -174,7 +174,7 @@ export const EMAIL_STATUS_STYLES: Record<EmailEventStatus, string> = {
   failed: "bg-rose-100 text-rose-800",
 };
 
-export const EMAIL_TYPES = ["follow_up", "consultation_invite", "appointment_reminder"] as const;
+export const EMAIL_TYPES = ["follow_up", "consultation_invite", "appointment_reminder", "consultation_follow_up"] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
 
@@ -182,6 +182,7 @@ export const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
   follow_up: "Follow-up",
   consultation_invite: "Consultation Invitation",
   appointment_reminder: "Appointment Reminder",
+  consultation_follow_up: "Consultation Follow-Up",
 };
 
 export type CrmOpportunityRow = {

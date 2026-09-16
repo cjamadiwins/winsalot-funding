@@ -7,9 +7,11 @@ import BookConsultationModal from "@/components/BookConsultationModal";
 import type { OpportunityType } from "@/lib/crm-types";
 import {
   cancelAppointmentAction,
+  completeAppointmentAction,
   deleteAppointmentAction,
   editAppointmentAction,
   getOfferedSlotsAction,
+  markNoShowAction,
   rescheduleAppointmentAction,
   resendAppointmentNotificationAction,
   reviewCrmAppointmentIncentiveAction,
@@ -111,6 +113,8 @@ export default function AdminAppointmentsClient({
           reschedule: rescheduleAppointmentAction,
           cancel: cancelAppointmentAction,
           edit: editAppointmentAction,
+          complete: completeAppointmentAction,
+          markNoShow: markNoShowAction,
           remove: deleteAppointmentAction,
           reviewIncentive: reviewCrmAppointmentIncentiveAction,
           resend: resendAppointmentNotificationAction,

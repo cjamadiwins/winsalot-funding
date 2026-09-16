@@ -7,8 +7,10 @@ import BookConsultationModal from "@/components/BookConsultationModal";
 import type { OpportunityType } from "@/lib/crm-types";
 import {
   cancelAppointmentAction,
+  completeAppointmentAction,
   editAppointmentAction,
   getOfferedSlotsAction,
+  markNoShowAction,
   rescheduleAppointmentAction,
 } from "./actions";
 import { bookConsultationAction, getConsultationOfferedSlotsAction } from "../opportunities/[id]/actions";
@@ -110,6 +112,8 @@ export default function AgentAppointmentsClient({
           reschedule: rescheduleAppointmentAction,
           cancel: cancelAppointmentAction,
           edit: editAppointmentAction,
+          complete: completeAppointmentAction,
+          markNoShow: markNoShowAction,
           opportunityHref: (opportunityId) => `/agent/opportunities/${opportunityId}`,
         }}
       />

@@ -26,7 +26,11 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
   const appointmentQuery = admin
     .from("winsalot_appointments")
     .select("id, opportunity_id, assigned_agent_id, created_at")
-    .eq("status", "booked")
+    // Credit the booking event itself, same as before 'completed'/'no_show'
+    // existed as separate statuses - only a cancelled consultation was ever
+    // excluded from this credit, and that stays true now that a booking can
+    // also move on to Completed or No Show.
+    .neq("status", "cancelled")
     .not("opportunity_id", "is", null);
   const deliveredEmailQuery = admin
     .from("crm_lead_emails")
