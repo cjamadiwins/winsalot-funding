@@ -22,8 +22,18 @@ import {
   runMarketingJobNowAction,
 } from "./actions";
 
-export default async function AdminMarketingPage() {
+export default async function AdminMarketingPage({
+  searchParams,
+}: {
+  // Set by the "Enroll in Email Marketing" link on a business's own
+  // /admin/crm/opportunities/[id] record (AdminOpportunityDetailClient) so
+  // this page can pre-select and highlight that exact business in the "Add
+  // a Contacted Business" form below - the admin still has to complete
+  // that form's own consent capture before anything is enrolled.
+  searchParams: Promise<{ opportunity_id?: string }>;
+}) {
   await requireCrmAdmin();
+  const { opportunity_id } = await searchParams;
   const supabase = await createSupabaseServerClient();
   const [
     { data: opportunities, error: opportunityError },
@@ -63,6 +73,7 @@ export default async function AdminMarketingPage() {
             templates={(templates ?? []) as CrmMarketingTemplateRow[]}
             deliveries={(deliveries ?? []) as CrmMarketingDeliveryRow[]}
             campaigns={(campaigns ?? []) as CrmMarketingCampaignRow[]}
+            highlightOpportunityId={opportunity_id ?? null}
             actions={{
               enroll: enrollMarketingContactAction,
               pause: pauseMarketingEnrollmentAction,

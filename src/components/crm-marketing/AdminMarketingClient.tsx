@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   MARKETING_CAMPAIGN_LABELS,
   MARKETING_CAMPAIGN_STATUS_LABELS,
   MARKETING_CAMPAIGN_TYPES,
+  MARKETING_ELIGIBLE_STAGES,
   MARKETING_ENROLLMENT_STATUS_LABELS,
   MARKETING_TEST_EMAIL_RECIPIENTS,
   type CrmMarketingCampaignRow,
@@ -34,6 +35,11 @@ type Props = {
   templates: CrmMarketingTemplateRow[];
   deliveries: CrmMarketingDeliveryRow[];
   campaigns: CrmMarketingCampaignRow[];
+  // Set when this page was reached via a business's own "Enroll in Email
+  // Marketing" link (/admin/crm/opportunities/[id]) - pre-selects and
+  // highlights that business in the "Add a Contacted Business" form below
+  // instead of enrolling anything automatically.
+  highlightOpportunityId?: string | null;
   actions: {
     enroll: (formData: FormData) => Promise<ActionResult>;
     pause: (id: string) => Promise<ActionResult>;
@@ -49,7 +55,7 @@ type Props = {
   };
 };
 
-const eligibleStages = new Set(["Contacted", "Interested", "Consultation Booked", "Proposal or Application Sent", "Follow-Up Required"]);
+const eligibleStages = MARKETING_ELIGIBLE_STAGES;
 const statusStyle: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-800",
   paused: "bg-amber-100 text-amber-800",
@@ -77,11 +83,11 @@ function formatDateCompact(value: string | null): string {
   });
 }
 
-export default function AdminMarketingClient({ opportunities, enrollments, templates, deliveries, campaigns, actions }: Props) {
+export default function AdminMarketingClient({ opportunities, enrollments, templates, deliveries, campaigns, highlightOpportunityId, actions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<ActionResult | null>(null);
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState("");
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState(highlightOpportunityId ?? "");
 
   const opportunityById = useMemo(() => new Map(opportunities.map((opportunity) => [opportunity.id, opportunity])), [opportunities]);
   const enrolledIds = useMemo(() => new Set(enrollments.map((enrollment) => enrollment.opportunity_id)), [enrollments]);
@@ -89,6 +95,23 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
     (opportunity) => eligibleStages.has(opportunity.stage) && !!opportunity.email && !enrolledIds.has(opportunity.id)
   );
   const selectedOpportunity = opportunityById.get(selectedOpportunityId);
+  // The business a "Enroll in Email Marketing" link on its own record sent
+  // the admin here for - looked up regardless of current eligibility so the
+  // banner below can explain why it isn't selectable if something changed
+  // (already enrolled elsewhere, stage moved on, etc.) since that link was
+  // generated.
+  const highlightedOpportunity = highlightOpportunityId ? opportunityById.get(highlightOpportunityId) : undefined;
+  const highlightedOpportunityEligible =
+    !!highlightOpportunityId && eligibleOpportunities.some((opportunity) => opportunity.id === highlightOpportunityId);
+
+  // Scrolls straight to the enroll form and puts the referring business
+  // front and center - the admin still has to pick a consent basis and
+  // record how consent was obtained there before anything is enrolled.
+  useEffect(() => {
+    if (highlightOpportunityId) {
+      document.getElementById("add-campaign")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [highlightOpportunityId]);
   // Each campaign_type's own Active/Paused/Archived status
   // (crm_marketing_campaigns, migration 0121) - defaults to "active" if a
   // row is somehow missing, matching runCrmMarketingJob's own default.
@@ -179,9 +202,28 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
       <RunMarketingJobNow runJobNow={actions.runJobNow} />
 
-      <section id="add-campaign" className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 scroll-mt-4">
+      <section
+        id="add-campaign"
+        className={`rounded-2xl border bg-[var(--crm-surface)] p-5 scroll-mt-4 ${highlightOpportunityId ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200"}`}
+      >
         <h2 className="text-lg font-bold text-slate-900">Add Campaign — Add a Contacted Business</h2>
         <p className="mt-1 text-sm text-slate-500">The campaign is locked to the service already recorded on the opportunity. A consent record is required before automatic sending begins.</p>
+
+        {highlightedOpportunity && (
+          <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${highlightedOpportunityEligible ? "border-sky-200 bg-sky-50 text-sky-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+            {highlightedOpportunityEligible ? (
+              <>
+                Enrolling <strong>{highlightedOpportunity.business_name}</strong> — select how consent was obtained and record it below to activate weekly emails.
+              </>
+            ) : (
+              <>
+                <strong>{highlightedOpportunity.business_name}</strong> isn&rsquo;t currently eligible to enroll here — it may already be enrolled, missing an
+                email address, or no longer a contacted, open opportunity.
+              </>
+            )}
+          </p>
+        )}
+
         <form action={submitEnrollment} className="mt-4 grid gap-4 lg:grid-cols-4">
           <label className="text-sm font-medium text-slate-700 lg:col-span-2">
             Contacted business
