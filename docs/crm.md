@@ -534,13 +534,44 @@ Work through these in order — each one rules out a specific layer:
 ## Weekly prospect marketing
 
 `/admin/crm/marketing` lets an admin enroll a contacted `crm_opportunities` row (with a recorded
-consent basis) into an automatic weekly email sequence matching its `opportunity_type`. The actual
-sending happens outside any page load, on a schedule:
+consent basis) into an automatic weekly email sequence for an explicitly chosen campaign — **Lead
+Generation**, **Business Financing**, or **Both Services**. The campaign is never derived from the
+opportunity's own recorded `opportunity_type`; the "Campaign Type" dropdown starts blank and the
+admin must consciously pick one before "Activate Weekly Emails" is even enabled
+(`enrollMarketingContactAction`, `crm/marketing/actions.ts`, no longer checks `campaign_type`
+against `opportunity.opportunity_type` at all) — a Lead Generation-recorded opportunity can
+knowingly be enrolled in Business Financing (or Both Services) marketing, and vice versa, if that's
+genuinely what the admin wants to send them. The same rule applies to re-enrolling a resubscribed
+contact (see "Resubscribe" below) — there is no remaining path that auto-picks a campaign from the
+opportunity record. The actual sending happens outside any page load, on a schedule:
 
+- **Both Services**: a third, deliberately unemphasized option ("unique circumstances only") that
+  sends the existing combined Lead Generation + Business Financing `both_services` template
+  sequence — never selected by default (the dropdown has no default value) and gated behind its own
+  explicit confirmation checkbox, re-validated server-side
+  (`both_services_confirmed`/`enrollMarketingContactAction`), so a hand-crafted request can't skip
+  it either. Its `crm_marketing_enrollments` row is exactly like any other campaign's — its own
+  independent `send_count`/`next_send_at`, entirely separate from (and never touched by) that same
+  business's hypothetical Lead-Generation-only or Business-Financing-only progress — and
+  `templateForEnrollment`'s strict `campaign_type` filter (unit-tested,
+  `src/lib/__tests__/crm-marketing-job.test.ts`) means a Both Services contact can only ever be sent
+  a Both Services template, never a Lead Generation or Business Financing one on top of it - so
+  there is no second, parallel send to collide with on the same day. Unsubscribing works exactly
+  like any other campaign: `unsubscribeByToken`/a hard bounce or spam complaint updates every
+  `crm_marketing_enrollments` row for that `opportunity_id` (not scoped to one `campaign_type`), so
+  a Both Services contact who unsubscribes stops receiving Winsalot Email Marketing entirely, not
+  just "half" of it.
 - **Trigger**: `GET /api/cron/crm-weekly-marketing` (`src/app/api/cron/crm-weekly-marketing/route.ts`),
-  registered in `vercel.json`'s `crons` array, daily. Vercel Cron calls this URL itself; it only
-  ever does real work on the `winsalot-funding` (Growth CRM) project — `isGrowthCrmHost()` no-ops
-  it everywhere else, including the `winsalot-leadgen-crm` project this same repo also deploys to.
+  registered in `vercel.json`'s `crons` array, hourly (`0 * * * *`). Vercel Cron calls this URL
+  itself; it only ever does real work on the `winsalot-funding` (Growth CRM) project —
+  `isGrowthCrmHost()` no-ops it everywhere else, including the `winsalot-leadgen-crm` project this
+  same repo also deploys to. Hourly (not daily) keeps the worst-case gap between "a contact becomes
+  due" and "the contact is actually processed" to about an hour instead of up to 24 — a fresh
+  enrollment's `next_send_at` is set to the moment of enrollment (immediately due), so a once-daily
+  cron could otherwise leave a brand-new contact waiting up to a full day if it was enrolled just
+  after that day's run. `claim_due_crm_marketing_enrollments`'s 30-minute stale-claim window (see
+  below) stays well under this new 60-minute interval, so a run that dies mid-flight is always
+  reclaimable by the very next one.
 - **Authorization**: same `CRON_SECRET` var documented above for the Lead Gen reminder cron, sent
   automatically by Vercel Cron as `Authorization: Bearer <value>` — **not** a separate secret for
   this route. It must be set as its own Vercel project env var on `winsalot-funding`'s Production
@@ -624,6 +655,13 @@ sending happens outside any page load, on a schedule:
 4. **Was it skipped for a business reason?** The job's JSON `results`/`enrollments.last_error`
    explain a skip: stage is `Client Won`/`Not Interested`, no email address, the recipient is
    suppressed/unsubscribed, or no active template exists for that `campaign_type`.
+5. **Was it enrolled after the last run but before the next one?** A brand-new enrollment's
+   `next_send_at` is set to the moment of enrollment - due immediately - but the hourly cron only
+   checks once an hour, so a contact enrolled seconds after one run can show `Sent = 0`/`Last Email
+   = —` for up to about an hour with nothing wrong. Confirm from `crm_marketing_enrollments` itself
+   (`status`, `next_send_at`, `send_count`) rather than assuming a stuck scheduler, or use "Run
+   Weekly Marketing Now" → "Run Now" on `/admin/crm/marketing` to process it immediately instead of
+   waiting for the next hourly tick.
 
 ## Email Marketing status badge (on the business record)
 
@@ -646,11 +684,13 @@ column of its own, always derived live from the same `crm_marketing_enrollments`
   highlights this exact business in that page's existing "Add a Contacted Business" form
   (`highlightOpportunityId` prop, `AdminMarketingClient.tsx` - scrolls to the form and shows a blue
   "Enrolling `<business>`" banner, or an amber "not currently eligible" one if something changed
-  since the link was generated). The admin still has to pick a consent basis and record how
-  consent was obtained in that same form, submitting to the one unchanged
-  `enrollMarketingContactAction` - so there remains exactly one enrollment code path (and one place
-  enforcing "no duplicate contacts" via its `onConflict: "opportunity_id"` upsert), and campaigns
-  continue to run only from `/admin/crm/marketing`.
+  since the link was generated). The admin still has to explicitly choose a Campaign Type (Lead
+  Generation/Business Financing/Both Services - blank by default, never derived from this
+  opportunity's own recorded service) and pick a consent basis and record how consent was obtained
+  in that same form, submitting to the one unchanged `enrollMarketingContactAction` - so there
+  remains exactly one enrollment code path (and one place enforcing "no duplicate contacts" via its
+  `onConflict: "opportunity_id"` upsert), and campaigns continue to run only from
+  `/admin/crm/marketing`.
 - **Unsubscribed** (red) — the recipient is on `crm_email_suppressions` (active) or their enrollment
   itself is `unsubscribed` (a hard bounce/spam complaint). The existing amber Resubscribe banner
   (see below) is the only path back from here — this status alone blocks the Consent Required
@@ -676,7 +716,11 @@ email, or by the Resend webhook auto-unsubscribing on a hard bounce/spam complai
     creates) that opportunity's `crm_marketing_enrollments` row to `send_count = 0` with its own fresh
     `consent_basis = 'express'` record, so the weekly sequence starts over from the first template.
     Only offered (and re-validated server-side regardless) when the opportunity has an email address
-    and isn't `Client Won`/`Not Interested`.
+    and isn't `Client Won`/`Not Interested`. Choosing this reveals its own "Campaign to re-enroll in"
+    dropdown (Lead Generation/Business Financing/Both Services, blank by default, with the same Both
+    Services confirmation checkbox as the enroll form on `/admin/crm/marketing`) — never derived from
+    the opportunity's own `opportunity_type`, and re-validated server-side
+    (`resubscribeEmail`, `src/lib/crm-email-suppression.ts`) so it can't be skipped either.
   - The `crm_email_suppressions` row is never deleted — a `active` flag (migration 0120) is what
     Resubscribe clears, so the original `reason`/`suppressed_at`/`opportunity_id` stay in place
     alongside who/when/how it was later resubscribed. A genuine second unsubscribe click re-suppresses

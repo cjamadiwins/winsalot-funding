@@ -67,6 +67,15 @@ const campaignStatusStyle: Record<MarketingCampaignStatus, string> = {
   paused: "bg-amber-100 text-amber-800",
   archived: "bg-slate-100 text-slate-700",
 };
+// Distinct color per campaign so "which sequence is this contact on" reads
+// at a glance on the Campaign Contacts card - never inferred from the
+// opportunity's own recorded service, since the admin's explicit choice
+// here is the only source of truth for which sequence actually sends.
+const campaignTypeStyle: Record<MarketingCampaignType, string> = {
+  lead_generation: "bg-sky-100 text-sky-800",
+  business_financing: "bg-violet-100 text-violet-800",
+  both_services: "bg-amber-100 text-amber-900",
+};
 
 // Compact date format for the Campaign Contacts list (e.g. "Sep 2, 2:34
 // AM") - short enough to sit inline in a card without wrapping, while
@@ -88,6 +97,17 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<ActionResult | null>(null);
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(highlightOpportunityId ?? "");
+  // Never pre-filled or derived from the selected business's own recorded
+  // service - the admin must consciously pick one every time (brief: "Do
+  // not automatically choose a campaign based only on the
+  // opportunity/service record" / "Default campaign selection should
+  // remain blank").
+  const [selectedCampaignType, setSelectedCampaignType] = useState<MarketingCampaignType | "">("");
+  // Only relevant (and only rendered) while "Both Services" is selected -
+  // a deliberate extra confirmation before a contact is enrolled in both
+  // sequences at once, per the brief's "Show a confirmation message before
+  // activation" / "should only be used in unique circumstances."
+  const [bothServicesConfirmed, setBothServicesConfirmed] = useState(false);
 
   const opportunityById = useMemo(() => new Map(opportunities.map((opportunity) => [opportunity.id, opportunity])), [opportunities]);
   const enrolledIds = useMemo(() => new Set(enrollments.map((enrollment) => enrollment.opportunity_id)), [enrollments]);
@@ -166,7 +186,11 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
   function submitEnrollment(formData: FormData) {
     runAction(async () => {
       const result = await actions.enroll(formData);
-      if (!result.error) setSelectedOpportunityId("");
+      if (!result.error) {
+        setSelectedOpportunityId("");
+        setSelectedCampaignType("");
+        setBothServicesConfirmed(false);
+      }
       return result;
     });
   }
@@ -196,7 +220,7 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
 
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard label="Active Contacts" value={activeCount} detail="Sending every seven days" />
-        <SummaryCard label="Due for Next Run" value={dueCount} detail="Processed by the daily scheduler" />
+        <SummaryCard label="Due for Next Run" value={dueCount} detail="Processed hourly by the scheduler" />
         <SummaryCard label="Emails Recorded" value={sentCount} detail="Sent and engagement tracked" />
       </div>
 
@@ -207,7 +231,10 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
         className={`rounded-2xl border bg-[var(--crm-surface)] p-5 scroll-mt-4 ${highlightOpportunityId ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200"}`}
       >
         <h2 className="text-lg font-bold text-slate-900">Add Campaign — Add a Contacted Business</h2>
-        <p className="mt-1 text-sm text-slate-500">The campaign is locked to the service already recorded on the opportunity. A consent record is required before automatic sending begins.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Choose which weekly sequence this business should receive — it is never chosen automatically from the opportunity&rsquo;s
+          recorded service. A consent record is required before automatic sending begins.
+        </p>
 
         {highlightedOpportunity && (
           <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${highlightedOpportunityEligible ? "border-sky-200 bg-sky-50 text-sky-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
@@ -233,9 +260,51 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                 <option key={opportunity.id} value={opportunity.id}>{opportunity.business_name} — {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}</option>
               ))}
             </select>
-            <input type="hidden" name="campaign_type" value={selectedOpportunity?.opportunity_type ?? ""} />
           </label>
-          <label className="text-sm font-medium text-slate-700">
+          <label className="text-sm font-medium text-slate-700 lg:col-span-2">
+            Campaign Type
+            <select
+              name="campaign_type"
+              required
+              value={selectedCampaignType}
+              onChange={(event) => {
+                const value = event.target.value as MarketingCampaignType | "";
+                setSelectedCampaignType(value);
+                if (value !== "both_services") setBothServicesConfirmed(false);
+              }}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Select a campaign — never automatic</option>
+              <option value="lead_generation">Lead Generation</option>
+              <option value="business_financing">Business Financing</option>
+              <option value="both_services">Both Services (unique circumstances only)</option>
+            </select>
+          </label>
+
+          {selectedCampaignType === "both_services" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 lg:col-span-4">
+              <p className="text-sm font-semibold text-amber-900">Both Services sends combined marketing content</p>
+              <p className="mt-1 text-sm text-amber-800">
+                This business will receive the Both Services weekly sequence — covering Lead Generation and Business Financing
+                content together in one set of emails, not the individual Lead Generation or Business Financing sequences.
+                Their Lead Generation and Business Financing progress still stay entirely their own (never shared with any
+                other contact&rsquo;s sequence), and unsubscribing stops every Winsalot Email Marketing send to them, not just
+                one sequence. Use this only for a business that&rsquo;s genuinely a fit for both services.
+              </p>
+              <label className="mt-2 flex items-start gap-2 text-sm font-medium text-amber-900">
+                <input
+                  type="checkbox"
+                  name="both_services_confirmed"
+                  checked={bothServicesConfirmed}
+                  onChange={(event) => setBothServicesConfirmed(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>I confirm this business should receive combined Both Services content.</span>
+              </label>
+            </div>
+          )}
+
+          <label className="text-sm font-medium text-slate-700 lg:col-span-2">
             Consent basis
             <select name="consent_basis" required defaultValue="" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               <option value="" disabled>Select one</option>
@@ -243,8 +312,18 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
               <option value="implied">Implied consent</option>
             </select>
           </label>
-          <div className="flex items-end">
-            <button disabled={isPending || !selectedOpportunity} className="w-full rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50">Activate Weekly Emails</button>
+          <div className="flex items-end lg:col-span-2">
+            <button
+              disabled={
+                isPending ||
+                !selectedOpportunity ||
+                !selectedCampaignType ||
+                (selectedCampaignType === "both_services" && !bothServicesConfirmed)
+              }
+              className="w-full rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50 lg:w-auto"
+            >
+              Activate Weekly Emails
+            </button>
           </div>
           <label className="text-sm font-medium text-slate-700 lg:col-span-4">
             Consent record
@@ -287,8 +366,9 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                 </div>
 
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
-                  <span>{MARKETING_CAMPAIGN_LABELS[enrollment.campaign_type]}</span>
-                  <span className="text-slate-300">·</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${campaignTypeStyle[enrollment.campaign_type]}`}>
+                    {MARKETING_CAMPAIGN_LABELS[enrollment.campaign_type]}
+                  </span>
                   <span
                     className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600"
                     title={enrollment.consent_notes}
@@ -301,6 +381,11 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                     </span>
                   )}
                 </div>
+                {enrollment.campaign_type === "both_services" && (
+                  <p className="mt-1.5 text-[11px] text-amber-700">
+                    Receives combined Lead Generation + Business Financing content in one weekly sequence.
+                  </p>
+                )}
 
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs">
                   <div>
@@ -613,7 +698,7 @@ function RunMarketingJobNow({ runJobNow }: { runJobNow: (dryRun: boolean) => Pro
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <h2 className="text-lg font-bold text-slate-900">Run Weekly Marketing Now</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Manually runs the same job the daily scheduler runs, authenticated as you instead of the Vercel Cron secret. Only contacts
+        Manually runs the same job the hourly scheduler runs, authenticated as you instead of the Vercel Cron secret. Only contacts
         already due (Next Email in the past) are processed. Preview first to see who would be emailed without sending anything.
       </p>
       <div className="mt-4 flex flex-wrap gap-3">

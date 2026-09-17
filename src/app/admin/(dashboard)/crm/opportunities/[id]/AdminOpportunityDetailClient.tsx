@@ -668,6 +668,10 @@ function ResubscribePanel({ opportunity, suppression }: { opportunity: CrmOpport
   const [pending, setPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [scope, setScope] = useState<"permission_only" | "reenroll_marketing">("permission_only");
+  // Never pre-filled or derived from the opportunity's own recorded
+  // service - same rule the Email Marketing enroll form follows.
+  const [campaignType, setCampaignType] = useState<"" | "lead_generation" | "business_financing" | "both_services">("");
+  const [bothServicesConfirmed, setBothServicesConfirmed] = useState(false);
   const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
 
   const canReenrollMarketing = !!opportunity.email?.trim() && !["Client Won", "Not Interested"].includes(opportunity.stage);
@@ -681,6 +685,9 @@ function ResubscribePanel({ opportunity, suppression }: { opportunity: CrmOpport
     if (!outcome.error) {
       setExpanded(false);
       setConfirmed(false);
+      setScope("permission_only");
+      setCampaignType("");
+      setBothServicesConfirmed(false);
     }
   }
 
@@ -747,6 +754,48 @@ function ResubscribePanel({ opportunity, suppression }: { opportunity: CrmOpport
             </label>
           </div>
 
+          {scope === "reenroll_marketing" && (
+            <label className="block text-xs font-semibold uppercase text-amber-800">
+              Campaign to re-enroll in
+              <select
+                name="campaign_type"
+                required
+                value={campaignType}
+                onChange={(event) => {
+                  const value = event.target.value as typeof campaignType;
+                  setCampaignType(value);
+                  if (value !== "both_services") setBothServicesConfirmed(false);
+                }}
+                className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
+              >
+                <option value="">Select a campaign — never automatic</option>
+                <option value="lead_generation">Lead Generation</option>
+                <option value="business_financing">Business Financing</option>
+                <option value="both_services">Both Services (unique circumstances only)</option>
+              </select>
+            </label>
+          )}
+
+          {scope === "reenroll_marketing" && campaignType === "both_services" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2">
+              <p className="text-xs font-normal normal-case text-amber-900">
+                This business will receive the combined Both Services weekly sequence (Lead Generation and Business Financing
+                content together), not the individual sequences. Use this only for a business that&rsquo;s genuinely a fit for
+                both services.
+              </p>
+              <label className="mt-2 flex items-start gap-2 text-xs font-medium normal-case text-amber-900">
+                <input
+                  type="checkbox"
+                  name="both_services_confirmed"
+                  checked={bothServicesConfirmed}
+                  onChange={(event) => setBothServicesConfirmed(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>I confirm this business should receive combined Both Services content.</span>
+              </label>
+            </div>
+          )}
+
           <label className="flex items-start gap-2 text-sm font-medium text-amber-900">
             <input
               type="checkbox"
@@ -761,7 +810,11 @@ function ResubscribePanel({ opportunity, suppression }: { opportunity: CrmOpport
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="submit"
-              disabled={pending || !confirmed}
+              disabled={
+                pending ||
+                !confirmed ||
+                (scope === "reenroll_marketing" && (!campaignType || (campaignType === "both_services" && !bothServicesConfirmed)))
+              }
               className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {pending ? "Resubscribing…" : "Confirm Resubscribe"}

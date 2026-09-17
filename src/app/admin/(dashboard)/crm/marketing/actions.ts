@@ -27,9 +27,20 @@ export async function enrollMarketingContactAction(formData: FormData): Promise<
   const campaignType = String(formData.get("campaign_type") ?? "").trim();
   const consentBasis = String(formData.get("consent_basis") ?? "").trim() as MarketingConsentBasis;
   const consentNotes = String(formData.get("consent_notes") ?? "").trim();
+  // Required only for campaign_type "both_services" - re-validated here,
+  // not just enforced by the disabled submit button client-side, so a
+  // hand-crafted request can't skip the "this sends both sequences at
+  // once, use only in unique circumstances" confirmation either. See the
+  // brief: "Both Services... must never be selected automatically... Show
+  // a confirmation message before activation."
+  const bothServicesConfirmed = formData.get("both_services_confirmed") === "on";
 
   if (!opportunityId) return { error: "Select a contacted business." };
+  if (!campaignType) return { error: "Choose a campaign - it is never selected automatically." };
   if (!isMarketingCampaignType(campaignType)) return { error: "Select a valid campaign." };
+  if (campaignType === "both_services" && !bothServicesConfirmed) {
+    return { error: "Confirm that this business should receive combined Lead Generation and Business Financing content before activating Both Services." };
+  }
   if (!["express", "implied"].includes(consentBasis)) return { error: "Select how consent was obtained." };
   if (!consentNotes) return { error: "Record when and how permission or implied consent was established." };
 
@@ -41,9 +52,11 @@ export async function enrollMarketingContactAction(formData: FormData): Promise<
   if (!opportunity) return { error: "Opportunity not found." };
   if (!ELIGIBLE_STAGES.has(opportunity.stage)) return { error: "Only contacted, open opportunities can enter weekly marketing." };
   if (!opportunity.email?.trim()) return { error: "Add an email address to this opportunity before enrolling it." };
-  if (campaignType !== opportunity.opportunity_type) {
-    return { error: "The campaign must match the service recorded on the opportunity." };
-  }
+  // Deliberately NOT checked against opportunity.opportunity_type anymore -
+  // the admin explicitly picks the campaign every time (never derived from
+  // the opportunity's own recorded service), so a Lead Generation-recorded
+  // opportunity can knowingly be enrolled in Business Financing (or Both
+  // Services) marketing and vice versa.
   if (await isEmailSuppressed(opportunity.email)) {
     return { error: "This email address is unsubscribed or suppressed and cannot be enrolled." };
   }
