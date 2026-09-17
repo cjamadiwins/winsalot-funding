@@ -37,7 +37,6 @@ import {
   bookConsultationAction,
   closeOpportunityAction,
   deleteOpportunityAction,
-  enrollEmailMarketingAction,
   getConsultationOfferedSlotsAction,
   markApplicationSubmittedAction,
   resubscribeEmailAction,
@@ -292,7 +291,7 @@ export default function AdminOpportunityDetailClient({
       )}
 
       {emailMarketingStatus === "consent_required" && (
-        <EnrollEmailMarketingPanel opportunity={opportunity} />
+        <EnrollEmailMarketingPrompt opportunity={opportunity} />
       )}
 
       {isOverdue(opportunity) && opportunity.next_follow_up_at && (
@@ -626,95 +625,28 @@ export default function AdminOpportunityDetailClient({
   );
 }
 
-// Inline "Enroll in Email Marketing" shown right on this business's own
-// record whenever its derived Email Marketing status is "Consent
-// Required" - an eligible, open, emailable opportunity that has never
-// been enrolled (or was previously removed/stopped) and isn't currently
-// suppressed/unsubscribed. Never auto-enrolls anything itself; an admin
-// must open this, record how consent was obtained, and submit. Delegates
-// to enrollEmailMarketingAction, which reuses the exact same validated
-// enrollMarketingContactAction the dedicated /admin/crm/marketing page
-// uses - so this is a second entry point into one enrollment path, never
-// a second implementation of its rules.
-function EnrollEmailMarketingPanel({ opportunity }: { opportunity: CrmOpportunityRow }) {
-  const [expanded, setExpanded] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
-
-  async function handleSubmit(formData: FormData) {
-    setPending(true);
-    setResult(null);
-    const outcome = await enrollEmailMarketingAction(opportunity.id, formData);
-    setPending(false);
-    setResult(outcome);
-    if (!outcome.error) setExpanded(false);
-  }
-
+// "Enroll in Email Marketing" for a business whose derived status is
+// "Consent Required" - a plain navigation link to the dedicated
+// /admin/crm/marketing section, never a direct enrollment action from
+// this page. This never writes to crm_marketing_enrollments itself (no
+// server action is called here at all) - it only carries this
+// opportunity's id over as `?opportunity_id=` so /admin/crm/marketing can
+// pre-select and highlight this exact business in its own "Add a
+// Contacted Business" form. The admin still has to complete that form's
+// normal consent capture there before anything is enrolled, and every
+// campaign continues to run only from that same section.
+function EnrollEmailMarketingPrompt({ opportunity }: { opportunity: CrmOpportunityRow }) {
   return (
-    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
       <p className="text-sm font-semibold text-amber-800">
-        Eligible for weekly Email Marketing — consent must be recorded before enrolling.
+        Eligible for weekly Email Marketing — enroll from the Email Marketing section.
       </p>
-
-      {!expanded ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="mt-3 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-        >
-          Enroll in Email Marketing
-        </button>
-      ) : (
-        <form action={handleSubmit} className="mt-3 space-y-3 border-t border-amber-200 pt-3">
-          <label className="block text-xs font-semibold uppercase text-amber-800">
-            How was consent obtained?
-            <select
-              name="consent_basis"
-              required
-              defaultValue="express"
-              className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
-            >
-              <option value="express">Express — explicitly opted in</option>
-              <option value="implied">Implied — existing business relationship</option>
-            </select>
-          </label>
-          <label className="block text-xs font-semibold uppercase text-amber-800">
-            Consent details
-            <textarea
-              name="consent_notes"
-              required
-              rows={2}
-              placeholder="Example: Asked during the September 2, 2026 consultation call to receive our weekly updates."
-              className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending ? "Enrolling…" : "Confirm Enroll"}
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setExpanded(false);
-                setResult(null);
-              }}
-              className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {result && (
-        <p className={`mt-3 text-xs font-medium ${result.error ? "text-rose-700" : "text-emerald-700"}`}>{result.error ?? result.success}</p>
-      )}
+      <Link
+        href={`/admin/crm/marketing?opportunity_id=${opportunity.id}`}
+        className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+      >
+        Enroll in Email Marketing
+      </Link>
     </div>
   );
 }

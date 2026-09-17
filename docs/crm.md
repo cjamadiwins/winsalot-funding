@@ -640,17 +640,21 @@ column of its own, always derived live from the same `crm_marketing_enrollments`
 - **Consent Required** (amber) — eligible to enroll (same `MARKETING_ELIGIBLE_STAGES` stage list
   `enrollMarketingContactAction` already enforces, plus an email address on file) but never
   enrolled, or previously stopped/removed — never auto-enrolled. An **Enroll in Email Marketing**
-  panel appears right here, right on the record: an admin opens it, records how consent was
-  obtained (express/implied + a required description), and submits — no navigation to
-  `/admin/crm/marketing` required. It calls `enrollEmailMarketingAction`
-  (`crm/opportunities/[id]/actions.ts`), a thin wrapper that supplies this business's own
-  `opportunity_id`/`campaign_type` and delegates straight to `enrollMarketingContactAction` itself,
-  so there is exactly one validated enrollment code path (and one place enforcing "no duplicate
-  contacts" via its `onConflict: "opportunity_id"` upsert) regardless of which page triggered it.
+  link appears right here, right on the record - but it never enrolls anything itself and never
+  calls a server action. It's a plain navigation to `/admin/crm/marketing?opportunity_id=<id>`
+  (`EnrollEmailMarketingPrompt` in `AdminOpportunityDetailClient.tsx`), which pre-selects and
+  highlights this exact business in that page's existing "Add a Contacted Business" form
+  (`highlightOpportunityId` prop, `AdminMarketingClient.tsx` - scrolls to the form and shows a blue
+  "Enrolling `<business>`" banner, or an amber "not currently eligible" one if something changed
+  since the link was generated). The admin still has to pick a consent basis and record how
+  consent was obtained in that same form, submitting to the one unchanged
+  `enrollMarketingContactAction` - so there remains exactly one enrollment code path (and one place
+  enforcing "no duplicate contacts" via its `onConflict: "opportunity_id"` upsert), and campaigns
+  continue to run only from `/admin/crm/marketing`.
 - **Unsubscribed** (red) — the recipient is on `crm_email_suppressions` (active) or their enrollment
   itself is `unsubscribed` (a hard bounce/spam complaint). The existing amber Resubscribe banner
   (see below) is the only path back from here — this status alone blocks the Consent Required
-  panel from ever appearing, so a suppressed/unsubscribed business can't be accidentally
+  prompt from ever appearing, so a suppressed/unsubscribed business can't be accidentally
   re-enrolled outside that explicit, consent-confirmed flow.
 - **Not Enrolled** (gray) — everything else: too early a stage (e.g. `New Prospect`), already
   `Client Won`/`Not Interested`, or no email address on file.
