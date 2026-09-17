@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { isEmailDncBlocked } from "./dnc-suppression";
+import { isMarketingCampaignType, type MarketingCampaignType } from "./crm-marketing-types";
 
 // Suppression-list system for the Growth CRM's prospect emails (crm_email_suppressions,
 // crm_unsubscribe_tokens - migration 0087). No equivalent existed before
@@ -166,6 +167,11 @@ export type ResubscribeInput = {
   consentMethod: string;
   consentDate: string;
   scope: ResubscribeScope;
+  // Required only when scope is "reenroll_marketing" - the admin's
+  // explicit choice of which weekly sequence to resume, never derived from
+  // the opportunity's own recorded service (same rule
+  // enrollMarketingContactAction enforces for a brand-new enrollment).
+  campaignType?: MarketingCampaignType;
 };
 
 export type ResubscribeResult = { error?: string; success?: string };
@@ -189,12 +195,16 @@ export async function resubscribeEmail(supabase: SupabaseClient, input: Resubscr
   // Re-enrolling in the weekly sequence needs a live, emailable,
   // still-open opportunity - re-validated here (not just trusted from
   // the page the admin is looking at) exactly like
-  // enrollMarketingContactAction does for a brand-new enrollment.
-  let opportunityType: string | null = null;
+  // enrollMarketingContactAction does for a brand-new enrollment. The
+  // campaign itself is never derived from opportunity.opportunity_type -
+  // the admin must explicitly pick it, exactly like a fresh enrollment.
   if (input.scope === "reenroll_marketing") {
+    if (!input.campaignType || !isMarketingCampaignType(input.campaignType)) {
+      return { error: "Choose a campaign to re-enroll in - it is never selected automatically." };
+    }
     const { data: opportunity } = await supabase
       .from("crm_opportunities")
-      .select("email, stage, opportunity_type")
+      .select("email, stage")
       .eq("id", input.opportunityId)
       .maybeSingle();
     if (!opportunity) return { error: "The linked business record could not be found." };
@@ -202,7 +212,6 @@ export async function resubscribeEmail(supabase: SupabaseClient, input: Resubscr
     if (["Client Won", "Not Interested"].includes(opportunity.stage)) {
       return { error: `This business cannot be re-enrolled in Email Marketing because it is ${opportunity.stage}.` };
     }
-    opportunityType = opportunity.opportunity_type;
   }
 
   const { error: suppressionError } = await admin
@@ -237,12 +246,12 @@ export async function resubscribeEmail(supabase: SupabaseClient, input: Resubscr
         : `Resubscribed by ${input.adminName} (individual emails only — not re-enrolled in weekly Email Marketing). Recipient's request: ${consentMethod}`,
   });
 
-  if (input.scope === "reenroll_marketing" && opportunityType) {
+  if (input.scope === "reenroll_marketing" && input.campaignType) {
     const now = new Date().toISOString();
     const { error: enrollError } = await supabase.from("crm_marketing_enrollments").upsert(
       {
         opportunity_id: input.opportunityId,
-        campaign_type: opportunityType,
+        campaign_type: input.campaignType,
         status: "active",
         consent_basis: "express",
         consent_notes: `Resubscribed by ${input.adminName} on ${input.consentDate.slice(0, 10)}: ${consentMethod}`,

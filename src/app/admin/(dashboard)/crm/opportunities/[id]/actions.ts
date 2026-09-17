@@ -7,6 +7,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
 import { resubscribeEmail, type ResubscribeResult, type ResubscribeScope } from "@/lib/crm-email-suppression";
+import type { MarketingCampaignType } from "@/lib/crm-marketing-types";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
@@ -303,6 +304,13 @@ export async function resubscribeEmailAction(opportunityId: string, formData: Fo
   if (scope !== "permission_only" && scope !== "reenroll_marketing") {
     return { error: "Select a valid resubscribe option." };
   }
+  const campaignType = String(formData.get("campaign_type") ?? "").trim() as MarketingCampaignType | "";
+  if (scope === "reenroll_marketing") {
+    if (!campaignType) return { error: "Choose a campaign to re-enroll in - it is never selected automatically." };
+    if (campaignType === "both_services" && formData.get("both_services_confirmed") !== "on") {
+      return { error: "Confirm that this business should receive combined Both Services content before re-enrolling." };
+    }
+  }
 
   const { data: opportunity } = await supabase.from("crm_opportunities").select("email").eq("id", opportunityId).maybeSingle();
   if (!opportunity?.email?.trim()) {
@@ -317,6 +325,7 @@ export async function resubscribeEmailAction(opportunityId: string, formData: Fo
     consentMethod,
     consentDate,
     scope,
+    campaignType: campaignType || undefined,
   });
 
   if (!result.error) {
