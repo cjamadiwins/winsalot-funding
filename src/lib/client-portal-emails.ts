@@ -35,7 +35,7 @@ function buildPortalEmailCopy(
       "If you have any questions, reply to this email.",
       "",
       "Best,",
-      "Winsalot Corp",
+      "Winsalot Corp.",
     ].join("\n");
     return {
       subject: "Your Winsalot Client Portal is ready",
@@ -57,7 +57,7 @@ function buildPortalEmailCopy(
     "If you did not request this, please contact Winsalot Corp.",
     "",
     "Best,",
-    "Winsalot Corp",
+    "Winsalot Corp.",
   ].join("\n");
   return {
     subject: "Reset your Winsalot Client Portal access",
@@ -118,7 +118,7 @@ export async function sendPortalEmail(input: SendPortalEmailInput): Promise<Send
     // intro, appointment reminders, etc.) still uses by default. Swaps
     // only the display name; the underlying verified sending address is
     // unchanged (buildLeadgenSenderWithDisplayName in leadgen-email.ts).
-    senderDisplayNameOverride: "Winsalot Corp",
+    senderDisplayNameOverride: "Winsalot Corp.",
   });
 
   if (result.error) return { error: result.error };

@@ -29,7 +29,7 @@ export default async function ClientPortalSetupPage({
   return (
     <div className="crm-theme flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 shadow-sm">
-        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp</p>
+        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp.</p>
         <h1 className="mt-1 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">Set up your Client Portal</h1>
         <p className="mt-2 text-sm text-[var(--color-text-muted)]">Choose a secure password to finish creating your Winsalot Client Portal access.</p>
 

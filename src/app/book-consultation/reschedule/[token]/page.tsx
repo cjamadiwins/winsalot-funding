@@ -57,7 +57,7 @@ function ErrorShell({ message }: { message: string }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-slate-50 p-6">
       <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
-        <h1 className="text-lg font-bold text-slate-900">Winsalot Corp</h1>
+        <h1 className="text-lg font-bold text-slate-900">Winsalot Corp.</h1>
         <p className="mt-3 text-sm text-slate-600">{message}</p>
       </div>
     </div>

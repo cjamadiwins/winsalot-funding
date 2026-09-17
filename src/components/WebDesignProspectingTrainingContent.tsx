@@ -57,7 +57,7 @@ const AGENT_GOALS = [
   "Is actively looking for new business clients",
   "Has capacity to accept additional projects",
   "Has a clear target market",
-  "Would benefit from Winsalot Corp generating qualified appointments for them",
+  "Would benefit from Winsalot Corp. generating qualified appointments for them",
   "Is interested in discussing the service further",
 ];
 
@@ -110,7 +110,7 @@ export default function WebDesignProspectingTrainingContent() {
       <Card>
         <h2 className="text-base font-bold text-[var(--color-ink-strong)]">Purpose</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--color-ink)]">
-          Winsalot Corp helps website and digital service providers generate qualified B2B
+          Winsalot Corp. helps website and digital service providers generate qualified B2B
           appointments with businesses that may need a new website, website redesign, e-commerce
           website, or rebranding of their existing online presence.
         </p>
@@ -156,9 +156,9 @@ export default function WebDesignProspectingTrainingContent() {
       </Card>
 
       <Card>
-        <h2 className="text-base font-bold text-[var(--color-ink-strong)]">What Winsalot Corp Is Offering</h2>
+        <h2 className="text-base font-bold text-[var(--color-ink-strong)]">What Winsalot Corp. Is Offering</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--color-ink)]">
-          Agents should explain that Winsalot Corp provides B2B lead generation and
+          Agents should explain that Winsalot Corp. provides B2B lead generation and
           appointment-setting services. The objective is to connect the website company with
           businesses interested in discussing:
         </p>
@@ -241,7 +241,7 @@ export default function WebDesignProspectingTrainingContent() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-[var(--color-accent-soft-text)]">
             Agents should never promise a specific number of customers or guarantee that an
-            appointment will become a sale. Winsalot Corp generates and qualifies opportunities
+            appointment will become a sale. Winsalot Corp. generates and qualifies opportunities
             and appointments; the client is responsible for presenting their website services and
             closing the business.
           </p>

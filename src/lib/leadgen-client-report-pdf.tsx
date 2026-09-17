@@ -49,7 +49,7 @@ export function LeadgenClientReportPdf({ report }: { report: LeadgenClientReport
             <View style={styles.brandRow}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image is not an HTML image. */}
               <Image src={WINSALOT_LOGO_DATA_URI} style={styles.logo} />
-              <Text style={styles.brand}>Winsalot Corp</Text>
+              <Text style={styles.brand}>Winsalot Corp.</Text>
             </View>
             <Text style={styles.tagline}>Empowering Businesses, One Solution at a Time.</Text>
           </View>
@@ -104,7 +104,7 @@ export function LeadgenClientReportPdf({ report }: { report: LeadgenClientReport
           ))}
         </View>
 
-        <Text style={styles.footer} fixed>Winsalot Corp · info@winsalotcorp.com · winsalotcorp.com</Text>
+        <Text style={styles.footer} fixed>Winsalot Corp. · info@winsalotcorp.com · winsalotcorp.com</Text>
       </Page>
     </Document>
   );

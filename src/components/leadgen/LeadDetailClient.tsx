@@ -56,7 +56,7 @@ const MANTRA_COLLAB_EMAIL_BODY =
   "You can book a free 15-minute consultation to learn how Mantra Collab can help {{business_name}}.\n\n" +
   "{{booking_section}}\n\n" +
   "Best regards,\n\n" +
-  "Winsalot Corp\n" +
+  "Winsalot Corp.\n" +
   "on behalf of Mantra Collab";
 
 export type LeadDetailActions = {

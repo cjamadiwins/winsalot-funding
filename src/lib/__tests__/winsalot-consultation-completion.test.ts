@@ -161,7 +161,7 @@ describe("performWinsalotCompletion", () => {
     // the CTA always links to the public /continue-with-winsalot page -
     // never a protected, authenticated page.
     expect(sentEmail.replyTo).toBeTruthy();
-    expect(sentEmail.text).toContain("Continue With Winsalot Corp: ");
+    expect(sentEmail.text).toContain("Continue With Winsalot Corp.: ");
     expect(sentEmail.text).toContain("/continue-with-winsalot");
     expect(sentEmail.text).not.toContain("/client/dashboard");
     expect(sentEmail.html).toContain("/continue-with-winsalot");
@@ -240,7 +240,7 @@ describe("consultation follow-up email content", () => {
     emailsSendMock.mockClear();
   });
 
-  it("always includes the public Continue With Winsalot Corp CTA, never a protected client dashboard link", async () => {
+  it("always includes the public Continue With Winsalot Corp. CTA, never a protected client dashboard link", async () => {
     const { admin } = makeFakeAdmin(baseAppointment);
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
     vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
@@ -249,13 +249,13 @@ describe("consultation follow-up email content", () => {
     const preview = await getWinsalotFollowUpEmailPreview("appt-1");
 
     expect(preview.error).toBeUndefined();
-    expect("text" in preview && preview.text).toContain("Continue With Winsalot Corp: ");
+    expect("text" in preview && preview.text).toContain("Continue With Winsalot Corp.: ");
     expect("text" in preview && preview.text).toContain("/continue-with-winsalot");
     expect("text" in preview && preview.text).not.toContain("/client/dashboard");
     // The Reply-To address stays active regardless of the CTA - a prospect
     // can always reply directly if they prefer.
     expect("text" in preview && preview.text).toContain("reply directly to this email");
-    expect("subject" in preview && preview.subject).toBe("Thank you for speaking with Winsalot Corp");
+    expect("subject" in preview && preview.subject).toBe("Thank you for speaking with Winsalot Corp.");
     expect(emailsSendMock).not.toHaveBeenCalled();
   });
 });

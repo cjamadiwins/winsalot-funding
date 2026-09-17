@@ -32,7 +32,7 @@ const inputClass =
   "w-full rounded-[10px] border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3.5 py-[13px] font-sans text-[14.5px]";
 
 const SUCCESS_MESSAGE =
-  "Thank you! Your request has been received. A Winsalot Corp representative will contact you within one business day.";
+  "Thank you! Your request has been received. A Winsalot Corp. representative will contact you within one business day.";
 
 export default function LeadGenerationIntakeForm() {
   const [form, setForm] = useState<FormState>(initialState);

@@ -93,7 +93,7 @@ function csvCell(value: string | number): string {
 
 export function leadgenClientReportCsv(report: LeadgenClientReport): string {
   const rows: Array<Array<string | number>> = [
-    ["Winsalot Corp Client Performance Report"],
+    ["Winsalot Corp. Client Performance Report"],
     ["Client", report.client.name],
     ["Period", `${report.period.from} to ${report.period.to}`],
     [],

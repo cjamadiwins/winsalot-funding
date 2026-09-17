@@ -35,7 +35,7 @@ export async function clientLoginAction(formData: FormData) {
     await supabase.auth.signOut();
     redirect(
       `/client?error=${encodeURIComponent(
-        "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp if you believe this is an error."
+        "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp. if you believe this is an error."
       )}`
     );
   }

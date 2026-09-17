@@ -3,7 +3,7 @@ import LeadGenerationHeader from "@/components/LeadGenerationHeader";
 import LeadGenerationIntakeForm from "@/components/LeadGenerationIntakeForm";
 
 export const metadata: Metadata = {
-  title: "Lead Generation Client Intake | Winsalot Corp",
+  title: "Lead Generation Client Intake | Winsalot Corp.",
   description:
     "Register your business for Winsalot's lead generation service and tell us about your target industry and campaign goals.",
 };

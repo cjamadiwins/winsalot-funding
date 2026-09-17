@@ -21,7 +21,7 @@ export default function Hero() {
             Get funded in 48 hours.
           </h1>
           <div className="mt-6 text-[19px] leading-[1.55] text-[var(--color-ink-soft)]">
-            To get funded, Winsalot Corp requires:
+            To get funded, Winsalot Corp. requires:
           </div>
           <ul className="mt-4 flex flex-col gap-2.5">
             {heroRequirements.map((req) => (

@@ -13,7 +13,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
   return (
     <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ maxWidth: 440, textAlign: "center" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Winsalot Corp</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Winsalot Corp.</h1>
         {"error" in result ? (
           <p style={{ fontSize: 15, color: "#374151" }}>{result.error}</p>
         ) : (

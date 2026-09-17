@@ -123,8 +123,8 @@ async function notifyOfWinsalotContinueRequest(
 
   tasks.push(
     notifyAdmins(admin, {
-      title: "Prospect wants to continue with Winsalot Corp",
-      body: `${input.contactName} at ${input.businessName} clicked "Continue With Winsalot Corp" and wants to move forward.`,
+      title: "Prospect wants to continue with Winsalot Corp.",
+      body: `${input.contactName} at ${input.businessName} clicked "Continue With Winsalot Corp." and wants to move forward.`,
       linkPath: opportunityId ? `/admin/crm/opportunities/${opportunityId}` : "/admin/crm/opportunities",
     })
   );
@@ -178,7 +178,7 @@ export async function performWinsalotContinueRequest(input: WinsalotContinueRequ
       opportunity_id: opportunityId,
       agent_id: null,
       activity_type: "continue_request_submitted",
-      notes: `${input.contactName.trim()} clicked "Continue With Winsalot Corp" and wants to move forward.`,
+      notes: `${input.contactName.trim()} clicked "Continue With Winsalot Corp." and wants to move forward.`,
     });
   }
 

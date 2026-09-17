@@ -28,7 +28,7 @@ export default function Footer() {
       <div className="mx-auto mb-10 flex max-w-[1200px] flex-col items-start justify-between gap-10 sm:flex-row">
         <div className="flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/winsalot-logo.png" alt="Winsalot Corp" className="h-14 w-auto" />
+          <img src="/winsalot-logo.png" alt="Winsalot Corp." className="h-14 w-auto" />
         </div>
         <div className="flex flex-wrap gap-16 text-sm text-[var(--color-text-muted-2)] sm:gap-20">
           {FOOTER_COLUMNS.map((col) => (

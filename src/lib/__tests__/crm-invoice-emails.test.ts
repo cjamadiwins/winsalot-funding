@@ -25,7 +25,7 @@ describe("buildDefaultInvoiceSentMessage - exact default monthly invoice templat
   const message = buildDefaultInvoiceSentMessage(baseInvoice, "Brent's Essentials");
 
   it("uses the exact required subject, naming the invoice", () => {
-    expect(defaultInvoiceSentSubject("INV-2026-0007")).toBe("Invoice INV-2026-0007 from Winsalot Corp");
+    expect(defaultInvoiceSentSubject("INV-2026-0007")).toBe("Invoice INV-2026-0007 from Winsalot Corp.");
   });
 
   it("starts with the exact required opening line", () => {
@@ -43,7 +43,7 @@ describe("buildDefaultInvoiceSentMessage - exact default monthly invoice templat
   it("keeps the required Winsalot Billing signature block", () => {
     expect(message).toContain("Best regards,");
     expect(message).toContain("Winsalot Billing");
-    expect(message).toContain("Winsalot Corp");
+    expect(message).toContain("Winsalot Corp.");
     expect(message).toContain("Empowering Businesses, One Solution at a Time.");
     expect(message).toContain("info@winsalotcorp.com");
     expect(message).toContain("647-300-1270");
@@ -72,7 +72,7 @@ describe("buildDefaultInvoiceReminderMessage", () => {
   });
 
   it("subject names the exact invoice", () => {
-    expect(defaultInvoiceReminderSubject("INV-2026-0007")).toBe("Payment Reminder: Invoice INV-2026-0007 from Winsalot Corp");
+    expect(defaultInvoiceReminderSubject("INV-2026-0007")).toBe("Payment Reminder: Invoice INV-2026-0007 from Winsalot Corp.");
   });
 });
 
@@ -96,7 +96,7 @@ describe("buildDefaultInvoiceReceiptMessage", () => {
   });
 
   it("subject names the exact invoice", () => {
-    expect(defaultInvoiceReceiptSubject("INV-2026-0007")).toBe("Payment Receipt: Invoice INV-2026-0007 from Winsalot Corp");
+    expect(defaultInvoiceReceiptSubject("INV-2026-0007")).toBe("Payment Receipt: Invoice INV-2026-0007 from Winsalot Corp.");
   });
 });
 

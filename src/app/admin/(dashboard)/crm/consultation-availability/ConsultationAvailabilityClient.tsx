@@ -147,9 +147,9 @@ export default function ConsultationAvailabilityClient({
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Company SMS Notification Number</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Winsalot Corp&apos;s own phone number for Growth CRM consultation bookings — receives an immediate SMS the
+          Winsalot Corp.&apos;s own phone number for Growth CRM consultation bookings — receives an immediate SMS the
           moment an appointment is booked, plus automatic 24-hour and 1-hour reminders. No client record is needed
-          for Winsalot Corp to receive these; this number applies only to the Growth CRM.
+          for Winsalot Corp. to receive these; this number applies only to the Growth CRM.
         </p>
         <form action={handleSaveCompanySmsNumber} className="mt-4 flex flex-wrap items-end gap-3">
           <Labeled label="Company SMS Notification Number">
@@ -186,7 +186,7 @@ export default function ConsultationAvailabilityClient({
           </label>
           <p className="mt-1 text-xs text-slate-500">
             Controls the prospect-facing 24-hour and 1-hour reminder SMS above. Off by default; the immediate booking
-            SMS and Winsalot Corp&apos;s own notifications are unaffected. Independent of email, which is always on.
+            SMS and Winsalot Corp.&apos;s own notifications are unaffected. Independent of email, which is always on.
           </p>
           <button type="submit" disabled={isPending} className={`${buttonClass} mt-3`}>
             Save

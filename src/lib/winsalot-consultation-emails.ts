@@ -42,7 +42,7 @@ function shell(bodyHtml: string, title: string): string {
           <tr>
             <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
               <p style="margin:0; font-size:12px; line-height:1.6; color:#6b7280;">
-                Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+                Winsalot Corp. · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
               </p>
             </td>
           </tr>
@@ -100,18 +100,18 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
   const textLines = [
     `Hi ${params.contactName},`,
     "",
-    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been confirmed.`,
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. has been confirmed.`,
     "",
     `Business: ${params.businessName}`,
     `Date: ${date}`,
     `Time: ${time}`,
     `Timezone: ${timezoneLabel}`,
     "",
-    "We look forward to learning more about your business and discussing how Winsalot Corp may be able to support your goals.",
+    "We look forward to learning more about your business and discussing how Winsalot Corp. may be able to support your goals.",
   ];
   if (params.rescheduleUrl) textLines.push("", `Need to reschedule? ${params.rescheduleUrl}`);
   if (params.cancelUrl) textLines.push(`Need to cancel? ${params.cancelUrl}`);
-  textLines.push("", "Best regards,", "Winsalot Corp", "647-300-1270", "info@winsalotcorp.com", "winsalotcorp.com");
+  textLines.push("", "Best regards,", "Winsalot Corp.", "647-300-1270", "info@winsalotcorp.com", "winsalotcorp.com");
 
   const detailsHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 20px; font-size:14px; color:#111827;">
@@ -128,9 +128,9 @@ export function buildWinsalotConfirmationEmail(params: ConsultationEmailParams):
   }
 
   const bodyHtml = `
-    ${paragraphsHtml([`Hi ${params.contactName},`, "", `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been confirmed.`])}
+    ${paragraphsHtml([`Hi ${params.contactName},`, "", `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. has been confirmed.`])}
     ${detailsHtml}
-    ${paragraphsHtml(["We look forward to learning more about your business and discussing how Winsalot Corp may be able to support your goals."])}
+    ${paragraphsHtml(["We look forward to learning more about your business and discussing how Winsalot Corp. may be able to support your goals."])}
     ${linksHtml}
   `;
 
@@ -180,12 +180,12 @@ export function buildWinsalotContinueRequestNotification(params: {
   crmLink: string;
 }): WinsalotEmailBody {
   const serviceLabel = winsalotServiceTypeLabel(params.serviceType);
-  const subject = `${params.businessName} wants to continue with Winsalot Corp`;
+  const subject = `${params.businessName} wants to continue with Winsalot Corp.`;
 
   const lines = [
     "Hi there,",
     "",
-    `${params.contactName} at ${params.businessName} clicked "Continue With Winsalot Corp" after their consultation and wants to move forward.`,
+    `${params.contactName} at ${params.businessName} clicked "Continue With Winsalot Corp." after their consultation and wants to move forward.`,
     "",
     `Contact: ${params.contactName}`,
     `Business: ${params.businessName}`,
@@ -203,11 +203,11 @@ export function buildWinsalotContinueRequestNotification(params: {
 export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
   const appointmentTypeLabel = winsalotAppointmentTypeCopyLabel(params.appointmentType);
-  const subject = "Your appointment with Winsalot Corp has been rescheduled";
+  const subject = "Your appointment with Winsalot Corp. has been rescheduled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
-    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been rescheduled.`,
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. has been rescheduled.`,
     "",
     `Business: ${params.businessName}`,
     `New Date: ${date}`,
@@ -216,7 +216,7 @@ export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): W
   ];
   if (params.rescheduleUrl) lines.push("", `Need to reschedule again? ${params.rescheduleUrl}`);
   if (params.cancelUrl) lines.push(`Need to cancel? ${params.cancelUrl}`);
-  lines.push("", "Best regards,", "Winsalot Corp");
+  lines.push("", "Best regards,", "Winsalot Corp.");
 
   let linksHtml = "";
   if (params.rescheduleUrl) linksHtml += ctaButtonHtml(params.rescheduleUrl, "Reschedule Again");
@@ -227,7 +227,7 @@ export function buildWinsalotRescheduleEmail(params: ConsultationEmailParams): W
   const bodyHtml = `${paragraphsHtml([
     `Hi ${params.contactName},`,
     "",
-    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp has been rescheduled.`,
+    `Your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. has been rescheduled.`,
   ])}${paragraphsHtml([
     `Business: ${params.businessName}`,
     `New Date: ${date}`,
@@ -245,7 +245,7 @@ export function buildWinsalotCancellationEmail(params: {
   timezone: string;
 }): WinsalotEmailBody {
   const { date, time, timezoneLabel } = formatAppointmentDateTime(params.startUtcIso, params.timezone);
-  const subject = "Your appointment with Winsalot Corp has been cancelled";
+  const subject = "Your appointment with Winsalot Corp. has been cancelled";
   const lines = [
     `Hi ${params.contactName},`,
     "",
@@ -254,7 +254,7 @@ export function buildWinsalotCancellationEmail(params: {
     "If you'd like to book a new time, just reply to this email or visit our booking page again.",
     "",
     "Best regards,",
-    "Winsalot Corp",
+    "Winsalot Corp.",
   ];
   const bodyHtml = paragraphsHtml(lines);
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };
@@ -304,7 +304,7 @@ export type FollowUpEmailParams = {
 // include and the next step.
 export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): WinsalotEmailBody {
   const firstName = firstNameOf(params.contactName);
-  const subject = "Thank you for speaking with Winsalot Corp";
+  const subject = "Thank you for speaking with Winsalot Corp.";
 
   const campaignBullets = [
     "Dedicated outbound prospecting for your business",
@@ -317,7 +317,7 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "Monthly performance reporting",
     "Ongoing campaign optimization",
     "Access to your client dashboard to monitor leads, appointments, and campaign progress",
-    "Ongoing support from the Winsalot Corp team",
+    "Ongoing support from the Winsalot Corp. team",
   ];
 
   const introLines = [
@@ -327,7 +327,7 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "",
     "As discussed, our goal is to help your business consistently connect with qualified potential customers through targeted B2B outreach and appointment setting.",
     "",
-    "When you work with Winsalot Corp, your campaign can include:",
+    "When you work with Winsalot Corp., your campaign can include:",
   ];
 
   const closingLines = [
@@ -336,7 +336,7 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "If you decide to move forward, we will complete your onboarding and set up your campaign based on your target market, services, and ideal customer.",
   ];
 
-  const nextStepLines = ["If you'd like to move forward with Winsalot Corp, click the button below to continue with the next step."];
+  const nextStepLines = ["If you'd like to move forward with Winsalot Corp., click the button below to continue with the next step."];
   const replyLine = "You can also reply directly to this email if you have any questions.";
 
   const textLines = [
@@ -347,12 +347,12 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
     "",
     ...nextStepLines,
     "",
-    `Continue With Winsalot Corp: ${params.continueUrl}`,
+    `Continue With Winsalot Corp.: ${params.continueUrl}`,
     "",
     replyLine,
     "",
     "Best regards,",
-    "Winsalot Corp",
+    "Winsalot Corp.",
     "647-300-1270",
     "info@winsalotcorp.com",
     "winsalotcorp.com",
@@ -360,7 +360,7 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
 
   const ctaHtml = `
     ${paragraphsHtml(nextStepLines)}
-    ${ctaButtonHtml(params.continueUrl, "Continue With Winsalot Corp")}
+    ${ctaButtonHtml(params.continueUrl, "Continue With Winsalot Corp.")}
     ${paragraphsHtml([replyLine])}
   `;
 
@@ -382,13 +382,13 @@ export function buildWinsalotReminderEmail(
   const when = params.reminderType === "24_hour_reminder" ? "tomorrow" : "in about 1 hour";
   const subject =
     params.reminderType === "24_hour_reminder"
-      ? "Reminder: your appointment with Winsalot Corp is tomorrow"
-      : "Reminder: your appointment with Winsalot Corp is in 1 hour";
+      ? "Reminder: your appointment with Winsalot Corp. is tomorrow"
+      : "Reminder: your appointment with Winsalot Corp. is in 1 hour";
 
   const lines = [
     `Hi ${params.contactName},`,
     "",
-    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp is ${when}.`,
+    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. is ${when}.`,
     "",
     `Business: ${params.businessName}`,
     `Date: ${date}`,
@@ -397,7 +397,7 @@ export function buildWinsalotReminderEmail(
   ];
   if (params.rescheduleUrl) lines.push("", `Need to reschedule? ${params.rescheduleUrl}`);
   if (params.cancelUrl) lines.push(`Need to cancel? ${params.cancelUrl}`);
-  lines.push("", "We look forward to speaking with you!", "", "Best regards,", "Winsalot Corp");
+  lines.push("", "We look forward to speaking with you!", "", "Best regards,", "Winsalot Corp.");
 
   let linksHtml = "";
   if (params.rescheduleUrl) linksHtml += ctaButtonHtml(params.rescheduleUrl, "Reschedule");
@@ -405,7 +405,7 @@ export function buildWinsalotReminderEmail(
   const bodyHtml = `${paragraphsHtml([
     `Hi ${params.contactName},`,
     "",
-    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp is ${when}.`,
+    `This is a reminder that your free 15-minute ${appointmentTypeLabel} with Winsalot Corp. is ${when}.`,
   ])}${paragraphsHtml([`Business: ${params.businessName}`, `Date: ${date}`, `Time: ${time}`, `Timezone: ${timezoneLabel}`])}${linksHtml}`;
 
   return { subject, text: lines.join("\n"), html: shell(bodyHtml, subject) };

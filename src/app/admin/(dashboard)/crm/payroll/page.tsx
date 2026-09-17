@@ -99,7 +99,7 @@ export default async function AdminCrmPayrollPage() {
       {!error && (
         <div id="agent-payroll" className="mt-6 scroll-mt-6">
           <AdminPayrollClient
-            companyName="Winsalot Corp"
+            companyName="Winsalot Corp."
             crmLabel="Winsalot Growth CRM"
             agents={((agents ?? []) as CrmUserRow[]).map((a) => ({
               id: a.id,

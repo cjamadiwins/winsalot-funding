@@ -21,7 +21,7 @@ export function buildFollowUpEmailText(customerName: string): string {
   return [
     `Hello ${firstName},`,
     "",
-    "We wanted to follow up — we haven't heard back from you yet about growing your business with Winsalot Corp's lead generation and business financing services.",
+    "We wanted to follow up — we haven't heard back from you yet about growing your business with Winsalot Corp.'s lead generation and business financing services.",
     "",
     "If you're still interested, just reply to this email or give us a call and we'll pick up right where we left off.",
     "",
@@ -48,7 +48,7 @@ export function buildFollowUpEmailHtml(customerName: string): string {
 </p>
 <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
   We wanted to follow up — we haven&apos;t heard back from you yet about growing your
-  business with Winsalot Corp&apos;s lead generation and business financing services.
+  business with Winsalot Corp.&apos;s lead generation and business financing services.
 </p>
 <p style="margin:0 0 16px 0; font-size:15px; line-height:1.6;">
   If you&apos;re still interested, just reply to this email or give us a call and
@@ -65,7 +65,7 @@ export function buildFollowUpEmailHtml(customerName: string): string {
   info@winsalotcorp.com
 </p>
 <p style="margin:16px 0 0 0; padding-top:16px; border-top:1px solid #e5e7eb; font-size:12px; line-height:1.5; color:#6b7280;">
-  You're receiving this because you spoke with Winsalot Corp about growing your business.
+  You're receiving this because you spoke with Winsalot Corp. about growing your business.
 </p>
 </div>`;
 }

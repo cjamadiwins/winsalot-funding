@@ -2,9 +2,9 @@ export default function LeadGenerationHeader() {
   return (
     <div className="flex flex-col items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-8 py-12 text-center sm:px-14">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/winsalot-logo.png" alt="Winsalot Corp" className="h-16 w-auto" />
+      <img src="/winsalot-logo.png" alt="Winsalot Corp." className="h-16 w-auto" />
       <div className="font-heading text-[13.5px] font-semibold uppercase tracking-wide text-[var(--color-ink-mute)]">
-        Winsalot Corp
+        Winsalot Corp.
       </div>
       <h1 className="max-w-lg font-heading text-[26px] font-bold text-[var(--color-ink-strong)] sm:text-[30px]">
         Lead Generation Client Intake Form

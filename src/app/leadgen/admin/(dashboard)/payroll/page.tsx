@@ -109,7 +109,7 @@ export default async function LeadgenAdminPayrollPage() {
       {!error && (
         <div id="agent-payroll" className="mt-6 scroll-mt-6">
           <AdminPayrollClient
-            companyName="Winsalot Corp"
+            companyName="Winsalot Corp."
             crmLabel="Lead Generation CRM"
             agents={((agents ?? []) as LeadgenUserRow[]).map((a) => ({
               id: a.id,
