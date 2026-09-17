@@ -25,7 +25,7 @@ import {
 export default async function AdminMarketingPage({
   searchParams,
 }: {
-  // Set by the "Enroll in Email Marketing" link on a business's own
+  // Set by the "Go to Email Marketing" link on a business's own
   // /admin/crm/opportunities/[id] record (AdminOpportunityDetailClient) so
   // this page can pre-select and highlight that exact business in the "Add
   // a Contacted Business" form below - the admin still has to complete
