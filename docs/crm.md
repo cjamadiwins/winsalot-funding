@@ -484,6 +484,39 @@ just fire-and-forget:
   provider-targeted rows the same table also holds — see migrations 0026/0028/0085) — it doesn't
   add any new tracking, writes, or Resend/webhook behavior of its own.
 
+### Send Email modal (opportunity pages)
+
+`ProspectEmailModal` (`src/components/ProspectEmailModal.tsx`) is the one "Send Email" modal
+shared, unmodified, by both `/admin/crm/opportunities/[id]` and `/agent/opportunities/[id]` — its
+two options:
+
+1. **Consultation Invitation** — the templated follow-up/booking email (`sendProspectEmail`),
+   shown first and given a purple card treatment (matching the page's own **Book Consultation**
+   button) since it's the general-purpose option for any interested prospect.
+2. **Detailed Service & Pricing** — a one-off reply for a prospect who specifically asked for
+   service/pricing details (`sendDetailedServicePricingEmail`, both in `src/lib/send-prospect-email.ts`),
+   kept in its existing blue styling, second in the list. Selecting **Lead Generation** shows the
+   admin-approved price (`crm_service_pricing`, $750/month by default) and an amber "Before
+   sending" reminder not to mention an unapproved pilot program.
+
+Both options write to the same `crm_lead_emails` ledger described above (`email_type` =
+`consultation_invite` | `detailed_service_pricing`) and never touch Email Marketing
+(`crm_marketing_enrollments`) — this is a one-off direct email, not a campaign enrollment.
+
+**2026-09-17 fix** — every "Detailed Service & Pricing" send was reporting "The email was sent,
+but delivery tracking could not be recorded." Root cause: migration
+[`20260917200853_crm_detailed_service_pricing_email.sql`](../supabase/migrations/20260917200853_crm_detailed_service_pricing_email.sql)
+(which creates `crm_service_pricing` and adds `'detailed_service_pricing'` to
+`crm_lead_emails_email_type_check`) had been committed to the repo but never actually applied to
+the live database, so the constraint still rejected that `email_type` and the `crm_lead_emails`
+insert in `sendDetailedServicePricingEmail` failed every time (the email itself still sent
+correctly — `getLeadGenerationPricing` silently falls back to the $750 default when the pricing
+table is missing, which is why the price was never wrong). Fixed by applying that already-written
+migration to the live project; no application code changed. One historical send (opportunity
+`e0fc0b3b-a5d8-4dc9-9e44-073b54e3d8d0`, "Maestro Tech") has a real `crm_activities` log entry but
+no `crm_lead_emails` row from before this fix — its original Resend email id was never recorded,
+so it can't be safely backfilled without re-sending; left as-is rather than fabricating a Resend id.
+
 ### Setting up the Resend webhook
 
 1. In the [Resend dashboard](https://resend.com/webhooks), click **Add Webhook**.
