@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
-import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import { sendDetailedServicePricingEmail, sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import type { DetailedService } from "@/lib/detailed-service-pricing";
 import { resubscribeEmail, type ResubscribeResult, type ResubscribeScope } from "@/lib/crm-email-suppression";
 import type { MarketingCampaignType } from "@/lib/crm-marketing-types";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
@@ -278,6 +279,36 @@ export async function sendProspectEmailAction(
   revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   revalidatePath("/admin/crm");
   return result;
+}
+
+export async function sendDetailedServicePricingEmailAction(
+  opportunityId: string,
+  service: DetailedService
+): Promise<SendProspectEmailResult> {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendDetailedServicePricingEmail(supabase, { opportunityId, crmUser, service });
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  revalidatePath("/admin/crm");
+  return result;
+}
+
+export async function updateLeadGenerationPriceAction(
+  opportunityId: string,
+  priceCents: number
+): Promise<{ error?: string }> {
+  const crmUser = await requireCrmAdmin();
+  if (!Number.isInteger(priceCents) || priceCents <= 0 || priceCents > 100_000_000) {
+    return { error: "Enter a valid approved monthly price." };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("crm_service_pricing")
+    .update({ price_cents: priceCents, updated_at: new Date().toISOString(), updated_by: crmUser.id })
+    .eq("service_key", "lead_generation");
+  if (error) return { error: "Failed to update the approved price." };
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  return {};
 }
 
 // Admin-only "Resubscribe" - clears an unsubscribed prospect's

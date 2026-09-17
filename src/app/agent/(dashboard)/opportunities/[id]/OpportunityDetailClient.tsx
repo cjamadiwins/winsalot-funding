@@ -32,6 +32,7 @@ import {
   rescheduleOpportunityFollowUpAction,
   scheduleOpportunityFollowUpAction,
   sendProspectEmailAction,
+  sendDetailedServicePricingEmailAction,
   updateOpportunityFieldsAction,
   updateOpportunityStageAction,
 } from "./actions";
@@ -47,7 +48,8 @@ export default function OpportunityDetailClient({
   emailHistory,
   isEmailSuppressed,
   dncSuppression = null,
-  bookingUrl,
+  continueUrl,
+  leadGenerationPricing,
   onBack,
 }: {
   opportunity: CrmOpportunityRow;
@@ -60,7 +62,8 @@ export default function OpportunityDetailClient({
   // to null so the Opportunity Finder dashboard modal (which doesn't pass
   // it yet) keeps compiling; the standalone page always supplies it.
   dncSuppression?: DncSuppressionRow | null;
-  bookingUrl: string;
+  continueUrl: string;
+  leadGenerationPricing: import("@/lib/detailed-service-pricing").ServicePricing;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
   // to My Opportunities" link for a button that switches the modal back to
@@ -466,9 +469,11 @@ export default function OpportunityDetailClient({
           contactName={opportunity.contact_name}
           toEmail={opportunity.email}
           opportunityType={opportunity.opportunity_type}
-          bookingUrl={bookingUrl}
+          continueUrl={continueUrl}
+          leadGenerationPricing={leadGenerationPricing}
           onClose={() => setShowEmailModal(false)}
           onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
+          onSendDetailed={(service) => sendDetailedServicePricingEmailAction(opportunity.id, service)}
           onSent={() => window.location.reload()}
         />
       )}

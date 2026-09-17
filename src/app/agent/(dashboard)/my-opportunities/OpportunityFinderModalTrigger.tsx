@@ -137,7 +137,8 @@ export default function OpportunityFinderModalTrigger({
                 currentAgentId={currentAgentId}
                 emailHistory={detail.emailHistory}
                 isEmailSuppressed={detail.isEmailSuppressed}
-                bookingUrl={detail.bookingUrl}
+                continueUrl={detail.continueUrl}
+                leadGenerationPricing={detail.leadGenerationPricing}
                 onBack={backToList}
               />
             </>

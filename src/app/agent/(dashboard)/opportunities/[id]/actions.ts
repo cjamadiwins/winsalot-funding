@@ -5,7 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { loadAgentOpportunityDetail, type AgentOpportunityDetailData } from "@/lib/agent-opportunity-detail-data";
-import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import { sendDetailedServicePricingEmail, sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
+import type { DetailedService } from "@/lib/detailed-service-pricing";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
@@ -361,6 +362,17 @@ export async function sendProspectEmailAction(
 
   const result = await sendProspectEmail(supabase, { opportunityId, crmUser, ...input });
 
+  revalidateOpportunity(opportunityId);
+  return result;
+}
+
+export async function sendDetailedServicePricingEmailAction(
+  opportunityId: string,
+  service: DetailedService
+): Promise<SendProspectEmailResult> {
+  const crmUser = await requireCrmUser();
+  const supabase = await createSupabaseServerClient();
+  const result = await sendDetailedServicePricingEmail(supabase, { opportunityId, crmUser, service });
   revalidateOpportunity(opportunityId);
   return result;
 }

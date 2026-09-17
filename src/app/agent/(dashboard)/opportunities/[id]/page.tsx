@@ -39,7 +39,8 @@ export default async function AgentOpportunityDetailPage({
       emailHistory={detail.emailHistory}
       isEmailSuppressed={detail.isEmailSuppressed}
       dncSuppression={detail.dncSuppression}
-      bookingUrl={detail.bookingUrl}
+      continueUrl={detail.continueUrl}
+      leadGenerationPricing={detail.leadGenerationPricing}
     />
   );
 }

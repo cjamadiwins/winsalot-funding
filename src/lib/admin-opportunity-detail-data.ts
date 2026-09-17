@@ -11,6 +11,9 @@ import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import { fetchWinsalotFollowUpStatusMap, type WinsalotFollowUpStatusEntry } from "@/lib/winsalot-consultation-completion";
 import type { CrmMarketingEnrollmentRow } from "@/lib/crm-marketing-types";
 import { deriveEmailMarketingStatus, type EmailMarketingStatus } from "@/lib/crm-email-marketing-status";
+import { getLeadGenerationPricing } from "@/lib/crm-service-pricing";
+import type { ServicePricing } from "@/lib/detailed-service-pricing";
+import { getSiteUrl } from "@/lib/site-url";
 
 export type AdminOpportunityDetailData = {
   opportunity: CrmOpportunityRow;
@@ -24,6 +27,7 @@ export type AdminOpportunityDetailData = {
   // Shared cross-CRM Do Not Contact restriction - see agent-opportunity-detail-data.ts.
   dncSuppression: DncSuppressionRow | null;
   bookingUrl: string;
+  continueUrl: string;
   appointments: WinsalotAppointmentRow[];
   // Webhook-aware Consultation Follow-Up status (Not Sent/Sending/Sent/
   // Delivered/Bounced/Failed) per appointment id - same derivation
@@ -38,6 +42,7 @@ export type AdminOpportunityDetailData = {
   // opportunity has never been enrolled in the weekly sequence at all.
   marketingEnrollment: CrmMarketingEnrollmentRow | null;
   emailMarketingStatus: EmailMarketingStatus;
+  leadGenerationPricing: ServicePricing;
 };
 
 // One Growth CRM opportunity's full detail record - the exact same query
@@ -63,6 +68,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     { data: appointments },
     { data: score },
     { data: marketingEnrollment },
+    leadGenerationPricing,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
     supabase.from("crm_activities").select("*").eq("opportunity_id", id).order("occurred_at", { ascending: false }),
@@ -85,6 +91,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     supabase.from("winsalot_appointments").select("*").eq("opportunity_id", id).order("appointment_start_at", { ascending: false }),
     supabase.from("crm_opportunity_scores").select("*").eq("opportunity_id", id).maybeSingle(),
     supabase.from("crm_marketing_enrollments").select("*").eq("opportunity_id", id).maybeSingle(),
+    getLeadGenerationPricing(supabase),
   ]);
 
   if (!opportunity) return null;
@@ -116,10 +123,12 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     suppression: suppression as CrmEmailSuppressionRow | null,
     dncSuppression,
     bookingUrl: getWinsalotBookingUrlBase(),
+    continueUrl: `${getSiteUrl()}/continue-with-winsalot`,
     appointments: (appointments ?? []) as WinsalotAppointmentRow[],
     followUpStatusByAppointmentId,
     score: score as CrmOpportunityScoreRow | null,
     marketingEnrollment: marketingEnrollment as CrmMarketingEnrollmentRow | null,
     emailMarketingStatus,
+    leadGenerationPricing,
   };
 }

@@ -7,6 +7,9 @@ import { getWinsalotBookingUrlBase } from "@/lib/send-prospect-email";
 import type { CrmActivityRow, CrmFollowUpRow, CrmOpportunityRow } from "@/lib/crm-types";
 import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
+import { getLeadGenerationPricing } from "@/lib/crm-service-pricing";
+import type { ServicePricing } from "@/lib/detailed-service-pricing";
+import { getSiteUrl } from "@/lib/site-url";
 
 export type AgentOpportunityDetailData = {
   opportunity: CrmOpportunityRow;
@@ -18,12 +21,14 @@ export type AgentOpportunityDetailData = {
   // looked up by this opportunity's phone/email - null when unrestricted.
   dncSuppression: DncSuppressionRow | null;
   bookingUrl: string;
+  continueUrl: string;
   // Not accepted by OpportunityDetailClient (the standalone agent page
   // never showed it) - carried here only so the Opportunity Finder
   // dashboard modal can show the same "why this score" explanation the
   // admin's own detail view already displays, without changing the
   // standalone page.
   score: CrmOpportunityScoreRow | null;
+  leadGenerationPricing: ServicePricing;
 };
 
 // One Growth CRM opportunity's full detail record, scoped to the
@@ -36,7 +41,7 @@ export async function loadAgentOpportunityDetail(id: string): Promise<AgentOppor
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
 
-  const [{ data: opportunity }, { data: activities }, { data: followUps }, { data: emailHistory }, { data: score }] = await Promise.all([
+  const [{ data: opportunity }, { data: activities }, { data: followUps }, { data: emailHistory }, { data: score }, leadGenerationPricing] = await Promise.all([
     supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
     supabase.from("crm_activities").select("*").eq("opportunity_id", id).order("occurred_at", { ascending: false }),
     supabase.from("crm_followups").select("*").eq("opportunity_id", id).order("scheduled_at", { ascending: true }),
@@ -46,6 +51,7 @@ export async function loadAgentOpportunityDetail(id: string): Promise<AgentOppor
       .eq("opportunity_id", id)
       .order("created_at", { ascending: false }),
     supabase.from("crm_opportunity_scores").select("*").eq("opportunity_id", id).maybeSingle(),
+    getLeadGenerationPricing(supabase),
   ]);
 
   if (!opportunity) return null;
@@ -69,6 +75,8 @@ export async function loadAgentOpportunityDetail(id: string): Promise<AgentOppor
     isEmailSuppressed: suppressed,
     dncSuppression,
     bookingUrl: getWinsalotBookingUrlBase(),
+    continueUrl: `${getSiteUrl()}/continue-with-winsalot`,
     score: score as CrmOpportunityScoreRow | null,
+    leadGenerationPricing,
   };
 }

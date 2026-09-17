@@ -41,6 +41,8 @@ import {
   markApplicationSubmittedAction,
   resubscribeEmailAction,
   sendProspectEmailAction,
+  sendDetailedServicePricingEmailAction,
+  updateLeadGenerationPriceAction,
   updateOpportunityAction,
 } from "./actions";
 import {
@@ -70,7 +72,8 @@ export default function AdminOpportunityDetailClient({
   isEmailSuppressed,
   suppression,
   dncSuppression = null,
-  bookingUrl,
+  continueUrl,
+  leadGenerationPricing,
   appointments,
   followUpStatusByAppointmentId,
   score,
@@ -90,7 +93,8 @@ export default function AdminOpportunityDetailClient({
   // the Opportunity Finder dashboard modal (which doesn't pass it yet)
   // keeps compiling; the standalone page always supplies it.
   dncSuppression?: DncSuppressionRow | null;
-  bookingUrl: string;
+  continueUrl: string;
+  leadGenerationPricing: import("@/lib/detailed-service-pricing").ServicePricing;
   appointments: WinsalotAppointmentRow[];
   // Webhook-aware Consultation Follow-Up status (Not Sent/Sending/Sent/
   // Delivered/Bounced/Failed + recipient) per appointment id - see
@@ -632,9 +636,13 @@ export default function AdminOpportunityDetailClient({
           contactName={opportunity.contact_name}
           toEmail={opportunity.email}
           opportunityType={opportunity.opportunity_type}
-          bookingUrl={bookingUrl}
+          continueUrl={continueUrl}
+          leadGenerationPricing={leadGenerationPricing}
+          canUpdatePrice
           onClose={() => setShowEmailModal(false)}
           onSend={(input) => sendProspectEmailAction(opportunity.id, input)}
+          onSendDetailed={(service) => sendDetailedServicePricingEmailAction(opportunity.id, service)}
+          onUpdatePrice={(priceCents) => updateLeadGenerationPriceAction(opportunity.id, priceCents)}
           onSent={() => window.location.reload()}
         />
       )}

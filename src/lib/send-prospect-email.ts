@@ -8,6 +8,15 @@ import { buildProspectEmailHtml, buildProspectEmailText } from "./prospect-email
 import { getSiteUrl } from "./site-url";
 import { createWinsalotPrefillToken } from "./winsalot-consultation-tokens";
 import type { CrmUserRow } from "./crm-types";
+import { getLeadGenerationPricing } from "./crm-service-pricing";
+import {
+  buildDetailedServicePricingHtml,
+  buildDetailedServicePricingText,
+  DETAILED_SERVICE_LABELS,
+  formatLeadGenerationPrice,
+  getDetailedServicePricingTemplate,
+  type DetailedService,
+} from "./detailed-service-pricing";
 
 // Winsalot's own consultation-booking page - the real canonical value
 // WINSALOT_BOOKING_URL should always resolve to in production. Used as a
@@ -60,6 +69,12 @@ export type SendProspectEmailInput = {
 };
 
 export type SendProspectEmailResult = { error?: string; email?: string };
+
+export type SendDetailedServicePricingInput = {
+  opportunityId: string;
+  crmUser: CrmUserRow;
+  service: DetailedService;
+};
 
 // Shared by the admin and agent "Send Email" actions - the templated
 // consultation-invite email, editable by the sender in ProspectEmailModal
@@ -197,6 +212,117 @@ export async function sendProspectEmail(
   if (updateError) {
     return { error: "The email was sent, but updating the prospect's status failed." };
   }
+
+  return { email: toEmail };
+}
+
+// One-off response for a prospect who explicitly requested service and
+// pricing details. It deliberately writes only to the existing direct-email
+// ledger/activity timeline and never reads or mutates marketing enrollments.
+export async function sendDetailedServicePricingEmail(
+  supabase: SupabaseClient,
+  input: SendDetailedServicePricingInput
+): Promise<SendProspectEmailResult> {
+  if (!(["lead_generation", "business_financing"] as const).includes(input.service)) {
+    return { error: "Choose a valid service." };
+  }
+
+  const { data: opportunity, error: fetchError } = await supabase
+    .from("crm_opportunities")
+    .select("email, contact_name, business_name, stage, opportunity_type")
+    .eq("id", input.opportunityId)
+    .maybeSingle();
+  if (fetchError || !opportunity) return { error: "Prospect not found." };
+  if (!opportunity.email) return { error: "This prospect has no email address on file — add one before sending." };
+
+  const toEmail = opportunity.email.trim();
+  if (await isEmailSuppressed(toEmail)) {
+    return { error: "This prospect has unsubscribed from promotional emails and cannot be emailed." };
+  }
+
+  const pricing = await getLeadGenerationPricing(supabase);
+  const template = getDetailedServicePricingTemplate({
+    service: input.service,
+    contactName: opportunity.contact_name,
+    businessName: opportunity.business_name,
+    leadGenerationPricing: pricing,
+  });
+
+  const continueUrl = `${getSiteUrl()}/continue-with-winsalot`;
+  const unsubscribeToken = await createUnsubscribeToken(toEmail, input.opportunityId);
+  const unsubscribeUrl = `${getSiteUrl()}/unsubscribe/${unsubscribeToken}`;
+  const replyToEmail = getEmailReplyTo();
+
+  const resend = getResendClient();
+  const { data: sendResult, error: emailError } = await resend.emails.send({
+    from: senderForOpportunityType(opportunity.opportunity_type),
+    to: toEmail,
+    replyTo: replyToEmail,
+    subject: template.subject,
+    text: buildDetailedServicePricingText({
+      service: input.service,
+      contactName: opportunity.contact_name,
+      businessName: opportunity.business_name,
+      leadGenerationPricing: pricing,
+      continueUrl,
+    }),
+    html: buildDetailedServicePricingHtml({
+      service: input.service,
+      contactName: opportunity.contact_name,
+      businessName: opportunity.business_name,
+      leadGenerationPricing: pricing,
+      continueUrl,
+    }),
+    headers: {
+      "List-Unsubscribe": `<mailto:${replyToEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  });
+  if (emailError || !sendResult) {
+    return { error: `Failed to send the email: ${emailError?.message ?? "Unknown Resend error."}` };
+  }
+
+  const senderName = input.crmUser.full_name || input.crmUser.email;
+  const sentAt = new Date().toISOString();
+  const serviceLabel = DETAILED_SERVICE_LABELS[input.service];
+  const priceNote = input.service === "lead_generation" ? ` Price sent: ${formatLeadGenerationPrice(pricing)}.` : " Price sent: Not fixed.";
+  const { data: activity, error: activityError } = await supabase
+    .from("crm_activities")
+    .insert({
+      opportunity_id: input.opportunityId,
+      agent_id: input.crmUser.id,
+      activity_type: "email",
+      occurred_at: sentAt,
+      notes: `Detailed Service & Pricing email sent — prospect requested service and pricing information. Selected service: ${serviceLabel}.${priceNote} Sent by ${senderName}.`,
+    })
+    .select("id")
+    .single();
+  if (activityError) return { error: "The email was sent, but recording it in the activity history failed." };
+
+  const admin = getSupabaseAdmin();
+  const { error: trackingError } = await admin.from("crm_lead_emails").insert({
+    opportunity_id: input.opportunityId,
+    agent_id: input.crmUser.id,
+    activity_id: activity.id,
+    resend_email_id: sendResult.id,
+    email_type: "detailed_service_pricing",
+    to_email: toEmail,
+    subject: template.subject,
+    status: "sent",
+    status_at: sentAt,
+    sent_at: sentAt,
+  });
+  if (trackingError) return { error: "The email was sent, but delivery tracking could not be recorded." };
+
+  const updates: Record<string, unknown> = {
+    last_email_status: "sent",
+    last_email_status_at: sentAt,
+    last_email_type: "detailed_service_pricing",
+    last_email_to: toEmail,
+  };
+  if (opportunity.stage === "New Prospect") updates.stage = "Contacted";
+  const { error: updateError } = await supabase.from("crm_opportunities").update(updates).eq("id", input.opportunityId);
+  if (updateError) return { error: "The email was sent, but updating the prospect's status failed." };
 
   return { email: toEmail };
 }
