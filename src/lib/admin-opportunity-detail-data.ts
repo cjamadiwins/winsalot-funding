@@ -9,6 +9,8 @@ import type { EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import type { CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import type { WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import { fetchWinsalotFollowUpStatusMap, type WinsalotFollowUpStatusEntry } from "@/lib/winsalot-consultation-completion";
+import type { CrmMarketingEnrollmentRow } from "@/lib/crm-marketing-types";
+import { deriveEmailMarketingStatus, type EmailMarketingStatus } from "@/lib/crm-email-marketing-status";
 
 export type AdminOpportunityDetailData = {
   opportunity: CrmOpportunityRow;
@@ -31,6 +33,11 @@ export type AdminOpportunityDetailData = {
   // column value.
   followUpStatusByAppointmentId: Record<string, WinsalotFollowUpStatusEntry>;
   score: CrmOpportunityScoreRow | null;
+  // Growth CRM Email Marketing enrollment status for this business - see
+  // crm-email-marketing-status.ts. `marketingEnrollment` is null when this
+  // opportunity has never been enrolled in the weekly sequence at all.
+  marketingEnrollment: CrmMarketingEnrollmentRow | null;
+  emailMarketingStatus: EmailMarketingStatus;
 };
 
 // One Growth CRM opportunity's full detail record - the exact same query
@@ -55,6 +62,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     { data: emailHistory },
     { data: appointments },
     { data: score },
+    { data: marketingEnrollment },
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").eq("id", id).maybeSingle(),
     supabase.from("crm_activities").select("*").eq("opportunity_id", id).order("occurred_at", { ascending: false }),
@@ -76,6 +84,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
       .order("created_at", { ascending: false }),
     supabase.from("winsalot_appointments").select("*").eq("opportunity_id", id).order("appointment_start_at", { ascending: false }),
     supabase.from("crm_opportunity_scores").select("*").eq("opportunity_id", id).maybeSingle(),
+    supabase.from("crm_marketing_enrollments").select("*").eq("opportunity_id", id).maybeSingle(),
   ]);
 
   if (!opportunity) return null;
@@ -89,6 +98,12 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
   const suppression = opportunity.email ? await getEmailSuppression(opportunity.email) : null;
   const dncSuppression = await checkDncSuppression({ phone: opportunity.phone, email: opportunity.email });
   const followUpStatusByAppointmentId = await fetchWinsalotFollowUpStatusMap((appointments ?? []) as WinsalotAppointmentRow[]);
+  const emailMarketingStatus = deriveEmailMarketingStatus({
+    stage: opportunity.stage,
+    email: opportunity.email,
+    isSuppressed: !!suppression?.active,
+    enrollmentStatus: (marketingEnrollment as CrmMarketingEnrollmentRow | null)?.status ?? null,
+  });
 
   return {
     opportunity: opportunity as CrmOpportunityRow,
@@ -104,5 +119,7 @@ export async function loadAdminOpportunityDetail(id: string): Promise<AdminOppor
     appointments: (appointments ?? []) as WinsalotAppointmentRow[],
     followUpStatusByAppointmentId,
     score: score as CrmOpportunityScoreRow | null,
+    marketingEnrollment: marketingEnrollment as CrmMarketingEnrollmentRow | null,
+    emailMarketingStatus,
   };
 }

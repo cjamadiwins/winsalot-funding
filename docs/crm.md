@@ -625,6 +625,36 @@ sending happens outside any page load, on a schedule:
    explain a skip: stage is `Client Won`/`Not Interested`, no email address, the recipient is
    suppressed/unsubscribed, or no active template exists for that `campaign_type`.
 
+## Email Marketing status badge (on the business record)
+
+Every `/admin/crm/opportunities/[id]` page (and the Opportunity Finder dashboard modal, which
+renders the identical `AdminOpportunityDetailClient`) shows a small, compact status badge next to
+the business name summarizing this one business's Email Marketing standing — never a stored
+column of its own, always derived live from the same `crm_marketing_enrollments`/
+`crm_email_suppressions` data the weekly job and suppression checks already use
+(`deriveEmailMarketingStatus`, `src/lib/crm-email-marketing-status.ts`):
+
+- **Enrolled** (green) — an `active` or `paused` `crm_marketing_enrollments` row. The subtitle under
+  the business name also names which weekly sequence (`Lead Generation`/`Business
+  Financing`/`Both Services`), and adds "(paused)" for a paused one.
+- **Consent Required** (amber) — eligible to enroll (same `MARKETING_ELIGIBLE_STAGES` stage list
+  `enrollMarketingContactAction` already enforces, plus an email address on file) but never
+  enrolled, or previously stopped/removed — never auto-enrolled. An **Enroll in Email Marketing**
+  panel appears right here, right on the record: an admin opens it, records how consent was
+  obtained (express/implied + a required description), and submits — no navigation to
+  `/admin/crm/marketing` required. It calls `enrollEmailMarketingAction`
+  (`crm/opportunities/[id]/actions.ts`), a thin wrapper that supplies this business's own
+  `opportunity_id`/`campaign_type` and delegates straight to `enrollMarketingContactAction` itself,
+  so there is exactly one validated enrollment code path (and one place enforcing "no duplicate
+  contacts" via its `onConflict: "opportunity_id"` upsert) regardless of which page triggered it.
+- **Unsubscribed** (red) — the recipient is on `crm_email_suppressions` (active) or their enrollment
+  itself is `unsubscribed` (a hard bounce/spam complaint). The existing amber Resubscribe banner
+  (see below) is the only path back from here — this status alone blocks the Consent Required
+  panel from ever appearing, so a suppressed/unsubscribed business can't be accidentally
+  re-enrolled outside that explicit, consent-confirmed flow.
+- **Not Enrolled** (gray) — everything else: too early a stage (e.g. `New Prospect`), already
+  `Client Won`/`Not Interested`, or no email address on file.
+
 ## Prospect email suppression & Resubscribe
 
 `crm_email_suppressions` (migration 0087) is the one list `isEmailSuppressed()` checks before every

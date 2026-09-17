@@ -7,6 +7,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
 import { resubscribeEmail, type ResubscribeResult, type ResubscribeScope } from "@/lib/crm-email-suppression";
+import { enrollMarketingContactAction } from "../../marketing/actions";
 import { getWinsalotOfferedSlots, performWinsalotBooking, type WinsalotBookingResult } from "@/lib/winsalot-consultation-book";
 import type { BookConsultationInput } from "@/components/BookConsultationModal";
 import {
@@ -323,6 +324,33 @@ export async function resubscribeEmailAction(opportunityId: string, formData: Fo
     revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
     revalidatePath("/admin/crm/marketing");
   }
+  return result;
+}
+
+// Inline "Enroll in Email Marketing" directly on this business's own
+// record - the brief's "Admin should be able to enroll an eligible
+// customer/prospect from their record without navigating to another
+// page." Deliberately reuses enrollMarketingContactAction
+// (crm/marketing/actions.ts) itself rather than re-implementing its
+// checks, so there is exactly one place that decides whether an
+// enrollment is allowed (stage eligibility, an email address on file, not
+// suppressed/unsubscribed) - this wrapper only ever supplies
+// opportunity_id/campaign_type itself (never trusting the client for
+// either, though enrollMarketingContactAction re-validates campaign_type
+// against the opportunity's own type regardless) and additionally
+// revalidates this opportunity's own page so its Email Marketing badge
+// updates immediately, exactly like resubscribeEmailAction above.
+export async function enrollEmailMarketingAction(opportunityId: string, formData: FormData): Promise<{ error?: string; success?: string }> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data: opportunity } = await supabase.from("crm_opportunities").select("opportunity_type").eq("id", opportunityId).maybeSingle();
+  if (!opportunity) return { error: "Opportunity not found." };
+
+  formData.set("opportunity_id", opportunityId);
+  formData.set("campaign_type", opportunity.opportunity_type);
+  const result = await enrollMarketingContactAction(formData);
+
+  if (!result.error) revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
   return result;
 }
 
