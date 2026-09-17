@@ -164,6 +164,19 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
       })).filter((group) => group.status !== "archived"),
     [orderedTemplates, campaignStatusByType]
   );
+  // Active-template count per campaign - the exact same set
+  // templateForEnrollment (src/lib/crm-marketing-job.ts) indexes into via
+  // `send_count % sequence.length`, so "Week N of M" on each Campaign
+  // Contacts card always names the same template the scheduler would
+  // actually send next, never a second, independently-computed guess.
+  const activeTemplateCountByCampaign = useMemo(() => {
+    const map = new Map<MarketingCampaignType, number>();
+    for (const template of templates) {
+      if (!template.active) continue;
+      map.set(template.campaign_type, (map.get(template.campaign_type) ?? 0) + 1);
+    }
+    return map;
+  }, [templates]);
   const latestDeliveryByEnrollment = useMemo(() => {
     const map = new Map<string, CrmMarketingDeliveryRow>();
     for (const delivery of deliveries) if (!map.has(delivery.enrollment_id)) map.set(delivery.enrollment_id, delivery);
@@ -404,6 +417,16 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
                   <div>
                     <p className="font-semibold uppercase tracking-wide text-slate-400">Sent</p>
                     <p className="mt-0.5 font-semibold text-slate-800">{enrollment.send_count}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Sequence</p>
+                    <p className="mt-0.5 text-slate-700">
+                      {(() => {
+                        const total = activeTemplateCountByCampaign.get(enrollment.campaign_type) ?? 0;
+                        if (total === 0) return "—";
+                        return `Week ${(enrollment.send_count % total) + 1} of ${total}`;
+                      })()}
+                    </p>
                   </div>
                 </div>
 

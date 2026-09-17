@@ -78,6 +78,16 @@ export async function enrollMarketingContactAction(formData: FormData): Promise<
       stopped_at: null,
       claim_token: null,
       claimed_at: null,
+      // Upsert on opportunity_id reuses the same row for a business that
+      // was previously "Remove"d from a campaign (which stamps removed_at,
+      // never deletes the row) - without clearing it back to null here,
+      // the row silently keeps matching /admin/crm/marketing's own
+      // `.is("removed_at", null)` query as EXCLUDED forever, even though
+      // status is 'active' again and the scheduler (which only checks
+      // `status`, never `removed_at`) happily claims and sends to it. That
+      // combination - actively sending but permanently invisible on
+      // Campaign Contacts - was a real bug, not by design.
+      removed_at: null,
       created_by: adminUser.id,
       updated_at: now,
     },

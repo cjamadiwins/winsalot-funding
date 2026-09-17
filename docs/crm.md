@@ -609,7 +609,16 @@ opportunity record. The actual sending happens outside any page load, on a sched
   list going forward. The `crm_marketing_enrollments` row, its consent fields, the underlying
   `crm_opportunities` business/opportunity, and every `crm_marketing_deliveries` row are untouched —
   deleting the enrollment row outright is not an option, since `crm_marketing_deliveries.enrollment_id`
-  is `on delete cascade` and would destroy that contact's sent-email history.
+  is `on delete cascade` and would destroy that contact's sent-email history. Re-adding the same
+  business afterward through "Add a Contacted Business" reuses this same row (the upsert is keyed on
+  `opportunity_id`) and explicitly resets `removed_at` back to `null` as part of that write
+  (`enrollMarketingContactAction`, `crm/marketing/actions.ts`) — without that, a removed-then-re-added
+  contact would keep matching this page's own `.is("removed_at", null)` query as excluded forever even
+  though its `status` is `active` again and the scheduler (which only checks `status`, never
+  `removed_at`) would happily claim and keep sending to it: actively sending, permanently invisible on
+  Campaign Contacts. That combination is exactly what happened to one real contact before this was
+  fixed - a stale `removed_at` left over from an earlier removal, not database data loss, a filtering
+  bug, or a schema mismatch.
 - **Campaign status (Pause/Reactivate/Delete)**: each campaign group ("Lead Generation"/"Business
   Financing"/"Both Services") in "Weekly Email Sequence" has its own Active/Paused/Deleted status,
   stored in `crm_marketing_campaigns` (migration 0121) — one row per `campaign_type`, entirely separate
