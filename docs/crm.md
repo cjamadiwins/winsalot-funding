@@ -695,7 +695,7 @@ column of its own, always derived live from the same `crm_marketing_enrollments`
   another at a glance.
 - **Consent Required** (amber) — eligible to enroll (same `MARKETING_ELIGIBLE_STAGES` stage list
   `enrollMarketingContactAction` already enforces, plus an email address on file) but never
-  enrolled, or previously stopped/removed — never auto-enrolled. An **Enroll in Email Marketing**
+  enrolled, or previously stopped/removed — never auto-enrolled. A **Go to Email Marketing**
   link appears right here, right on the record - but it never enrolls anything itself and never
   calls a server action. It's a plain navigation to `/admin/crm/marketing?opportunity_id=<id>`
   (`EnrollEmailMarketingPrompt` in `AdminOpportunityDetailClient.tsx`), which pre-selects and

@@ -664,7 +664,7 @@ export default function AdminOpportunityDetailClient({
   );
 }
 
-// "Enroll in Email Marketing" for a business whose derived status is
+// "Go to Email Marketing" for a business whose derived status is
 // "Consent Required" - a plain navigation link to the dedicated
 // /admin/crm/marketing section, never a direct enrollment action from
 // this page. This never writes to crm_marketing_enrollments itself (no
@@ -684,7 +684,7 @@ function EnrollEmailMarketingPrompt({ opportunity }: { opportunity: CrmOpportuni
         href={`/admin/crm/marketing?opportunity_id=${opportunity.id}`}
         className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
       >
-        Enroll in Email Marketing
+        Go to Email Marketing
       </Link>
     </div>
   );

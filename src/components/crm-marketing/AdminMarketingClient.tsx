@@ -115,7 +115,7 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
     (opportunity) => eligibleStages.has(opportunity.stage) && !!opportunity.email && !enrolledIds.has(opportunity.id)
   );
   const selectedOpportunity = opportunityById.get(selectedOpportunityId);
-  // The business a "Enroll in Email Marketing" link on its own record sent
+  // The business a "Go to Email Marketing" link on its own record sent
   // the admin here for - looked up regardless of current eligibility so the
   // banner below can explain why it isn't selectable if something changed
   // (already enrolled elsewhere, stage moved on, etc.) since that link was
