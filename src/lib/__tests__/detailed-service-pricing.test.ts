@@ -31,13 +31,14 @@ describe("Detailed Service & Pricing templates", () => {
     expect(template.paragraphs.join("\n")).toContain("depend on the business profile, lender, approval");
   });
 
-  it("renders a branded CTA and plain-text fallback link", () => {
+  it("renders the branded CTA without a visible raw URL", () => {
     const continueUrl = "https://growth.winsalotcorp.com/continue-with-winsalot";
     const input = { ...common, service: "lead_generation" as const, continueUrl };
-    expect(buildDetailedServicePricingText(input)).toContain(`Continue with Winsalot Corp: ${continueUrl}`);
+    expect(buildDetailedServicePricingText(input)).not.toContain(continueUrl);
     const html = buildDetailedServicePricingHtml(input);
+    expect(html).toContain(`href="${continueUrl}"`);
     expect(html).toContain(">Continue with Winsalot Corp</a>");
-    expect(html).toContain("If the button does not work, copy this link:");
-    expect(html).toContain(continueUrl);
+    expect(html).not.toContain("If the button does not work, copy this link:");
+    expect(html).not.toContain(`>${continueUrl}<`);
   });
 });

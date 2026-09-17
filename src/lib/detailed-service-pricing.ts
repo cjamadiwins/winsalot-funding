@@ -96,9 +96,6 @@ export function buildDetailedServicePricingText(input: {
     const headingIndex = parts.indexOf("What Our Lead Generation Service Includes");
     parts.splice(headingIndex + 1, 0, template.bullets.map((item) => `- ${item}`).join("\n"));
   }
-  const ctaIndex = parts.findIndex((part) => part.startsWith("If you would like to move forward"));
-  const insertionIndex = ctaIndex >= 0 ? ctaIndex + 1 : Math.max(parts.length - 2, 0);
-  parts.splice(insertionIndex, 0, `Continue with Winsalot Corp: ${input.continueUrl}`);
   return parts.join("\n\n");
 }
 
@@ -129,7 +126,7 @@ export function buildDetailedServicePricingHtml(input: {
   parts.splice(
     insertionIndex,
     0,
-    `<div style="margin:22px 0;text-align:center;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 24px;border-radius:8px;background:#0284c7;color:#ffffff;font-weight:700;text-decoration:none;">Continue with Winsalot Corp</a><p style="margin:10px 0 0;font-size:12px;color:#64748b;">If the button does not work, copy this link: <a href="${safeUrl}" style="color:#0369a1;">${safeUrl}</a></p></div>`
+    `<div style="margin:22px 0;text-align:center;"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 24px;border-radius:8px;background:#0284c7;color:#ffffff;font-weight:700;text-decoration:none;">Continue with Winsalot Corp</a></div>`
   );
 
   return `<div style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><div style="padding:18px 22px;background:#0f172a;color:#ffffff;border-radius:12px 12px 0 0;"><div style="font-size:20px;font-weight:700;">Winsalot Corp</div><div style="margin-top:3px;font-size:13px;color:#bae6fd;">Empowering Businesses, One Solution at a Time.</div></div><div style="padding:24px 22px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;background:#ffffff;">${parts.join("\n")}</div></div>`;
