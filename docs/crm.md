@@ -516,8 +516,13 @@ two options:
 2. **Detailed Service & Pricing** — a one-off reply for a prospect who specifically asked for
    service/pricing details (`sendDetailedServicePricingEmail`, both in `src/lib/send-prospect-email.ts`),
    kept in its existing blue styling, second in the list. Selecting **Lead Generation** shows the
-   admin-approved price (`crm_service_pricing`, $750/month by default) and an amber "Before
-   sending" reminder not to mention an unapproved pilot program.
+   admin-approved price (`crm_service_pricing`, $750/month by default). Both services show their
+   own amber "Before sending" reminder, keyed on `service === "lead_generation"` right in
+   `ProspectEmailModal.tsx` (never sent as part of the actual email - `detailed-service-pricing.ts`
+   has no such text): Lead Generation's warns not to mention an unapproved pilot program; Business
+   Finance's instead warns never to quote or guarantee funding amounts, rates, terms, or approval,
+   since that's the lender's decision, not Winsalot's. `DetailedService` only has these two values,
+   so TypeScript itself rules out a third case ever showing the wrong reminder.
 
 **Select Service cards (2026-09-17)** — the two service options in the "Select service" step are
 now subtly color-coded, matching the actual email's own accent colors: **Lead Generation** uses
