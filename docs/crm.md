@@ -700,9 +700,13 @@ column of its own, always derived live from the same `crm_marketing_enrollments`
   calls a server action. It's a plain navigation to `/admin/crm/marketing?opportunity_id=<id>`
   (`EnrollEmailMarketingPrompt` in `AdminOpportunityDetailClient.tsx`), which pre-selects and
   highlights this exact business in that page's existing "Add a Contacted Business" form
-  (`highlightOpportunityId` prop, `AdminMarketingClient.tsx` - scrolls to the form and shows a blue
-  "Enrolling `<business>`" banner, or an amber "not currently eligible" one if something changed
-  since the link was generated). The admin still has to explicitly choose a Campaign Type (Lead
+  (`highlightOpportunityId` prop, `AdminMarketingClient.tsx` - scrolls to the form and shows one of
+  three banners: a blue "Enrolling `<business>`" one when it's still eligible; a green "is already
+  enrolled in the `<campaign>` email campaign - manage the existing campaign below" one if it became
+  `active`/`paused` by the time the admin got here (e.g. a second admin enrolled it, or the link was
+  revisited) - checked *before* eligibility, since an already-enrolled business is never itself an
+  "eligibility problem"; or an amber one naming the actual reason (no email address on file, or its
+  current stage isn't a contacted, open one) only when neither of those applies. The admin still has to explicitly choose a Campaign Type (Lead
   Generation/Business Financing/Both Services - blank by default, never derived from this
   opportunity's own recorded service) and pick a consent basis and record how consent was obtained
   in that same form, submitting to the one unchanged `enrollMarketingContactAction` - so there
