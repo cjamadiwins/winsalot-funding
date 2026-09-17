@@ -220,7 +220,11 @@ export default function AdminOpportunityDetailClient({
               <span className="text-slate-400">
                 {" "}
                 · Weekly {MARKETING_CAMPAIGN_LABELS[marketingEnrollment.campaign_type]} emails
-                {marketingEnrollment.status === "paused" ? " (paused)" : ""}
+                {marketingEnrollment.status === "paused"
+                  ? " (paused)"
+                  : marketingEnrollment.status === "active"
+                    ? ` · Next email ${new Date(marketingEnrollment.next_send_at).toLocaleDateString()}`
+                    : ""}
               </span>
             )}
           </p>
@@ -295,10 +299,25 @@ export default function AdminOpportunityDetailClient({
       )}
 
       {isOverdue(opportunity) && opportunity.next_follow_up_at && (
-        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-          Overdue — {overdueDurationLabel(opportunity.next_follow_up_at)} (was due{" "}
-          {new Date(opportunity.next_follow_up_at).toLocaleString()})
-        </p>
+        <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          <p>
+            Overdue — {overdueDurationLabel(opportunity.next_follow_up_at)} (was due{" "}
+            {new Date(opportunity.next_follow_up_at).toLocaleString()})
+          </p>
+          {/* This banner is always a Scheduled Callback (crm_followups) - a
+              manual reminder an admin/agent set, never the automated Email
+              Marketing schedule (crm_marketing_enrollments.next_send_at,
+              shown separately above). Naming the actual pending callback
+              here removes any doubt when a business is also enrolled in
+              Email Marketing at the same time - the two are unrelated and
+              this overdue banner is never caused by, or resolved by, the
+              marketing send. */}
+          {followUps[0] && (
+            <p className="mt-1 text-xs font-normal text-rose-600">
+              Scheduled callback: {followUps[0].note?.trim() ? followUps[0].note : "No note"}
+            </p>
+          )}
+        </div>
       )}
 
       {error && (

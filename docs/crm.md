@@ -683,7 +683,16 @@ column of its own, always derived live from the same `crm_marketing_enrollments`
 
 - **Enrolled** (green) — an `active` or `paused` `crm_marketing_enrollments` row. The subtitle under
   the business name also names which weekly sequence (`Lead Generation`/`Business
-  Financing`/`Both Services`), and adds "(paused)" for a paused one.
+  Financing`/`Both Services`), adds "(paused)" for a paused one, and for an `active` one shows
+  "Next email `<date>`" straight from that row's own `next_send_at` - entirely separate from, and
+  never affected by, this same page's red **Overdue** banner above it (`crm_followups`/
+  `crm_opportunities.next_follow_up_at` - a manual callback an admin/agent scheduled, unrelated to
+  Email Marketing). No code path in `crm-marketing-job.ts` or `crm/marketing/actions.ts` ever reads
+  or writes `crm_followups`/`next_follow_up_at`, and nothing in the Scheduled Callbacks/Overdue
+  machinery reads `crm_marketing_enrollments` - a business can be simultaneously overdue on a real
+  manual callback and current on its automated weekly email, and the Overdue banner now names the
+  actual pending callback's own note (`followUps[0].note`) so the two are never confused for one
+  another at a glance.
 - **Consent Required** (amber) — eligible to enroll (same `MARKETING_ELIGIBLE_STAGES` stage list
   `enrollMarketingContactAction` already enforces, plus an email address on file) but never
   enrolled, or previously stopped/removed — never auto-enrolled. An **Enroll in Email Marketing**
