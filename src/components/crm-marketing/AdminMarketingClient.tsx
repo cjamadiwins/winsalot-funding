@@ -121,8 +121,31 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
   // (already enrolled elsewhere, stage moved on, etc.) since that link was
   // generated.
   const highlightedOpportunity = highlightOpportunityId ? opportunityById.get(highlightOpportunityId) : undefined;
+  // Already-enrolled is checked *before* "eligible" below, since
+  // eligibleOpportunities deliberately excludes anyone in enrolledIds -
+  // without this, a business that's actively/paused-enrolled would fall
+  // through to the "not eligible" amber warning purely because it's
+  // already enrolled, which reads as a real problem when it isn't one.
+  const highlightedActiveEnrollment = highlightOpportunityId
+    ? enrollments.find(
+        (enrollment) =>
+          enrollment.opportunity_id === highlightOpportunityId && (enrollment.status === "active" || enrollment.status === "paused")
+      )
+    : undefined;
   const highlightedOpportunityEligible =
     !!highlightOpportunityId && eligibleOpportunities.some((opportunity) => opportunity.id === highlightOpportunityId);
+  // Specific enough to only ever name a real, checked problem (never "it
+  // may already be enrolled" - that case is handled separately above) -
+  // covers the two conditions eligibleOpportunities actually checks, so
+  // this can't say something eligibleOpportunities itself didn't verify.
+  const highlightedIneligibleReason =
+    highlightedOpportunity && !highlightedActiveEnrollment && !highlightedOpportunityEligible
+      ? !highlightedOpportunity.email?.trim()
+        ? "it has no email address on file"
+        : !eligibleStages.has(highlightedOpportunity.stage)
+          ? `it is currently "${highlightedOpportunity.stage}", not a contacted, open opportunity`
+          : "of an enrollment issue"
+      : null;
 
   // Scrolls straight to the enroll form and puts the referring business
   // front and center - the admin still has to pick a consent basis and
@@ -249,7 +272,13 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
           recorded service. A consent record is required before automatic sending begins.
         </p>
 
-        {highlightedOpportunity && (
+        {highlightedOpportunity && highlightedActiveEnrollment && (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <strong>{highlightedOpportunity.business_name}</strong> is already enrolled in the{" "}
+            {MARKETING_CAMPAIGN_LABELS[highlightedActiveEnrollment.campaign_type]} email campaign. Manage the existing campaign below.
+          </p>
+        )}
+        {highlightedOpportunity && !highlightedActiveEnrollment && (
           <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${highlightedOpportunityEligible ? "border-sky-200 bg-sky-50 text-sky-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
             {highlightedOpportunityEligible ? (
               <>
@@ -257,8 +286,7 @@ export default function AdminMarketingClient({ opportunities, enrollments, templ
               </>
             ) : (
               <>
-                <strong>{highlightedOpportunity.business_name}</strong> isn&rsquo;t currently eligible to enroll here — it may already be enrolled, missing an
-                email address, or no longer a contacted, open opportunity.
+                <strong>{highlightedOpportunity.business_name}</strong> isn&rsquo;t currently eligible to enroll here — {highlightedIneligibleReason}.
               </>
             )}
           </p>
