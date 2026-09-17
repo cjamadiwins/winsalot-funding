@@ -120,6 +120,19 @@ export function isMarketingCampaignType(value: string): value is MarketingCampai
   return MARKETING_CAMPAIGN_TYPES.includes(value as MarketingCampaignType);
 }
 
+// Stages a crm_opportunities row must be in to enter weekly Email
+// Marketing - shared by enrollMarketingContactAction
+// (crm/marketing/actions.ts) and the per-record "Consent Required"/"Not
+// Enrolled" status derivation (crm-email-marketing-status.ts) so both
+// always agree on which businesses are eligible to enroll.
+export const MARKETING_ELIGIBLE_STAGES = new Set([
+  "Contacted",
+  "Interested",
+  "Consultation Booked",
+  "Proposal or Application Sent",
+  "Follow-Up Required",
+]);
+
 // Fixed allowlist for "Send Test Email" on /admin/crm/marketing - the only
 // addresses a test send may ever reach. Never extend this from data an
 // admin's browser supplies; both the recipient <select> and the server

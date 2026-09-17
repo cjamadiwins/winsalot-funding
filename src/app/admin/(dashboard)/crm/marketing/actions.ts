@@ -8,6 +8,7 @@ import {
   isMarketingCampaignType,
   isMarketingTestEmailRecipient,
   MARKETING_CAMPAIGN_LABELS,
+  MARKETING_ELIGIBLE_STAGES,
   type MarketingCampaignStatus,
   type MarketingConsentBasis,
 } from "@/lib/crm-marketing-types";
@@ -17,13 +18,7 @@ import { runCrmMarketingJob, type MarketingJobSummary } from "@/lib/crm-marketin
 type MarketingActionResult = { error?: string; success?: string };
 type RunJobActionResult = MarketingActionResult & { summary?: MarketingJobSummary };
 
-const ELIGIBLE_STAGES = new Set([
-  "Contacted",
-  "Interested",
-  "Consultation Booked",
-  "Proposal or Application Sent",
-  "Follow-Up Required",
-]);
+const ELIGIBLE_STAGES = MARKETING_ELIGIBLE_STAGES;
 
 export async function enrollMarketingContactAction(formData: FormData): Promise<MarketingActionResult> {
   const adminUser = await requireCrmAdmin();

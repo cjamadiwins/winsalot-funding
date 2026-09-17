@@ -21,6 +21,9 @@ import { effectiveOpportunityCategory, OPPORTUNITY_CATEGORY_LABELS, OPPORTUNITY_
 import type { CrmEmailSuppressionRow } from "@/lib/crm-email-suppression";
 import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
+import EmailMarketingBadge from "@/components/crm-ui/EmailMarketingBadge";
+import type { EmailMarketingStatus } from "@/lib/crm-email-marketing-status";
+import { MARKETING_CAMPAIGN_LABELS, type CrmMarketingEnrollmentRow } from "@/lib/crm-marketing-types";
 import { WINSALOT_APPOINTMENT_STATUS_LABELS, WINSALOT_APPOINTMENT_STATUS_STYLES, type WinsalotAppointmentRow } from "@/lib/winsalot-consultation-types";
 import type { WinsalotFollowUpStatusEntry } from "@/lib/winsalot-consultation-completion";
 import EmailStatusPanel from "@/components/EmailStatusPanel";
@@ -34,6 +37,7 @@ import {
   bookConsultationAction,
   closeOpportunityAction,
   deleteOpportunityAction,
+  enrollEmailMarketingAction,
   getConsultationOfferedSlotsAction,
   markApplicationSubmittedAction,
   resubscribeEmailAction,
@@ -70,6 +74,8 @@ export default function AdminOpportunityDetailClient({
   appointments,
   followUpStatusByAppointmentId,
   score,
+  marketingEnrollment,
+  emailMarketingStatus,
   onBack,
 }: {
   opportunity: CrmOpportunityRow;
@@ -91,6 +97,9 @@ export default function AdminOpportunityDetailClient({
   // admin-opportunity-detail-data.ts.
   followUpStatusByAppointmentId: Record<string, WinsalotFollowUpStatusEntry>;
   score: CrmOpportunityScoreRow | null;
+  // Growth CRM Email Marketing enrollment - see admin-opportunity-detail-data.ts.
+  marketingEnrollment: CrmMarketingEnrollmentRow | null;
+  emailMarketingStatus: EmailMarketingStatus;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
   // to Opportunity Finder" link below for a button that switches the modal
@@ -204,8 +213,18 @@ export default function AdminOpportunityDetailClient({
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             {opportunity.business_name}
             {dncSuppression && <DncBadge suppression={dncSuppression} />}
+            <EmailMarketingBadge status={emailMarketingStatus} />
           </h1>
-          <p className="mt-1 text-sm text-slate-500">{OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
+            {emailMarketingStatus === "enrolled" && marketingEnrollment && (
+              <span className="text-slate-400">
+                {" "}
+                · Weekly {MARKETING_CAMPAIGN_LABELS[marketingEnrollment.campaign_type]} emails
+                {marketingEnrollment.status === "paused" ? " (paused)" : ""}
+              </span>
+            )}
+          </p>
           {score && (
             <div className="mt-2 flex items-center gap-2">
               <span className="text-lg font-extrabold text-slate-900">{score.score}</span>
@@ -270,6 +289,10 @@ export default function AdminOpportunityDetailClient({
 
       {isEmailSuppressed && suppression && (
         <ResubscribePanel opportunity={opportunity} suppression={suppression} />
+      )}
+
+      {emailMarketingStatus === "consent_required" && (
+        <EnrollEmailMarketingPanel opportunity={opportunity} />
       )}
 
       {isOverdue(opportunity) && opportunity.next_follow_up_at && (
@@ -598,6 +621,99 @@ export default function AdminOpportunityDetailClient({
           onClose={() => setShowBookModal(false)}
           onBooked={() => window.location.reload()}
         />
+      )}
+    </div>
+  );
+}
+
+// Inline "Enroll in Email Marketing" shown right on this business's own
+// record whenever its derived Email Marketing status is "Consent
+// Required" - an eligible, open, emailable opportunity that has never
+// been enrolled (or was previously removed/stopped) and isn't currently
+// suppressed/unsubscribed. Never auto-enrolls anything itself; an admin
+// must open this, record how consent was obtained, and submit. Delegates
+// to enrollEmailMarketingAction, which reuses the exact same validated
+// enrollMarketingContactAction the dedicated /admin/crm/marketing page
+// uses - so this is a second entry point into one enrollment path, never
+// a second implementation of its rules.
+function EnrollEmailMarketingPanel({ opportunity }: { opportunity: CrmOpportunityRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
+
+  async function handleSubmit(formData: FormData) {
+    setPending(true);
+    setResult(null);
+    const outcome = await enrollEmailMarketingAction(opportunity.id, formData);
+    setPending(false);
+    setResult(outcome);
+    if (!outcome.error) setExpanded(false);
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-sm font-semibold text-amber-800">
+        Eligible for weekly Email Marketing — consent must be recorded before enrolling.
+      </p>
+
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-3 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          Enroll in Email Marketing
+        </button>
+      ) : (
+        <form action={handleSubmit} className="mt-3 space-y-3 border-t border-amber-200 pt-3">
+          <label className="block text-xs font-semibold uppercase text-amber-800">
+            How was consent obtained?
+            <select
+              name="consent_basis"
+              required
+              defaultValue="express"
+              className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
+            >
+              <option value="express">Express — explicitly opted in</option>
+              <option value="implied">Implied — existing business relationship</option>
+            </select>
+          </label>
+          <label className="block text-xs font-semibold uppercase text-amber-800">
+            Consent details
+            <textarea
+              name="consent_notes"
+              required
+              rows={2}
+              placeholder="Example: Asked during the September 2, 2026 consultation call to receive our weekly updates."
+              className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-800"
+            />
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? "Enrolling…" : "Confirm Enroll"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setExpanded(false);
+                setResult(null);
+              }}
+              className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {result && (
+        <p className={`mt-3 text-xs font-medium ${result.error ? "text-rose-700" : "text-emerald-700"}`}>{result.error ?? result.success}</p>
       )}
     </div>
   );
