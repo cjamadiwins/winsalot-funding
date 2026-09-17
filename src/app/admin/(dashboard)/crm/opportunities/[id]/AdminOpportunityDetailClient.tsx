@@ -45,6 +45,7 @@ import {
 } from "./actions";
 import {
   completeFollowUpAction,
+  deleteFollowUpAction,
   rescheduleFollowUpAction,
   scheduleFollowUpAction,
 } from "../../followup-actions";
@@ -451,6 +452,17 @@ export default function AdminOpportunityDetailClient({
                         className="text-xs font-semibold text-sky-600 hover:text-sky-700"
                       >
                         Reschedule
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          if (!window.confirm("Delete this scheduled callback? This will not delete the opportunity.")) return;
+                          runAction(() => deleteFollowUpAction(followUp.id, opportunity.id));
+                        }}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        Delete
                       </button>
                     </div>
                     {reschedulingId === followUp.id && (

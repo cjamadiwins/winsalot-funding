@@ -105,6 +105,56 @@ export async function rescheduleFollowUpAction(
   refresh();
 }
 
+// Admin-only "Delete" for a single Scheduled Callback - permanently
+// removes just that one crm_followups row, never the opportunity, its
+// notes/activity history, or anything Email Marketing-related (this table
+// has no relationship to crm_marketing_enrollments at all). Gated by
+// requireCrmAdmin() here, and independently by crm_followups_admin_all's
+// own RLS ("for all", so it already covers delete) - an agent session has
+// no delete policy on this table at all (only its own
+// select/insert/update policies), so this can never be reached from
+// /agent/*. The delete itself fires the existing
+// crm_followups_sync_opportunity_trigger (migration 0082, runs on
+// insert/update/**delete**), which recomputes
+// crm_opportunities.next_follow_up_at as the earliest remaining pending
+// callback (or null if none are left) - so the Opportunity page, "All
+// Agents' Follow-Ups", and every overdue/upcoming count that reads
+// next_follow_up_at/crm_followups update immediately, with no extra code
+// here needed for that. The original scheduled date/time and note are
+// read *before* deleting so the activity-timeline entry can still name
+// them afterward.
+export async function deleteFollowUpAction(followUpId: string, opportunityId: string) {
+  const crmUser = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("crm_followups")
+    .select("scheduled_at, note")
+    .eq("id", followUpId)
+    .maybeSingle();
+  if (fetchError || !existing) throw new Error("Follow-up not found.");
+
+  const { error } = await supabase.from("crm_followups").delete().eq("id", followUpId);
+  if (error) throw new Error("Failed to delete the callback.");
+
+  const adminName = crmUser.full_name || crmUser.email;
+  const { error: activityError } = await supabase.from("crm_activities").insert({
+    opportunity_id: opportunityId,
+    agent_id: crmUser.id,
+    activity_type: "outcome",
+    notes: `Scheduled callback deleted by ${adminName}. Was due ${new Date(existing.scheduled_at).toLocaleString()}${
+      existing.note ? ` — "${existing.note}"` : ""
+    }.`,
+  });
+  if (activityError) {
+    throw new Error("Callback deleted, but failed to log it on the activity timeline.");
+  }
+
+  revalidatePath("/admin/crm");
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  refresh();
+}
+
 // Marking a callback completed also leaves a record on the activity
 // timeline (who completed it and when), same as the agent-side action.
 export async function completeFollowUpAction(followUpId: string, opportunityId: string) {
