@@ -43,29 +43,29 @@ export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, t
   const signUrl = `${getSiteUrl()}/agreement-sign/${token}`;
   const isPilot = agreement.campaign_type === "free_pilot";
   const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
-  const subject = `Your Winsalot Corp ${docLabel} is ready to sign - ${agreement.legal_business_name}`;
+  const subject = `Your Winsalot Corp. ${docLabel} is ready to sign - ${agreement.legal_business_name}`;
   const greeting = agreement.contact_person.trim().split(/\s+/)[0] || "there";
 
   const text = [
     `Hi ${greeting},`,
     "",
-    `Your Winsalot Corp ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${agreement.legal_business_name} is ready for your review and signature.`,
+    `Your Winsalot Corp. ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${agreement.legal_business_name} is ready for your review and signature.`,
     "",
     `Please review and sign here: ${signUrl}`,
     "",
     "If you have any questions, just reply to this email.",
     "",
     "Best regards,",
-    "Winsalot Corp",
+    "Winsalot Corp.",
     "Empowering Businesses, One Solution at a Time.",
   ].join("\n");
 
   const html = textToSimpleHtml([
     `Hi ${escapeHtml(greeting)},`,
-    `Your Winsalot Corp ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
+    `Your Winsalot Corp. ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
   ]) + ctaButtonHtml(signUrl, `Review and Sign ${isPilot ? "Pilot Agreement" : "Agreement"}`) + textToSimpleHtml([
     "If you have any questions, just reply to this email.",
-    "Best regards,<br>Winsalot Corp<br>Empowering Businesses, One Solution at a Time.",
+    "Best regards,<br>Winsalot Corp.<br>Empowering Businesses, One Solution at a Time.",
   ]);
 
   const resend = getResendClient();
@@ -106,7 +106,7 @@ export async function sendSignedAgreementClientCopy(
   const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
   const pdfBuffer = await renderAgreementPdfBuffer({ agreement, template });
   const filename = `Winsalot-Corp-Agreement-${agreement.legal_business_name.replace(/[^a-z0-9]+/gi, "-")}.pdf`;
-  const subject = `Signed: Winsalot Corp ${docLabel} - ${agreement.legal_business_name}`;
+  const subject = `Signed: Winsalot Corp. ${docLabel} - ${agreement.legal_business_name}`;
 
   const text = [
     `The ${isPilot ? "pilot program agreement" : "service agreement"} for ${agreement.legal_business_name} has been signed.`,
@@ -213,20 +213,20 @@ export async function sendIntakeFormEmail(agreement: CrmClientAgreementRow, toke
   const text = [
     `Hi ${greeting},`,
     "",
-    `Thank you for signing your Winsalot Corp service agreement for ${agreement.legal_business_name}.`,
+    `Thank you for signing your Winsalot Corp. service agreement for ${agreement.legal_business_name}.`,
     "",
     `Please complete your client intake form here: ${intakeUrl}`,
     "",
     "Best regards,",
-    "Winsalot Corp",
+    "Winsalot Corp.",
     "Empowering Businesses, One Solution at a Time.",
   ].join("\n");
 
   const html = textToSimpleHtml([
     `Hi ${escapeHtml(greeting)},`,
-    `Thank you for signing your Winsalot Corp service agreement for ${escapeHtml(agreement.legal_business_name)}.`,
+    `Thank you for signing your Winsalot Corp. service agreement for ${escapeHtml(agreement.legal_business_name)}.`,
   ]) + ctaButtonHtml(intakeUrl, "Complete Client Intake Form") + textToSimpleHtml([
-    "Best regards,<br>Winsalot Corp<br>Empowering Businesses, One Solution at a Time.",
+    "Best regards,<br>Winsalot Corp.<br>Empowering Businesses, One Solution at a Time.",
   ]);
 
   const resend = getResendClient();

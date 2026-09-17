@@ -239,7 +239,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-slate-50">
       <header className="bg-[#1e3a8a] px-6 py-8 text-center text-white">
-        <Image src="/winsalot-logo.png" alt="Winsalot Corp" width={160} height={48} className="mx-auto h-12 w-auto object-contain" priority />
+        <Image src="/winsalot-logo.png" alt="Winsalot Corp." width={160} height={48} className="mx-auto h-12 w-auto object-contain" priority />
         <p className="mt-3 text-sm font-medium text-sky-100">Empowering Businesses, One Solution at a Time.</p>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">

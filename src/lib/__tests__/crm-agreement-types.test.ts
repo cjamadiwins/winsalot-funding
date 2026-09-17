@@ -40,7 +40,7 @@ describe("buildAgreementTargetStatement", () => {
     expect(
       buildAgreementTargetStatement({ service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 25 })
     ).toBe(
-      "Winsalot Corp will target 25 qualified leads per month. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp does not guarantee that a lead or appointment will result in a sale."
+      "Winsalot Corp. will target 25 qualified leads per month. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp. does not guarantee that a lead or appointment will result in a sale."
     );
   });
 
@@ -53,12 +53,12 @@ describe("buildAgreementTargetStatement", () => {
   it("uses 'guarantee' only when target_type is deliberately 'guaranteed'", () => {
     expect(
       buildAgreementTargetStatement({ service_type: "qualified_leads", target_type: "guaranteed", monthly_target: 25 })
-    ).toContain("Winsalot Corp will guarantee 25 qualified leads per month");
+    ).toContain("Winsalot Corp. will guarantee 25 qualified leads per month");
   });
 
   it("always includes the no-guarantee-of-sales disclosure, regardless of target_type", () => {
     const text = buildAgreementTargetStatement({ service_type: "qualified_leads", target_type: "guaranteed", monthly_target: 5 });
-    expect(text).toContain("Winsalot Corp does not guarantee that a lead or appointment will result in a sale.");
+    expect(text).toContain("Winsalot Corp. does not guarantee that a lead or appointment will result in a sale.");
   });
 });
 
@@ -102,7 +102,7 @@ describe("renderAgreementTemplate", () => {
 
   it("always replaces a pilot's 'services' section dynamically, so a Paid Pilot never inherits the stale 'complimentary' claim", () => {
     const servicesTemplate: Pick<CrmAgreementTemplateRow, "content"> = {
-      content: [{ key: "services", title: "Pilot Program Scope", body: "Winsalot Corp will provide a complimentary, time-limited pilot program..." }],
+      content: [{ key: "services", title: "Pilot Program Scope", body: "Winsalot Corp. will provide a complimentary, time-limited pilot program..." }],
     };
     const rendered = renderAgreementTemplate(servicesTemplate, { ...paidPilotBase, service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 15 });
     expect(rendered[0].body).toBe(buildPilotServicesStatement(paidPilotBase));
@@ -144,10 +144,10 @@ describe("pilot template rendering", () => {
     };
     const rendered = renderAgreementTemplate(pilotTemplate, { ...freePilotBase, service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 20 });
     expect(rendered[0].body).toBe(PILOT_PROGRAM_DISCLOSURE);
-    expect(rendered[0].body).toContain("Winsalot Corp will provide the pilot services for the agreed period, scope, target market, and deliverables.");
+    expect(rendered[0].body).toContain("Winsalot Corp. will provide the pilot services for the agreed period, scope, target market, and deliverables.");
     expect(rendered[0].body).toContain("A pilot program is intended to test campaign performance and service fit.");
-    expect(rendered[0].body).toContain("Winsalot Corp does not guarantee a specific number of sales, closed deals, revenue, funding approvals, or customer conversions");
-    expect(rendered[0].body).toContain("Where the pilot includes a defined target number of leads or appointments, Winsalot Corp will work toward that agreed target during the pilot period.");
+    expect(rendered[0].body).toContain("Winsalot Corp. does not guarantee a specific number of sales, closed deals, revenue, funding approvals, or customer conversions");
+    expect(rendered[0].body).toContain("Where the pilot includes a defined target number of leads or appointments, Winsalot Corp. will work toward that agreed target during the pilot period.");
     expect(rendered[0].body).toContain("both parties may review the results and decide whether to continue, extend, modify, or end the service.");
     // Never says every pilot is free/at no charge - it must read the same
     // for a Free Pilot and a Paid Pilot alike (spec: "Update the existing

@@ -40,7 +40,7 @@ export default async function AgentPayPage() {
       {!error && (
         <div className="mt-6 space-y-6">
           <MyPayView
-            companyName="Winsalot Corp"
+            companyName="Winsalot Corp."
             crmLabel="Winsalot Growth CRM"
             agentName={agent.full_name}
             nextPayday={getNextPayday()}

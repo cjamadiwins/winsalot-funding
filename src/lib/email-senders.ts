@@ -28,7 +28,7 @@ export type EmailCategory = "growth" | "funding" | "billing" | "quotes";
 // agent-specific name to 'Winsalot Corp'"). Shared across every category
 // by default - each category's SENDER_OVERRIDE_ENV_VAR below can still
 // override it independently.
-const DEFAULT_SENDER_DISPLAY_NAME = "Winsalot Corp";
+const DEFAULT_SENDER_DISPLAY_NAME = "Winsalot Corp.";
 
 // growth/funding default to info@winsalotcorp.com - the same already-
 // verified, already-warmed address the Lead Generation CRM sends from

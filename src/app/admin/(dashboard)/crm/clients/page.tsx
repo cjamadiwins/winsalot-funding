@@ -23,7 +23,7 @@ export default async function AdminClientsPage({
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Clients</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Winsalot Corp&apos;s signed client accounts - manage profiles, service details, assigned agents, and status. Admin-only.
+        Winsalot Corp.&apos;s signed client accounts - manage profiles, service details, assigned agents, and status. Admin-only.
       </p>
 
       {error && (

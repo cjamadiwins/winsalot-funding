@@ -48,7 +48,7 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
     if (leadgenUser.role === "client") {
       redirect(
         `/client?error=${encodeURIComponent(
-          "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp if you believe this is an error."
+          "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp. if you believe this is an error."
         )}`
       );
     }

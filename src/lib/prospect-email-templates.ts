@@ -35,7 +35,7 @@ function firstNameOnly(fullName: string): string {
 // Fixed, brand-only closing - matches the exact closing already used by
 // the Winsalot consultation-booking emails
 // (src/lib/winsalot-consultation-emails.ts).
-const CONSULTATION_EMAIL_CLOSING = ["Best regards,", "Winsalot Corp"].join("\n");
+const CONSULTATION_EMAIL_CLOSING = ["Best regards,", "Winsalot Corp."].join("\n");
 
 // Fixed subject/CTA label for every Growth CRM prospect email, regardless
 // of opportunity_type - matches the Lead Generation CRM's own

@@ -12,7 +12,7 @@ const NEXT_STEPS = [
   "Confirm your business information",
   "Confirm the service and campaign package discussed during your consultation",
   "Provide your preferred target market and ideal customer profile",
-  "Review the Winsalot Corp service agreement",
+  "Review the Winsalot Corp. service agreement",
   "Complete payment or deposit requirements where applicable",
   "Receive access to your client onboarding and dashboard",
 ];
@@ -59,7 +59,7 @@ export default function ContinueWithWinsalotClient() {
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
           <h2 className="text-xl font-bold text-emerald-800">Thank you.</h2>
           <p className="mt-2 text-[15px] text-emerald-700">Your request has been received.</p>
-          <p className="mt-2 text-[15px] text-emerald-700">Winsalot Corp will prepare your next onboarding steps and contact you shortly.</p>
+          <p className="mt-2 text-[15px] text-emerald-700">Winsalot Corp. will prepare your next onboarding steps and contact you shortly.</p>
         </div>
       </PageShell>
     );
@@ -120,7 +120,7 @@ export default function ContinueWithWinsalotClient() {
           disabled={submitting}
           className="mt-5 w-full rounded-full bg-sky-600 px-5 py-3 text-[15px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? "Submitting…" : "Continue With Winsalot Corp"}
+          {submitting ? "Submitting…" : "Continue With Winsalot Corp."}
         </button>
 
         <p className="mt-4 text-center text-[12px] text-slate-500">
@@ -135,11 +135,11 @@ function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-slate-50">
       <header className="bg-[#1e3a8a] px-6 py-8 text-center text-white">
-        <Image src="/winsalot-logo.png" alt="Winsalot Corp" width={160} height={48} className="mx-auto h-12 w-auto object-contain" priority />
+        <Image src="/winsalot-logo.png" alt="Winsalot Corp." width={160} height={48} className="mx-auto h-12 w-auto object-contain" priority />
         <p className="mt-3 text-sm font-medium text-sky-100">Empowering Businesses, One Solution at a Time.</p>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <h1 className="text-center text-2xl font-bold text-slate-900 sm:text-[28px]">Continue With Winsalot Corp</h1>
+        <h1 className="text-center text-2xl font-bold text-slate-900 sm:text-[28px]">Continue With Winsalot Corp.</h1>
         {children}
       </main>
     </div>

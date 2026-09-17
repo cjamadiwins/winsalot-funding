@@ -34,7 +34,7 @@ export default async function Home({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--color-bg)] px-6 text-center text-[var(--color-ink)]">
-      <Image src="/winsalot-logo.png" alt="Winsalot Corp" width={80} height={80} className="h-20 w-20 object-contain" priority />
+      <Image src="/winsalot-logo.png" alt="Winsalot Corp." width={80} height={80} className="h-20 w-20 object-contain" priority />
       <h1 className="mt-6 text-3xl font-bold sm:text-4xl">Winsalot Growth CRM</h1>
       <p className="mt-3 max-w-md text-[15px] text-slate-500">
         Empowering Businesses, One Solution at a Time.

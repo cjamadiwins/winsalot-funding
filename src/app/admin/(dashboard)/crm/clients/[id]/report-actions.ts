@@ -33,7 +33,7 @@ export async function sendClientReportAction(crmClientId: string, month: string)
   const report = await loadLeadgenClientReport(admin, leadgenClient as LeadgenClientRow, period);
   const pdf = await renderLeadgenClientReportPdf(report);
   const monthLabel = new Date(`${safeMonth}-01T12:00:00Z`).toLocaleDateString("en-CA", { month: "long", year: "numeric", timeZone: "UTC" });
-  const body = `Hello ${crmClient.company_name} team,\n\nYour ${monthLabel} client performance report is attached. You can also sign in to the Winsalot Client Portal to review your results.\n\nBest,\nWinsalot Corp`;
+  const body = `Hello ${crmClient.company_name} team,\n\nYour ${monthLabel} client performance report is attached. You can also sign in to the Winsalot Client Portal to review your results.\n\nBest,\nWinsalot Corp.`;
   let sent = 0;
   for (const recipient of recipients) {
     const result = await sendLeadgenEmail(admin, {
@@ -46,7 +46,7 @@ export async function sendClientReportAction(crmClientId: string, month: string)
       html: textToSimpleHtml(body),
       sentBy: staff.id,
       clientVisible: true,
-      senderDisplayNameOverride: "Winsalot Corp",
+      senderDisplayNameOverride: "Winsalot Corp.",
       attachments: [{ filename: leadgenReportFilename(leadgenClient.name, period, "pdf"), content: pdf }],
     });
     if (result.error) return { error: sent > 0 ? `Sent to ${sent} client email(s), but another send failed.` : result.error };

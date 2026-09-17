@@ -418,6 +418,26 @@ To fix that without changing anything for existing admins:
   `/admin/login`. The `/admin/*` gating logic itself is unchanged — same checks, same
   redirects, just refactored into a shared function.
 
+## Company name branding
+
+**2026-09-17** — standardized the displayed company name from "Winsalot Corp" to "Winsalot
+Corp." everywhere it appears as user-visible text: both CRMs (Admin/agent), the Client Portal,
+email templates/signatures/previews, dashboard greetings, consultation/reminder/follow-up emails,
+invoices, agreements, reports, and training content. Scoped to literal display strings only —
+`Winsalot Corp` (title case, with a space) can never coincide with a domain (`winsalotcorp.com`),
+an env var (`WINSALOT_BOOKING_URL`), or a code identifier, since none of those contain a space in
+that form, so no route, permission, tracking, or integration code changed. Code comments, already-
+correct occurrences, and genuine historical records (past `crm_activities`/`leadgen_emails`/
+`crm_lead_emails` rows, audit-log `*_by_name` snapshots, cached `crm_opportunity_scores.signals`
+quoting a real past subject line, already-sent notification rows, raw CSV data exports, and
+`README.md`/`.env.example` developer documentation) were deliberately left untouched — they
+reflect what was actually said/sent/recorded at the time, not current display copy. Two pieces of
+*live* data were also updated to match, since they're the system's own current display values, not
+frozen history: the shared `info@winsalotcorp.com` `leadgen_users.full_name` (shown in reports/
+dashboards), the two `crm_agreement_templates.content` bodies (re-rendered live on every agreement
+view via `renderAgreementTemplate`, not frozen per signed agreement), and the 11
+`crm_marketing_templates` campaign email bodies.
+
 ## Email delivery tracking
 
 Every quote-request and follow-up email an agent or admin sends from a lead's page
@@ -498,6 +518,24 @@ two options:
    kept in its existing blue styling, second in the list. Selecting **Lead Generation** shows the
    admin-approved price (`crm_service_pricing`, $750/month by default) and an amber "Before
    sending" reminder not to mention an unapproved pilot program.
+
+**Select Service cards (2026-09-17)** — the two service options in the "Select service" step are
+now subtly color-coded, matching the actual email's own accent colors: **Lead Generation** uses
+`border-blue-200`/`bg-blue-50`/`text-blue-600` (`#BFDBFE`/`#EFF6FF`/`#2563EB`), **Business Finance**
+uses `border-green-200`/`bg-green-50`/`text-green-700` (`#BBF7D0`/`#F0FDF4`/`#15803D`), each with a
+slightly stronger `hover:`/`focus-visible:` border and background. Purely visual — the underlying
+service values, pricing, and `onSendDetailed(service)` call are unchanged. Since the modal is one
+shared component, this applies identically to Admin and agent.
+
+**Lighter Detailed Service & Pricing email header (2026-09-17)** — `buildDetailedServicePricingHtml`
+(`src/lib/detailed-service-pricing.ts`) replaced its old solid dark (`#0f172a`) header with a light
+one (`#F5F9FF` background, `#1E3A5F` title, `#52677D` subtitle, `#D9E6F2` bottom border) so this
+one-to-one follow-up email reads less like a mass marketing blast, and switched the "Continue with
+Winsalot Corp." CTA button to `#2563EB`/white. Body text moved from `#1f2937` to `#374151`. No
+copy, personalization, pricing, CTA destination, or tracking changed — verified by rendering both
+service variants to static HTML and screenshotting them. The modal's own "Email preview" panel
+(`ProspectEmailModal.tsx`) now renders a matching light header above the previewed paragraphs, so
+what Admin/agent see before sending matches what's actually emailed.
 
 Both options write to the same `crm_lead_emails` ledger described above (`email_type` =
 `consultation_invite` | `detailed_service_pricing`) and never touch Email Marketing

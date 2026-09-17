@@ -72,7 +72,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <View style={styles.brandRow}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer's own Image element, not an HTML <img> - it has no alt prop at all. */}
               <Image src={WINSALOT_LOGO_DATA_URI} style={styles.logo} />
-              <Text style={styles.brand}>Winsalot Corp</Text>
+              <Text style={styles.brand}>Winsalot Corp.</Text>
             </View>
             <Text style={styles.tagline}>Empowering Businesses, One Solution at a Time.</Text>
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
@@ -178,7 +178,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
         <View style={styles.signatureBlock}>
           <View style={styles.signatureCol}>
             <View style={styles.signatureLine}>
-              <Text style={styles.value}>Winsalot Corp</Text>
+              <Text style={styles.value}>Winsalot Corp.</Text>
               <Text style={styles.label}>Authorized Representative</Text>
             </View>
           </View>
@@ -194,7 +194,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
         </View>
 
         <Text style={styles.footer} fixed>
-          Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+          Winsalot Corp. · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
         </Text>
       </Page>
     </Document>

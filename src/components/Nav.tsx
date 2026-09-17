@@ -10,7 +10,7 @@ export default function Nav() {
     <div className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-6 px-8 py-[18px] sm:px-14 bg-[var(--color-bg)]/90 backdrop-blur-md border-b border-[var(--color-border)]">
       <div className="flex flex-none items-center gap-2.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/winsalot-logo.png" alt="Winsalot Corp" className="h-16 w-auto flex-none" />
+        <img src="/winsalot-logo.png" alt="Winsalot Corp." className="h-16 w-auto flex-none" />
       </div>
       <div className="flex flex-wrap items-center gap-8 text-[14.5px] font-medium text-[var(--color-ink-mute)]">
         {NAV_LINKS.map((link) => (

@@ -18,7 +18,7 @@ export async function sendFollowUpEmailForOpportunity(
     opportunityId,
     crmUser,
     emailType: "follow_up",
-    subject: "Following Up — Winsalot Corp",
+    subject: "Following Up — Winsalot Corp.",
     buildText: buildFollowUpEmailText,
     buildHtml: buildFollowUpEmailHtml,
     activityNotePrefix: "Follow-up email",

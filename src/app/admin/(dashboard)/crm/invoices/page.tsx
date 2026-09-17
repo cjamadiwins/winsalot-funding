@@ -32,7 +32,7 @@ export default async function AdminInvoicesPage({
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Create, send, and track invoices for Winsalot Corp&apos;s clients. Wave remains the official accounting record - this is for
+        Create, send, and track invoices for Winsalot Corp.&apos;s clients. Wave remains the official accounting record - this is for
         creating, emailing, and tracking invoices only. Admin-only.
       </p>
 

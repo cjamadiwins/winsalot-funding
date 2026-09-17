@@ -14,7 +14,7 @@ export default async function ClientResetPasswordPage({
   return (
     <div className="crm-theme flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 shadow-sm">
-        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp</p>
+        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp.</p>
         <h1 className="mt-1 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">
           {data.user ? "Choose a new password" : "Reset Client Portal password"}
         </h1>

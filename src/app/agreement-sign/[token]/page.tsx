@@ -14,8 +14,8 @@ import { recordAgreementOpenedAction } from "./actions";
 import AgreementSignClient from "./AgreementSignClient";
 
 export const metadata: Metadata = {
-  title: "Winsalot Corp Service Agreement",
-  description: "Review and sign your Winsalot Corp service agreement.",
+  title: "Winsalot Corp. Service Agreement",
+  description: "Review and sign your Winsalot Corp. service agreement.",
 };
 
 function formatDate(value: string | null): string {
@@ -62,7 +62,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">Winsalot Corp</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Winsalot Corp.</h1>
         <p className="text-sm text-slate-500">Empowering Businesses, One Solution at a Time.</p>
       </div>
 

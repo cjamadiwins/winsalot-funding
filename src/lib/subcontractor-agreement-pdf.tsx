@@ -61,7 +61,7 @@ export function SubcontractorAgreementPdfDocument({ agreement }: SubcontractorAg
             <View style={styles.brandRow}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer's own Image element, not an HTML <img> - it has no alt prop at all. */}
               <Image src={WINSALOT_LOGO_DATA_URI} style={styles.logo} />
-              <Text style={styles.brand}>Winsalot Corp</Text>
+              <Text style={styles.brand}>Winsalot Corp.</Text>
             </View>
             <Text style={styles.tagline}>Brampton, Ontario, Canada</Text>
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
@@ -120,7 +120,7 @@ export function SubcontractorAgreementPdfDocument({ agreement }: SubcontractorAg
         </View>
 
         <Text style={styles.footer} fixed>
-          Winsalot Corp · Brampton, Ontario, Canada · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+          Winsalot Corp. · Brampton, Ontario, Canada · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
         </Text>
       </Page>
     </Document>

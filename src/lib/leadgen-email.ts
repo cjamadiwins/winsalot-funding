@@ -15,7 +15,7 @@ import { LEADGEN_CONSULTATION_CTA_LABEL } from "./leadgen-types";
 // in spam. Lead Generation CRM emails use the company identity rather
 // than an individual administrator's name.
 export function getLeadgenSenderEmail(): string {
-  return process.env.LEADGEN_EMAIL_FROM || "Winsalot Corp <info@winsalotcorp.com>";
+  return process.env.LEADGEN_EMAIL_FROM || "Winsalot Corp. <info@winsalotcorp.com>";
 }
 
 export function getLeadgenReplyToEmail(): string {

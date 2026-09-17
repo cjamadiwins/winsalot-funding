@@ -10,7 +10,7 @@ export default async function ClientPortalLoginPage({
   return (
     <div className="crm-theme flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 shadow-sm">
-        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp</p>
+        <p className="text-sm font-semibold text-[var(--color-accent)]">Winsalot Corp.</p>
         <h1 className="mt-1 font-heading text-xl font-bold text-[var(--color-ink-strong)]">Client Portal Sign In</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">Secure access to your campaign progress, leads, appointments and reports.</p>
 

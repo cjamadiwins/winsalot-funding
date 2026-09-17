@@ -14,8 +14,8 @@ import { recordIntakeOpenedAction } from "./actions";
 import ClientIntakeFormClient from "./ClientIntakeFormClient";
 
 export const metadata: Metadata = {
-  title: "Winsalot Corp Client Intake Form",
-  description: "Complete your Winsalot Corp client intake form.",
+  title: "Winsalot Corp. Client Intake Form",
+  description: "Complete your Winsalot Corp. client intake form.",
 };
 
 const CLIENT_DASHBOARD_URL = `${LEADGEN_PRODUCTION_ORIGIN}/client/dashboard`;
@@ -31,7 +31,7 @@ const CLIENT_SERVICE_BENEFITS = [
   "Ongoing campaign optimization",
   "Access to your client dashboard",
   "Visibility into leads, appointments, and campaign progress",
-  "Support from Winsalot Corp throughout the campaign",
+  "Support from Winsalot Corp. throughout the campaign",
 ] as const;
 
 function formatDate(value: string | null): string {
@@ -53,7 +53,7 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <h1 className="text-2xl font-bold text-slate-900">This intake form has already been submitted</h1>
-        <p className="mt-3 text-slate-600">Thank you - Winsalot Corp has already received your information.</p>
+        <p className="mt-3 text-slate-600">Thank you - Winsalot Corp. has already received your information.</p>
       </div>
     );
   }
@@ -70,7 +70,7 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">Winsalot Corp Client Intake Form</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Winsalot Corp. Client Intake Form</h1>
         <p className="text-sm text-slate-500">Empowering Businesses, One Solution at a Time.</p>
       </div>
 
@@ -105,7 +105,7 @@ export default async function ClientIntakePage({ params }: { params: Promise<{ t
 
       <section className="mt-8 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm sm:p-6" aria-labelledby="client-benefits-title">
         <h2 id="client-benefits-title" className="text-xl font-bold text-slate-900">
-          What You Get With Winsalot Corp
+          What You Get With Winsalot Corp.
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Your campaign includes structured outreach, transparent activity tracking, and ongoing support from our team.

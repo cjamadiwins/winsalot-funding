@@ -387,7 +387,7 @@ function serviceLabel(serviceType: AgreementServiceType): string {
 export function buildAgreementTargetStatement(agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target">): string {
   const noun = serviceNounPlural(agreement.service_type);
   const verb = agreement.target_type === "guaranteed" ? "guarantee" : "target";
-  return `Winsalot Corp will ${verb} ${agreement.monthly_target} qualified ${noun} per month. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp does not guarantee that a lead or appointment will result in a sale.`;
+  return `Winsalot Corp. will ${verb} ${agreement.monthly_target} qualified ${noun} per month. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp. does not guarantee that a lead or appointment will result in a sale.`;
 }
 
 export type RenderedAgreementSection = { key: string; title: string; body: string };
@@ -465,7 +465,7 @@ export function buildPilotFeesStatement(
 // unchanged.
 export function buildPilotServicesStatement(agreement: Pick<CrmClientAgreementRow, "pilot_type" | "service_type">): string {
   const descriptor = agreement.pilot_type === "paid" ? "a" : "a complimentary,";
-  return `Winsalot Corp will provide ${descriptor} time-limited pilot program to the Client, consisting of prospecting, outreach, and qualification activities directed at the Client's target industries and locations, for the purpose of generating ${serviceNounPlural(agreement.service_type)} on the Client's behalf, for the agreed pilot duration and scope set out in this Agreement.`;
+  return `Winsalot Corp. will provide ${descriptor} time-limited pilot program to the Client, consisting of prospecting, outreach, and qualification activities directed at the Client's target industries and locations, for the purpose of generating ${serviceNounPlural(agreement.service_type)} on the Client's behalf, for the agreed pilot duration and scope set out in this Agreement.`;
 }
 
 // Renders every template section for one agreement, substituting
@@ -520,10 +520,10 @@ export function agreedTargetLabel(serviceType: AgreementServiceType, campaignTyp
 }
 
 export const AGREED_TARGET_NOTICE =
-  "This target is based on your signed service agreement. Please contact Winsalot Corp if a change is required.";
+  "This target is based on your signed service agreement. Please contact Winsalot Corp. if a change is required.";
 
 export const PILOT_TARGET_NOTICE =
-  "This target is based on your signed pilot program agreement. Please contact Winsalot Corp if a change is required.";
+  "This target is based on your signed pilot program agreement. Please contact Winsalot Corp. if a change is required.";
 
 // The required Pilot Terms and No Guarantee disclosure (migration 0144) -
 // deliberately written to work for BOTH a Free Pilot and a Paid Pilot
@@ -533,13 +533,13 @@ export const PILOT_TARGET_NOTICE =
 // 0098) so the agreement preview/PDF/public sign page all show identical
 // wording; exported here for reuse and for tests.
 export const PILOT_PROGRAM_DISCLOSURE = [
-  "Winsalot Corp will provide the pilot services for the agreed period, scope, target market, and deliverables.",
+  "Winsalot Corp. will provide the pilot services for the agreed period, scope, target market, and deliverables.",
   "",
   "A pilot program is intended to test campaign performance and service fit.",
   "",
-  "Winsalot Corp does not guarantee a specific number of sales, closed deals, revenue, funding approvals, or customer conversions unless a specific deliverable is expressly stated in the agreement.",
+  "Winsalot Corp. does not guarantee a specific number of sales, closed deals, revenue, funding approvals, or customer conversions unless a specific deliverable is expressly stated in the agreement.",
   "",
-  "Where the pilot includes a defined target number of leads or appointments, Winsalot Corp will work toward that agreed target during the pilot period.",
+  "Where the pilot includes a defined target number of leads or appointments, Winsalot Corp. will work toward that agreed target during the pilot period.",
   "",
   "At the end of the pilot, both parties may review the results and decide whether to continue, extend, modify, or end the service.",
 ].join("\n");

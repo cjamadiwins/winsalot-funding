@@ -42,7 +42,7 @@ function shell(bodyHtml: string, title: string): string {
           <tr>
             <td style="padding-top:16px; border-top:1px solid #e5e7eb;">
               <p style="margin:0; font-size:12px; line-height:1.6; color:#6b7280;">
-                Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+                Winsalot Corp. · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
               </p>
             </td>
           </tr>
@@ -91,7 +91,7 @@ function formatServicePeriod(invoice: Pick<CrmInvoiceRow, "service_period_start"
 const SIGNATURE_LINES = [
   "Best regards,",
   "Winsalot Billing",
-  "Winsalot Corp",
+  "Winsalot Corp.",
   "Empowering Businesses, One Solution at a Time.",
   "info@winsalotcorp.com",
   "647-300-1270",
@@ -103,7 +103,7 @@ const SIGNATURE_LINES = [
 // every client/month and reads as a mail-merge blast; naming the invoice
 // number instead reads as one specific, expected transactional notice.
 export function defaultInvoiceSentSubject(invoiceNumber: string): string {
-  return `Invoice ${invoiceNumber} from Winsalot Corp`;
+  return `Invoice ${invoiceNumber} from Winsalot Corp.`;
 }
 
 // The exact default monthly invoice email template from the brief, with
@@ -142,7 +142,7 @@ export function buildInvoiceSentEmail(
 }
 
 export function defaultInvoiceReminderSubject(invoiceNumber: string): string {
-  return `Payment Reminder: Invoice ${invoiceNumber} from Winsalot Corp`;
+  return `Payment Reminder: Invoice ${invoiceNumber} from Winsalot Corp.`;
 }
 
 // "Payment reminders must clearly show: client name, invoice number,
@@ -155,7 +155,7 @@ export function buildDefaultInvoiceReminderMessage(
   const lines = [
     `Hi ${clientDisplayName},`,
     "",
-    `This is a friendly reminder that Invoice ${invoice.invoice_number} from Winsalot Corp has a balance due.`,
+    `This is a friendly reminder that Invoice ${invoice.invoice_number} from Winsalot Corp. has a balance due.`,
     "",
     `Invoice number: ${invoice.invoice_number}`,
     `Original due date: ${formatInvoiceDate(invoice.due_date)}`,
@@ -176,7 +176,7 @@ export function buildInvoiceReminderEmail(
 }
 
 export function defaultInvoiceReceiptSubject(invoiceNumber: string): string {
-  return `Payment Receipt: Invoice ${invoiceNumber} from Winsalot Corp`;
+  return `Payment Receipt: Invoice ${invoiceNumber} from Winsalot Corp.`;
 }
 
 // "When an invoice is marked Paid, allow admin to send a receipt
