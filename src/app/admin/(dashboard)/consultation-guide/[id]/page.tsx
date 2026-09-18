@@ -18,8 +18,8 @@ export default async function ConsultationGuideDetailPage({ params }: { params: 
   return (
     <ConsultationGuideForm
       guide={guide as CrmConsultationGuideRow}
-      saveAction={(formData) => updateConsultationGuideAction(id, formData)}
-      completeAction={(formData) => completeConsultationGuideAction(id, formData)}
+      saveAction={updateConsultationGuideAction.bind(null, id)}
+      completeAction={completeConsultationGuideAction.bind(null, id)}
       backHref="/admin/consultation-guide"
     />
   );
