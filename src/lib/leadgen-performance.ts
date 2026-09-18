@@ -25,6 +25,7 @@ export const LEADGEN_PERFORMANCE_TIMEZONE = "America/Toronto";
 
 export type LeadgenPerformanceAppointment = {
   id: string;
+  lead_id: string | null;
   business_name: string;
   contact_name: string | null;
   appointment_date: string;

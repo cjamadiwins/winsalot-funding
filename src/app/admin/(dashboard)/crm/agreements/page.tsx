@@ -54,7 +54,11 @@ export default async function AdminCrmAgreementsPage() {
             {agreementRows.map((agreement) => (
               <tr key={agreement.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-3 text-slate-600">{agreement.agreement_number}</td>
-                <td className="px-4 py-3 font-medium text-slate-900">{agreement.legal_business_name}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  <Link href={`/admin/crm/agreements/${agreement.id}`} className="hover:text-sky-700 hover:underline">
+                    {agreement.legal_business_name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{CAMPAIGN_TYPE_LABELS[agreement.campaign_type]}</td>
                 <td className="px-4 py-3 text-slate-600">{agreement.service_type}</td>
                 <td className="px-4 py-3 text-slate-600 capitalize">{agreement.status}</td>

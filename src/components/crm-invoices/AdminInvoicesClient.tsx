@@ -176,7 +176,10 @@ export default function AdminInvoicesClient({
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3">
                   <span>
-                    {clientName} — {formatDate(p.payment_date)}
+                    <Link href={`/admin/crm/clients/${p.client_id}`} className="font-medium hover:text-sky-700 hover:underline">
+                      {clientName}
+                    </Link>{" "}
+                    — {formatDate(p.payment_date)}
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="font-medium">{formatCurrency(p.amount, p.currency)}</span>
@@ -390,7 +393,11 @@ export default function AdminInvoicesClient({
                       {inv.invoice_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">{clientName}</td>
+                  <td className="px-4 py-3">
+                    <Link href={`/admin/crm/clients/${inv.client_id}`} className="hover:text-sky-700 hover:underline">
+                      {clientName}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3">{formatDate(inv.issue_date)}</td>
                   <td className="px-4 py-3">{formatDate(inv.due_date)}</td>
                   <td className="px-4 py-3">

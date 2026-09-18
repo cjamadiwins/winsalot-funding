@@ -227,7 +227,9 @@ export default function LeadgenMyOpportunitiesClient({
                       {row.businessName}
                     </button>
                   ) : (
-                    <div className="break-words font-bold text-slate-900">{row.businessName}</div>
+                    <Link href={row.detailHref} className="break-words font-bold text-slate-900 hover:text-sky-700 hover:underline">
+                      {row.businessName}
+                    </Link>
                   )}
                   <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
                 </div>

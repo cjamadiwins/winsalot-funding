@@ -30,7 +30,7 @@ export default async function LeadgenAdminPerformancePage() {
       .order("full_name"),
     admin
       .from("leadgen_appointments")
-      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
+      .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
       .order("appointment_date", { ascending: false }),
   ]);
 
@@ -77,6 +77,7 @@ export default async function LeadgenAdminPerformancePage() {
               key={agent.id}
               agentName={agent.full_name || agent.email}
               performance={computeLeadgenAgentPerformance(allAppointments, agent.id)}
+              leadHrefBase="/leadgen/admin/leads"
             />
           ))
         )}

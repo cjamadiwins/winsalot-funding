@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { Users, UserCheck, PauseCircle, Clock, RefreshCw, Mail, CalendarClock, AlertTriangle } from "lucide-react";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
@@ -422,7 +423,15 @@ function EnrollmentRow({
 } & EnrollmentRowHandlers) {
   return (
     <tr>
-      <td className="px-3 py-2.5 font-medium text-slate-900">{client?.company_name ?? "Unknown client"}</td>
+      <td className="px-3 py-2.5 font-medium text-slate-900">
+        {client ? (
+          <Link href={`/admin/crm/clients/${client.id}`} className="hover:text-sky-700 hover:underline">
+            {client.company_name}
+          </Link>
+        ) : (
+          "Unknown client"
+        )}
+      </td>
       <td className="px-3 py-2.5 text-slate-600">{client?.status ?? "—"}</td>
       <td className="px-3 py-2.5">
         <CampaignTypeEditor enrollment={enrollment} onChangeCampaignType={handlers.onChangeCampaignType} />
@@ -466,7 +475,15 @@ function EnrollmentCard({
     <div className="rounded-xl border border-slate-200 bg-white p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[13.5px] font-semibold text-slate-900">{client?.company_name ?? "Unknown client"}</p>
+          <p className="truncate text-[13.5px] font-semibold text-slate-900">
+            {client ? (
+              <Link href={`/admin/crm/clients/${client.id}`} className="hover:text-sky-700 hover:underline">
+                {client.company_name}
+              </Link>
+            ) : (
+              "Unknown client"
+            )}
+          </p>
           <div className="mt-1 text-[12.5px]">
             <CampaignTypeEditor enrollment={enrollment} onChangeCampaignType={handlers.onChangeCampaignType} />
           </div>
@@ -631,7 +648,15 @@ function FollowupPanel({
               const isDue = f.follow_up_date <= today;
               return (
                 <tr key={f.id}>
-                  <td className="px-4 py-3 font-medium text-slate-900">{clientById.get(f.client_id)?.company_name ?? "Unknown client"}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {clientById.get(f.client_id) ? (
+                      <Link href={`/admin/crm/clients/${f.client_id}`} className="hover:text-sky-700 hover:underline">
+                        {clientById.get(f.client_id)?.company_name}
+                      </Link>
+                    ) : (
+                      "Unknown client"
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={isDue ? "font-semibold text-orange-700" : "text-slate-600"}>{formatDate(f.follow_up_date)}</span>
                     {isDue && <span className="ml-1.5 text-[10.5px] font-semibold text-orange-600">DUE</span>}
@@ -665,7 +690,14 @@ function FollowupPanel({
           <div className="mt-2 space-y-1.5">
             {pastFollowups.map((f) => (
               <div key={f.id} className="rounded-lg border border-slate-200 px-3 py-2 text-[12.5px] text-slate-600">
-                {clientById.get(f.client_id)?.company_name ?? "Unknown client"} — {formatDate(f.follow_up_date)} — {f.resolved_at ? "Resolved" : "Cancelled"}
+                {clientById.get(f.client_id) ? (
+                  <Link href={`/admin/crm/clients/${f.client_id}`} className="font-medium text-slate-700 hover:text-sky-700 hover:underline">
+                    {clientById.get(f.client_id)?.company_name}
+                  </Link>
+                ) : (
+                  "Unknown client"
+                )}{" "}
+                — {formatDate(f.follow_up_date)} — {f.resolved_at ? "Resolved" : "Cancelled"}
               </div>
             ))}
           </div>

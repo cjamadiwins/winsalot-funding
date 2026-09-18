@@ -14,7 +14,7 @@ export default async function LeadgenAgentPerformancePage() {
 
   const { data: appointments } = await supabase
     .from("leadgen_appointments")
-    .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
+    .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
     .order("appointment_date", { ascending: false });
 
   const performance = computeLeadgenAgentPerformance((appointments ?? []) as LeadgenPerformanceAppointment[], agent.id);
@@ -28,7 +28,7 @@ export default async function LeadgenAgentPerformancePage() {
       </p>
 
       <div className="mt-6">
-        <AgentPerformanceCard agentName={agent.full_name || agent.email} performance={performance} />
+        <AgentPerformanceCard agentName={agent.full_name || agent.email} performance={performance} leadHrefBase="/leadgen/agent/leads" />
       </div>
     </div>
   );

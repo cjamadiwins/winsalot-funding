@@ -344,7 +344,16 @@ export default function WinsalotAppointmentsListClient({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-900">{appt.business_name}</span>
+                  {appt.opportunity_id ? (
+                    <Link
+                      href={actions.opportunityHref(appt.opportunity_id)}
+                      className="font-semibold text-slate-900 hover:text-sky-700 hover:underline"
+                    >
+                      {appt.business_name}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold text-slate-900">{appt.business_name}</span>
+                  )}
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${WINSALOT_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
                     {WINSALOT_APPOINTMENT_STATUS_LABELS[appt.status]}
                   </span>

@@ -56,7 +56,16 @@ export default function LeadgenAppointmentRecordsModal({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-slate-900">{appt.business_name}</span>
+                      {appt.lead_id ? (
+                        <Link
+                          href={`${leadHrefBase}/${appt.lead_id}`}
+                          className="font-bold text-slate-900 hover:text-sky-700 hover:underline"
+                        >
+                          {appt.business_name}
+                        </Link>
+                      ) : (
+                        <span className="font-bold text-slate-900">{appt.business_name}</span>
+                      )}
                       <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800">Booked</span>
                     </div>
                     <p className="mt-1 text-[12.5px] text-slate-500">

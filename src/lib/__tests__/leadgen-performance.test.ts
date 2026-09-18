@@ -17,6 +17,7 @@ const WEEK_END = "2026-09-11";
 function appointment(overrides: Partial<LeadgenPerformanceAppointment> = {}): LeadgenPerformanceAppointment {
   return {
     id: "appointment-1",
+    lead_id: "lead-1",
     business_name: "Example Business",
     contact_name: "Jane Doe",
     appointment_date: "2026-09-20",
