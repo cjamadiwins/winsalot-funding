@@ -46,7 +46,7 @@ export default async function NewConsultationGuidePage({
       opportunityId={opportunityId ?? null}
       initial={initial}
       saveAction={createConsultationGuideAction}
-      completeAction={(formData) => completeConsultationGuideAction(null, formData)}
+      completeAction={completeConsultationGuideAction.bind(null, null)}
       backHref="/admin/consultation-guide"
     />
   );
