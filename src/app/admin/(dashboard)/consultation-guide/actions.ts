@@ -98,6 +98,32 @@ function fieldsFromForm(formData: FormData) {
   };
 }
 
+// Mirrors performWinsalotCompletion's guarded status transition
+// (winsalot-consultation-completion.ts) for the appointment this guide was
+// opened from - "Only Complete Consultation inside the guide may complete
+// the appointment." Never calls sendWinsalotFollowUpEmail: the guide's own
+// service-specific email above is the only email a guide completion ever
+// sends, so the appointment's old Lead-Gen-only follow-up must never also
+// fire here. Best-effort and silent when it doesn't apply - an appointment
+// that isn't currently "booked" (already completed via the old flow,
+// cancelled, or no-show) is left untouched rather than erroring, since the
+// guide's own completion above is what actually matters to the caller.
+async function completeLinkedAppointment(appointmentId: string, actor: { userId: string; name: string }): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+  await admin
+    .from("winsalot_appointments")
+    .update({
+      status: "completed",
+      completed_at: nowIso,
+      completed_by_user_id: actor.userId,
+      completed_by_name: actor.name,
+      updated_at: nowIso,
+    })
+    .eq("id", appointmentId)
+    .eq("status", "booked");
+}
+
 async function logConsultationActivity(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   opportunityId: string | null,
@@ -238,6 +264,12 @@ export async function completeConsultationGuideAction(id: string | null, formDat
 
   if (justCompleted) {
     await logConsultationActivity(supabase, fields.opportunity_id, admin.id, `Consultation completed by ${admin.full_name || admin.email}.`);
+
+    if (fields.appointment_id) {
+      await completeLinkedAppointment(fields.appointment_id, { userId: admin.id, name: admin.full_name || admin.email });
+      revalidatePath("/admin/crm/appointments");
+      revalidatePath("/agent/appointments");
+    }
 
     if (!fields.email) {
       noFollowUpEmailReason = "No recipient email";
