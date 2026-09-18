@@ -36,6 +36,38 @@ export const LENDING_FIT_STATUS_LABELS: Record<LendingFitStatus, string> = {
   not_applicable: "Not applicable",
 };
 
+// The consultation's Service field - deliberately only 2 values, unlike
+// crm_opportunities' 3-way OpportunityType (lead_generation /
+// business_financing / both_services). A "both_services" appointment has
+// no single correct answer here, so it's never auto-resolved to one value
+// - Admin must choose explicitly before the consultation can be marked
+// complete (per CJ's brief: "Do not guess the service from notes or other
+// text").
+export const CONSULTATION_GUIDE_SERVICES = ["lead_generation", "business_financing"] as const;
+export type ConsultationGuideService = (typeof CONSULTATION_GUIDE_SERVICES)[number];
+
+export const CONSULTATION_GUIDE_SERVICE_LABELS: Record<ConsultationGuideService, string> = {
+  lead_generation: "Lead Generation",
+  business_financing: "Business Finance",
+};
+
+export const CONSULTATION_GUIDE_FOLLOW_UP_STATUSES = ["not_sent", "sending", "sent", "failed"] as const;
+export type ConsultationGuideFollowUpStatus = (typeof CONSULTATION_GUIDE_FOLLOW_UP_STATUSES)[number];
+
+export const CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS: Record<ConsultationGuideFollowUpStatus, string> = {
+  not_sent: "Not Sent",
+  sending: "Sending",
+  sent: "Sent",
+  failed: "Failed",
+};
+
+export const CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES: Record<ConsultationGuideFollowUpStatus, string> = {
+  not_sent: "bg-slate-100 text-slate-600",
+  sending: "bg-sky-100 text-sky-700",
+  sent: "bg-emerald-100 text-emerald-700",
+  failed: "bg-rose-100 text-rose-700",
+};
+
 // Section 2: Start the Conversation.
 export const CONSULTATION_GUIDE_OPENING_LINE =
   "Thanks for meeting with me. I’d like to understand your business, your growth goals, what you’re doing now to win customers, and where you need the most support. Then I can explain where Winsalot Corp. may be able to help.";
@@ -183,6 +215,23 @@ export type CrmConsultationGuideRow = {
   completed_at: string | null;
   completed_by: string | null;
 
+  // Set when this guide was opened from an existing booked appointment
+  // (?appointmentId=... on /new) - null for a manual consultation.
+  appointment_id: string | null;
+  service: ConsultationGuideService | null;
+
+  follow_up_email_status: ConsultationGuideFollowUpStatus;
+  follow_up_email_sent_at: string | null;
+  // The service the sent template actually matched, captured at send time
+  // - kept separate from `service` above since that field can still be
+  // edited after completion.
+  follow_up_email_service: ConsultationGuideService | null;
+  follow_up_email_error: string | null;
+  follow_up_crm_lead_email_id: string | null;
+  // Set to "No recipient email" when completed without a recipient
+  // address on file; null whenever a send was attempted.
+  no_follow_up_email_reason: string | null;
+
   business_name: string | null;
   contact_name: string | null;
   phone: string | null;
@@ -213,7 +262,18 @@ export type CrmConsultationGuideRow = {
 // a consultation opened without one being obvious from its own columns.
 export type ConsultationGuideListRow = Pick<
   CrmConsultationGuideRow,
-  "id" | "created_at" | "updated_at" | "status" | "business_name" | "contact_name" | "consultation_date" | "consultant_name" | "opportunity_id"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "status"
+  | "business_name"
+  | "contact_name"
+  | "consultation_date"
+  | "consultant_name"
+  | "opportunity_id"
+  | "appointment_id"
+  | "service"
+  | "follow_up_email_status"
 > & {
   opportunityBusinessName: string | null;
 };

@@ -185,6 +185,7 @@ export const EMAIL_TYPES = [
   "appointment_reminder",
   "consultation_follow_up",
   "detailed_service_pricing",
+  "business_finance_follow_up",
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -195,6 +196,7 @@ export const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
   appointment_reminder: "Appointment Reminder",
   consultation_follow_up: "Consultation Follow-Up",
   detailed_service_pricing: "Detailed Service & Pricing",
+  business_finance_follow_up: "Business Finance Follow-Up",
 };
 
 export type CrmOpportunityRow = {

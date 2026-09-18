@@ -374,6 +374,54 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
   return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
 }
 
+export type BusinessFinanceFollowUpEmailParams = {
+  contactName: string;
+  businessName: string;
+  // The consultant who ran the consultation - always the admin who marks
+  // it complete (the guide's own free-text consultant_name field is used
+  // for the displayed name when set, so it can still credit whoever
+  // actually ran the call even if a different admin clicks Complete).
+  consultantName: string;
+  consultantEmail: string;
+};
+
+// New Business Finance consultation-completion follow-up email (Growth
+// CRM Client Consultation Guide, "Mark Consultation Complete" with
+// Service = Business Finance). Copy is fixed exactly to CJ's brief - do
+// not reword without checking the brief first. Never sent for the
+// existing Lead Generation flow, which keeps using
+// buildWinsalotFollowUpEmail above unchanged. Never exposes internal
+// consultation notes, qualification answers, or lender information - it
+// only ever takes a name/business/consultant, nothing from the guide's
+// own discovery/fit/summary answers.
+export function buildWinsalotBusinessFinanceFollowUpEmail(params: BusinessFinanceFollowUpEmailParams): WinsalotEmailBody {
+  const firstName = firstNameOf(params.contactName);
+  const subject = "Thank You for Meeting With Winsalot Corp. — Business Financing Next Steps";
+
+  const introLines = [
+    `Hi ${firstName},`,
+    "",
+    `Thank you for taking the time to speak with Winsalot Corp. about your business financing needs. It was helpful to learn more about ${params.businessName}, your goals, and the type of support you are looking for.`,
+    "",
+    "Winsalot Corp. works with a network of business financing providers to help eligible businesses explore available funding options. Our support is provided at no cost to you—we are compensated by the funding provider when a successful funding arrangement is completed.",
+    "",
+    "The next step is to review some basic business information and supporting documents. Requirements can vary by provider, but they typically include recent business bank statements and information about the business. We will confirm the exact documents required before anything is submitted.",
+    "",
+    "Please note that all financing options are subject to review and approval by the funding provider. Winsalot Corp. does not guarantee approval, a specific amount, rate, term, or funding timeline.",
+    "",
+    "If you are ready to continue, please reply to this email and we will provide the next steps and secure document-submission instructions.",
+    "",
+    "Thank you again for considering Winsalot Corp. We look forward to supporting your business.",
+  ];
+
+  const signOffLines = ["Best regards,", params.consultantName, "Winsalot Corp.", params.consultantEmail, "647-300-1270", "winsalotcorp.com"];
+
+  const textLines = [...introLines, "", ...signOffLines];
+  const bodyHtml = `${paragraphsHtml(introLines)}${paragraphsHtml(signOffLines)}`;
+
+  return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
+}
+
 export function buildWinsalotReminderEmail(
   params: ConsultationEmailParams & { reminderType: "24_hour_reminder" | "1_hour_reminder" }
 ): WinsalotEmailBody {
