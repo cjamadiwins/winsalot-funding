@@ -439,6 +439,20 @@ export default function WinsalotAppointmentsListClient({
                     View Prospect
                   </Link>
                 )}
+                {/* Admin-only shortcut into the Client Consultation Guide -
+                    that feature is admin-only per its own RLS policy, so
+                    it's never shown on the agent view (isAdmin=false),
+                    where it would only lead to a login redirect. Available
+                    regardless of status - a guide is often started before
+                    the call happens, not only after. */}
+                {isAdmin && (
+                  <Link
+                    href={`/admin/consultation-guide/new?appointmentId=${appt.id}`}
+                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    Open Consultation Guide
+                  </Link>
+                )}
                 <button type="button" onClick={() => openRow(appt, "edit")} className="text-xs font-semibold text-slate-600 hover:text-slate-800">
                   Edit
                 </button>

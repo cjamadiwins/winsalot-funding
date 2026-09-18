@@ -8,6 +8,7 @@ import {
   CONSULTATION_GUIDE_LEADGEN_FIT_QUESTIONS,
   CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS,
   CONSULTATION_GUIDE_STATUS_LABELS,
+  CONSULTATION_GUIDE_SERVICE_LABELS,
   CONSULTATION_GUIDE_SUMMARY_FIELDS,
   LEADGEN_FIT_STATUS_LABELS,
   LENDING_FIT_STATUS_LABELS,
@@ -106,6 +107,7 @@ export function ConsultationGuidePdfDocument({ guide }: { guide: CrmConsultation
             <Field label="Industry" value={guide.industry} />
             <Field label="Location" value={guide.location} />
             <Field label="Consultant" value={guide.consultant_name} />
+            <Field label="Service" value={guide.service ? CONSULTATION_GUIDE_SERVICE_LABELS[guide.service] : null} />
           </View>
         </View>
 

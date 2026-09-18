@@ -8,11 +8,15 @@ import {
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
   CONSULTATION_GUIDE_CLOSING_LINE,
   CONSULTATION_GUIDE_DISCOVERY_QUESTIONS,
+  CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS,
+  CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES,
   CONSULTATION_GUIDE_INTERNAL_REMINDER,
   CONSULTATION_GUIDE_LEADGEN_FIT_QUESTIONS,
   CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS,
   CONSULTATION_GUIDE_LENDING_WARNING,
   CONSULTATION_GUIDE_OPENING_LINE,
+  CONSULTATION_GUIDE_SERVICES,
+  CONSULTATION_GUIDE_SERVICE_LABELS,
   CONSULTATION_GUIDE_STATUS_LABELS,
   CONSULTATION_GUIDE_STATUS_STYLES,
   CONSULTATION_GUIDE_SUMMARY_FIELDS,
@@ -24,10 +28,19 @@ import {
   LENDING_FIT_STATUSES,
   type ConsultationGuideAnswers,
   type ConsultationGuideChecklist,
+  type ConsultationGuideService,
   type CrmConsultationGuideRow,
 } from "@/lib/consultation-guide";
+import { previewConsultationCompletionAction, type ConsultationCompletionPreview } from "./actions";
+import AppointmentPicker from "./AppointmentPicker";
 
-type ActionResult = { id?: string; error?: string };
+type ActionResult = {
+  id?: string;
+  error?: string;
+  outcome?: "completed" | "already_completed";
+  followUpEmailStatus?: string;
+  noFollowUpEmailReason?: string | null;
+};
 
 const inputClasses =
   "w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-[13.5px] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
@@ -86,24 +99,49 @@ function FitStatusPicker({
   );
 }
 
-type PrefillableField = "business_name" | "contact_name" | "phone" | "email" | "industry" | "location" | "consultant_name";
+type PrefillableField = "business_name" | "contact_name" | "phone" | "email" | "industry" | "location" | "consultant_name" | "notes";
 
 export default function ConsultationGuideForm({
   guide,
   opportunityId,
+  appointmentId,
+  linkedAppointmentLabel,
+  appointmentNotFound,
+  showAppointmentPicker,
   initial,
+  initialService,
   saveAction,
   completeAction,
+  retryFollowUpAction,
   backHref,
 }: {
   guide: CrmConsultationGuideRow | null;
   opportunityId?: string | null;
+  // The linked appointment (if any), passed by ?appointmentId= on /new or
+  // read off an existing guide's own appointment_id on reopen.
+  appointmentId?: string | null;
+  linkedAppointmentLabel?: string | null;
+  // True when ?appointmentId= pointed at an appointment that no longer
+  // exists - shown as a notice, never a crash; Admin can still search for
+  // a different one or fill the guide in manually.
+  appointmentNotFound?: boolean;
+  // Shows the manual appointment-search fallback - only on a brand-new
+  // guide opened with neither ?appointmentId= nor ?opportunityId=.
+  showAppointmentPicker?: boolean;
   // Only used when guide is null - populated from an existing Growth CRM
-  // opportunity when the guide was opened from its record (see
-  // consultation-guide/new/page.tsx).
+  // opportunity or appointment when the guide was opened from one of
+  // those records (see consultation-guide/new/page.tsx).
   initial?: Partial<Record<PrefillableField, string | null>>;
+  // Auto-selected from a linked appointment's own service_type when it's
+  // an unambiguous match (never for "both_services" - see
+  // new/page.tsx's serviceFromAppointmentType).
+  initialService?: ConsultationGuideService | null;
   saveAction: (formData: FormData) => Promise<ActionResult>;
   completeAction: (formData: FormData) => Promise<ActionResult>;
+  // Only passed for an existing, completed guide whose follow-up email
+  // failed - undefined everywhere else (a brand-new guide has nothing to
+  // retry yet).
+  retryFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
   backHref: string;
 }) {
   function val(field: PrefillableField): string | null | undefined {
@@ -115,6 +153,8 @@ export default function ConsultationGuideForm({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completePreview, setCompletePreview] = useState<ConsultationCompletionPreview | null>(null);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
   const discovery = guide?.discovery ?? {};
   const leadgenFit = guide?.leadgen_fit ?? {};
@@ -130,11 +170,31 @@ export default function ConsultationGuideForm({
     setMessage(null);
     startTransition(async () => {
       const result = await action(formData);
-      if (result.error) {
+      if (result.error && result.outcome !== "completed") {
         setError(result.error);
         return;
       }
-      setMessage(label);
+
+      let finalMessage = label;
+      if (result.outcome === "already_completed") {
+        finalMessage = "This consultation was already marked completed.";
+      } else if (result.outcome === "completed") {
+        const statusLabel = result.followUpEmailStatus ? CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS[result.followUpEmailStatus as keyof typeof CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS] : null;
+        if (result.error) {
+          // Completion itself succeeded, but the follow-up email failed to
+          // send - the consultation stays Completed either way (see
+          // completeConsultationGuideAction), so this is a warning, not a
+          // blocking error.
+          setError(result.error);
+          finalMessage = "Consultation marked complete.";
+        } else if (result.noFollowUpEmailReason) {
+          finalMessage = `Consultation marked complete. No follow-up email sent (${result.noFollowUpEmailReason}).`;
+        } else if (statusLabel) {
+          finalMessage = `Consultation marked complete. Follow-up email: ${statusLabel}.`;
+        }
+      }
+      setMessage(finalMessage);
+
       if (!guide && result.id) {
         router.push(`/admin/consultation-guide/${result.id}`);
       } else {
@@ -143,19 +203,61 @@ export default function ConsultationGuideForm({
     });
   }
 
+  async function openCompleteModal() {
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const preview = await previewConsultationCompletionAction(formData);
+      if ("error" in preview) {
+        setError(preview.error);
+        return;
+      }
+      setCompletePreview(preview);
+    });
+  }
+
+  function confirmComplete() {
+    setCompletePreview(null);
+    runSave("Consultation marked complete.", completeAction);
+  }
+
+  function handleRetryFollowUp() {
+    if (!retryFollowUpAction || !guide) return;
+    setRetryMessage(null);
+    startTransition(async () => {
+      const result = await retryFollowUpAction(guide.id);
+      setRetryMessage(result.error ?? result.message ?? null);
+      router.refresh();
+    });
+  }
+
+  const showFollowUpBadge = guide && guide.status === "completed" && guide.service;
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href={backHref} className="text-[13px] font-semibold text-sky-600 hover:text-sky-700">
           ← Back to Consultation Guides
         </Link>
-        {guide && (
-          <span
-            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONSULTATION_GUIDE_STATUS_STYLES[guide.status]}`}
-          >
-            {CONSULTATION_GUIDE_STATUS_LABELS[guide.status]}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {showFollowUpBadge && (
+            <span
+              title={guide!.follow_up_email_error ?? guide!.no_follow_up_email_reason ?? undefined}
+              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES[guide!.follow_up_email_status]}`}
+            >
+              Follow-Up Email: {CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS[guide!.follow_up_email_status]}
+            </span>
+          )}
+          {guide && (
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONSULTATION_GUIDE_STATUS_STYLES[guide.status]}`}
+            >
+              {CONSULTATION_GUIDE_STATUS_LABELS[guide.status]}
+            </span>
+          )}
+        </div>
       </div>
 
       {message && (
@@ -164,9 +266,38 @@ export default function ConsultationGuideForm({
       {error && (
         <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</p>
       )}
+      {retryMessage && (
+        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">{retryMessage}</p>
+      )}
+
+      {guide && guide.status === "completed" && guide.follow_up_email_status === "failed" && retryFollowUpAction && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handleRetryFollowUp}
+          className="mt-3 rounded-[10px] border border-rose-300 bg-rose-50 px-3.5 py-2 text-[12.5px] font-bold text-rose-700 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Retry Follow-Up Email
+        </button>
+      )}
+
+      {(linkedAppointmentLabel || appointmentNotFound) && (
+        <p
+          className={`mt-3 rounded-lg border px-4 py-2.5 text-[12.5px] font-medium ${
+            appointmentNotFound ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"
+          }`}
+        >
+          {appointmentNotFound
+            ? "The linked appointment could not be found. Search for a different one below, or fill in this consultation manually."
+            : `Linked Appointment: ${linkedAppointmentLabel}`}
+        </p>
+      )}
+
+      {showAppointmentPicker && !guide && <AppointmentPicker />}
 
       <form ref={formRef} className="mt-2">
         <input type="hidden" name="opportunity_id" defaultValue={guide?.opportunity_id ?? opportunityId ?? ""} />
+        <input type="hidden" name="appointment_id" defaultValue={guide?.appointment_id ?? appointmentId ?? ""} />
 
         <div>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">Client Consultation Guide</h1>
@@ -191,6 +322,26 @@ export default function ConsultationGuideForm({
                 defaultValue={guide?.consultation_date ?? new Date().toISOString().slice(0, 10)}
               />
               <Field label="Consultant" name="consultant_name" defaultValue={val("consultant_name")} />
+            </div>
+            <div className="mt-4">
+              <span className={labelClasses}>
+                Service <span className="text-rose-600">*</span>
+              </span>
+              <p className="mt-0.5 text-[11.5px] text-slate-500">Required before this consultation can be marked complete.</p>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {CONSULTATION_GUIDE_SERVICES.map((option) => (
+                  <label key={option} className="flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                    <input
+                      type="radio"
+                      name="service"
+                      value={option}
+                      defaultChecked={(guide?.service ?? initialService) === option}
+                      className="h-4 w-4"
+                    />
+                    {CONSULTATION_GUIDE_SERVICE_LABELS[option]}
+                  </label>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -315,7 +466,7 @@ export default function ConsultationGuideForm({
             <textarea
               name="notes"
               placeholder="Type any additional notes here during the consultation…"
-              defaultValue={guide?.notes ?? ""}
+              defaultValue={val("notes") ?? ""}
               className={`${inputClasses} mt-3 min-h-[120px] resize-y`}
             />
           </section>
@@ -341,7 +492,7 @@ export default function ConsultationGuideForm({
           <button
             type="button"
             disabled={isPending}
-            onClick={() => runSave("Consultation marked complete.", completeAction)}
+            onClick={openCompleteModal}
             className="rounded-[11px] bg-emerald-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Mark Consultation Complete
@@ -365,6 +516,64 @@ export default function ConsultationGuideForm({
           )}
         </div>
       </form>
+
+      {completePreview && "subject" in completePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="text-[16px] font-bold text-slate-900">Mark Consultation Complete?</h2>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Recipient</p>
+                <p className="mt-0.5 font-medium text-slate-800">{completePreview.recipientName}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Service</p>
+                <p className="mt-0.5 font-medium text-slate-800">{completePreview.serviceLabel}</p>
+              </div>
+            </div>
+
+            {completePreview.recipientEmail ? (
+              <p className="mt-3 text-[13px] text-slate-600">
+                A follow-up email will be sent to <span className="font-semibold text-slate-800">{completePreview.recipientEmail}</span>.
+              </p>
+            ) : (
+              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-800">
+                This prospect has no email address on file. You can still complete this consultation - no follow-up email will be
+                sent, and the reason will be recorded as &ldquo;No recipient email.&rdquo;
+              </p>
+            )}
+
+            {completePreview.recipientEmail && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Subject</p>
+                <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{completePreview.subject}</p>
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Body</p>
+                <pre className="mt-0.5 max-h-56 overflow-y-auto whitespace-pre-wrap font-sans text-[12.5px] leading-relaxed text-slate-700">
+                  {completePreview.bodyText}
+                </pre>
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setCompletePreview(null)}
+                className="rounded-[10px] border border-slate-300 bg-white px-4 py-2 text-[13px] font-bold text-slate-700 transition hover:border-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={confirmComplete}
+                className="rounded-[10px] bg-emerald-600 px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {completePreview.recipientEmail ? "Complete & Send Email" : "Complete Without Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
