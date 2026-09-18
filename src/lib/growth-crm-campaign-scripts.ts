@@ -58,23 +58,23 @@ export type GrowthCrmCampaignScript = {
 export const GROWTH_CRM_CAMPAIGN_SCRIPTS: Record<GrowthCrmCampaignKey, GrowthCrmCampaignScript> = {
   "website-development": {
     opener: (agentName) =>
-      `"Hi, this is ${agentName} calling from Winsalot Corp. We help businesses improve or redesign their websites so they better showcase their work, build credibility, and generate more customer inquiries. I wanted to quickly ask — are you currently happy with your website, or would you be open to discussing some improvements?"`,
+      `"Hi, this is ${agentName} calling from Winsalot Corp. We help website development and web design companies generate qualified business opportunities through outbound calling and appointment setting. We connect companies like yours with businesses that may be looking for a new website, website redesign, or rebranding. I wanted to ask — are you currently looking to add more business clients?"`,
   },
   "marketing-agencies": {
     opener: (agentName) =>
-      `"Hi, this is ${agentName} from Winsalot Corp. We help businesses with outbound lead generation and appointment setting. I'm reaching out to see whether your agency is currently looking for additional support generating qualified sales opportunities for your team."`,
+      `"Hi, this is ${agentName} calling from Winsalot Corp. We help marketing agencies generate qualified business opportunities through outbound prospecting and appointment setting. Our team reaches out to businesses, identifies companies interested in marketing support, and helps book conversations for your sales team. Are you currently looking to bring in more business clients?"`,
   },
   "bookkeeping-accounting": {
     opener: (agentName) =>
-      `"Hi, this is ${agentName} from Winsalot Corp. We're reaching out to businesses regarding bookkeeping and accounting support. I wanted to quickly ask whether you currently handle your bookkeeping internally or work with an outside provider."`,
+      `"Hi, this is ${agentName} calling from Winsalot Corp. We help bookkeeping and accounting firms generate qualified business opportunities through outbound calling and appointment setting. We connect firms like yours with businesses that may need bookkeeping, accounting, payroll, or financial support. Are you currently looking to add more business clients?"`,
   },
   "it-services": {
     opener: (agentName) =>
-      `"Hi, this is ${agentName} from Winsalot Corp. We're reaching out to businesses regarding IT support and technology services. I wanted to ask whether your company currently has an IT provider or if you're open to reviewing additional support options."`,
+      `"Hi, this is ${agentName} calling from Winsalot Corp. We help IT service and technology companies generate qualified B2B opportunities through outbound calling and appointment setting. We reach businesses that may need managed IT, technical support, cybersecurity, or other IT services and help arrange conversations with interested prospects. Are you currently looking to grow your business client base?"`,
   },
   "security-systems": {
     opener: (agentName) =>
-      `"Hi, this is ${agentName} from Winsalot Corp. We're reaching out to businesses regarding commercial security systems and camera installation. I wanted to ask whether you currently have a security camera system in place or if upgrading it is something you may be considering."`,
+      `"Hi, this is ${agentName} calling from Winsalot Corp. We help commercial security and camera installation companies generate qualified business opportunities through outbound calling and appointment setting. We connect companies like yours with businesses that may be considering security cameras, access control, or security system upgrades. Are you currently looking to add more commercial clients?"`,
   },
   "business-finance": {
     opener: (agentName) =>
