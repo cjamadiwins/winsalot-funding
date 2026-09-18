@@ -422,6 +422,24 @@ export async function resendConsultationFollowUpEmailAction(id: string): Promise
   return { message: "Follow-up email resent." };
 }
 
+// Admin-only, explicitly confirmed "Delete" from the consultation guide
+// list - only the guide row itself is removed. crm_consultation_guides
+// has no child rows referencing it (the linked appointment and
+// opportunity are what it points *to*, not the other way around, and the
+// sent follow-up email lives in crm_lead_emails, keyed off the
+// opportunity rather than the guide), so a plain delete here can never
+// take the linked appointment, prospect, or email/audit history with it.
+export async function deleteConsultationGuideAction(id: string): Promise<{ error?: string }> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.from("crm_consultation_guides").delete().eq("id", id);
+  if (error) return { error: "Failed to delete the consultation record." };
+
+  revalidatePath("/admin/consultation-guide");
+  return {};
+}
+
 export type AppointmentSearchResult = {
   id: string;
   business_name: string;
