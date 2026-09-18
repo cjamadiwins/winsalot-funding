@@ -44,7 +44,6 @@ const styles = StyleSheet.create({
   statusBadge: { fontSize: 8.5, fontWeight: 700, color: "#1e3a8a", marginBottom: 6 },
   checklistItem: { fontSize: 9, marginBottom: 3 },
   reminder: { fontSize: 8, color: "#78350f", backgroundColor: "#fffbeb", padding: 6, marginTop: 4 },
-  warning: { fontSize: 8, color: "#7f1d1d", backgroundColor: "#fef2f2", padding: 6, marginTop: 4 },
   footer: { position: "absolute", bottom: 24, left: 40, right: 40, textAlign: "center", fontSize: 7.5, color: "#94a3b8", borderTopWidth: 1, borderTopColor: "#e2e8f0", paddingTop: 6 },
 });
 
@@ -138,7 +137,7 @@ export function ConsultationGuidePdfDocument({ guide }: { guide: CrmConsultation
             <Text style={styles.statusBadge}>Fit: {LENDING_FIT_STATUS_LABELS[guide.lending_fit_status]}</Text>
           )}
           <QuestionAnswers questions={CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS} answers={guide.lending_fit ?? {}} />
-          <Text style={styles.warning}>
+          <Text style={styles.reminder}>
             INTERNAL: Do not promise an approval, rate, term, or funding amount. Eligibility and offers are determined by the lender after review.
           </Text>
         </View>
