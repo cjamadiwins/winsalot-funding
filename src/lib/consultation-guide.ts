@@ -214,12 +214,20 @@ export type CrmConsultationGuideRow = {
   status: ConsultationGuideStatus;
   completed_at: string | null;
   completed_by: string | null;
+  // Set on every save (including editing an already-completed guide) -
+  // separate from created_by, which never changes after the first save.
+  updated_by: string | null;
 
   // Set when this guide was opened from an existing booked appointment
   // (?appointmentId=... on /new) - null for a manual consultation.
   appointment_id: string | null;
   service: ConsultationGuideService | null;
 
+  // Always describes the *original* automatic send from Mark Consultation
+  // Complete (or the first successful Retry after it failed) - a later
+  // deliberate Resend (see follow_up_email_resend_count below) never
+  // changes these, by design ("preserve the original recipient, template,
+  // send time and delivery status").
   follow_up_email_status: ConsultationGuideFollowUpStatus;
   follow_up_email_sent_at: string | null;
   // The service the sent template actually matched, captured at send time
@@ -231,6 +239,17 @@ export type CrmConsultationGuideRow = {
   // Set to "No recipient email" when completed without a recipient
   // address on file; null whenever a send was attempted.
   no_follow_up_email_reason: string | null;
+
+  // A deliberate, admin-confirmed "Resend Follow-Up Email" of the same
+  // template to the same recipient - only ever offered once the original
+  // send above already succeeded (see resendConsultationFollowUpEmailAction
+  // in actions.ts). Purely additive bookkeeping for "how many times, and
+  // when/by whom most recently" - never overwrites the original send
+  // columns above.
+  follow_up_email_resend_count: number;
+  follow_up_email_last_resent_at: string | null;
+  follow_up_email_last_resent_by: string | null;
+  follow_up_email_last_resend_error: string | null;
 
   business_name: string | null;
   contact_name: string | null;

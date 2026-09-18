@@ -11,7 +11,7 @@ import type { ConsultationGuideService, CrmConsultationGuideRow } from "./consul
 // the appointment-based flow, but for crm_consultation_guides, which can
 // be completed with or without a linked appointment/opportunity at all.
 
-export type ConsultationGuideEmailConsultant = { name: string; email: string };
+export type ConsultationGuideEmailConsultant = { name: string; email: string; userId?: string };
 
 // Builds the exact email a guide's follow-up would send for a given
 // service - shared by the completion-confirmation preview and the real
@@ -126,6 +126,96 @@ export async function sendConsultationGuideFollowUpEmail(
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : "Unknown error sending follow-up email.";
     await admin.from("crm_consultation_guides").update({ follow_up_email_status: "failed", follow_up_email_error: errorDetail }).eq("id", guide.id);
+    return { status: "failed", error: errorDetail };
+  }
+}
+
+// A deliberate, admin-confirmed "Resend Follow-Up Email" of a guide whose
+// original send already succeeded (see resendConsultationFollowUpEmailAction
+// - never automatic, always a confirmed click). Sends the exact same
+// template/recipient as the original via buildConsultationGuideFollowUpEmail,
+// so it can never diverge from what was actually sent the first time, but
+// - unlike sendConsultationGuideFollowUpEmail above - never touches
+// follow_up_email_status/sent_at/service/error/follow_up_crm_lead_email_id:
+// those columns must keep describing the *original* send exactly as CJ
+// asked ("preserve the original recipient, template, send time and
+// delivery status"). Only the separate follow_up_email_resend_count/
+// last_resent_* columns change here.
+export async function resendConsultationGuideFollowUpEmail(
+  admin: SupabaseClient,
+  guide: Pick<CrmConsultationGuideRow, "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "follow_up_email_resend_count">,
+  consultant: ConsultationGuideEmailConsultant
+): Promise<ConsultationGuideEmailSendResult> {
+  const service = guide.service;
+  if (!service) return { status: "failed", error: "No service selected." };
+  if (!guide.email) return { status: "failed", error: "No recipient email." };
+
+  const email = buildConsultationGuideFollowUpEmail(service, {
+    contactName: guide.contact_name || "there",
+    consultantName: guide.consultant_name || consultant.name,
+  });
+
+  try {
+    const resend = getResendClient();
+    const { data: sendResult, error: sendError } = await resend.emails.send({
+      from: getEmailSender(service === "business_financing" ? "funding" : "growth"),
+      to: guide.email,
+      replyTo: getEmailReplyTo(),
+      subject: email.subject,
+      text: email.text,
+      html: email.html,
+    });
+
+    if (sendError || !sendResult) {
+      const errorDetail = sendError?.message ?? "Unknown Resend error.";
+      await admin.from("crm_consultation_guides").update({ follow_up_email_last_resend_error: errorDetail }).eq("id", guide.id);
+      return { status: "failed", error: errorDetail };
+    }
+
+    const sentAt = new Date().toISOString();
+    let crmLeadEmailId: string | null = null;
+
+    if (guide.opportunity_id) {
+      const emailType = service === "business_financing" ? "business_finance_follow_up" : "consultation_follow_up";
+      const { data: tracked } = await admin
+        .from("crm_lead_emails")
+        .insert({
+          opportunity_id: guide.opportunity_id,
+          resend_email_id: sendResult.id,
+          email_type: emailType,
+          to_email: guide.email,
+          subject: email.subject,
+          status: "sent",
+          status_at: sentAt,
+          sent_at: sentAt,
+        })
+        .select("id")
+        .maybeSingle();
+      crmLeadEmailId = (tracked?.id as string | undefined) ?? null;
+
+      await admin.from("crm_activities").insert({
+        opportunity_id: guide.opportunity_id,
+        agent_id: null,
+        activity_type: "email",
+        notes: `Consultation follow-up email (${service === "business_financing" ? "Business Finance" : "Lead Generation"}) resent to ${guide.email} by ${consultant.name}.`,
+        occurred_at: sentAt,
+      });
+    }
+
+    await admin
+      .from("crm_consultation_guides")
+      .update({
+        follow_up_email_resend_count: (guide.follow_up_email_resend_count ?? 0) + 1,
+        follow_up_email_last_resent_at: sentAt,
+        follow_up_email_last_resent_by: consultant.userId ?? null,
+        follow_up_email_last_resend_error: null,
+      })
+      .eq("id", guide.id);
+
+    return { status: "sent", resendEmailId: sendResult.id, crmLeadEmailId };
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : "Unknown error resending follow-up email.";
+    await admin.from("crm_consultation_guides").update({ follow_up_email_last_resend_error: errorDetail }).eq("id", guide.id);
     return { status: "failed", error: errorDetail };
   }
 }
