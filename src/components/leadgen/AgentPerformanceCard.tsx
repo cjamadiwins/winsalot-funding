@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CalendarCheck, Target, Hourglass } from "lucide-react";
 import type { LeadgenAgentPerformance } from "@/lib/leadgen-performance";
 import { leadgenWeekRangeLabel } from "@/lib/leadgen-performance";
@@ -9,7 +10,15 @@ import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/Perfo
 // admin's "every agent" view (/leadgen/admin/performance) and an agent's
 // own "just me" view (/leadgen/agent/performance), so the two can never
 // drift out of sync with each other.
-export default function AgentPerformanceCard({ agentName, performance }: { agentName: string; performance: LeadgenAgentPerformance }) {
+export default function AgentPerformanceCard({
+  agentName,
+  performance,
+  leadHrefBase,
+}: {
+  agentName: string;
+  performance: LeadgenAgentPerformance;
+  leadHrefBase: string;
+}) {
   const { bookedThisWeek, target, percentage, remainingToTarget, weekStart, weekEnd, dailyBreakdown, previousWeekTotal, monthlyTotal, appointments } =
     performance;
   const barWidth = Math.min(100, percentage);
@@ -101,7 +110,15 @@ export default function AgentPerformanceCard({ agentName, performance }: { agent
               <tbody>
                 {appointments.map((appt) => (
                   <tr key={appt.id} className="border-b border-slate-100">
-                    <td className="p-2.5 font-medium text-slate-900">{appt.business_name}</td>
+                    <td className="p-2.5 font-medium text-slate-900">
+                      {appt.lead_id ? (
+                        <Link href={`${leadHrefBase}/${appt.lead_id}`} className="hover:text-sky-700 hover:underline">
+                          {appt.business_name}
+                        </Link>
+                      ) : (
+                        appt.business_name
+                      )}
+                    </td>
                     <td className="p-2.5 text-slate-600">{appt.contact_name ?? "—"}</td>
                     <td className="p-2.5 text-slate-600">
                       {appt.appointment_date} {appt.appointment_time}

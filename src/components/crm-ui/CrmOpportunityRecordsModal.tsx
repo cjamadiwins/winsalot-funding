@@ -111,7 +111,9 @@ export default function CrmOpportunityRecordsModal({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-slate-900">{record.business_name}</span>
+                      <Link href={detailHref} className="font-bold text-slate-900 hover:text-sky-700 hover:underline">
+                        {record.business_name}
+                      </Link>
                       <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_STAGE_STYLES[record.stage]}`}>
                         {record.stage}
                       </span>

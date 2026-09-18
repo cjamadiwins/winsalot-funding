@@ -98,7 +98,7 @@ export default async function LeadgenAgentDashboardPage() {
     // selected for the Weekly Incentive card below.
     supabase
       .from("leadgen_appointments")
-      .select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, incentive_status, client_id")
+      .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id, incentive_status, client_id")
       .order("appointment_date", { ascending: false }),
     // Names for the "My Results by Client" breakdown below - agents can
     // already read every client's name (see leads/new/page.tsx), only
