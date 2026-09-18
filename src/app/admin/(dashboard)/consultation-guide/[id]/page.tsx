@@ -2,7 +2,12 @@ import { notFound } from "next/navigation";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import ConsultationGuideForm from "../ConsultationGuideForm";
-import { updateConsultationGuideAction, completeConsultationGuideAction, retryConsultationFollowUpEmailAction } from "../actions";
+import {
+  updateConsultationGuideAction,
+  completeConsultationGuideAction,
+  retryConsultationFollowUpEmailAction,
+  resendConsultationFollowUpEmailAction,
+} from "../actions";
 import type { CrmConsultationGuideRow } from "@/lib/consultation-guide";
 
 // Reopen an existing consultation guide (draft or completed) - "Keep
@@ -28,14 +33,25 @@ export default async function ConsultationGuideDetailPage({ params }: { params: 
     }
   }
 
+  // "Show who last updated the consultation and when" - the row itself
+  // only has updated_by's id, so resolve the display name here the same
+  // way new/page.tsx resolves a linked appointment's assigned agent.
+  let updatedByName: string | null = null;
+  if (guideRow.updated_by) {
+    const { data: updater } = await supabase.from("crm_users").select("full_name, email").eq("id", guideRow.updated_by).maybeSingle();
+    if (updater) updatedByName = updater.full_name || updater.email;
+  }
+
   return (
     <ConsultationGuideForm
       guide={guideRow}
       appointmentId={guideRow.appointment_id}
       linkedAppointmentLabel={linkedAppointmentLabel}
+      updatedByName={updatedByName}
       saveAction={updateConsultationGuideAction.bind(null, id)}
       completeAction={completeConsultationGuideAction.bind(null, id)}
       retryFollowUpAction={retryConsultationFollowUpEmailAction}
+      resendFollowUpAction={resendConsultationFollowUpEmailAction}
       backHref="/admin/consultation-guide"
     />
   );

@@ -442,10 +442,14 @@ export default function WinsalotAppointmentsListClient({
                 {/* Admin-only shortcut into the Client Consultation Guide -
                     that feature is admin-only per its own RLS policy, so
                     it's never shown on the agent view (isAdmin=false),
-                    where it would only lead to a login redirect. Available
-                    regardless of status - a guide is often started before
-                    the call happens, not only after. */}
-                {isAdmin && (
+                    where it would only lead to a login redirect. Shown here
+                    for every status except "booked", where the prominent
+                    green "Start Consultation" button below is the one and
+                    only way in (so there's never two links to the same
+                    guide on the same row) - a guide is still useful to open
+                    for a completed/cancelled/no-show appointment (e.g. to
+                    review or correct a past consultation). */}
+                {isAdmin && appt.status !== "booked" && (
                   <Link
                     href={`/admin/consultation-guide/new?appointmentId=${appt.id}`}
                     className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
@@ -463,15 +467,34 @@ export default function WinsalotAppointmentsListClient({
                 )}
                 {appt.status === "booked" && (
                   <>
-                    {actions.complete && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => handleComplete(appt)}
-                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    {/* Admin: only the Client Consultation Guide's own
+                        "Mark Consultation Complete" may complete an
+                        appointment and send its follow-up email now - this
+                        button only opens the guide, it never completes or
+                        emails anything by itself (see
+                        completeLinkedAppointment in
+                        consultation-guide/actions.ts). Agents have no
+                        access to the guide (admin-only RLS), so they keep
+                        the original one-click "Complete Consultation" flow
+                        below unchanged. */}
+                    {isAdmin ? (
+                      <Link
+                        href={`/admin/consultation-guide/new?appointmentId=${appt.id}`}
+                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
                       >
-                        Complete Consultation
-                      </button>
+                        Start Consultation
+                      </Link>
+                    ) : (
+                      actions.complete && (
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleComplete(appt)}
+                          className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Complete Consultation
+                        </button>
+                      )
                     )}
                     {actions.markNoShow && (
                       <button type="button" disabled={isPending} onClick={() => handleMarkNoShow(appt)} className="text-xs font-semibold text-amber-700 hover:text-amber-800">

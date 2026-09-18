@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { sendConsultationGuideFollowUpEmail, buildConsultationGuideFollowUpEmail } from "@/lib/consultation-guide-email";
+import { sendConsultationGuideFollowUpEmail, resendConsultationGuideFollowUpEmail, buildConsultationGuideFollowUpEmail } from "@/lib/consultation-guide-email";
 import {
   CONSULTATION_GUIDE_CAMPAIGN_EXPECTATION_QUESTIONS,
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
@@ -98,6 +98,32 @@ function fieldsFromForm(formData: FormData) {
   };
 }
 
+// Mirrors performWinsalotCompletion's guarded status transition
+// (winsalot-consultation-completion.ts) for the appointment this guide was
+// opened from - "Only Complete Consultation inside the guide may complete
+// the appointment." Never calls sendWinsalotFollowUpEmail: the guide's own
+// service-specific email above is the only email a guide completion ever
+// sends, so the appointment's old Lead-Gen-only follow-up must never also
+// fire here. Best-effort and silent when it doesn't apply - an appointment
+// that isn't currently "booked" (already completed via the old flow,
+// cancelled, or no-show) is left untouched rather than erroring, since the
+// guide's own completion above is what actually matters to the caller.
+async function completeLinkedAppointment(appointmentId: string, actor: { userId: string; name: string }): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+  await admin
+    .from("winsalot_appointments")
+    .update({
+      status: "completed",
+      completed_at: nowIso,
+      completed_by_user_id: actor.userId,
+      completed_by_name: actor.name,
+      updated_at: nowIso,
+    })
+    .eq("id", appointmentId)
+    .eq("status", "booked");
+}
+
 async function logConsultationActivity(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   opportunityId: string | null,
@@ -157,7 +183,7 @@ export async function updateConsultationGuideAction(id: string, formData: FormDa
   const supabase = await createSupabaseServerClient();
 
   const fields = fieldsFromForm(formData);
-  const { error } = await supabase.from("crm_consultation_guides").update(fields).eq("id", id);
+  const { error } = await supabase.from("crm_consultation_guides").update({ ...fields, updated_by: admin.id }).eq("id", id);
   if (error) return { error: "Failed to save the consultation guide." };
 
   await logConsultationActivity(
@@ -197,7 +223,7 @@ export async function completeConsultationGuideAction(id: string | null, formDat
     return { error: "Select a service (Lead Generation or Business Finance) before completing this consultation." };
   }
 
-  const completion = { status: "completed" as const, completed_at: new Date().toISOString(), completed_by: admin.id };
+  const completion = { status: "completed" as const, completed_at: new Date().toISOString(), completed_by: admin.id, updated_by: admin.id };
 
   let guideId = id;
   let justCompleted = false;
@@ -218,7 +244,7 @@ export async function completeConsultationGuideAction(id: string | null, formDat
       // Already completed (duplicate click, a resubmitted form after a
       // refresh, or a second tab) - still save the latest field edits, but
       // never re-run the transition or send a second email.
-      const { error: fieldsError } = await supabase.from("crm_consultation_guides").update(fields).eq("id", guideId);
+      const { error: fieldsError } = await supabase.from("crm_consultation_guides").update({ ...fields, updated_by: admin.id }).eq("id", guideId);
       if (fieldsError) return { error: "Failed to save the consultation guide." };
     }
   } else {
@@ -238,6 +264,12 @@ export async function completeConsultationGuideAction(id: string | null, formDat
 
   if (justCompleted) {
     await logConsultationActivity(supabase, fields.opportunity_id, admin.id, `Consultation completed by ${admin.full_name || admin.email}.`);
+
+    if (fields.appointment_id) {
+      await completeLinkedAppointment(fields.appointment_id, { userId: admin.id, name: admin.full_name || admin.email });
+      revalidatePath("/admin/crm/appointments");
+      revalidatePath("/agent/appointments");
+    }
 
     if (!fields.email) {
       noFollowUpEmailReason = "No recipient email";
@@ -353,6 +385,41 @@ export async function retryConsultationFollowUpEmailAction(id: string): Promise<
 
   if (result.status === "failed") return { error: result.error };
   return { message: "Follow-up email sent." };
+}
+
+// Admin-only, explicitly confirmed "Resend Follow-Up Email" for a
+// completed guide whose original send already succeeded - the client-side
+// confirm dialog is what makes this deliberate (see
+// resendConsultationGuideFollowUpEmail in consultation-guide-email.ts for
+// why the original send's own record is never touched). For a guide whose
+// original send hasn't succeeded yet (not_sent/failed), use
+// retryConsultationFollowUpEmailAction above instead - that's still the
+// first successful send, not a resend.
+export async function resendConsultationFollowUpEmailAction(id: string): Promise<{ error?: string; message?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: guideRow } = await supabaseAdmin.from("crm_consultation_guides").select("*").eq("id", id).maybeSingle();
+  if (!guideRow) return { error: "Consultation guide not found." };
+  const guide = guideRow as CrmConsultationGuideRow;
+
+  if (guide.status !== "completed") return { error: "Only a completed consultation can resend its follow-up email." };
+  if (guide.follow_up_email_status !== "sent") return { error: "This consultation's follow-up email hasn't sent successfully yet - use Retry instead." };
+  if (!guide.service) return { error: "Select a service and save before resending the follow-up email." };
+  if (!guide.email) return { error: "This consultation has no recipient email address on file." };
+
+  const result = await resendConsultationGuideFollowUpEmail(supabaseAdmin, guide, {
+    name: admin.full_name || admin.email,
+    email: admin.email,
+    userId: admin.id,
+  });
+
+  revalidatePath("/admin/consultation-guide");
+  revalidatePath(`/admin/consultation-guide/${id}`);
+  if (guide.opportunity_id) revalidatePath(`/admin/crm/opportunities/${guide.opportunity_id}`);
+
+  if (result.status === "failed") return { error: result.error };
+  return { message: "Follow-up email resent." };
 }
 
 export type AppointmentSearchResult = {

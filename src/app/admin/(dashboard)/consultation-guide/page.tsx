@@ -140,13 +140,36 @@ export default async function ConsultationGuideIndexPage({
                     )}
                   </td>
                   <td className="px-3 py-2 text-slate-600">{new Date(guide.updated_at).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right">
-                    <Link
-                      href={`/admin/consultation-guide/${guide.id}`}
-                      className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
-                    >
-                      Open
-                    </Link>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {guide.status === "completed" ? (
+                      // Completed consultations stay viewable and editable
+                      // for future reference, as two distinct actions -
+                      // View opens the printable/read-only PDF, Edit opens
+                      // the same editable record a draft uses.
+                      <span className="inline-flex gap-1.5">
+                        <a
+                          href={`/admin/consultation-guide/${guide.id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+                        >
+                          View
+                        </a>
+                        <Link
+                          href={`/admin/consultation-guide/${guide.id}`}
+                          className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
+                        >
+                          Edit
+                        </Link>
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/admin/consultation-guide/${guide.id}`}
+                        className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
+                      >
+                        Open
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -110,9 +110,11 @@ export default function ConsultationGuideForm({
   showAppointmentPicker,
   initial,
   initialService,
+  updatedByName,
   saveAction,
   completeAction,
   retryFollowUpAction,
+  resendFollowUpAction,
   backHref,
 }: {
   guide: CrmConsultationGuideRow | null;
@@ -136,12 +138,21 @@ export default function ConsultationGuideForm({
   // an unambiguous match (never for "both_services" - see
   // new/page.tsx's serviceFromAppointmentType).
   initialService?: ConsultationGuideService | null;
+  // Resolved display name for guide.updated_by, looked up server-side
+  // ([id]/page.tsx) since the guide row itself only has the user id. Null
+  // when nobody has edited it since it was created.
+  updatedByName?: string | null;
   saveAction: (formData: FormData) => Promise<ActionResult>;
   completeAction: (formData: FormData) => Promise<ActionResult>;
   // Only passed for an existing, completed guide whose follow-up email
-  // failed - undefined everywhere else (a brand-new guide has nothing to
-  // retry yet).
+  // failed or hasn't sent yet - undefined everywhere else (a brand-new
+  // guide has nothing to retry yet).
   retryFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
+  // Only passed for an existing, completed guide whose follow-up email
+  // already sent successfully - a deliberate, separately confirmed resend
+  // of that same email, per CJ's "Any email resend must use a separate
+  // confirmed Resend Email action."
+  resendFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
   backHref: string;
 }) {
   function val(field: PrefillableField): string | null | undefined {
@@ -233,6 +244,21 @@ export default function ConsultationGuideForm({
     });
   }
 
+  // "Any email resend must use a separate confirmed Resend Email action" -
+  // the confirm() dialog here is that explicit confirmation step; the
+  // original send's own recipient/template/time/status are never touched
+  // by this (see resendConsultationGuideFollowUpEmail).
+  function handleResendFollowUp() {
+    if (!resendFollowUpAction || !guide) return;
+    if (!confirm(`Resend the consultation follow-up email to ${guide.email}? This sends an additional copy - it will not change the original send's record.`)) return;
+    setRetryMessage(null);
+    startTransition(async () => {
+      const result = await resendFollowUpAction(guide.id);
+      setRetryMessage(result.error ?? result.message ?? null);
+      router.refresh();
+    });
+  }
+
   const showFollowUpBadge = guide && guide.status === "completed" && guide.service;
 
   return (
@@ -260,6 +286,12 @@ export default function ConsultationGuideForm({
         </div>
       </div>
 
+      {guide && (
+        <p className="mt-1.5 text-[12px] text-slate-500">
+          {updatedByName ? `Last updated by ${updatedByName} on ${new Date(guide.updated_at).toLocaleString()}` : `Last updated ${new Date(guide.updated_at).toLocaleString()}`}
+        </p>
+      )}
+
       {message && (
         <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{message}</p>
       )}
@@ -278,6 +310,17 @@ export default function ConsultationGuideForm({
           className="mt-3 rounded-[10px] border border-rose-300 bg-rose-50 px-3.5 py-2 text-[12.5px] font-bold text-rose-700 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Retry Follow-Up Email
+        </button>
+      )}
+
+      {guide && guide.status === "completed" && guide.follow_up_email_status === "sent" && resendFollowUpAction && (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handleResendFollowUp}
+          className="mt-3 rounded-[10px] border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Resend Follow-Up Email{guide.follow_up_email_resend_count > 0 ? ` (sent ${guide.follow_up_email_resend_count}x since)` : ""}
         </button>
       )}
 
@@ -473,30 +516,50 @@ export default function ConsultationGuideForm({
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2.5">
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => runSave("Consultation saved.", saveAction)}
-            className="rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Save Consultation
-          </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => runSave("Saved as draft.", saveAction)}
-            className="rounded-[11px] border border-slate-300 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Save as Draft
-          </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={openCompleteModal}
-            className="rounded-[11px] bg-emerald-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Mark Consultation Complete
-          </button>
+          {guide && guide.status === "completed" ? (
+            // A completed consultation is edited, never re-completed or
+            // re-drafted - "Saving edits must not reopen the appointment
+            // or resend any email." This is the one Save button available
+            // here; it always calls the same plain saveAction as "Save
+            // Consultation"/"Save as Draft" do below (status untouched).
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => runSave("Changes saved.", saveAction)}
+              className="rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Save Changes
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => runSave("Consultation saved.", saveAction)}
+                className="rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Save Consultation
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => runSave("Saved as draft.", saveAction)}
+                className="rounded-[11px] border border-slate-300 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Save as Draft
+              </button>
+            </>
+          )}
+          {!(guide && guide.status === "completed") && (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={openCompleteModal}
+              className="rounded-[11px] bg-emerald-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Mark Consultation Complete
+            </button>
+          )}
           {guide ? (
             <a
               href={`/admin/consultation-guide/${guide.id}/pdf`}

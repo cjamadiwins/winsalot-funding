@@ -51,11 +51,11 @@ import {
   rescheduleFollowUpAction,
   scheduleFollowUpAction,
 } from "../../followup-actions";
-// "Complete Consultation" / "Mark No Show" - the same actions
-// /admin/crm/appointments uses, surfaced directly on this page's own
-// Appointments section too, so completing a consultation never requires
-// navigating to a separate management page first.
-import { completeAppointmentAction, markNoShowAction } from "../../appointments/actions";
+// "Mark No Show" - the same action /admin/crm/appointments uses, surfaced
+// directly on this page's own Appointments section too. Completing a
+// consultation is handled entirely inside the Client Consultation Guide
+// now (see the "Start Consultation" link below), not here.
+import { markNoShowAction } from "../../appointments/actions";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -142,23 +142,6 @@ export default function AdminOpportunityDetailClient({
         unstable_rethrow(err);
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
-    });
-  }
-
-  // "Complete Consultation" - same performWinsalotCompletion/
-  // completeAppointmentAction the appointment management area
-  // (/admin/crm/appointments) uses; the "only ever once" guarantee lives
-  // in that shared, guarded database update, not here. A single confirm
-  // dialog (this sends an email and can't be undone) is enough friction
-  // for an accidental click.
-  function handleCompleteAppointment(appt: WinsalotAppointmentRow) {
-    if (!confirm(`Mark this consultation as completed? This sends a one-time follow-up email to ${appt.email}.`)) return;
-    setAppointmentMessage(null);
-    startTransition(async () => {
-      const result = await completeAppointmentAction(appt.id);
-      if (result.error) setAppointmentMessage({ id: appt.id, text: result.error });
-      else if (result.outcome === "already_completed") setAppointmentMessage({ id: appt.id, text: "This consultation was already marked completed." });
-      else if (result.followUpEmailStatus) setAppointmentMessage({ id: appt.id, text: `Marked Completed. Follow-up email: ${result.followUpEmailStatus}.` });
     });
   }
 
@@ -606,14 +589,19 @@ export default function AdminOpportunityDetailClient({
                 </p>
                 {appt.status === "booked" && (
                   <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-100 pt-2">
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => handleCompleteAppointment(appt)}
-                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    {/* Only the Client Consultation Guide's own "Mark
+                        Consultation Complete" may complete an appointment
+                        and send its follow-up email now - see
+                        completeLinkedAppointment in
+                        consultation-guide/actions.ts. This link only opens
+                        the guide; it never completes or emails anything by
+                        itself. */}
+                    <Link
+                      href={`/admin/consultation-guide/new?appointmentId=${appt.id}`}
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
                     >
-                      Complete Consultation
-                    </button>
+                      Start Consultation
+                    </Link>
                     <button
                       type="button"
                       disabled={isPending}

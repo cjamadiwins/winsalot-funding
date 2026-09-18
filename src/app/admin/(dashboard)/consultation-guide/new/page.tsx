@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import ConsultationGuideForm from "../ConsultationGuideForm";
@@ -55,6 +56,23 @@ export default async function NewConsultationGuidePage({
     if (!appointment) {
       appointmentNotFound = true;
     } else {
+      // Never spawn a second consultation guide for the same appointment -
+      // "Start Consultation"/"Open Consultation Guide" on an appointment
+      // that already has one (draft or completed) reopens that existing
+      // guide instead, so it stays the single record for that
+      // consultation ("Completed consultations must remain viewable and
+      // editable" - not duplicated).
+      const { data: existingGuide } = await supabase
+        .from("crm_consultation_guides")
+        .select("id")
+        .eq("appointment_id", appointmentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingGuide) {
+        redirect(`/admin/consultation-guide/${existingGuide.id}`);
+      }
+
       const opportunity = appointment.crm_opportunities as
         | { business_name: string; industry: string | null; city: string | null; province_state: string | null }
         | null;
