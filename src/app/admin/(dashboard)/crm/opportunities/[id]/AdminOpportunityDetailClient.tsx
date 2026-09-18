@@ -282,6 +282,12 @@ export default function AdminOpportunityDetailClient({
           >
             Book Consultation
           </button>
+          <Link
+            href={`/admin/consultation-guide/new?opportunityId=${opportunity.id}`}
+            className="rounded-full border border-sky-300 px-4 py-1.5 text-sm font-semibold text-sky-600 shadow-sm transition hover:bg-sky-600 hover:text-white"
+          >
+            Consultation Guide
+          </Link>
           <button
             type="button"
             disabled={isPending}

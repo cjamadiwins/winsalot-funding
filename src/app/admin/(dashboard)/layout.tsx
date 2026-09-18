@@ -22,6 +22,7 @@ import {
   Receipt,
   FileSignature,
   ClipboardList,
+  ClipboardCheck,
   Workflow,
   BookOpenCheck,
   PhoneCall,
@@ -36,6 +37,7 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "CRM", href: "/admin/crm", icon: <LayoutDashboard /> },
+  { label: "Consultation Guide", href: "/admin/consultation-guide", icon: <ClipboardCheck /> },
   { label: "Opportunity Finder", href: "/admin/crm/opportunity-finder", icon: <Target /> },
   { label: "Appointments", href: "/admin/crm/appointments", icon: <CalendarClock /> },
   { label: "Consultation Availability", href: "/admin/crm/consultation-availability", icon: <CalendarCog /> },

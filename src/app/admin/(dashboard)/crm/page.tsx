@@ -39,6 +39,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadGrowthTeamSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 import AdminCampaignScriptCard from "@/components/crm-ui/AdminCampaignScriptCard";
+import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -220,6 +221,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
           </Link>
         </div>
       </div>
+
+      <ConsultationGuideCard />
 
       <AdminCampaignScriptCard />
 
