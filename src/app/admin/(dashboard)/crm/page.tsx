@@ -9,7 +9,7 @@ import AdminFollowUps from "./AdminFollowUps";
 import AdminOverdueOpportunitiesPanel from "./AdminOverdueOpportunitiesPanel";
 import ResultsByAgentConversion from "@/components/ResultsByAgentConversion";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
-import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
+import { loadDialpadDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE, type CrmOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { Flame, Gauge, Snowflake, CalendarClock, Trophy, Users, UserCheck, CalendarCheck, Clock, UserPlus, CalendarPlus, BarChart3 } from "lucide-react";
@@ -50,9 +50,14 @@ import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  await requireCrmAdmin();
+  const admin = await requireCrmAdmin();
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
+
+  // Weekly workflow: keeps the compact Dialpad Performance section below
+  // current even when nobody has visited the dedicated /admin/crm/dialpad
+  // page yet - see ensureLatestDialpadReportImported().
+  await ensureLatestDialpadReportImported({ supabase, workspace: "growth", importedById: admin.id, importedByName: admin.full_name || admin.email });
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
   // crm_followups_admin_all / winsalot_appointments_admin_all) permits a
