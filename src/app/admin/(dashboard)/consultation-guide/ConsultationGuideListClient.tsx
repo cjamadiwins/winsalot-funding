@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS,
@@ -27,50 +27,32 @@ export type ConsultationGuideListRow = Pick<
   | "follow_up_email_status"
 >;
 
-// Client half of the admin-only Client Consultation Guide index - holds
-// the list in local state so a confirmed Delete can remove just that one
-// row and show a success message without a full page reload, per CJ's
-// "After deletion, remove only the consultation from the list and show a
-// success message." Deleting only ever removes the crm_consultation_guides
-// row itself (see deleteConsultationGuideAction) - the linked appointment,
-// prospect, and its email/audit history are never touched.
+// Client half of the admin-only Client Consultation Guide index - kept
+// compact, with only View and Edit (or Open, for a draft) per row.
+// Delete lives inside the Edit Consultation page instead (see
+// ConsultationGuideForm's "Delete consultation" link), which redirects
+// back here with ?deleted=<business name> on success; successMessage
+// (read from that param by the server page) is what turns into the
+// banner below.
 export default function ConsultationGuideListClient({
-  guides: initialGuides,
-  deleteAction,
+  guides,
+  successMessage,
 }: {
   guides: ConsultationGuideListRow[];
-  deleteAction: (id: string) => Promise<{ error?: string }>;
+  successMessage?: string | null;
 }) {
-  const [guides, setGuides] = useState(initialGuides);
-  const [isPending, startTransition] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function handleDelete(guide: ConsultationGuideListRow) {
-    if (!confirm("Delete this consultation record? This cannot be undone.")) return;
-    setError(null);
-    setMessage(null);
-    setDeletingId(guide.id);
-    startTransition(async () => {
-      const result = await deleteAction(guide.id);
-      if (result.error) {
-        setDeletingId(null);
-        setError(result.error);
-        return;
-      }
-      setGuides((prev) => prev.filter((g) => g.id !== guide.id));
-      setDeletingId(null);
-      setMessage(`Deleted the consultation record for ${guide.business_name || "Untitled consultation"}.`);
-    });
-  }
+  const [message, setMessage] = useState(successMessage ?? null);
 
   return (
     <div>
       {message && (
-        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{message}</p>
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
+          <span>{message}</span>
+          <button type="button" onClick={() => setMessage(null)} className="font-semibold text-emerald-600 hover:text-emerald-800">
+            Dismiss
+          </button>
+        </div>
       )}
-      {error && <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</p>}
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         <div className="overflow-x-auto">
@@ -165,14 +147,6 @@ export default function ConsultationGuideListClient({
                           Open
                         </Link>
                       )}
-                      <button
-                        type="button"
-                        disabled={isPending && deletingId === guide.id}
-                        onClick={() => handleDelete(guide)}
-                        className="inline-flex whitespace-nowrap rounded-md border border-rose-600 px-2.5 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isPending && deletingId === guide.id ? "Deleting…" : "Delete"}
-                      </button>
                     </span>
                   </td>
                 </tr>

@@ -115,6 +115,7 @@ export default function ConsultationGuideForm({
   completeAction,
   retryFollowUpAction,
   resendFollowUpAction,
+  deleteAction,
   backHref,
 }: {
   guide: CrmConsultationGuideRow | null;
@@ -153,6 +154,12 @@ export default function ConsultationGuideForm({
   // of that same email, per CJ's "Any email resend must use a separate
   // confirmed Resend Email action."
   resendFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
+  // Only passed for an existing guide (never a brand-new, unsaved one) -
+  // powers the "Delete consultation" link at the bottom of the page. Only
+  // ever removes the crm_consultation_guides row itself; the linked
+  // appointment, prospect, and any sent follow-up email/audit history are
+  // never touched (see deleteConsultationGuideAction).
+  deleteAction?: (id: string) => Promise<{ error?: string }>;
   backHref: string;
 }) {
   function val(field: PrefillableField): string | null | undefined {
@@ -256,6 +263,25 @@ export default function ConsultationGuideForm({
       const result = await resendFollowUpAction(guide.id);
       setRetryMessage(result.error ?? result.message ?? null);
       router.refresh();
+    });
+  }
+
+  // Confirmed delete of this consultation record only - "Delete this
+  // consultation record? This cannot be undone." On success, returns to
+  // the list with a success message rather than showing one here, since
+  // this page is gone once the record is.
+  function handleDelete() {
+    if (!guide || !deleteAction) return;
+    if (!confirm("Delete this consultation record? This cannot be undone.")) return;
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const result = await deleteAction(guide.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.push(`/admin/consultation-guide?deleted=${encodeURIComponent(guide.business_name || "Untitled consultation")}`);
     });
   }
 
@@ -579,6 +605,19 @@ export default function ConsultationGuideForm({
           )}
         </div>
       </form>
+
+      {guide && deleteAction && (
+        <div className="mt-8 border-t border-slate-200 pt-4 text-center">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleDelete}
+            className="text-[12.5px] font-semibold text-rose-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Delete consultation
+          </button>
+        </div>
+      )}
 
       {completePreview && "subject" in completePreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">

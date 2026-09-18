@@ -4,20 +4,21 @@ import { ClipboardCheck } from "lucide-react";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import ConsultationGuideListClient, { type ConsultationGuideListRow } from "./ConsultationGuideListClient";
-import { deleteConsultationGuideAction } from "./actions";
 
 // Admin-only Client Consultation Guide index - "Keep historical
 // consultations available so Admin can reopen them later." Opening this
 // page with ?opportunityId=<id> (from an opportunity record's own
 // "Consultation Guide" link) skips straight to a new, pre-filled guide
-// rather than showing the list first.
+// rather than showing the list first. ?deleted=<business name> arrives
+// from a confirmed "Delete consultation" on the Edit page (see
+// ConsultationGuideForm) and becomes the success message below.
 export default async function ConsultationGuideIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ opportunityId?: string }>;
+  searchParams: Promise<{ opportunityId?: string; deleted?: string }>;
 }) {
   await requireCrmAdmin();
-  const { opportunityId } = await searchParams;
+  const { opportunityId, deleted } = await searchParams;
   if (opportunityId) {
     redirect(`/admin/consultation-guide/new?opportunityId=${encodeURIComponent(opportunityId)}`);
   }
@@ -58,7 +59,7 @@ export default async function ConsultationGuideIndexPage({
         </p>
       )}
 
-      {!error && <ConsultationGuideListClient guides={guides} deleteAction={deleteConsultationGuideAction} />}
+      {!error && <ConsultationGuideListClient guides={guides} successMessage={deleted ? `Deleted the consultation record for ${deleted}.` : null} />}
     </div>
   );
 }
