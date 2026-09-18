@@ -17,7 +17,7 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
-import { loadDialpadDashboardData } from "@/lib/dialpad-report-data";
+import { loadDialpadDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/lib/opportunity-finder";
 import type { LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
 import { loadLeadgenAdminOpportunityFinderData } from "@/lib/leadgen-admin-opportunity-finder-data";
@@ -247,6 +247,10 @@ export default async function LeadgenAdminDashboardPage() {
       lead_id: appt.lead_id,
     }));
 
+  // Weekly workflow: keeps the compact Dialpad Performance section below
+  // current even when nobody has visited the dedicated
+  // /leadgen/admin/dialpad page yet - see ensureLatestDialpadReportImported().
+  await ensureLatestDialpadReportImported({ supabase: admin, workspace: "lead", importedById: adminUser.id, importedByName: adminUser.full_name || adminUser.email });
   const dialpadData = await loadDialpadDashboardData(admin);
 
   // Winsalot Sales Coach & Operations Manager - Team Overview (below) -

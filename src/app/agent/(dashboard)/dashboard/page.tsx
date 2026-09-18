@@ -35,7 +35,7 @@ import FollowUpCalendar from "./FollowUpCalendar";
 import OverdueOpportunitiesPanel from "./OverdueOpportunitiesPanel";
 import AttendanceCard from "./AttendanceCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
-import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
+import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import { addBoardOpportunityNoteAction } from "../my-opportunities/actions";
 import { completeOpportunityFollowUpAction, rescheduleOpportunityFollowUpAction, scheduleOpportunityFollowUpAction } from "../opportunities/[id]/actions";
 import { buildOpportunityCardRecords } from "@/lib/crm-dashboard-records";
@@ -161,6 +161,11 @@ export default async function AgentDashboardPage() {
   // never even receives another agent's rows over the wire), so an agent
   // only ever sees their own rate here.
   const conversionRecords = await getCrmOpportunityConversionRecords(crmUser.id);
+  // Best-effort only: an agent's own session can never write these tables
+  // (RLS requires an admin role on every insert here), so this is just a
+  // harmless no-op unless no admin has opened a Dialpad-syncing page yet -
+  // see ensureLatestDialpadReportImported().
+  await ensureLatestDialpadReportImported({ supabase, workspace: "growth", importedById: crmUser.id, importedByName: crmUser.full_name || crmUser.email });
   const dialpadData = await loadDialpadAgentDashboardData(supabase);
 
   // Winsalot Sales Coach & Operations Manager (below) - reuses the

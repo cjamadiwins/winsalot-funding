@@ -42,7 +42,7 @@ import AgentWeeklyIncentiveCard from "@/components/crm-ui/AgentWeeklyIncentiveCa
 import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
-import { loadDialpadAgentDashboardData } from "@/lib/dialpad-report-data";
+import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
@@ -149,6 +149,11 @@ export default async function LeadgenAgentDashboardPage() {
   const capReached = isMonthlyIncentiveCapReached(monthToDateApproved, settings.monthlyCap);
   const remainingToCap = Math.max(0, settings.monthlyCap - monthToDateApproved);
   const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  // Best-effort only: an agent's own session can never write these tables
+  // (RLS requires an admin role on every insert here), so this is just a
+  // harmless no-op unless no admin has opened a Dialpad-syncing page yet -
+  // see ensureLatestDialpadReportImported().
+  await ensureLatestDialpadReportImported({ supabase, workspace: "lead", importedById: agent.id, importedByName: agent.full_name || agent.email });
   const dialpadData = await loadDialpadAgentDashboardData(supabase);
   // Only count/show a follow-up if it's still its lead's authoritative
   // upcoming one (lead.next_follow_up_at === this row's scheduled_at) -
