@@ -23,6 +23,11 @@ export type CrmUserRow = {
   // this login is scoped to. Always null for admin/agent (migration 0136,
   // mirrors leadgen_users.client_id + role='client' exactly).
   subcontractor_id: string | null;
+  // Agent-selected "current campaign" for the Quick Call Script card -
+  // display/work-context state only, same as leadgen_users.current_campaign_id
+  // (migration 20260918151958). One of GrowthCrmCampaignKey
+  // (src/lib/growth-crm-campaign-scripts.ts) or null if none selected yet.
+  current_campaign_key: string | null;
 };
 
 export type AgentAttendanceRow = {

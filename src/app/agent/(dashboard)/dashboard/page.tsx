@@ -45,6 +45,8 @@ import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigg
 import { addAgentDncSuppressionAction } from "../do-not-contact-actions";
 import { loadGrowthAgentSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
+import AgentCampaignScriptCard from "@/components/crm-ui/AgentCampaignScriptCard";
+import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -265,6 +267,15 @@ export default async function AgentDashboardPage() {
           </Link>
         </div>
       </div>
+
+      <AgentCampaignScriptCard
+        currentCampaignKey={
+          crmUser.current_campaign_key && isGrowthCrmCampaignKey(crmUser.current_campaign_key)
+            ? (crmUser.current_campaign_key as GrowthCrmCampaignKey)
+            : null
+        }
+        agentName={agentDisplayName}
+      />
 
       <SalesCoachAgentCard data={salesCoachData} />
 
