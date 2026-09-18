@@ -464,7 +464,7 @@ export default function ConsultationGuideForm({
               />
             </div>
             <QuestionList questions={CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS} answers={lendingFit} />
-            <p className="mt-5 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-[12.5px] font-semibold text-rose-800">
+            <p className="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12.5px] font-semibold text-amber-900">
               {CONSULTATION_GUIDE_LENDING_WARNING}
             </p>
           </section>

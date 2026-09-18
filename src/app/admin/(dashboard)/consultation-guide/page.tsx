@@ -3,14 +3,8 @@ import { redirect } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import {
-  CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS,
-  CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES,
-  CONSULTATION_GUIDE_SERVICE_LABELS,
-  CONSULTATION_GUIDE_STATUS_LABELS,
-  CONSULTATION_GUIDE_STATUS_STYLES,
-  type CrmConsultationGuideRow,
-} from "@/lib/consultation-guide";
+import ConsultationGuideListClient, { type ConsultationGuideListRow } from "./ConsultationGuideListClient";
+import { deleteConsultationGuideAction } from "./actions";
 
 // Admin-only Client Consultation Guide index - "Keep historical
 // consultations available so Admin can reopen them later." Opening this
@@ -36,21 +30,7 @@ export default async function ConsultationGuideIndexPage({
     )
     .order("created_at", { ascending: false });
 
-  const guides = (data ?? []) as Pick<
-    CrmConsultationGuideRow,
-    | "id"
-    | "created_at"
-    | "updated_at"
-    | "status"
-    | "business_name"
-    | "contact_name"
-    | "consultation_date"
-    | "consultant_name"
-    | "opportunity_id"
-    | "appointment_id"
-    | "service"
-    | "follow_up_email_status"
-  >[];
+  const guides = (data ?? []) as ConsultationGuideListRow[];
 
   return (
     <div>
@@ -78,113 +58,7 @@ export default async function ConsultationGuideIndexPage({
         </p>
       )}
 
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-[13px]">
-            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Business</th>
-                <th className="px-3 py-2">Contact</th>
-                <th className="px-3 py-2">Service</th>
-                <th className="px-3 py-2">Appointment</th>
-                <th className="px-3 py-2">Consultant</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Follow-Up Email</th>
-                <th className="px-3 py-2">Last Updated</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {guides.map((guide) => (
-                <tr key={guide.id} className="border-b border-slate-100 last:border-0">
-                  <td className="max-w-[220px] px-3 py-2 font-medium text-slate-900">
-                    {/* Opens the related prospect/business record when this
-                        consultation is linked to one; the "Open" action on
-                        the right always opens the guide itself. */}
-                    {guide.opportunity_id ? (
-                      <Link href={`/admin/crm/opportunities/${guide.opportunity_id}`} className="line-clamp-2 break-words hover:text-sky-600">
-                        {guide.business_name || "Untitled consultation"}
-                      </Link>
-                    ) : (
-                      <span className="line-clamp-2 break-words">{guide.business_name || "Untitled consultation"}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">{guide.contact_name || "—"}</td>
-                  <td className="px-3 py-2 text-slate-600">{guide.service ? CONSULTATION_GUIDE_SERVICE_LABELS[guide.service] : "—"}</td>
-                  <td className="px-3 py-2 text-slate-600">
-                    {guide.appointment_id ? (
-                      <Link href={`/admin/crm/appointments#appointment-${guide.appointment_id}`} className="font-semibold text-sky-600 hover:text-sky-700">
-                        View
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">{guide.consultant_name || "—"}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${CONSULTATION_GUIDE_STATUS_STYLES[guide.status]}`}
-                    >
-                      {CONSULTATION_GUIDE_STATUS_LABELS[guide.status]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    {guide.status === "completed" ? (
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES[guide.follow_up_email_status]}`}
-                      >
-                        {CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS[guide.follow_up_email_status]}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">{new Date(guide.updated_at).toLocaleString()}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
-                    {guide.status === "completed" ? (
-                      // Completed consultations stay viewable and editable
-                      // for future reference, as two distinct actions -
-                      // View opens the printable/read-only PDF, Edit opens
-                      // the same editable record a draft uses.
-                      <span className="inline-flex gap-1.5">
-                        <a
-                          href={`/admin/consultation-guide/${guide.id}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
-                        >
-                          View
-                        </a>
-                        <Link
-                          href={`/admin/consultation-guide/${guide.id}`}
-                          className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
-                        >
-                          Edit
-                        </Link>
-                      </span>
-                    ) : (
-                      <Link
-                        href={`/admin/consultation-guide/${guide.id}`}
-                        className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
-                      >
-                        Open
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-
-              {guides.length === 0 && !error && (
-                <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
-                    No consultations logged yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {!error && <ConsultationGuideListClient guides={guides} deleteAction={deleteConsultationGuideAction} />}
     </div>
   );
 }
