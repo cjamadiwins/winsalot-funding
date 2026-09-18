@@ -422,8 +422,8 @@ export async function resendConsultationFollowUpEmailAction(id: string): Promise
   return { message: "Follow-up email resent." };
 }
 
-// Admin-only, explicitly confirmed "Delete" from the consultation guide
-// list - only the guide row itself is removed. crm_consultation_guides
+// Admin-only, explicitly confirmed "Delete consultation" from the bottom
+// of the Edit Consultation page - only the guide row itself is removed. crm_consultation_guides
 // has no child rows referencing it (the linked appointment and
 // opportunity are what it points *to*, not the other way around, and the
 // sent follow-up email lives in crm_lead_emails, keyed off the

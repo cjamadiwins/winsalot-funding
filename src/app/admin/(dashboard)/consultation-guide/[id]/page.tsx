@@ -7,6 +7,7 @@ import {
   completeConsultationGuideAction,
   retryConsultationFollowUpEmailAction,
   resendConsultationFollowUpEmailAction,
+  deleteConsultationGuideAction,
 } from "../actions";
 import type { CrmConsultationGuideRow } from "@/lib/consultation-guide";
 
@@ -52,6 +53,7 @@ export default async function ConsultationGuideDetailPage({ params }: { params: 
       completeAction={completeConsultationGuideAction.bind(null, id)}
       retryFollowUpAction={retryConsultationFollowUpEmailAction}
       resendFollowUpAction={resendConsultationFollowUpEmailAction}
+      deleteAction={deleteConsultationGuideAction}
       backHref="/admin/consultation-guide"
     />
   );
