@@ -314,9 +314,7 @@ export async function previewConsultationCompletionAction(formData: FormData): P
 
   const email = buildConsultationGuideFollowUpEmail(fields.service, {
     contactName: fields.contact_name || "there",
-    businessName: fields.business_name || "your business",
     consultantName: fields.consultant_name || admin.full_name || admin.email,
-    consultantEmail: admin.email,
   });
 
   return {

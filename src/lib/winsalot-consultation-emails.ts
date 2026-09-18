@@ -376,48 +376,56 @@ export function buildWinsalotFollowUpEmail(params: FollowUpEmailParams): Winsalo
 
 export type BusinessFinanceFollowUpEmailParams = {
   contactName: string;
-  businessName: string;
   // The consultant who ran the consultation - always the admin who marks
   // it complete (the guide's own free-text consultant_name field is used
   // for the displayed name when set, so it can still credit whoever
   // actually ran the call even if a different admin clicks Complete).
   consultantName: string;
-  consultantEmail: string;
 };
 
 // New Business Finance consultation-completion follow-up email (Growth
 // CRM Client Consultation Guide, "Mark Consultation Complete" with
-// Service = Business Finance). Copy is fixed exactly to CJ's brief - do
-// not reword without checking the brief first. Never sent for the
-// existing Lead Generation flow, which keeps using
+// Service = Business Finance). Copy is fixed exactly to CJ's brief - the
+// 2026-09-18 21:05 revision superseded the earlier draft, so this is the
+// current version; do not reword without checking the brief first. Never
+// sent for the existing Lead Generation flow, which keeps using
 // buildWinsalotFollowUpEmail above unchanged. Never exposes internal
 // consultation notes, qualification answers, or lender information - it
-// only ever takes a name/business/consultant, nothing from the guide's
-// own discovery/fit/summary answers.
+// only ever takes a contact/consultant name, nothing from the guide's own
+// discovery/fit/summary answers.
 export function buildWinsalotBusinessFinanceFollowUpEmail(params: BusinessFinanceFollowUpEmailParams): WinsalotEmailBody {
   const firstName = firstNameOf(params.contactName);
-  const subject = "Thank You for Meeting With Winsalot Corp. — Business Financing Next Steps";
+  const subject = "Next Steps for Your Business Financing Request";
 
   const introLines = [
     `Hi ${firstName},`,
     "",
-    `Thank you for taking the time to speak with Winsalot Corp. about your business financing needs. It was helpful to learn more about ${params.businessName}, your goals, and the type of support you are looking for.`,
+    "Thank you for taking the time to speak with Winsalot Corp. about your business financing needs.",
     "",
-    "Winsalot Corp. works with a network of business financing providers to help eligible businesses explore available funding options. Our support is provided at no cost to you—we are compensated by the funding provider when a successful funding arrangement is completed.",
+    "Based on our consultation, the next step is to review your business information and recent bank statements so we can determine which financing options may be available.",
     "",
-    "The next step is to review some basic business information and supporting documents. Requirements can vary by provider, but they typically include recent business bank statements and information about the business. We will confirm the exact documents required before anything is submitted.",
-    "",
-    "Please note that all financing options are subject to review and approval by the funding provider. Winsalot Corp. does not guarantee approval, a specific amount, rate, term, or funding timeline.",
-    "",
-    "If you are ready to continue, please reply to this email and we will provide the next steps and secure document-submission instructions.",
-    "",
-    "Thank you again for considering Winsalot Corp. We look forward to supporting your business.",
+    "Please reply to this email with:",
   ];
 
-  const signOffLines = ["Best regards,", params.consultantName, "Winsalot Corp.", params.consultantEmail, "647-300-1270", "winsalotcorp.com"];
+  const requestBullets = [
+    "Your most recent six months of business bank statements",
+    "Your legal business name",
+    "The amount of financing requested",
+    "How you intend to use the funds",
+  ];
 
-  const textLines = [...introLines, "", ...signOffLines];
-  const bodyHtml = `${paragraphsHtml(introLines)}${paragraphsHtml(signOffLines)}`;
+  const closingLines = [
+    "Once received, we will review the information and, where appropriate, submit it to a suitable funding partner. Financing is subject to the lender's review and approval. Winsalot Corp. does not guarantee approval, rates, terms, or funding amounts.",
+    "",
+    "There is no fee charged by Winsalot Corp. for helping you explore business financing options. If financing is completed, Winsalot Corp. may receive compensation from the funding provider.",
+    "",
+    "If you have any questions, reply to this email and we will be happy to assist.",
+  ];
+
+  const signOffLines = ["Best regards,", params.consultantName, "Winsalot Corp."];
+
+  const textLines = [...introLines, ...requestBullets.map((line) => `• ${line}`), "", ...closingLines, "", ...signOffLines];
+  const bodyHtml = `${paragraphsHtml(introLines)}${bulletListHtml(requestBullets)}${paragraphsHtml(["", ...closingLines])}${paragraphsHtml(signOffLines)}`;
 
   return { subject, text: textLines.join("\n"), html: shell(bodyHtml, subject) };
 }

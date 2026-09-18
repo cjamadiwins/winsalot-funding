@@ -99,7 +99,7 @@ function FitStatusPicker({
   );
 }
 
-type PrefillableField = "business_name" | "contact_name" | "phone" | "email" | "industry" | "location" | "consultant_name";
+type PrefillableField = "business_name" | "contact_name" | "phone" | "email" | "industry" | "location" | "consultant_name" | "notes";
 
 export default function ConsultationGuideForm({
   guide,
@@ -466,7 +466,7 @@ export default function ConsultationGuideForm({
             <textarea
               name="notes"
               placeholder="Type any additional notes here during the consultation…"
-              defaultValue={guide?.notes ?? ""}
+              defaultValue={val("notes") ?? ""}
               className={`${inputClasses} mt-3 min-h-[120px] resize-y`}
             />
           </section>

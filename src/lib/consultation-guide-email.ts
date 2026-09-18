@@ -19,15 +19,10 @@ export type ConsultationGuideEmailConsultant = { name: string; email: string };
 // different from what "send" actually sends.
 export function buildConsultationGuideFollowUpEmail(
   service: ConsultationGuideService,
-  params: { contactName: string; businessName: string; consultantName: string; consultantEmail: string }
+  params: { contactName: string; consultantName: string }
 ): WinsalotEmailBody {
   if (service === "business_financing") {
-    return buildWinsalotBusinessFinanceFollowUpEmail({
-      contactName: params.contactName,
-      businessName: params.businessName,
-      consultantName: params.consultantName,
-      consultantEmail: params.consultantEmail,
-    });
+    return buildWinsalotBusinessFinanceFollowUpEmail({ contactName: params.contactName, consultantName: params.consultantName });
   }
   // Lead Generation reuses the existing appointment-completion email
   // unchanged - "Do not change its current wording or functionality."
@@ -60,9 +55,7 @@ export async function sendConsultationGuideFollowUpEmail(
 
   const email = buildConsultationGuideFollowUpEmail(service, {
     contactName: guide.contact_name || "there",
-    businessName: guide.business_name || "your business",
     consultantName: guide.consultant_name || consultant.name,
-    consultantEmail: consultant.email,
   });
 
   try {

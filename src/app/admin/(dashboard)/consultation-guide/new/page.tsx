@@ -77,6 +77,7 @@ export default async function NewConsultationGuidePage({
         email: appointment.email,
         industry: opportunity?.industry ?? null,
         location: opportunity ? [opportunity.city, opportunity.province_state].filter(Boolean).join(", ") || null : null,
+        notes: appointment.notes,
       };
       initialService = serviceFromAppointmentType(appointment.service_type as OpportunityType);
       resolvedOpportunityId = appointment.opportunity_id;
