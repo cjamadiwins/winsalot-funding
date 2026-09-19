@@ -1,7 +1,11 @@
-// Header-guessing for the Call List Segments connect flow. Deliberately
+// Header-guessing for the Call List Segments upload flow. Deliberately
 // has no "server-only" import - both the server action that builds the
 // initial suggested mapping and (if ever needed) a client-side preview
 // can use it directly, since it's pure string logic with no secrets.
+//
+// Every uploaded column that doesn't map to one of these fixed fields is
+// kept, not discarded - see call_list_leads.extra_fields - so a LeadSwift
+// export with unexpected extra columns is never silently truncated.
 export const CALL_LIST_TARGET_FIELDS = [
   "business_name",
   "contact_name",
@@ -11,27 +15,26 @@ export const CALL_LIST_TARGET_FIELDS = [
   "city",
   "province",
   "industry",
-  "source_notes",
+  "notes",
 ] as const;
 
 export type CallListTargetField = (typeof CALL_LIST_TARGET_FIELDS)[number];
 
 export const CALL_LIST_TARGET_FIELD_LABELS: Record<CallListTargetField, string> = {
-  business_name: "Business name",
-  contact_name: "Contact name",
+  business_name: "Business Name",
+  contact_name: "Contact Name",
   phone: "Phone",
   email: "Email",
   website: "Website",
   city: "City",
-  province: "Province / State",
+  province: "Province",
   industry: "Industry",
-  source_notes: "Source / list notes",
+  notes: "Notes",
 };
 
-// Only business_name and phone are ever required by a CRM lead row - a
-// segment can still be connected without a mapped email/website/etc, but
-// at least one row-matching identifier (phone or business name) must be
-// mappable or every sheet row from it would be unmatchable/undeduplicable.
+// business_name is the only field a call_list_leads row can't do without
+// (it's `not null`) - everything else, including phone, may be blank for
+// a given row (duplicate matching just falls back to business name).
 export const CALL_LIST_REQUIRED_FIELDS: CallListTargetField[] = ["business_name"];
 
 const SYNONYMS: Record<CallListTargetField, string[]> = {
@@ -43,7 +46,7 @@ const SYNONYMS: Record<CallListTargetField, string[]> = {
   city: ["city", "town"],
   province: ["province", "state", "province state", "province/state", "region"],
   industry: ["industry", "category", "sector", "niche", "vertical"],
-  source_notes: ["source notes", "source list notes", "source/list notes", "list notes", "notes", "source"],
+  notes: ["notes", "note", "comments", "comment", "description"],
 };
 
 function normalizeHeader(header: string): string {
@@ -55,7 +58,7 @@ function normalizeHeader(header: string): string {
 }
 
 // Best-effort guess only - always shown to the Admin for confirmation/
-// correction before a segment is created, never applied silently.
+// correction before the file is imported, never applied silently.
 export function guessColumnMapping(headers: string[]): Record<CallListTargetField, string | null> {
   const normalizedHeaders = headers.map((header) => ({ raw: header, norm: normalizeHeader(header) }));
   const used = new Set<string>();
@@ -69,4 +72,42 @@ export function guessColumnMapping(headers: string[]): Record<CallListTargetFiel
   }
 
   return mapping;
+}
+
+export type MappedLeadRow = {
+  business_name: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  website: string;
+  city: string;
+  province: string;
+  industry: string;
+  notes: string;
+  extra_fields: Record<string, string>;
+};
+
+// Applies a confirmed header mapping to one parsed data row: fixed
+// fields go to their own column, every other header (unmapped, or a
+// duplicate header name the admin didn't pick) is preserved verbatim in
+// extra_fields so nothing from the original file is ever lost.
+export function applyColumnMapping(headers: string[], row: string[], mapping: Partial<Record<CallListTargetField, string>>): MappedLeadRow {
+  const valueByHeader = new Map(headers.map((header, i) => [header, row[i] ?? ""]));
+  const mappedHeaders = new Set(Object.values(mapping).filter((h): h is string => !!h));
+
+  const result = {} as MappedLeadRow;
+  for (const field of CALL_LIST_TARGET_FIELDS) {
+    const header = mapping[field];
+    result[field] = header ? (valueByHeader.get(header) ?? "").trim() : "";
+  }
+
+  const extra_fields: Record<string, string> = {};
+  for (const header of headers) {
+    if (mappedHeaders.has(header)) continue;
+    const value = (valueByHeader.get(header) ?? "").trim();
+    if (value) extra_fields[header] = value;
+  }
+  result.extra_fields = extra_fields;
+
+  return result;
 }

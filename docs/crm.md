@@ -185,47 +185,76 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   sent, and relies on RLS policies scoped to `crm_user_role`/`assigned_agent_id` for every
   authenticated read/write.
 
-## Call List Segments (Google Sheets sync)
+## Call List Segments (CSV/XLSX upload workflow)
 
 Admin-only feature, present in both the Growth CRM (`/admin/crm/call-list-segments`) and the
-Lead Generation CRM (`/leadgen/admin/call-list-segments`). An Admin connects a Google Sheet tab
-via a secure per-admin Google OAuth grant (never a public/view-only link) and names it a "Call
-List Segment" — Google Sheets stays the editable source of *contact/list* fields (business
-name, contact name, phone, email, website, city/province, industry, source notes); the CRM
-stays the sole source of everything else (call history, notes, status, appointments, agent
-assignment). See `supabase/migrations/20260919120000_call_list_segments.sql` for the schema and
-its header comment for the full design rationale, and `src/lib/call-list-sync.ts` for the sync
-engine (shared by both CRMs).
+Lead Generation CRM (`/leadgen/admin/call-list-segments`), plus an agent-facing working view at
+`/agent/call-list-segments` / `/leadgen/agent/call-list-segments`. The CRM itself is the staging
+spreadsheet — there is no external service, API, or credentials involved. Workflow: **LeadSwift
+(or any other) export → upload CSV/XLSX → clean/edit inside the CRM as a Draft → Deploy to one
+or more agents → agents work the list, logging every call into the CRM's existing Call Logs →
+an Interested/Qualified lead can optionally be promoted into the real pipeline.** See
+`supabase/migrations/20260919150000_call_list_segments_upload_workflow.sql` for the schema and
+its header comment for the full design rationale.
 
-- **Connect flow**: Admin enters a segment name, CRM service/campaign, and assigned agent(s),
-  then connects a Google account (`/api/google/oauth/connect` → `/api/google/oauth/callback`,
-  read-only `spreadsheets.readonly` scope) and picks a spreadsheet tab. Column headers are
-  auto-guessed (`src/lib/call-list-column-mapping.ts`) and shown for confirmation before the
-  segment is created — one tab can back at most one segment.
-- **Sync ("Sync Now" button, manual only — no scheduled cron)**: diffs the sheet's current rows
-  against this segment's existing CRM leads by normalized phone number (falling back to
-  normalized business name). A match updates only the *list* fields above; a sheet row matching
-  a CRM record from a *different* segment (or none) is skipped as a duplicate rather than
-  reassigned; a new row is checked against the shared Do Not Call list
-  (`src/lib/dnc-suppression.ts`) and skipped if phone-blocked, otherwise inserted and round-robin
-  assigned across the segment's agent roster; a previously-synced row no longer present in the
-  sheet is marked `archived` (never deleted, along with its call logs/history). Every run is
-  logged to `call_list_sync_runs` and summarized on the segment (new/updated/duplicates
-  skipped/DNC skipped/archived/errors).
-- **Agent visibility**: unchanged from the existing `assigned_agent_id`-based RLS — no new agent
-  policies were added to `crm_opportunities`/`leadgen_leads`, since a synced lead's
-  `assigned_agent_id` is set once at insert time from the segment's agent roster.
-- **Segment performance view**: `/…/call-list-segments/[id]` shows total leads, leads
-  remaining, calls made, interested leads, callbacks due, appointments booked, every linked call
-  log/note (via a denormalized, trigger-maintained `call_list_segment_id` on
-  `crm_activities`/`crm_followups`/`leadgen_lead_activities`/`leadgen_followups`), and filters by
-  agent/status/date range.
-- **Secrets**: Google OAuth tokens are AES-256-GCM encrypted at rest
-  (`src/lib/crypto-secrets.ts`, key in `GOOGLE_OAUTH_TOKEN_ENCRYPTION_KEY`) and stored in
-  `call_list_google_connections`, a table with RLS enabled but zero policies — service-role
-  access only, same pattern as `crm_dnc_suppressions`. See `.env.example` for the required
-  `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_TOKEN_ENCRYPTION_KEY`
-  setup.
+- **Upload**: Admin enters a segment name, campaign/service, industry, and territory, then
+  uploads a `.csv` or `.xlsx` file (`src/lib/call-list-file-parser.ts`, using the `xlsx` package
+  for spreadsheets and the existing `parseCsvRows` for CSV). Column headers are auto-guessed
+  (`src/lib/call-list-column-mapping.ts`) against a fixed field set (business name, contact
+  name, phone, email, website, city, province, industry, notes); anything unmapped is preserved
+  verbatim per-row in a `extra_fields` JSON blob rather than discarded, so an unexpected
+  LeadSwift column is never lost. The segment is created as **Draft** and every parsed row lands
+  in the new `call_list_leads` staging table — nothing touches `crm_opportunities`/
+  `leadgen_leads` at this point.
+- **Draft editing** (`src/components/crm-call-list/SpreadsheetEditorClient.tsx`, Admin-only):
+  inline cell editing (autosaves on blur), add/delete rows individually or in bulk, search,
+  sort, and dynamically-rendered columns for anything in `extra_fields`. A duplicate/DNC check
+  (`recheckSegmentDuplicates` in `src/lib/call-list-leads.ts`) flags — never auto-deletes — rows
+  matching another row in the same segment or an existing CRM record by phone, email, or
+  business name + city, and separately flags a match against the shared Do Not Call list.
+- **Deploy**: Admin picks one or more agents and the segment flips from Draft to **Active**
+  (`src/lib/call-list-deploy.ts`) — from then on, every agent on that roster can see and work
+  every lead in the segment (RLS is segment-level, not per-lead), while everyone else cannot.
+  Redeploying later (e.g. to reassign agents) is allowed and just updates the roster.
+- **Agent permission model**: agents can only ever read/work leads in a segment deployed to
+  them - uploading, importing, creating/deploying/reassigning/completing/archiving a segment,
+  and the CSV export, all require `requireCrmAdmin`/`requireLeadgenAdmin` at the Server Action/
+  route level *and* have no agent-writable RLS policy on `call_list_segments`/
+  `call_list_google_connections`-successor tables at all - an agent session cannot do any of
+  these even by calling the database directly. A `call_list_leads` row's imported contact
+  fields are similarly locked down at the database layer: migration
+  `20260919160000_call_list_leads_restrict_agent_field_edits.sql` adds a trigger that rejects
+  any agent-authenticated write to anything other than the call-outcome fields
+  (`last_outcome`/`last_contacted_at`/`callback_at`) - this app's own Server Actions never trip
+  it (they write through the service-role client), so it only ever blocks a direct/bypass
+  write attempt. None of this restricts *reading* - an agent still sees every field (business
+  name, contact name, phone, email, etc.) on their assigned leads, rendered as ordinary
+  selectable text with no clipboard/`user-select` restriction, so copying a value into the
+  existing Call Log or elsewhere in the CRM is never blocked.
+- **Working a list** (agent-facing, `src/components/crm-call-list/CallListWorkingClient.tsx`):
+  for each lead, the agent records an outcome (`src/lib/call-log.ts`'s shared
+  `CALL_LOG_OUTCOMES` — No Answer, Voicemail, Gatekeeper, Not Interested, Callback, Do Not Call,
+  Interested, Appointment Booked), notes, and an optional callback/appointment date-time. This
+  writes straight into the CRM's **existing** `crm_call_logs`/`leadgen_call_logs` tables (tagged
+  with `call_list_segment_id`/`call_list_lead_id`/`contact_name`/`callback_at`/`appointment_at` -
+  all additive, nullable columns; no second call-history system was created), and denormalizes
+  the lead's current state (`last_outcome`, `callback_at`) back onto `call_list_leads` for the
+  working-list view. A "Do Not Call" outcome adds a shared Do Not Contact suppression exactly
+  like the plain agent Call Log page already does. Admin can still see every call, including
+  these, from the existing Call Logs area, and gets a segment-scoped subset on the segment's own
+  detail page.
+- **Promotion** (`src/lib/call-list-promote.ts`): a deliberate, one-at-a-time "Promote" action
+  (available to both Admin and the assigned agent) turns a qualified `call_list_leads` row into
+  a real `crm_opportunities`/`leadgen_leads` record — never automatic for every dialed row, so a
+  large raw call list never floods the qualified pipeline. Checks for an existing pipeline
+  record first (by phone, else business name + city) and links to it instead of creating a
+  duplicate.
+- **Segment performance view**: `/…/call-list-segments/[id]` (Active/Completed/Archived) shows
+  total leads, leads remaining, calls made, interested, callbacks due, appointments booked,
+  promoted count, the segment's own Call Logs, and a CSV export of the cleaned list
+  (`buildSegmentLeadsCsv`). Status moves Draft → Active → Completed/Archived
+  (`updateSegmentStatus`), and every historical segment (and its leads/call history) stays
+  intact — nothing is ever deleted once deployed.
 
 ## How it works
 

@@ -3,41 +3,38 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSegments } from "@/lib/call-list-segments";
 import CallListSegmentsClient from "@/components/crm-call-list/CallListSegmentsClient";
-import { syncSegmentNowAction } from "./actions";
 
-export default async function CallListSegmentsPage() {
+export default async function LeadgenCallListSegmentsPage() {
   await requireLeadgenAdmin();
 
   const admin = getSupabaseAdmin();
-  const [segments, agentsResult] = await Promise.all([
+  const [segments, agentsResult, campaignsResult] = await Promise.all([
     listSegments("lead_generation"),
     admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
+    admin.from("leadgen_campaigns").select("id, name, client_id"),
   ]);
 
-  const segmentIds = segments.map((s) => s.id);
-  const campaignIds = [...new Set(segments.map((s) => s.leadgen_campaign_id).filter((id): id is string => !!id))];
-
-  const [{ data: agentLinks }, { data: campaigns }] = await Promise.all([
-    segmentIds.length
-      ? admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
-      : Promise.resolve({ data: [] as { segment_id: string; agent_id: string }[] }),
-    campaignIds.length
-      ? admin.from("leadgen_campaigns").select("id, name, client_id").in("id", campaignIds)
-      : Promise.resolve({ data: [] as { id: string; name: string; client_id: string }[] }),
-  ]);
-
-  const clientIds = [...new Set((campaigns ?? []).map((c) => c.client_id))];
+  const clientIds = [...new Set(((campaignsResult.data ?? []) as { id: string; name: string; client_id: string }[]).map((c) => c.client_id))];
   const { data: clients } = clientIds.length
     ? await admin.from("leadgen_clients").select("id, name").in("id", clientIds)
     : { data: [] as { id: string; name: string }[] };
-
   const clientNameById = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const campaignLabelById = new Map(
-    ((campaigns ?? []) as { id: string; name: string; client_id: string }[]).map((c) => [
+    ((campaignsResult.data ?? []) as { id: string; name: string; client_id: string }[]).map((c) => [
       c.id,
-      `${clientNameById.get(c.client_id) ?? "Unknown Client"} — ${c.name}`,
+      `${clientNameById.get(c.client_id) ?? "Unknown client"} — ${c.name}`,
     ])
   );
+
+  const segmentIds = segments.map((s) => s.id);
+  const [{ data: agentLinks }, { data: leadCounts }] = await Promise.all([
+    segmentIds.length
+      ? admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
+      : Promise.resolve({ data: [] as { segment_id: string; agent_id: string }[] }),
+    segmentIds.length
+      ? admin.from("call_list_leads").select("segment_id").in("segment_id", segmentIds)
+      : Promise.resolve({ data: [] as { segment_id: string }[] }),
+  ]);
 
   const agentNameById = new Map(((agentsResult.data ?? []) as { id: string; full_name: string }[]).map((a) => [a.id, a.full_name]));
   const agentIdsBySegment = new Map<string, string[]>();
@@ -46,11 +43,16 @@ export default async function CallListSegmentsPage() {
     list.push(link.agent_id);
     agentIdsBySegment.set(link.segment_id, list);
   }
+  const leadCountBySegment = new Map<string, number>();
+  for (const row of leadCounts ?? []) {
+    leadCountBySegment.set(row.segment_id, (leadCountBySegment.get(row.segment_id) ?? 0) + 1);
+  }
 
   const rows = segments.map((segment) => ({
     segment,
-    serviceLabel: (segment.leadgen_campaign_id && campaignLabelById.get(segment.leadgen_campaign_id)) || "—",
+    serviceLabel: segment.campaign_name || campaignLabelById.get(segment.leadgen_campaign_id ?? "") || "—",
     agentNames: (agentIdsBySegment.get(segment.id) ?? []).map((id) => agentNameById.get(id) ?? "Unknown"),
+    leadCount: leadCountBySegment.get(segment.id) ?? 0,
   }));
 
   return (
@@ -59,20 +61,20 @@ export default async function CallListSegmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Call List Segments</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Admin-only. Connect a Google Sheet as the editable master call list for a named segment — new rows sync
-            into this CRM, but every call, note, and outcome stays here. Agents work entirely inside the CRM.
+            Admin-only. Upload a CSV/XLSX export (e.g. from LeadSwift), clean it inside the CRM, then deploy it to
+            agents — every call, note, and outcome feeds the existing Call Logs.
           </p>
         </div>
         <Link
           href="/leadgen/admin/call-list-segments/new"
           className="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
-          New Segment
+          Upload Call List
         </Link>
       </div>
 
       <div className="mt-6">
-        <CallListSegmentsClient basePath="/leadgen/admin/call-list-segments" rows={rows} syncNowAction={syncSegmentNowAction} />
+        <CallListSegmentsClient basePath="/leadgen/admin/call-list-segments" rows={rows} />
       </div>
     </div>
   );
