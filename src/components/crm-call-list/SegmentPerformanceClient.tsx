@@ -195,7 +195,13 @@ export default function SegmentPerformanceClient({
         </div>
       </div>
 
-      <DeployPanelClient segmentId={segment.id} agents={allAgents} deployAction={deployAction} />
+      <DeployPanelClient
+        key={[...assignedAgentIds].sort().join(",")}
+        segmentId={segment.id}
+        agents={allAgents}
+        assignedAgentIds={assignedAgentIds}
+        deployAction={deployAction}
+      />
 
       <div className="rounded-xl border border-slate-200 p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-900">Assigned agents</h2>

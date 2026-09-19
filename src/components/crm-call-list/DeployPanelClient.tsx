@@ -7,14 +7,21 @@ import { Rocket } from "lucide-react";
 export default function DeployPanelClient({
   segmentId,
   agents,
+  assignedAgentIds = [],
   deployAction,
 }: {
   segmentId: string;
   agents: { id: string; name: string }[];
+  assignedAgentIds?: string[];
   deployAction: (segmentId: string, agentIds: string[]) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<string[]>([]);
+  // Seeded from the segment's current roster so an already-assigned agent
+  // (e.g. re-opening this panel to remove one agent and add another) shows
+  // up pre-selected instead of forcing Admin to re-pick everyone - see the
+  // `key` on this component in SegmentPerformanceClient, which remounts it
+  // (and so re-seeds this state) whenever the saved roster changes.
+  const [selected, setSelected] = useState<string[]>(assignedAgentIds);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +45,10 @@ export default function DeployPanelClient({
   return (
     <div className="rounded-xl border border-slate-200 p-4">
       <h2 className="text-sm font-semibold text-slate-900">Deploy / Assign Segment</h2>
-      <p className="mt-1 text-[12.5px] text-slate-500">Once deployed, only the agents you pick can see and work this list.</p>
+      <p className="mt-1 text-[12.5px] text-slate-500">
+        Click an agent to select or unselect them. Selected agents are highlighted below; saving replaces the full assignment list with
+        whoever is selected, so unselecting an agent removes their access to this list.
+      </p>
       {error && <p className="mt-2 text-[12.5px] text-rose-700">{error}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {agents.length === 0 && <span className="text-sm text-slate-500">No active agents to assign.</span>}
