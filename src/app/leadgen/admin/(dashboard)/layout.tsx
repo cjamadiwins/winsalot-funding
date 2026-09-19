@@ -22,6 +22,7 @@ import {
   Gift,
   PhoneCall,
   Target,
+  Table2,
 } from "lucide-react";
 import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -31,6 +32,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Clients", href: "/leadgen/admin/clients", icon: <Building2 /> },
   { label: "Leads", href: "/leadgen/admin/leads", icon: <Users /> },
   { label: "Opportunity Finder", href: "/leadgen/admin/opportunity-finder", icon: <Target /> },
+  { label: "Call List Segments", href: "/leadgen/admin/call-list-segments", icon: <Table2 /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
   { label: "Call Logs", href: "/leadgen/admin/performance/call-notes", icon: <PhoneCall /> },

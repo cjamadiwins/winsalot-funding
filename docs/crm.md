@@ -185,6 +185,48 @@ schema and `src/lib/winsalot-consultation-*.ts` for the application logic.
   sent, and relies on RLS policies scoped to `crm_user_role`/`assigned_agent_id` for every
   authenticated read/write.
 
+## Call List Segments (Google Sheets sync)
+
+Admin-only feature, present in both the Growth CRM (`/admin/crm/call-list-segments`) and the
+Lead Generation CRM (`/leadgen/admin/call-list-segments`). An Admin connects a Google Sheet tab
+via a secure per-admin Google OAuth grant (never a public/view-only link) and names it a "Call
+List Segment" — Google Sheets stays the editable source of *contact/list* fields (business
+name, contact name, phone, email, website, city/province, industry, source notes); the CRM
+stays the sole source of everything else (call history, notes, status, appointments, agent
+assignment). See `supabase/migrations/20260919120000_call_list_segments.sql` for the schema and
+its header comment for the full design rationale, and `src/lib/call-list-sync.ts` for the sync
+engine (shared by both CRMs).
+
+- **Connect flow**: Admin enters a segment name, CRM service/campaign, and assigned agent(s),
+  then connects a Google account (`/api/google/oauth/connect` → `/api/google/oauth/callback`,
+  read-only `spreadsheets.readonly` scope) and picks a spreadsheet tab. Column headers are
+  auto-guessed (`src/lib/call-list-column-mapping.ts`) and shown for confirmation before the
+  segment is created — one tab can back at most one segment.
+- **Sync ("Sync Now" button, manual only — no scheduled cron)**: diffs the sheet's current rows
+  against this segment's existing CRM leads by normalized phone number (falling back to
+  normalized business name). A match updates only the *list* fields above; a sheet row matching
+  a CRM record from a *different* segment (or none) is skipped as a duplicate rather than
+  reassigned; a new row is checked against the shared Do Not Call list
+  (`src/lib/dnc-suppression.ts`) and skipped if phone-blocked, otherwise inserted and round-robin
+  assigned across the segment's agent roster; a previously-synced row no longer present in the
+  sheet is marked `archived` (never deleted, along with its call logs/history). Every run is
+  logged to `call_list_sync_runs` and summarized on the segment (new/updated/duplicates
+  skipped/DNC skipped/archived/errors).
+- **Agent visibility**: unchanged from the existing `assigned_agent_id`-based RLS — no new agent
+  policies were added to `crm_opportunities`/`leadgen_leads`, since a synced lead's
+  `assigned_agent_id` is set once at insert time from the segment's agent roster.
+- **Segment performance view**: `/…/call-list-segments/[id]` shows total leads, leads
+  remaining, calls made, interested leads, callbacks due, appointments booked, every linked call
+  log/note (via a denormalized, trigger-maintained `call_list_segment_id` on
+  `crm_activities`/`crm_followups`/`leadgen_lead_activities`/`leadgen_followups`), and filters by
+  agent/status/date range.
+- **Secrets**: Google OAuth tokens are AES-256-GCM encrypted at rest
+  (`src/lib/crypto-secrets.ts`, key in `GOOGLE_OAUTH_TOKEN_ENCRYPTION_KEY`) and stored in
+  `call_list_google_connections`, a table with RLS enabled but zero policies — service-role
+  access only, same pattern as `crm_dnc_suppressions`. See `.env.example` for the required
+  `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_TOKEN_ENCRYPTION_KEY`
+  setup.
+
 ## How it works
 
 1. An agent signs in at **`/agent/login`** and adds a new interested lead from

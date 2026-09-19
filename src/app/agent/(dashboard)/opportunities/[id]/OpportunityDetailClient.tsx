@@ -50,6 +50,7 @@ export default function OpportunityDetailClient({
   dncSuppression = null,
   continueUrl,
   leadGenerationPricing,
+  callListSegmentName = null,
   onBack,
 }: {
   opportunity: CrmOpportunityRow;
@@ -64,6 +65,11 @@ export default function OpportunityDetailClient({
   dncSuppression?: DncSuppressionRow | null;
   continueUrl: string;
   leadGenerationPricing: import("@/lib/detailed-service-pricing").ServicePricing;
+  // Name of the Call List Segment this opportunity was synced in from,
+  // if any (Call List Segments feature) - optional/defaulted to null so
+  // existing callers (e.g. the Opportunity Finder modal) keep compiling
+  // without passing it.
+  callListSegmentName?: string | null;
   // Set only when rendered inside the Opportunity Finder dashboard modal
   // (see OpportunityFinderModalTrigger) - swaps the page-navigation "Back
   // to My Opportunities" link for a button that switches the modal back to
@@ -118,6 +124,11 @@ export default function OpportunityDetailClient({
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             {OPPORTUNITY_TYPE_LABELS[opportunity.opportunity_type]}
             {opportunity.city ? ` · ${[opportunity.city, opportunity.province_state].filter(Boolean).join(", ")}` : ""}
+            {callListSegmentName && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                Call List: {callListSegmentName}
+              </span>
+            )}
           </p>
         </div>
         <select
@@ -236,6 +247,7 @@ export default function OpportunityDetailClient({
                 <Field label="Email" value={opportunity.email} />
                 <Field label="City" value={opportunity.city} />
                 <Field label="Province / State" value={opportunity.province_state} />
+                <Field label="Website" value={opportunity.website} />
                 {(opportunity.opportunity_type === "lead_generation" || opportunity.opportunity_type === "both_services") && (
                   <>
                     <Field label="Industry" value={opportunity.industry} />
@@ -286,6 +298,12 @@ export default function OpportunityDetailClient({
               <div className="mt-4">
                 <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">Notes</dt>
                 <dd className="mt-0.5 whitespace-pre-wrap text-[14px] text-[var(--color-text-body)]">{opportunity.notes}</dd>
+              </div>
+            )}
+            {!editing && opportunity.source_notes && (
+              <div className="mt-4">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">Source / List Notes</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap text-[14px] text-[var(--color-text-body)]">{opportunity.source_notes}</dd>
               </div>
             )}
           </section>

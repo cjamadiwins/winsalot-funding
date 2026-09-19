@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { loadAgentOpportunityDetail } from "@/lib/agent-opportunity-detail-data";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import OpportunityDetailClient from "./OpportunityDetailClient";
 
 export default async function AgentOpportunityDetailPage({
@@ -30,9 +31,23 @@ export default async function AgentOpportunityDetailPage({
     );
   }
 
+  // Best-effort, additive lookup so a synced lead's Call List Segment
+  // name can be shown alongside its imported details - never blocks
+  // rendering the rest of the page if it's missing or fails.
+  let callListSegmentName: string | null = null;
+  if (detail.opportunity.call_list_segment_id) {
+    const { data: segment } = await getSupabaseAdmin()
+      .from("call_list_segments")
+      .select("name")
+      .eq("id", detail.opportunity.call_list_segment_id)
+      .maybeSingle();
+    callListSegmentName = segment?.name ?? null;
+  }
+
   return (
     <OpportunityDetailClient
       opportunity={detail.opportunity}
+      callListSegmentName={callListSegmentName}
       activities={detail.activities}
       followUps={detail.followUps}
       currentAgentId={crmUser.id}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { loadLeadgenLeadDetail } from "@/lib/leadgen-lead-detail-data";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
 import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
@@ -64,6 +65,18 @@ export default async function LeadgenAdminLeadDetailPage({
     );
   }
 
+  // Best-effort, additive lookup so a synced lead's Call List Segment
+  // name can be shown alongside its imported details.
+  let callListSegmentName: string | null = null;
+  if (detail.lead.call_list_segment_id) {
+    const { data: segment } = await getSupabaseAdmin()
+      .from("call_list_segments")
+      .select("name")
+      .eq("id", detail.lead.call_list_segment_id)
+      .maybeSingle();
+    callListSegmentName = segment?.name ?? null;
+  }
+
   return (
     <LeadDetailClient
       lead={detail.lead}
@@ -71,6 +84,7 @@ export default async function LeadgenAdminLeadDetailPage({
       campaign={detail.campaign}
       agents={detail.agents}
       assignedAgentName={detail.assignedAgentName}
+      callListSegmentName={callListSegmentName}
       currentUserName={adminUser.full_name || adminUser.email}
       currentUserId={adminUser.id}
       activities={detail.activities}
