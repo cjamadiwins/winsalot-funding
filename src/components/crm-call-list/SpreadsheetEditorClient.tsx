@@ -4,8 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Plus, RefreshCw, Search, AlertTriangle, PhoneOff } from "lucide-react";
 import { CALL_LIST_TARGET_FIELDS, CALL_LIST_TARGET_FIELD_LABELS, type CallListTargetField } from "@/lib/call-list-column-mapping";
+import { KNOWN_COLUMNS, extraFieldColumnKey, isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow } from "@/lib/call-list-types";
 import RemovedRowsPanel from "./RemovedRowsPanel";
+import ManageColumnsPopover from "./ManageColumnsPopover";
 
 type SortKey = CallListTargetField | "flags";
 
@@ -20,6 +22,8 @@ export default function SpreadsheetEditorClient({
   removeLeadsAction,
   restoreLeadsAction,
   recheckDuplicatesAction,
+  initialHiddenFields,
+  updateColumnVisibilityAction,
 }: {
   segmentId: string;
   initialLeads: CallListLeadRow[];
@@ -29,6 +33,8 @@ export default function SpreadsheetEditorClient({
   removeLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
   restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
   recheckDuplicatesAction: (segmentId: string) => Promise<{ error?: string; possibleDuplicates?: number; dncFlagged?: number }>;
+  initialHiddenFields: string[];
+  updateColumnVisibilityAction: (hiddenFields: string[]) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -41,12 +47,26 @@ export default function SpreadsheetEditorClient({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
+  const [hiddenFields, setHiddenFields] = useState<string[]>(initialHiddenFields);
 
-  const extraColumns = useMemo(() => {
+  const allExtraColumns = useMemo(() => {
     const keys = new Set<string>();
     for (const lead of leads) for (const key of Object.keys(lead.extra_fields ?? {})) keys.add(key);
     return [...keys].sort();
   }, [leads]);
+
+  const visibleTargetFields = useMemo(
+    () => CALL_LIST_TARGET_FIELDS.filter((field) => !isColumnHidden(hiddenFields, field)),
+    [hiddenFields]
+  );
+  const extraColumns = useMemo(
+    () => allExtraColumns.filter((col) => !isColumnHidden(hiddenFields, extraFieldColumnKey(col))),
+    [allExtraColumns, hiddenFields]
+  );
+  const availableColumns = useMemo(
+    () => [...KNOWN_COLUMNS, ...allExtraColumns.map((col) => ({ key: extraFieldColumnKey(col), label: col }))],
+    [allExtraColumns]
+  );
 
   const filteredLeads = useMemo(() => {
     let rows = leads;
@@ -205,6 +225,13 @@ export default function SpreadsheetEditorClient({
           >
             <Plus className="h-3.5 w-3.5" /> Add Row
           </button>
+          <ManageColumnsPopover
+            availableColumns={availableColumns}
+            extraFieldNames={allExtraColumns}
+            initialHiddenFields={hiddenFields}
+            updateAction={updateColumnVisibilityAction}
+            onHiddenFieldsChange={setHiddenFields}
+          />
         </div>
       </div>
 
@@ -215,7 +242,7 @@ export default function SpreadsheetEditorClient({
               <th className="w-8 px-2 py-2">
                 <input type="checkbox" checked={selected.size > 0 && selected.size === filteredLeads.length} onChange={toggleSelectAll} />
               </th>
-              {CALL_LIST_TARGET_FIELDS.map((field) => (
+              {visibleTargetFields.map((field) => (
                 <th key={field} className="cursor-pointer whitespace-nowrap px-2 py-2 font-semibold" onClick={() => toggleSort(field)}>
                   {CALL_LIST_TARGET_FIELD_LABELS[field]}
                   {sortKey === field && (sortAsc ? " ▲" : " ▼")}
@@ -236,7 +263,7 @@ export default function SpreadsheetEditorClient({
                 <td className="px-2 py-1">
                   <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                 </td>
-                {CALL_LIST_TARGET_FIELDS.map((field) => (
+                {visibleTargetFields.map((field) => (
                   <td key={field} className="px-1 py-1">
                     {field === "notes" ? (
                       <textarea
@@ -286,7 +313,7 @@ export default function SpreadsheetEditorClient({
             ))}
             {filteredLeads.length === 0 && (
               <tr>
-                <td colSpan={CALL_LIST_TARGET_FIELDS.length + extraColumns.length + 3} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={visibleTargetFields.length + extraColumns.length + 3} className="px-4 py-6 text-center text-slate-500">
                   No rows match.
                 </td>
               </tr>

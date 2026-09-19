@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
+import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 import { logCallListCallAction, promoteCallListLeadAction } from "../actions";
 
@@ -27,7 +28,29 @@ export default async function AgentCallListSegmentDetailPage({ params }: { param
     );
   }
 
-  const { data: leads } = await supabase.from("call_list_leads").select("*").eq("segment_id", id).order("created_at", { ascending: true });
+  const [{ data: leads }, { data: visibility }] = await Promise.all([
+    supabase.from("call_list_leads").select("*").eq("segment_id", id).order("created_at", { ascending: true }),
+    // RLS: agent select-only on call_list_column_visibility - Admin's
+    // "Manage Columns" setting for this CRM, enforced server-side (not
+    // just a client-side conditional) below.
+    supabase.from("call_list_column_visibility").select("hidden_fields").eq("crm", "growth").maybeSingle(),
+  ]);
+  const hiddenFields = (visibility?.hidden_fields as string[] | null) ?? [];
+
+  // Hidden columns must not reach the agent's browser at all "through
+  // agent-side API responses if possible" - extra_fields (imported junk
+  // columns like IS_WORDPRESS) is never rendered by this view regardless,
+  // so it's dropped unconditionally. contact_name/phone are nulled out
+  // here too when Admin has hidden them, on top of CallListWorkingClient's
+  // own conditional rendering. last_outcome is deliberately left alone -
+  // CallListWorkingClient's "Not yet contacted" filter depends on its
+  // true value even when the column itself is hidden from display.
+  const sanitizedLeads = ((leads ?? []) as CallListLeadRow[]).map((lead) => ({
+    ...lead,
+    extra_fields: {},
+    contact_name: isColumnHidden(hiddenFields, "contact_name") ? null : lead.contact_name,
+    phone: isColumnHidden(hiddenFields, "phone") ? null : lead.phone,
+  }));
 
   return (
     <div>
@@ -35,10 +58,10 @@ export default async function AgentCallListSegmentDetailPage({ params }: { param
         ← Back to My Call Lists
       </Link>
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{(leads ?? []).length} lead(s) in this list.</p>
+      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
 
       <div className="mt-6">
-        <CallListWorkingClient leads={(leads ?? []) as CallListLeadRow[]} logCallAction={logCallListCallAction} promoteAction={promoteCallListLeadAction} />
+        <CallListWorkingClient leads={sanitizedLeads} logCallAction={logCallListCallAction} promoteAction={promoteCallListLeadAction} hiddenFields={hiddenFields} />
       </div>
     </div>
   );

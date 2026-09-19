@@ -5,6 +5,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getSegment, getSegmentAgentIds } from "@/lib/call-list-segments";
 import { listSegmentLeads, listRemovedSegmentLeads } from "@/lib/call-list-leads";
+import { getHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
 import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
@@ -17,6 +18,7 @@ import {
   recheckDuplicatesAction,
   removeSegmentLeadsAction,
   restoreSegmentLeadsAction,
+  updateCallListColumnVisibilityAction,
   updateSegmentLeadAction,
   updateSegmentStatusAction,
 } from "../actions";
@@ -40,7 +42,11 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
   const serviceLabel = segment.campaign_name || (await resolveServiceLabel(admin, segment.leadgen_campaign_id)) || "—";
 
   if (segment.status === "draft") {
-    const [leads, removedLeads] = await Promise.all([listSegmentLeads(segment.id), listRemovedSegmentLeads(segment.id)]);
+    const [leads, removedLeads, hiddenFields] = await Promise.all([
+      listSegmentLeads(segment.id),
+      listRemovedSegmentLeads(segment.id),
+      getHiddenColumnFields("lead_generation"),
+    ]);
     const { data: agentsResult } = await admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name");
     const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
 
@@ -68,6 +74,8 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
           removeLeadsAction={removeSegmentLeadsAction}
           restoreLeadsAction={restoreSegmentLeadsAction}
           recheckDuplicatesAction={recheckDuplicatesAction}
+          initialHiddenFields={hiddenFields}
+          updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
         />
 
         <DeployPanelClient segmentId={segment.id} agents={agents} deployAction={deploySegmentAction} />
@@ -75,9 +83,10 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     );
   }
 
-  const [leads, removedLeads, agentIds, agentsResult, callLogsResult] = await Promise.all([
+  const [leads, removedLeads, hiddenFields, agentIds, agentsResult, callLogsResult] = await Promise.all([
     listSegmentLeads(segment.id),
     listRemovedSegmentLeads(segment.id),
+    getHiddenColumnFields("lead_generation"),
     getSegmentAgentIds(segment.id),
     admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
     admin
@@ -133,6 +142,8 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}
+      initialHiddenFields={hiddenFields}
+      updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
     />
   );
 }

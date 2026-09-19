@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PhoneCall, Rocket } from "lucide-react";
 import { CALL_LOG_OUTCOMES, CALL_LOG_OUTCOME_STYLES, type CallLogOutcome } from "@/lib/call-log";
+import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow } from "@/lib/call-list-types";
 
 // Deliberately per-lead, one-at-a-time (no row selection, no "export"/
@@ -16,14 +17,21 @@ import type { CallListLeadRow } from "@/lib/call-list-types";
 // single field into the existing Call Log or elsewhere in the CRM; only
 // bulk/administrative capabilities are restricted here, never normal
 // per-field copying.
+//
+// hiddenFields (from the Admin "Manage Columns" setting) hides contact
+// name/phone/outcome the same way the Admin's own spreadsheet views do -
+// business_name always stays visible here regardless, since it's this
+// card's only identifier for which lead the agent is looking at.
 export default function CallListWorkingClient({
   leads,
   logCallAction,
   promoteAction,
+  hiddenFields,
 }: {
   leads: CallListLeadRow[];
   logCallAction: (leadId: string, formData: FormData) => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
+  hiddenFields: string[];
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -32,6 +40,9 @@ export default function CallListWorkingClient({
   const [notice, setNotice] = useState<Record<string, string>>({});
 
   const visibleLeads = filter === "not_contacted" ? leads.filter((l) => !l.last_outcome) : leads;
+  const showContact = !isColumnHidden(hiddenFields, "contact_name");
+  const showPhone = !isColumnHidden(hiddenFields, "phone");
+  const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
 
   function handleSubmit(leadId: string, formData: FormData) {
     setNotice((prev) => ({ ...prev, [leadId]: "" }));
@@ -90,11 +101,13 @@ export default function CallListWorkingClient({
                     {lead.business_name}
                     {lead.dnc_flag && <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10.5px] font-semibold text-rose-800">DNC</span>}
                   </div>
-                  <div className="text-[12.5px] text-[var(--color-text-muted)]">
-                    {lead.contact_name ? `${lead.contact_name} · ` : ""}
-                    {lead.phone ?? "No phone"}
-                  </div>
-                  {lead.last_outcome && (
+                  {(showContact || showPhone) && (
+                    <div className="text-[12.5px] text-[var(--color-text-muted)]">
+                      {showContact && lead.contact_name ? `${lead.contact_name} · ` : ""}
+                      {showPhone ? (lead.phone ?? "No phone") : ""}
+                    </div>
+                  )}
+                  {showOutcome && lead.last_outcome && (
                     <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${CALL_LOG_OUTCOME_STYLES[lead.last_outcome as CallLogOutcome] ?? "bg-slate-100 text-slate-700"}`}>
                       {lead.last_outcome}
                     </span>

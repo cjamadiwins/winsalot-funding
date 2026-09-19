@@ -7,6 +7,8 @@ import { ArrowLeft, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
 import DeployPanelClient from "./DeployPanelClient";
 import RemovedRowsPanel from "./RemovedRowsPanel";
+import ManageColumnsPopover from "./ManageColumnsPopover";
+import { KNOWN_COLUMNS, extraFieldColumnKey, isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 
 export type SegmentCallLogView = {
@@ -36,6 +38,8 @@ export default function SegmentPerformanceClient({
   updateStatusAction,
   promoteAction,
   restoreLeadsAction,
+  initialHiddenFields,
+  updateColumnVisibilityAction,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
@@ -59,12 +63,30 @@ export default function SegmentPerformanceClient({
   updateStatusAction: (segmentId: string, status: "active" | "completed" | "archived") => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
   restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
+  initialHiddenFields: string[];
+  updateColumnVisibilityAction: (hiddenFields: string[]) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<"all" | "not_contacted" | "interested" | "do_not_call" | "promoted">("all");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [hiddenFields, setHiddenFields] = useState<string[]>(initialHiddenFields);
+
+  const extraFieldNames = useMemo(() => {
+    const keys = new Set<string>();
+    for (const lead of leads) for (const key of Object.keys(lead.extra_fields ?? {})) keys.add(key);
+    return [...keys].sort();
+  }, [leads]);
+  const availableColumns = useMemo(
+    () => [...KNOWN_COLUMNS, ...extraFieldNames.map((name) => ({ key: extraFieldColumnKey(name), label: name }))],
+    [extraFieldNames]
+  );
+  const showBusiness = !isColumnHidden(hiddenFields, "business_name");
+  const showContact = !isColumnHidden(hiddenFields, "contact_name");
+  const showPhone = !isColumnHidden(hiddenFields, "phone");
+  const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
+  const showCallback = !isColumnHidden(hiddenFields, "callback_at");
 
   const filteredLeads = useMemo(() => {
     let rows = leads;
@@ -163,12 +185,21 @@ export default function SegmentPerformanceClient({
             </button>
           )}
         </div>
-        <a
-          href={`${basePath}/${segment.id}/export`}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12.5px] font-medium text-slate-700 hover:border-slate-400"
-        >
-          Export CSV
-        </a>
+        <div className="flex items-center gap-2">
+          <ManageColumnsPopover
+            availableColumns={availableColumns}
+            extraFieldNames={extraFieldNames}
+            initialHiddenFields={hiddenFields}
+            updateAction={updateColumnVisibilityAction}
+            onHiddenFieldsChange={setHiddenFields}
+          />
+          <a
+            href={`${basePath}/${segment.id}/export`}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12.5px] font-medium text-slate-700 hover:border-slate-400"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <DeployPanelClient segmentId={segment.id} agents={allAgents} deployAction={deployAction} />
@@ -205,11 +236,11 @@ export default function SegmentPerformanceClient({
           <table className="w-full text-left text-[13px]">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2 font-semibold">Business</th>
-                <th className="px-3 py-2 font-semibold">Contact</th>
-                <th className="px-3 py-2 font-semibold">Phone</th>
-                <th className="px-3 py-2 font-semibold">Last Outcome</th>
-                <th className="px-3 py-2 font-semibold">Callback</th>
+                {showBusiness && <th className="px-3 py-2 font-semibold">Business</th>}
+                {showContact && <th className="px-3 py-2 font-semibold">Contact</th>}
+                {showPhone && <th className="px-3 py-2 font-semibold">Phone</th>}
+                {showOutcome && <th className="px-3 py-2 font-semibold">Last Outcome</th>}
+                {showCallback && <th className="px-3 py-2 font-semibold">Callback</th>}
                 <th className="px-3 py-2 font-semibold">Promoted</th>
               </tr>
             </thead>
@@ -218,11 +249,11 @@ export default function SegmentPerformanceClient({
                 const promotedId = lead.promoted_opportunity_id || lead.promoted_leadgen_lead_id;
                 return (
                   <tr key={lead.id}>
-                    <td className="px-3 py-2">{lead.business_name}</td>
-                    <td className="px-3 py-2 text-slate-600">{lead.contact_name ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-600">{lead.phone ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-600">{lead.last_outcome ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-600">{lead.callback_at ? new Date(lead.callback_at).toLocaleString() : "—"}</td>
+                    {showBusiness && <td className="px-3 py-2">{lead.business_name}</td>}
+                    {showContact && <td className="px-3 py-2 text-slate-600">{lead.contact_name ?? "—"}</td>}
+                    {showPhone && <td className="px-3 py-2 text-slate-600">{lead.phone ?? "—"}</td>}
+                    {showOutcome && <td className="px-3 py-2 text-slate-600">{lead.last_outcome ?? "—"}</td>}
+                    {showCallback && <td className="px-3 py-2 text-slate-600">{lead.callback_at ? new Date(lead.callback_at).toLocaleString() : "—"}</td>}
                     <td className="px-3 py-2">
                       {promotedId ? (
                         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Promoted</span>
