@@ -16,8 +16,9 @@ import {
 import {
   addManualSegmentLead,
   bulkInsertSegmentLeads,
-  deleteSegmentLeads,
   recheckSegmentDuplicates,
+  removeSegmentLeads,
+  restoreSegmentLeads,
   updateSegmentLeadFields,
   type SegmentLeadEditableFields,
 } from "@/lib/call-list-leads";
@@ -140,12 +141,23 @@ export async function addSegmentLeadAction(segmentId: string, fields: Partial<Re
   return {};
 }
 
-export async function deleteSegmentLeadsAction(segmentId: string, leadIds: string[]): Promise<{ error?: string }> {
+export async function removeSegmentLeadsAction(segmentId: string, leadIds: string[]): Promise<{ error?: string }> {
+  const admin = await requireLeadgenAdmin();
+  try {
+    await removeSegmentLeads(leadIds, admin.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to remove the selected rows." };
+  }
+  revalidatePath(`${BASE_PATH}/${segmentId}`);
+  return {};
+}
+
+export async function restoreSegmentLeadsAction(segmentId: string, leadIds: string[]): Promise<{ error?: string }> {
   await requireLeadgenAdmin();
   try {
-    await deleteSegmentLeads(leadIds);
+    await restoreSegmentLeads(leadIds);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Failed to delete the selected rows." };
+    return { error: err instanceof Error ? err.message : "Failed to restore the selected rows." };
   }
   revalidatePath(`${BASE_PATH}/${segmentId}`);
   return {};

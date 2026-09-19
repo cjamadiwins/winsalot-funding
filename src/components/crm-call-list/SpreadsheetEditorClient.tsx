@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2, Plus, RefreshCw, Search, AlertTriangle, PhoneOff } from "lucide-react";
 import { CALL_LIST_TARGET_FIELDS, CALL_LIST_TARGET_FIELD_LABELS, type CallListTargetField } from "@/lib/call-list-column-mapping";
 import type { CallListLeadRow } from "@/lib/call-list-types";
+import RemovedRowsPanel from "./RemovedRowsPanel";
 
 type SortKey = CallListTargetField | "flags";
 
@@ -13,16 +14,20 @@ type LeadEditPatch = Partial<Record<CallListTargetField, string>> & { extra_fiel
 export default function SpreadsheetEditorClient({
   segmentId,
   initialLeads,
+  initialRemovedLeads,
   updateLeadAction,
   addLeadAction,
-  deleteLeadsAction,
+  removeLeadsAction,
+  restoreLeadsAction,
   recheckDuplicatesAction,
 }: {
   segmentId: string;
   initialLeads: CallListLeadRow[];
+  initialRemovedLeads: CallListLeadRow[];
   updateLeadAction: (leadId: string, patch: LeadEditPatch, segmentId: string) => Promise<{ error?: string }>;
   addLeadAction: (segmentId: string, fields: Partial<Record<CallListTargetField, string>>) => Promise<{ error?: string }>;
-  deleteLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
+  removeLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
+  restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
   recheckDuplicatesAction: (segmentId: string) => Promise<{ error?: string; possibleDuplicates?: number; dncFlagged?: number }>;
 }) {
   const router = useRouter();
@@ -35,6 +40,7 @@ export default function SpreadsheetEditorClient({
   const [sortAsc, setSortAsc] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
 
   const extraColumns = useMemo(() => {
     const keys = new Set<string>();
@@ -109,16 +115,32 @@ export default function SpreadsheetEditorClient({
     });
   }
 
-  function handleDelete(ids: string[]) {
+  function requestRemove(ids: string[]) {
     if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} row${ids.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
     setError(null);
+    setNotice(null);
+    setConfirmIds(ids);
+  }
+
+  function confirmRemove() {
+    const ids = confirmIds ?? [];
+    setConfirmIds(null);
+    if (ids.length === 0) return;
     setLeads((prev) => prev.filter((l) => !ids.includes(l.id)));
-    setSelected(new Set());
-    startTransition(async () => {
-      const result = await deleteLeadsAction(segmentId, ids);
-      if (result.error) setError(result.error);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
     });
+    startTransition(async () => {
+      const result = await removeLeadsAction(segmentId, ids);
+      if (result.error) setError(result.error);
+      else setNotice(`${ids.length} row${ids.length > 1 ? "s" : ""} removed from the call list.`);
+    });
+  }
+
+  function handleRestored(rows: CallListLeadRow[]) {
+    setLeads((prev) => [...prev, ...rows]);
   }
 
   function handleRecheck() {
@@ -161,10 +183,10 @@ export default function SpreadsheetEditorClient({
           {selected.size > 0 && (
             <button
               type="button"
-              onClick={() => handleDelete([...selected])}
+              onClick={() => requestRemove([...selected])}
               className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 px-2.5 py-1.5 text-[12.5px] font-medium text-rose-700 hover:border-rose-400"
             >
-              <Trash2 className="h-3.5 w-3.5" /> Delete {selected.size} selected
+              <Trash2 className="h-3.5 w-3.5" /> Remove Selected ({selected.size})
             </button>
           )}
           <button
@@ -256,7 +278,7 @@ export default function SpreadsheetEditorClient({
                   </div>
                 </td>
                 <td className="px-2 py-1 text-right">
-                  <button type="button" onClick={() => handleDelete([lead.id])} aria-label="Delete row" className="text-slate-400 hover:text-rose-600">
+                  <button type="button" onClick={() => requestRemove([lead.id])} aria-label="Remove row" className="text-slate-400 hover:text-rose-600">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </td>
@@ -273,6 +295,40 @@ export default function SpreadsheetEditorClient({
         </table>
       </div>
       <p className="text-[12px] text-slate-500">{leads.length} row(s) total. Edits save automatically when you leave a cell.</p>
+
+      <RemovedRowsPanel
+        segmentId={segmentId}
+        initialRemovedLeads={initialRemovedLeads}
+        restoreAction={restoreLeadsAction}
+        onRestored={handleRestored}
+      />
+
+      {confirmIds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-sm font-semibold text-slate-900">Remove selected rows?</h3>
+            <p className="mt-2 text-[13px] text-slate-600">
+              These rows will be removed from the active call list. You can restore them later if needed.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmIds(null)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12.5px] font-medium text-slate-700 hover:border-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemove}
+                className="rounded-lg bg-rose-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-rose-700"
+              >
+                Remove Rows
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,8 +21,23 @@ export async function listSegmentLeads(segmentId: string): Promise<CallListLeadR
     .from("call_list_leads")
     .select("*")
     .eq("segment_id", segmentId)
+    .is("removed_at", null)
     .order("source_row_number", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
+  return (data ?? []) as CallListLeadRow[];
+}
+
+// Rows an Admin removed from this segment's active list (see
+// removeSegmentLeads below) - never permanently deleted, just hidden from
+// every "active list" query above until restored.
+export async function listRemovedSegmentLeads(segmentId: string): Promise<CallListLeadRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("call_list_leads")
+    .select("*")
+    .eq("segment_id", segmentId)
+    .not("removed_at", "is", null)
+    .order("removed_at", { ascending: false });
   return (data ?? []) as CallListLeadRow[];
 }
 
@@ -114,10 +129,31 @@ export async function addManualSegmentLead(
   return data as CallListLeadRow;
 }
 
-export async function deleteSegmentLeads(ids: string[]): Promise<void> {
+// Reversible "safe delete" for cleaning an imported call list - never a
+// real DELETE. Removed rows simply drop out of listSegmentLeads (and
+// therefore out of the spreadsheet editor, the agent working view, CSV
+// export, and duplicate re-checks) until an Admin restores them. Because
+// crm_call_logs/leadgen_call_logs only ever reference call_list_lead_id
+// with "on delete set null" (never cascade), this never touches Call Logs,
+// outcomes, notes, callbacks, or appointments either way.
+export async function removeSegmentLeads(ids: string[], removedBy: string): Promise<void> {
   if (ids.length === 0) return;
   const admin = getSupabaseAdmin();
-  const { error } = await admin.from("call_list_leads").delete().in("id", ids);
+  const { error } = await admin
+    .from("call_list_leads")
+    .update({ removed_at: new Date().toISOString(), removed_by: removedBy })
+    .in("id", ids)
+    .is("removed_at", null);
+  if (error) throw new Error(error.message);
+}
+
+export async function restoreSegmentLeads(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from("call_list_leads")
+    .update({ removed_at: null, removed_by: null })
+    .in("id", ids);
   if (error) throw new Error(error.message);
 }
 
