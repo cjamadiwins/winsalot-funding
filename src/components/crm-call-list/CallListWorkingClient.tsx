@@ -18,10 +18,16 @@ import type { CallListLeadRow } from "@/lib/call-list-types";
 // bulk/administrative capabilities are restricted here, never normal
 // per-field copying.
 //
-// hiddenFields (from the Admin "Manage Columns" setting) hides contact
-// name/phone/outcome the same way the Admin's own spreadsheet views do -
-// business_name always stays visible here regardless, since it's this
-// card's only identifier for which lead the agent is looking at.
+// hiddenFields (from the Admin "Manage Columns" setting) hides a field
+// the same way the Admin's own spreadsheet views do - business_name
+// always stays visible here regardless, since it's this card's only
+// identifier for which lead the agent is looking at. Every other core
+// calling field (contact name, phone, email, website, industry, notes,
+// call outcome, callback) is visible by default and only ever hidden if
+// Admin explicitly hides it - an empty/never-configured hiddenFields
+// list (the default state) hides nothing, and "Reset to Default" in
+// Manage Columns never hides any of these, only imported extra_fields
+// columns - see defaultHiddenColumnFields in call-list-columns.ts.
 export default function CallListWorkingClient({
   leads,
   logCallAction,
@@ -42,7 +48,12 @@ export default function CallListWorkingClient({
   const visibleLeads = filter === "not_contacted" ? leads.filter((l) => !l.last_outcome) : leads;
   const showContact = !isColumnHidden(hiddenFields, "contact_name");
   const showPhone = !isColumnHidden(hiddenFields, "phone");
+  const showEmail = !isColumnHidden(hiddenFields, "email");
+  const showWebsite = !isColumnHidden(hiddenFields, "website");
+  const showIndustry = !isColumnHidden(hiddenFields, "industry");
+  const showNotes = !isColumnHidden(hiddenFields, "notes");
   const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
+  const showCallback = !isColumnHidden(hiddenFields, "callback_at");
 
   function handleSubmit(leadId: string, formData: FormData) {
     setNotice((prev) => ({ ...prev, [leadId]: "" }));
@@ -107,11 +118,23 @@ export default function CallListWorkingClient({
                       {showPhone ? (lead.phone ?? "No phone") : ""}
                     </div>
                   )}
+                  {((showEmail && lead.email) || (showWebsite && lead.website)) && (
+                    <div className="text-[12.5px] text-[var(--color-text-muted)]">
+                      {showEmail && lead.email ? lead.email : ""}
+                      {showEmail && lead.email && showWebsite && lead.website ? " · " : ""}
+                      {showWebsite && lead.website ? lead.website : ""}
+                    </div>
+                  )}
+                  {showIndustry && lead.industry && <div className="text-[12.5px] text-[var(--color-text-muted)]">{lead.industry}</div>}
                   {showOutcome && lead.last_outcome && (
                     <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${CALL_LOG_OUTCOME_STYLES[lead.last_outcome as CallLogOutcome] ?? "bg-slate-100 text-slate-700"}`}>
                       {lead.last_outcome}
                     </span>
                   )}
+                  {showCallback && lead.callback_at && (
+                    <p className="mt-1 text-[12px] text-orange-700">Callback: {new Date(lead.callback_at).toLocaleString()}</p>
+                  )}
+                  {showNotes && lead.notes && <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{lead.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   {promotedId ? (

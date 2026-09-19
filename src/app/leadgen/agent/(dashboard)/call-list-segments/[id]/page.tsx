@@ -40,16 +40,24 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
   // Hidden columns must not reach the agent's browser at all "through
   // agent-side API responses if possible" - extra_fields (imported junk
   // columns like IS_WORDPRESS) is never rendered by this view regardless,
-  // so it's dropped unconditionally. contact_name/phone are nulled out
-  // here too when Admin has hidden them, on top of CallListWorkingClient's
-  // own conditional rendering. last_outcome is deliberately left alone -
-  // CallListWorkingClient's "Not yet contacted" filter depends on its
-  // true value even when the column itself is hidden from display.
+  // so it's dropped unconditionally. Every other core calling field is
+  // nulled out here too when Admin has explicitly hidden it, on top of
+  // CallListWorkingClient's own conditional rendering - business_name is
+  // never nulled (the card's only identifier) and last_outcome is
+  // deliberately left alone (CallListWorkingClient's "Not yet contacted"
+  // filter depends on its true value even when the column is hidden from
+  // display). None of these are hidden by default - only an explicit
+  // Admin choice in Manage Columns ever adds one to hiddenFields.
   const sanitizedLeads = ((leads ?? []) as CallListLeadRow[]).map((lead) => ({
     ...lead,
     extra_fields: {},
     contact_name: isColumnHidden(hiddenFields, "contact_name") ? null : lead.contact_name,
     phone: isColumnHidden(hiddenFields, "phone") ? null : lead.phone,
+    email: isColumnHidden(hiddenFields, "email") ? null : lead.email,
+    website: isColumnHidden(hiddenFields, "website") ? null : lead.website,
+    industry: isColumnHidden(hiddenFields, "industry") ? null : lead.industry,
+    notes: isColumnHidden(hiddenFields, "notes") ? null : lead.notes,
+    callback_at: isColumnHidden(hiddenFields, "callback_at") ? null : lead.callback_at,
   }));
 
   return (
