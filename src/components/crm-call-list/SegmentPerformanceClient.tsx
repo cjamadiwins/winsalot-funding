@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
 import DeployPanelClient from "./DeployPanelClient";
+import RemovedRowsPanel from "./RemovedRowsPanel";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 
 export type SegmentCallLogView = {
@@ -25,6 +26,7 @@ export default function SegmentPerformanceClient({
   segment,
   serviceLabel,
   leads,
+  removedLeads,
   agentNameById,
   allAgents,
   assignedAgentIds,
@@ -33,11 +35,13 @@ export default function SegmentPerformanceClient({
   deployAction,
   updateStatusAction,
   promoteAction,
+  restoreLeadsAction,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
   serviceLabel: string;
   leads: CallListLeadRow[];
+  removedLeads: CallListLeadRow[];
   agentNameById: Map<string, string>;
   allAgents: { id: string; name: string }[];
   assignedAgentIds: string[];
@@ -54,6 +58,7 @@ export default function SegmentPerformanceClient({
   deployAction: (segmentId: string, agentIds: string[]) => Promise<{ error?: string }>;
   updateStatusAction: (segmentId: string, status: "active" | "completed" | "archived") => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
+  restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -258,6 +263,8 @@ export default function SegmentPerformanceClient({
           </ul>
         )}
       </div>
+
+      <RemovedRowsPanel segmentId={segment.id} initialRemovedLeads={removedLeads} restoreAction={restoreLeadsAction} />
     </div>
   );
 }

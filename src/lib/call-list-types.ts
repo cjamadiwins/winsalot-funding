@@ -51,6 +51,8 @@ export type CallListLeadRow = {
   promoted_leadgen_lead_id: string | null;
   promoted_at: string | null;
   created_by: string | null;
+  removed_at: string | null;
+  removed_by: string | null;
 };
 
 export type CallListSegmentAgentRow = {

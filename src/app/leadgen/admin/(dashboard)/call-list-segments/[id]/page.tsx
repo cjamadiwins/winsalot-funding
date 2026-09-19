@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getSegment, getSegmentAgentIds } from "@/lib/call-list-segments";
-import { listSegmentLeads } from "@/lib/call-list-leads";
+import { listSegmentLeads, listRemovedSegmentLeads } from "@/lib/call-list-leads";
 import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
 import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
@@ -12,10 +12,11 @@ import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/
 import {
   addSegmentLeadAction,
   deleteDraftSegmentAction,
-  deleteSegmentLeadsAction,
   deploySegmentAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
+  removeSegmentLeadsAction,
+  restoreSegmentLeadsAction,
   updateSegmentLeadAction,
   updateSegmentStatusAction,
 } from "../actions";
@@ -39,7 +40,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
   const serviceLabel = segment.campaign_name || (await resolveServiceLabel(admin, segment.leadgen_campaign_id)) || "—";
 
   if (segment.status === "draft") {
-    const leads = await listSegmentLeads(segment.id);
+    const [leads, removedLeads] = await Promise.all([listSegmentLeads(segment.id), listRemovedSegmentLeads(segment.id)]);
     const { data: agentsResult } = await admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name");
     const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
 
@@ -61,9 +62,11 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
         <SpreadsheetEditorClient
           segmentId={segment.id}
           initialLeads={leads}
+          initialRemovedLeads={removedLeads}
           updateLeadAction={updateSegmentLeadAction}
           addLeadAction={addSegmentLeadAction}
-          deleteLeadsAction={deleteSegmentLeadsAction}
+          removeLeadsAction={removeSegmentLeadsAction}
+          restoreLeadsAction={restoreSegmentLeadsAction}
           recheckDuplicatesAction={recheckDuplicatesAction}
         />
 
@@ -72,8 +75,9 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     );
   }
 
-  const [leads, agentIds, agentsResult, callLogsResult] = await Promise.all([
+  const [leads, removedLeads, agentIds, agentsResult, callLogsResult] = await Promise.all([
     listSegmentLeads(segment.id),
+    listRemovedSegmentLeads(segment.id),
     getSegmentAgentIds(segment.id),
     admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
     admin
@@ -119,6 +123,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       segment={segment}
       serviceLabel={serviceLabel}
       leads={leads}
+      removedLeads={removedLeads}
       agentNameById={agentNameById}
       allAgents={agents}
       assignedAgentIds={agentIds}
@@ -127,6 +132,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       deployAction={deploySegmentAction}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
+      restoreLeadsAction={restoreSegmentLeadsAction}
     />
   );
 }
