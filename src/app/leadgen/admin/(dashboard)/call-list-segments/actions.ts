@@ -24,6 +24,7 @@ import {
 } from "@/lib/call-list-leads";
 import { deploySegment } from "@/lib/call-list-deploy";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
+import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 
 const BASE_PATH = "/leadgen/admin/call-list-segments";
 
@@ -213,4 +214,19 @@ export async function promoteSegmentLeadAction(leadId: string): Promise<{ error?
   const result = await promoteToLeadgenLead(leadId, admin.id);
   if ("error" in result) return { error: result.error };
   return { id: result.id, linkedExisting: result.linkedExisting };
+}
+
+// "Manage Columns" - display-only, CRM-wide (not per-segment) - never
+// touches call_list_leads. Admin-only; requireLeadgenAdmin() is the real
+// enforcement, backed by the RLS on call_list_column_visibility (agents
+// only ever get a select policy there, never insert/update).
+export async function updateCallListColumnVisibilityAction(hiddenFields: string[]): Promise<{ error?: string }> {
+  const admin = await requireLeadgenAdmin();
+  try {
+    await setHiddenColumnFields("lead_generation", hiddenFields, admin.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save column visibility." };
+  }
+  revalidatePath(BASE_PATH);
+  return {};
 }
