@@ -116,6 +116,7 @@ export default function LeadDetailClient({
   score,
   dncSuppression = null,
   onBack,
+  callListSegmentName = null,
 }: {
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
@@ -176,6 +177,11 @@ export default function LeadDetailClient({
   // returns to that list view instead of redirecting to listPath. Neither
   // standalone lead detail page (admin or agent) ever passes this.
   onBack?: () => void;
+  // Name of the Call List Segment this lead was synced in from, if any
+  // (Call List Segments feature) - optional/defaulted to null so every
+  // existing caller (dashboards, Opportunity Finder modal) keeps
+  // compiling without passing it.
+  callListSegmentName?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -342,6 +348,11 @@ export default function LeadDetailClient({
           <p className="mt-1 text-sm text-slate-500">
             {client.name}
             {campaign ? ` · ${campaign.name}` : ""} · {[lead.city, lead.province].filter(Boolean).join(", ")}
+            {callListSegmentName && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                Call List: {callListSegmentName}
+              </span>
+            )}
           </p>
           {score && (
             <div className="mt-2 flex items-center gap-2">
@@ -615,6 +626,12 @@ export default function LeadDetailClient({
               <Row label="Date Added" value={new Date(lead.created_at).toLocaleString()} />
               <Row label="Last Contacted" value={lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : null} />
               <Row label="Next Follow-up" value={lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : null} />
+              {lead.source_notes && (
+                <div className="border-t border-slate-100 pt-2.5">
+                  <dt className="text-slate-500">Source / List Notes</dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-slate-900">{lead.source_notes}</dd>
+                </div>
+              )}
               {lead.notes && (
                 <div className="border-t border-slate-100 pt-2.5">
                   <dt className="text-slate-500">Internal Notes (staff only)</dt>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { loadLeadgenAgentLeadDetail } from "@/lib/leadgen-agent-lead-detail-data";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
@@ -51,12 +52,23 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     );
   }
 
+  let callListSegmentName: string | null = null;
+  if (detail.lead.call_list_segment_id) {
+    const { data: segment } = await getSupabaseAdmin()
+      .from("call_list_segments")
+      .select("name")
+      .eq("id", detail.lead.call_list_segment_id)
+      .maybeSingle();
+    callListSegmentName = segment?.name ?? null;
+  }
+
   return (
     <LeadDetailClient
       lead={detail.lead}
       client={detail.client!}
       campaign={detail.campaign}
       agents={[]}
+      callListSegmentName={callListSegmentName}
       assignedAgentName={agent.full_name}
       currentUserName={agent.full_name || agent.email}
       currentUserId={agent.id}

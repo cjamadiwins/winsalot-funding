@@ -267,6 +267,16 @@ export type LeadgenLeadRow = {
   // separate from `notes` above, which stays internal-only (never covered
   // by any client RLS policy), exactly like leadgen_lead_activities.
   client_notes: string | null;
+  // Call List Segments (migration 20260919120000) - source_notes is a
+  // synced *list* field, refreshed on every Google Sheets sync; every
+  // other field on this row (status, notes, assigned_agent_id, etc.)
+  // never is. archived means "removed from the source Google Sheet", not
+  // deleted - the lead and its full history remain intact.
+  source_notes: string | null;
+  call_list_segment_id: string | null;
+  archived: boolean;
+  archived_reason: string | null;
+  archived_at: string | null;
 };
 
 export const LEADGEN_ACTIVITY_TYPES = [

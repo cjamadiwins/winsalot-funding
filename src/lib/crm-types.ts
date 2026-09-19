@@ -247,6 +247,18 @@ export type CrmOpportunityRow = {
   last_email_status_at: string | null;
   last_email_type: EmailType | null;
   last_email_to: string | null;
+
+  // Call List Segments (migration 20260919120000) - website/source_notes
+  // are synced *list* fields, refreshed on every Google Sheets sync;
+  // everything else on this row (stage, notes, assigned_agent_id, etc.)
+  // never is. archived means "removed from the source Google Sheet",
+  // not deleted - the opportunity and its full history remain intact.
+  website: string | null;
+  source_notes: string | null;
+  call_list_segment_id: string | null;
+  archived: boolean;
+  archived_reason: string | null;
+  archived_at: string | null;
 };
 
 // A single tracked send (crm_lead_emails) - the Resend email id plus a
