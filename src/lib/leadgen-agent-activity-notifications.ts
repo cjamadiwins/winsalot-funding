@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import type { BreakStage } from "./attendance-pay";
+import { IDLE_ACK_REASON_LABELS, type BreakStage, type IdleAckReason } from "./attendance-pay";
 
 // Lead Generation CRM mirror of crm-agent-activity-notifications.ts - see
 // that file for the full rationale. Kept as its own copy rather than a
@@ -28,12 +28,40 @@ export async function notifyAdminsOfAgentIdle(input: { idleSessionId: string; ag
   const { error } = await admin.from("leadgen_notifications").insert(
     adminIds.map((userId) => ({
       user_id: userId,
-      title: `${input.agentName} has been inactive for 45 minutes.`,
+      title: `${input.agentName} has been inactive for 45 minutes and did not acknowledge the 30-minute idle warning.`,
       body: null,
       link_path: `${ATTENDANCE_ADMIN_PATH}?idle=${input.idleSessionId}`,
     }))
   );
   if (error) console.error("[leadgen-agent-activity] Failed to notify admins of idle agent:", error);
+}
+
+// Lead Generation CRM mirror of crm-agent-activity-notifications.ts's
+// notifyAdminsOfIdleAcknowledgment - see that file for the full rationale.
+export async function notifyAdminsOfIdleAcknowledgment(input: {
+  idleSessionId: string;
+  agentName: string;
+  reason: IdleAckReason;
+  explanation: string | null;
+  idleDurationMinutes: number;
+}): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const adminIds = await loadActiveAdminIds();
+  if (adminIds.length === 0) return;
+
+  const reasonLabel = IDLE_ACK_REASON_LABELS[input.reason];
+  const durationLabel = `Idle duration: ${input.idleDurationMinutes} min`;
+  const body = input.reason === "other" && input.explanation ? `${durationLabel} · Explanation: ${input.explanation}` : durationLabel;
+
+  const { error } = await admin.from("leadgen_notifications").insert(
+    adminIds.map((userId) => ({
+      user_id: userId,
+      title: `${input.agentName} acknowledged a 30-minute idle alert. Reason: ${reasonLabel}.`,
+      body,
+      link_path: `${ATTENDANCE_ADMIN_PATH}?idleAck=${input.idleSessionId}`,
+    }))
+  );
+  if (error) console.error("[leadgen-agent-activity] Failed to notify admins of idle acknowledgment:", error);
 }
 
 export async function notifyAdminsOfBreakOverdue(input: {

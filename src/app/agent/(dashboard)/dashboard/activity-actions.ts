@@ -3,8 +3,8 @@
 import { refresh, revalidatePath } from "next/cache";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { computeAgentActivityPollPlan, type AgentActivityRow } from "@/lib/attendance-pay";
-import { notifyAdminsOfAgentIdle, notifyAdminsOfBreakOverdue } from "@/lib/crm-agent-activity-notifications";
+import { computeAgentActivityPollPlan, isIdleAckReason, type AgentActivityRow } from "@/lib/attendance-pay";
+import { notifyAdminsOfAgentIdle, notifyAdminsOfBreakOverdue, notifyAdminsOfIdleAcknowledgment } from "@/lib/crm-agent-activity-notifications";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 
 // Agent Idle & Break Alert System - the agent-side half of the polling
@@ -57,25 +57,47 @@ export async function pollAgentActivityAction(hadInteraction: boolean): Promise<
     if (error) return { row: openShift, error: error.message };
   }
 
-  if (plan.idleTransition === "end") {
+  const agentName = crmUser.full_name.trim() || crmUser.email;
+
+  // The 30-minute idle acknowledgment episode - open/escalate/resolve the
+  // one agent_idle_sessions row for it. Independent of idleTransition
+  // above (which only ever reflects the 45-minute idle_since marker) -
+  // see computeAgentActivityPollPlan's own comment for why these two are
+  // now separate.
+  if (plan.idleWarningTransition === "open" && plan.idleWarningAtIso) {
     await supabase
       .from("agent_idle_sessions")
-      .update({ idle_end: new Date().toISOString() })
+      .insert({ attendance_id: openShift.id, agent_id: crmUser.id, idle_start: plan.idleWarningAtIso });
+  } else if (plan.idleWarningTransition === "resolve_exempted" && plan.idleWarningAtIso) {
+    await supabase
+      .from("agent_idle_sessions")
+      .update({ idle_end: plan.idleWarningAtIso })
       .eq("attendance_id", openShift.id)
       .eq("agent_id", crmUser.id)
       .is("idle_end", null);
-  }
-
-  const agentName = crmUser.full_name.trim() || crmUser.email;
-
-  if (plan.idleTransition === "start" && plan.idleStartIso) {
-    const { data: idleSession, error: idleInsertError } = await supabase
+  } else if (plan.idleWarningTransition === "escalate" && plan.idleWarningAtIso) {
+    const { data: escalatedSession } = await supabase
       .from("agent_idle_sessions")
-      .insert({ attendance_id: openShift.id, agent_id: crmUser.id, idle_start: plan.idleStartIso })
+      .update({ escalated_at: plan.idleWarningAtIso })
+      .eq("attendance_id", openShift.id)
+      .eq("agent_id", crmUser.id)
+      .is("idle_end", null)
       .select("id")
-      .single();
-    if (!idleInsertError && idleSession) {
-      await notifyAdminsOfAgentIdle({ idleSessionId: idleSession.id as string, agentName });
+      .maybeSingle();
+    let sessionId = escalatedSession?.id as string | undefined;
+    if (!sessionId) {
+      // Defensive fallback only - the 30-minute warning always opens the
+      // row before this branch can ever run, so this insert should never
+      // actually be needed in practice.
+      const { data: inserted } = await supabase
+        .from("agent_idle_sessions")
+        .insert({ attendance_id: openShift.id, agent_id: crmUser.id, idle_start: plan.idleWarningAtIso, escalated_at: plan.idleWarningAtIso })
+        .select("id")
+        .single();
+      sessionId = inserted?.id as string | undefined;
+    }
+    if (sessionId) {
+      await notifyAdminsOfAgentIdle({ idleSessionId: sessionId, agentName });
     }
   }
 
@@ -83,12 +105,88 @@ export async function pollAgentActivityAction(hadInteraction: boolean): Promise<
     await notifyAdminsOfBreakOverdue({ attendanceId: openShift.id, stage, agentName });
   }
 
-  if (plan.idleTransition !== "none" || plan.overdueStagesToNotify.length > 0) {
+  if (plan.idleTransition !== "none" || plan.idleWarningTransition !== "none" || plan.overdueStagesToNotify.length > 0) {
     revalidatePath("/admin/crm/attendance");
   }
 
   const updatedRow: AgentAttendanceRow = plan.attendancePatch ? { ...openShift, ...plan.attendancePatch } : openShift;
   return { row: updatedRow };
+}
+
+// Submitted from the required 30-minute idle acknowledgment modal
+// (src/components/agent-activity/AgentActivityMonitor.tsx). Closes the
+// agent's own currently-open idle session with their reason (and written
+// explanation if "Other"), clears the pending-acknowledgment flag and any
+// 45-minute escalation, and notifies every admin immediately - "even
+// though the agent immediately returns to Active afterward." Uses the
+// same session-scoped client as the poll action above, so RLS (agent may
+// only insert/select their own rows, and only update their own still-open
+// row - never a closed/historical one) is the actual enforcement
+// boundary, not just this function's own requireCrmUser() gate.
+export async function acknowledgeIdleWarningAction(input: { reason: string; explanation?: string }): Promise<AgentActivityPollResult> {
+  const crmUser = await requireCrmUser();
+  if (!isIdleAckReason(input.reason)) return { row: null, error: "Select a valid reason." };
+  const explanation = (input.explanation ?? "").trim();
+  if (input.reason === "other" && !explanation) return { row: null, error: "Please describe the reason for the inactivity." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: openShift, error: openShiftError } = await loadOwnOpenShift(supabase, crmUser.id);
+  if (openShiftError) return { row: null, error: openShiftError.message };
+  if (!openShift) return { row: null, error: "You are not clocked in." };
+  if (!openShift.idle_ack_pending_since) return { row: openShift }; // nothing pending - safe no-op (e.g. a double submit)
+
+  const nowIso = new Date().toISOString();
+
+  const { data: session, error: sessionFetchError } = await supabase
+    .from("agent_idle_sessions")
+    .select("id, idle_start, escalated_at")
+    .eq("attendance_id", openShift.id)
+    .eq("agent_id", crmUser.id)
+    .is("idle_end", null)
+    .maybeSingle();
+  if (sessionFetchError) return { row: openShift, error: sessionFetchError.message };
+
+  let idleDurationMinutes = 0;
+  if (session) {
+    idleDurationMinutes = Math.max(0, Math.round((new Date(nowIso).getTime() - new Date(session.idle_start as string).getTime()) / 60000));
+    const { error: sessionUpdateError } = await supabase
+      .from("agent_idle_sessions")
+      .update({
+        idle_end: nowIso,
+        acknowledged_at: nowIso,
+        acknowledged_reason: input.reason,
+        acknowledged_explanation: input.reason === "other" ? explanation : null,
+        acknowledged_before_escalation: !session.escalated_at,
+      })
+      .eq("id", session.id)
+      .eq("agent_id", crmUser.id)
+      .is("idle_end", null);
+    if (sessionUpdateError) return { row: openShift, error: sessionUpdateError.message };
+  }
+
+  const attendancePatch = { idle_ack_pending_since: null, idle_since: null, last_activity_at: nowIso };
+  const { error: attendanceError } = await supabase
+    .from("agent_attendance")
+    .update(attendancePatch)
+    .eq("id", openShift.id)
+    .eq("agent_id", crmUser.id)
+    .is("clock_out", null);
+  if (attendanceError) return { row: openShift, error: attendanceError.message };
+
+  if (session) {
+    const agentName = crmUser.full_name.trim() || crmUser.email;
+    await notifyAdminsOfIdleAcknowledgment({
+      idleSessionId: session.id as string,
+      agentName,
+      reason: input.reason,
+      explanation: input.reason === "other" ? explanation : null,
+      idleDurationMinutes,
+    });
+  }
+
+  revalidatePath("/admin/crm/attendance");
+
+  return { row: { ...openShift, ...attendancePatch } as AgentAttendanceRow };
 }
 
 // "Actively marked as being on a business call" - a manual toggle, since

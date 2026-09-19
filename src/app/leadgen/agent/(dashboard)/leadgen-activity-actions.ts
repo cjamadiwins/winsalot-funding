@@ -3,8 +3,8 @@
 import { refresh, revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { computeAgentActivityPollPlan, type AgentActivityRow } from "@/lib/attendance-pay";
-import { notifyAdminsOfAgentIdle, notifyAdminsOfBreakOverdue } from "@/lib/leadgen-agent-activity-notifications";
+import { computeAgentActivityPollPlan, isIdleAckReason, type AgentActivityRow } from "@/lib/attendance-pay";
+import { notifyAdminsOfAgentIdle, notifyAdminsOfBreakOverdue, notifyAdminsOfIdleAcknowledgment } from "@/lib/leadgen-agent-activity-notifications";
 import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
 
 // Lead Generation CRM mirror of src/app/agent/(dashboard)/dashboard/
@@ -50,25 +50,42 @@ export async function pollLeadgenAgentActivityAction(hadInteraction: boolean): P
     if (error) return { row: openShift, error: error.message };
   }
 
-  if (plan.idleTransition === "end") {
+  const agentName = agent.full_name.trim() || agent.email;
+
+  // The 30-minute idle acknowledgment episode - see
+  // src/app/agent/(dashboard)/dashboard/activity-actions.ts's mirror of
+  // this block for the full rationale.
+  if (plan.idleWarningTransition === "open" && plan.idleWarningAtIso) {
     await supabase
       .from("leadgen_agent_idle_sessions")
-      .update({ idle_end: new Date().toISOString() })
+      .insert({ attendance_id: openShift.id, agent_id: agent.id, idle_start: plan.idleWarningAtIso });
+  } else if (plan.idleWarningTransition === "resolve_exempted" && plan.idleWarningAtIso) {
+    await supabase
+      .from("leadgen_agent_idle_sessions")
+      .update({ idle_end: plan.idleWarningAtIso })
       .eq("attendance_id", openShift.id)
       .eq("agent_id", agent.id)
       .is("idle_end", null);
-  }
-
-  const agentName = agent.full_name.trim() || agent.email;
-
-  if (plan.idleTransition === "start" && plan.idleStartIso) {
-    const { data: idleSession, error: idleInsertError } = await supabase
+  } else if (plan.idleWarningTransition === "escalate" && plan.idleWarningAtIso) {
+    const { data: escalatedSession } = await supabase
       .from("leadgen_agent_idle_sessions")
-      .insert({ attendance_id: openShift.id, agent_id: agent.id, idle_start: plan.idleStartIso })
+      .update({ escalated_at: plan.idleWarningAtIso })
+      .eq("attendance_id", openShift.id)
+      .eq("agent_id", agent.id)
+      .is("idle_end", null)
       .select("id")
-      .single();
-    if (!idleInsertError && idleSession) {
-      await notifyAdminsOfAgentIdle({ idleSessionId: idleSession.id as string, agentName });
+      .maybeSingle();
+    let sessionId = escalatedSession?.id as string | undefined;
+    if (!sessionId) {
+      const { data: inserted } = await supabase
+        .from("leadgen_agent_idle_sessions")
+        .insert({ attendance_id: openShift.id, agent_id: agent.id, idle_start: plan.idleWarningAtIso, escalated_at: plan.idleWarningAtIso })
+        .select("id")
+        .single();
+      sessionId = inserted?.id as string | undefined;
+    }
+    if (sessionId) {
+      await notifyAdminsOfAgentIdle({ idleSessionId: sessionId, agentName });
     }
   }
 
@@ -76,12 +93,81 @@ export async function pollLeadgenAgentActivityAction(hadInteraction: boolean): P
     await notifyAdminsOfBreakOverdue({ attendanceId: openShift.id, stage, agentName });
   }
 
-  if (plan.idleTransition !== "none" || plan.overdueStagesToNotify.length > 0) {
+  if (plan.idleTransition !== "none" || plan.idleWarningTransition !== "none" || plan.overdueStagesToNotify.length > 0) {
     revalidatePath("/leadgen/admin/attendance");
   }
 
   const updatedRow: LeadgenAgentAttendanceRow = plan.attendancePatch ? { ...openShift, ...plan.attendancePatch } : openShift;
   return { row: updatedRow };
+}
+
+// Lead Generation CRM mirror of
+// src/app/agent/(dashboard)/dashboard/activity-actions.ts's
+// acknowledgeIdleWarningAction - see that file for the full rationale.
+export async function acknowledgeLeadgenIdleWarningAction(input: { reason: string; explanation?: string }): Promise<LeadgenAgentActivityPollResult> {
+  const agent = await requireLeadgenAgent();
+  if (!isIdleAckReason(input.reason)) return { row: null, error: "Select a valid reason." };
+  const explanation = (input.explanation ?? "").trim();
+  if (input.reason === "other" && !explanation) return { row: null, error: "Please describe the reason for the inactivity." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: openShift, error: openShiftError } = await loadOwnOpenShift(supabase, agent.id);
+  if (openShiftError) return { row: null, error: openShiftError.message };
+  if (!openShift) return { row: null, error: "You are not clocked in." };
+  if (!openShift.idle_ack_pending_since) return { row: openShift };
+
+  const nowIso = new Date().toISOString();
+
+  const { data: session, error: sessionFetchError } = await supabase
+    .from("leadgen_agent_idle_sessions")
+    .select("id, idle_start, escalated_at")
+    .eq("attendance_id", openShift.id)
+    .eq("agent_id", agent.id)
+    .is("idle_end", null)
+    .maybeSingle();
+  if (sessionFetchError) return { row: openShift, error: sessionFetchError.message };
+
+  let idleDurationMinutes = 0;
+  if (session) {
+    idleDurationMinutes = Math.max(0, Math.round((new Date(nowIso).getTime() - new Date(session.idle_start as string).getTime()) / 60000));
+    const { error: sessionUpdateError } = await supabase
+      .from("leadgen_agent_idle_sessions")
+      .update({
+        idle_end: nowIso,
+        acknowledged_at: nowIso,
+        acknowledged_reason: input.reason,
+        acknowledged_explanation: input.reason === "other" ? explanation : null,
+        acknowledged_before_escalation: !session.escalated_at,
+      })
+      .eq("id", session.id)
+      .eq("agent_id", agent.id)
+      .is("idle_end", null);
+    if (sessionUpdateError) return { row: openShift, error: sessionUpdateError.message };
+  }
+
+  const attendancePatch = { idle_ack_pending_since: null, idle_since: null, last_activity_at: nowIso };
+  const { error: attendanceError } = await supabase
+    .from("leadgen_agent_attendance")
+    .update(attendancePatch)
+    .eq("id", openShift.id)
+    .eq("agent_id", agent.id)
+    .is("clock_out", null);
+  if (attendanceError) return { row: openShift, error: attendanceError.message };
+
+  if (session) {
+    const agentName = agent.full_name.trim() || agent.email;
+    await notifyAdminsOfIdleAcknowledgment({
+      idleSessionId: session.id as string,
+      agentName,
+      reason: input.reason,
+      explanation: input.reason === "other" ? explanation : null,
+      idleDurationMinutes,
+    });
+  }
+
+  revalidatePath("/leadgen/admin/attendance");
+
+  return { row: { ...openShift, ...attendancePatch } as LeadgenAgentAttendanceRow };
 }
 
 export async function setLeadgenOnCallStatusAction(onCall: boolean): Promise<LeadgenAgentActivityPollResult> {

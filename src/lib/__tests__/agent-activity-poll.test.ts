@@ -5,9 +5,11 @@ import {
   computeAgentActivityPollPlan,
   computeAgentLiveStatus,
   computeBreakDurations,
+  IDLE_ACK_REASONS,
   INACTIVITY_IDLE_MINUTES,
   INACTIVITY_WARNING_MINUTES,
   isBreakSeriouslyOverdue,
+  isIdleAckReason,
   type AgentActivityRow,
 } from "../attendance-pay";
 
@@ -32,6 +34,7 @@ function baseRow(overrides: Partial<AgentActivityRow> = {}): AgentActivityRow {
     last_activity_at: minutesAgoIso(0),
     idle_since: null,
     is_on_call: false,
+    idle_ack_pending_since: null,
     break1_overdue_notified_at: null,
     lunch_overdue_notified_at: null,
     break2_overdue_notified_at: null,
@@ -49,6 +52,8 @@ describe("computeAgentActivityPollPlan - clocked-out and heartbeat basics", () =
       idleStartIso: null,
       notifyIdle: false,
       overdueStagesToNotify: [],
+      idleWarningTransition: "none",
+      idleWarningAtIso: null,
     });
   });
 
@@ -58,59 +63,116 @@ describe("computeAgentActivityPollPlan - clocked-out and heartbeat basics", () =
     expect(plan.attendancePatch).toEqual({ last_activity_at: NOW_ISO });
     expect(plan.idleTransition).toBe("none");
     expect(plan.notifyIdle).toBe(false);
+    expect(plan.idleWarningTransition).toBe("none");
   });
 
   it("does nothing when there is no interaction but the agent isn't inactive long enough yet", () => {
-    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_WARNING_MINUTES) });
+    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_WARNING_MINUTES - 1) });
     const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
     expect(plan.attendancePatch).toBeNull();
     expect(plan.idleTransition).toBe("none");
+    expect(plan.idleWarningTransition).toBe("none");
   });
 });
 
-describe("computeAgentActivityPollPlan - the 45-minute idle transition", () => {
-  it("marks the agent Idle, opens an idle session, and asks the caller to notify admins at exactly 45 minutes", () => {
-    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_IDLE_MINUTES) });
+describe("computeAgentActivityPollPlan - the 30-minute idle acknowledgment warning", () => {
+  it("opens a pending acknowledgment at exactly 30 minutes, without touching idle_since", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_WARNING_MINUTES) });
     const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
-    expect(plan.idleTransition).toBe("start");
-    expect(plan.idleStartIso).toBe(NOW_ISO);
-    expect(plan.notifyIdle).toBe(true);
-    expect(plan.attendancePatch).toEqual({ idle_since: NOW_ISO });
-  });
-
-  it("never re-triggers the idle transition once idle_since is already set", () => {
-    const row = baseRow({ last_activity_at: minutesAgoIso(90), idle_since: minutesAgoIso(45) });
-    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("open");
+    expect(plan.idleWarningAtIso).toBe(NOW_ISO);
+    expect(plan.attendancePatch).toEqual({ idle_ack_pending_since: NOW_ISO });
     expect(plan.idleTransition).toBe("none");
     expect(plan.notifyIdle).toBe(false);
   });
 
-  it("clears idle_since and ends the idle session the moment real activity is seen again", () => {
-    const row = baseRow({ last_activity_at: minutesAgoIso(60), idle_since: minutesAgoIso(15) });
-    const plan = computeAgentActivityPollPlan(row, { hadInteraction: true, nowIso: NOW_ISO });
-    expect(plan.idleTransition).toBe("end");
-    expect(plan.attendancePatch).toEqual({ last_activity_at: NOW_ISO, idle_since: null });
-  });
-
-  it("never starts an inactivity clock while the agent is on an approved break", () => {
-    const row = baseRow({
-      last_activity_at: minutesAgoIso(90),
-      break1_start: minutesAgoIso(10),
-    });
+  it("never re-opens a warning that's already pending", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(35), idle_ack_pending_since: minutesAgoIso(5) });
     const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
-    expect(plan.idleTransition).toBe("none");
+    expect(plan.idleWarningTransition).toBe("none");
+    expect(plan.attendancePatch).toBeNull();
   });
 
-  it("never starts an inactivity clock while the agent is on lunch", () => {
+  it("does NOT clear a pending acknowledgment just because the agent moved the mouse again", () => {
+    // Only an explicit acknowledgment (or an exempted state, see below) may
+    // ever clear idle_ack_pending_since - mere interaction is not enough.
+    const row = baseRow({ last_activity_at: minutesAgoIso(35), idle_ack_pending_since: minutesAgoIso(5) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: true, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("none");
+    expect(plan.attendancePatch).toEqual({ last_activity_at: NOW_ISO });
+  });
+
+  it("never opens a warning while the agent is on an approved break", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(90), break1_start: minutesAgoIso(10) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("none");
+  });
+
+  it("never opens a warning while the agent is on lunch", () => {
     const row = baseRow({ last_activity_at: minutesAgoIso(90), lunch_start: minutesAgoIso(5) });
     const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("none");
+  });
+
+  it("never opens a warning while the agent is marked on a call", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(90), is_on_call: true });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("none");
+  });
+
+  it("resolves an already-pending warning (no acknowledgment required) the moment the agent enters an exempted state", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(35), idle_ack_pending_since: minutesAgoIso(5), break1_start: minutesAgoIso(1) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("resolve_exempted");
+    expect(plan.idleWarningAtIso).toBe(NOW_ISO);
+    expect(plan.attendancePatch).toEqual({ idle_ack_pending_since: null });
+  });
+
+  it("resolves an already-pending warning when the agent goes on a call", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(35), idle_ack_pending_since: minutesAgoIso(5), is_on_call: true });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("resolve_exempted");
+  });
+});
+
+describe("computeAgentActivityPollPlan - the 45-minute idle escalation", () => {
+  it("marks the agent Idle, escalates the already-open warning, and asks the caller to notify admins at exactly 45 minutes", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_IDLE_MINUTES), idle_ack_pending_since: minutesAgoIso(INACTIVITY_IDLE_MINUTES - INACTIVITY_WARNING_MINUTES) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleTransition).toBe("start");
+    expect(plan.idleStartIso).toBe(NOW_ISO);
+    expect(plan.notifyIdle).toBe(true);
+    expect(plan.idleWarningTransition).toBe("escalate");
+    expect(plan.idleWarningAtIso).toBe(NOW_ISO);
+    expect(plan.attendancePatch).toEqual({ idle_since: NOW_ISO });
+  });
+
+  it("never escalates to 45 minutes if the 30-minute warning was never opened (e.g. it was already resolved)", () => {
+    // idle_ack_pending_since is null here even though inactivity is past
+    // 45 minutes - computeAgentActivityPollPlan can only ever reach this
+    // via the "open" branch first on a real poll cadence, but this proves
+    // escalation itself doesn't fire without that precondition.
+    const row = baseRow({ last_activity_at: minutesAgoIso(INACTIVITY_IDLE_MINUTES) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    // Falls into the "open" branch instead, since nothing is pending yet.
+    expect(plan.idleWarningTransition).toBe("open");
     expect(plan.idleTransition).toBe("none");
   });
 
-  it("never starts an inactivity clock while the agent is marked on a call", () => {
-    const row = baseRow({ last_activity_at: minutesAgoIso(90), is_on_call: true });
+  it("never re-triggers the idle transition once idle_since is already set", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(90), idle_since: minutesAgoIso(45), idle_ack_pending_since: minutesAgoIso(60) });
     const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
     expect(plan.idleTransition).toBe("none");
+    expect(plan.notifyIdle).toBe(false);
+    expect(plan.idleWarningTransition).toBe("none");
+  });
+
+  it("clears idle_since the moment real activity is seen again, but leaves the pending acknowledgment (and its session) outstanding", () => {
+    const row = baseRow({ last_activity_at: minutesAgoIso(60), idle_since: minutesAgoIso(15), idle_ack_pending_since: minutesAgoIso(30) });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: true, nowIso: NOW_ISO });
+    expect(plan.idleTransition).toBe("end");
+    expect(plan.idleWarningTransition).toBe("none");
+    expect(plan.attendancePatch).toEqual({ last_activity_at: NOW_ISO, idle_since: null });
   });
 });
 
@@ -179,5 +241,20 @@ describe("agentInactivityMinutes / isBreakSeriouslyOverdue", () => {
     const atBoundary = computeBreakDurations(baseRow({ break1_start: minutesAgoIso(15 + BREAK_OVERDUE_GRACE_MINUTES) }), NOW_ISO).break1;
     expect(isBreakSeriouslyOverdue(justUnder)).toBe(false);
     expect(isBreakSeriouslyOverdue(atBoundary)).toBe(true);
+  });
+});
+
+describe("idle acknowledgment reasons", () => {
+  it("recognizes exactly the seven fixed reasons, including 'other'", () => {
+    expect(IDLE_ACK_REASONS).toHaveLength(7);
+    expect(IDLE_ACK_REASONS).toContain("other");
+    for (const reason of IDLE_ACK_REASONS) {
+      expect(isIdleAckReason(reason)).toBe(true);
+    }
+  });
+
+  it("rejects anything outside the fixed list", () => {
+    expect(isIdleAckReason("made_up_reason")).toBe(false);
+    expect(isIdleAckReason("")).toBe(false);
   });
 });

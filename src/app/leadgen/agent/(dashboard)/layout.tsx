@@ -7,7 +7,7 @@ import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadLeadgenChatUnreadCount } from "@/lib/leadgen-chat-data";
 import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
 import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
-import { pollLeadgenAgentActivityAction } from "./leadgen-activity-actions";
+import { pollLeadgenAgentActivityAction, acknowledgeLeadgenIdleWarningAction } from "./leadgen-activity-actions";
 import {
   LayoutDashboard,
   Users,
@@ -107,6 +107,7 @@ export default async function LeadgenAgentLayout({ children }: { children: React
       <AgentActivityMonitor
         initialRow={(openShift as LeadgenAgentAttendanceRow | null)}
         pollAction={pollLeadgenAgentActivityAction}
+        acknowledgeIdleAction={acknowledgeLeadgenIdleWarningAction}
       />
     </div>
   );

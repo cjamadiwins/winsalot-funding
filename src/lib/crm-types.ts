@@ -53,6 +53,28 @@ export type AgentAttendanceRow = {
   break1_overdue_notified_at: string | null;
   lunch_overdue_notified_at: string | null;
   break2_overdue_notified_at: string | null;
+  // Set while the 30-minute idle acknowledgment is outstanding (migration
+  // 20260919200000_agent_idle_acknowledgment.sql).
+  idle_ack_pending_since: string | null;
+};
+
+// One row per idle episode (public.agent_idle_sessions) - see that
+// table's comment and src/lib/attendance-pay.ts for the full lifecycle.
+// Admin's idle acknowledgment history (AdminAttendanceClient.tsx) only
+// ever reads rows where acknowledged_at is set.
+export type AgentIdleSessionRow = {
+  id: string;
+  created_at: string;
+  attendance_id: string;
+  agent_id: string;
+  idle_start: string;
+  idle_end: string | null;
+  idle_duration_minutes: number | null;
+  acknowledged_at: string | null;
+  acknowledged_reason: string | null;
+  acknowledged_explanation: string | null;
+  escalated_at: string | null;
+  acknowledged_before_escalation: boolean | null;
 };
 
 // ---------------------------------------------------------------------

@@ -24,6 +24,7 @@ export type AgentActivityRowLike = {
   last_activity_at: string;
   idle_since: string | null;
   is_on_call: boolean;
+  idle_ack_pending_since: string | null;
   break1_start: string | null;
   break1_end: string | null;
   lunch_start: string | null;
@@ -32,12 +33,15 @@ export type AgentActivityRowLike = {
   break2_end: string | null;
 };
 
+export type AcknowledgeIdleInput = { reason: string; explanation?: string };
+
 // Drives the poll loop against whichever CRM's server action is passed
 // in - the hook itself has no idea which CRM it's running in, only the
 // shared row shape both attendance tables satisfy.
 export function useAgentActivityMonitor<T extends AgentActivityRowLike>(params: {
   initialRow: T | null;
   pollAction: (hadInteraction: boolean) => Promise<{ row: T | null; error?: string }>;
+  acknowledgeIdleAction: (input: AcknowledgeIdleInput) => Promise<{ row: T | null; error?: string }>;
 }) {
   const [row, setRow] = useState<T | null>(params.initialRow);
   const interactedRef = useRef(false);
@@ -107,5 +111,19 @@ export function useAgentActivityMonitor<T extends AgentActivityRowLike>(params: 
     void poll(true);
   }, [poll]);
 
-  return { row, acknowledgeStillWorking };
+  // The 30-minute idle acknowledgment modal's own submit - unlike every
+  // other write here, this is never driven by the interval, only by an
+  // explicit form submission, and its result (success or a validation
+  // error) needs to reach the caller directly rather than being silently
+  // swallowed the way a routine poll's error is.
+  const acknowledgeIdleWarning = useCallback(
+    async (input: AcknowledgeIdleInput) => {
+      const result = await params.acknowledgeIdleAction(input);
+      if (!result.error && result.row) setRow(result.row);
+      return result;
+    },
+    [params]
+  );
+
+  return { row, acknowledgeStillWorking, acknowledgeIdleWarning };
 }
