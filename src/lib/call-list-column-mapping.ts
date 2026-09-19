@@ -195,10 +195,10 @@ export type MappedLeadRow = {
 // column, every other real header (unmapped, or a duplicate header name
 // the admin didn't pick) is preserved verbatim in extra_fields so nothing
 // from the original file is ever lost.
-export function applyColumnMapping(headers: string[], row: string[], mapping: Partial<Record<CallListTargetField, string>>): MappedLeadRow {
+export function applyColumnMapping(headers: string[], row: string[], mapping: Partial<Record<CallListTargetField, string | null>>): MappedLeadRow {
   const valueByHeader = new Map(headers.map((header, i) => [header, row[i] ?? ""]));
 
-  function resolve(headerRef: string | undefined): string {
+  function resolve(headerRef: string | null | undefined): string {
     if (!headerRef) return "";
     if (headerRef.startsWith(COMBINE_PREFIX)) {
       const [first, last] = headerRef.slice(COMBINE_PREFIX.length).split("|");
