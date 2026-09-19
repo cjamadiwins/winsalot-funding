@@ -1,7 +1,7 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import UploadSegmentClient from "@/components/crm-call-list/UploadSegmentClient";
-import { uploadSegmentAction } from "../actions";
+import { previewUploadFileAction, uploadSegmentAction } from "../actions";
 
 export default async function NewLeadgenCallListSegmentPage() {
   await requireLeadgenAdmin();
@@ -38,6 +38,7 @@ export default async function NewLeadgenCallListSegmentPage() {
           typeOptions={typeOptions}
           typeFieldLabel="Campaign"
           typeFieldName="leadgen_campaign_id"
+          previewAction={previewUploadFileAction}
           uploadAction={uploadSegmentAction}
         />
       </div>

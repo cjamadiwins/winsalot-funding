@@ -197,15 +197,32 @@ an Interested/Qualified lead can optionally be promoted into the real pipeline.*
 `supabase/migrations/20260919150000_call_list_segments_upload_workflow.sql` for the schema and
 its header comment for the full design rationale.
 
-- **Upload**: Admin enters a segment name, campaign/service, industry, and territory, then
-  uploads a `.csv` or `.xlsx` file (`src/lib/call-list-file-parser.ts`, using the `xlsx` package
-  for spreadsheets and the existing `parseCsvRows` for CSV). Column headers are auto-guessed
+- **Upload** (`src/components/crm-call-list/UploadSegmentClient.tsx`, a two-step wizard): Admin
+  enters a segment name (genuinely blank until a file is picked - see below - never a "e.g. ..."
+  example placeholder), campaign/service, industry, and territory, then picks a `.csv` or
+  `.xlsx` file and clicks **Continue**. `previewUploadFileAction` parses the file
+  (`src/lib/call-list-file-parser.ts`, the `xlsx` package for spreadsheets, the existing
+  `parseCsvRows` for CSV) and returns its headers plus a best-effort guessed mapping
   (`src/lib/call-list-column-mapping.ts`) against a fixed field set (business name, contact
-  name, phone, email, website, city, province, industry, notes); anything unmapped is preserved
-  verbatim per-row in a `extra_fields` JSON blob rather than discarded, so an unexpected
-  LeadSwift column is never lost. The segment is created as **Draft** and every parsed row lands
-  in the new `call_list_leads` staging table — nothing touches `crm_opportunities`/
-  `leadgen_leads` at this point.
+  name, phone, email, website, city, province, industry, notes) - nothing is written to the
+  database yet. The guesser's synonym lists are deliberately broad (Company/Organisation/
+  Business/plain "Name" for business name, Business Phone/Contact Phone for phone, URL for
+  website, State for province, Category for industry, etc.) and it also detects a split
+  First Name/Last Name pair and offers a synthesized "combined" option for contact name.
+  Admin then sees a **Map Columns** step - always shown, never skipped - to confirm or correct
+  every field (Business Name is the only one required; anything left unmapped, or any column
+  not used at all, is still preserved verbatim per-row in `extra_fields` so nothing from the
+  file is ever lost). Only on confirming there does `uploadSegmentAction` actually create the
+  segment (as **Draft**) and insert every parsed row into the new `call_list_leads` staging
+  table - nothing touches `crm_opportunities`/`leadgen_leads` at this point. An uncertain or
+  wrong guess is corrected here, never a rejected upload.
+- **Segment Name suggestion** (`src/lib/call-list-filename.ts`): the moment a file is chosen
+  (before any upload), the Segment Name field - blank until then - is pre-filled from the
+  file's own name, stripped of its extension, LeadSwift's own boilerplate/id/hash tokens (e.g.
+  `campaign-124996-search-920856-website-designer_winnipeg-mb-canada_e488c1.csv` becomes
+  "Website Designer – Winnipeg MB"), and never overwrites a name the Admin has already typed.
+  Always fully editable, and never itself creates anything - only clicking through both wizard
+  steps does.
 - **Draft editing** (`src/components/crm-call-list/SpreadsheetEditorClient.tsx`, Admin-only):
   inline cell editing (autosaves on blur), add/delete rows individually or in bulk, search,
   sort, and dynamically-rendered columns for anything in `extra_fields`. A duplicate/DNC check
