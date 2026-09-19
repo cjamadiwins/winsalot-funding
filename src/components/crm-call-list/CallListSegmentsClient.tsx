@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
-import type { CallListSegmentRow } from "@/lib/call-list-types";
+import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES, type CallListSegmentRow } from "@/lib/call-list-types";
 
 // Shared between the Growth CRM and Lead Generation CRM Call List
 // Segments list pages - both pass the same row shape so the table stays
@@ -12,13 +12,6 @@ export type CallListSegmentRowView = {
   serviceLabel: string;
   agentNames: string[];
   leadCount: number;
-};
-
-const STATUS_STYLES: Record<CallListSegmentRow["status"], string> = {
-  draft: "bg-slate-100 text-slate-600",
-  active: "bg-emerald-50 text-emerald-700",
-  completed: "bg-sky-50 text-sky-700",
-  archived: "bg-slate-100 text-slate-500",
 };
 
 export default function CallListSegmentsClient({ basePath, rows }: { basePath: string; rows: CallListSegmentRowView[] }) {
@@ -61,7 +54,7 @@ export default function CallListSegmentsClient({ basePath, rows }: { basePath: s
               </td>
               <td className="px-3 py-2.5 text-slate-700">{agentNames.length > 0 ? agentNames.join(", ") : "Unassigned"}</td>
               <td className="px-3 py-2.5">
-                <StatusBadge label={segment.status} className={STATUS_STYLES[segment.status]} />
+                <StatusBadge label={CALL_LIST_SEGMENT_STATUS_LABELS[segment.status]} className={CALL_LIST_SEGMENT_STATUS_STYLES[segment.status]} />
               </td>
               <td className="px-3 py-2.5 text-slate-600">{new Date(segment.created_at).toLocaleDateString()}</td>
             </tr>

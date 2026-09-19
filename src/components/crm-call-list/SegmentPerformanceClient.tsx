@@ -9,7 +9,7 @@ import DeployPanelClient from "./DeployPanelClient";
 import RemovedRowsPanel from "./RemovedRowsPanel";
 import ManageColumnsPopover from "./ManageColumnsPopover";
 import { KNOWN_COLUMNS, extraFieldColumnKey, isColumnHidden } from "@/lib/call-list-columns";
-import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
+import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES, type CallListLeadRow, type CallListSegmentRow } from "@/lib/call-list-types";
 
 export type SegmentCallLogView = {
   id: string;
@@ -122,13 +122,6 @@ export default function SegmentPerformanceClient({
     });
   }
 
-  const STATUS_STYLES: Record<CallListSegmentRow["status"], string> = {
-    draft: "bg-slate-100 text-slate-600",
-    active: "bg-emerald-50 text-emerald-700",
-    completed: "bg-sky-50 text-sky-700",
-    archived: "bg-slate-100 text-slate-500",
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -137,7 +130,7 @@ export default function SegmentPerformanceClient({
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold text-slate-900">{segment.name}</h1>
-          <StatusBadge label={segment.status} className={STATUS_STYLES[segment.status]} />
+          <StatusBadge label={CALL_LIST_SEGMENT_STATUS_LABELS[segment.status]} className={CALL_LIST_SEGMENT_STATUS_STYLES[segment.status]} />
         </div>
         <p className="mt-1 text-sm text-slate-500">
           {serviceLabel}
