@@ -1,9 +1,24 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getSegment, getSegmentAgentIds, listSyncRuns } from "@/lib/call-list-segments";
-import SegmentDetailClient from "@/components/crm-call-list/SegmentDetailClient";
-import { syncSegmentNowAction, updateSegmentAgentsAction, disconnectSegmentAction, reactivateSegmentAction } from "../actions";
+import { getSegment, getSegmentAgentIds } from "@/lib/call-list-segments";
+import { listSegmentLeads } from "@/lib/call-list-leads";
+import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
+import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
+import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
+import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/crm-call-list/SegmentPerformanceClient";
+import {
+  addSegmentLeadAction,
+  deleteDraftSegmentAction,
+  deleteSegmentLeadsAction,
+  deploySegmentAction,
+  promoteSegmentLeadAction,
+  recheckDuplicatesAction,
+  updateSegmentLeadAction,
+  updateSegmentStatusAction,
+} from "../actions";
 
 const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   lead_generation: "Lead Generation",
@@ -11,114 +26,105 @@ const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   both_services: "Lead Gen + Financing",
 };
 
-const OPEN_STAGES = ["New Prospect", "Contacted", "Interested", "Consultation Booked", "Proposal or Application Sent", "Follow-Up Required"];
-
-export default async function CallListSegmentDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ agent?: string; status?: string; from?: string; to?: string }>;
-}) {
+export default async function CallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireCrmAdmin();
   const { id } = await params;
-  const filters = await searchParams;
 
   const segment = await getSegment(id);
   if (!segment || segment.crm !== "growth") notFound();
 
   const admin = getSupabaseAdmin();
+  const serviceLabel = segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—";
 
-  let leadsQuery = admin.from("crm_opportunities").select("*").eq("call_list_segment_id", id);
-  if (filters.agent) leadsQuery = leadsQuery.eq("assigned_agent_id", filters.agent);
-  if (filters.status) leadsQuery = leadsQuery.eq("stage", filters.status);
-  if (filters.from) leadsQuery = leadsQuery.gte("created_at", filters.from);
-  if (filters.to) leadsQuery = leadsQuery.lte("created_at", filters.to);
+  if (segment.status === "draft") {
+    const leads = await listSegmentLeads(segment.id);
+    const { data: agentsResult } = await admin.from("crm_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name");
+    const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
 
-  const [
-    { data: filteredLeads },
-    { count: totalLeads },
-    { count: openLeads },
-    { count: callsMade },
-    { count: interestedLeads },
-    { count: callbacksDue },
-    { count: appointmentsBooked },
-    { data: activities },
-    agentIds,
-    syncRuns,
-    agentsResult,
-  ] = await Promise.all([
-    leadsQuery.order("created_at", { ascending: false }),
-    admin.from("crm_opportunities").select("id", { count: "exact", head: true }).eq("call_list_segment_id", id),
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Link href="/admin/crm/call-list-segments" className="inline-flex items-center gap-1 text-[12.5px] text-slate-500 hover:text-slate-700">
+              <ArrowLeft className="h-3.5 w-3.5" /> All segments
+            </Link>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">{segment.name}</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Draft · {serviceLabel} · {leads.length} row(s) from {segment.source_file_name}
+            </p>
+          </div>
+          <DeleteDraftButton segmentId={segment.id} listHref="/admin/crm/call-list-segments" deleteAction={deleteDraftSegmentAction} />
+        </div>
+
+        <SpreadsheetEditorClient
+          segmentId={segment.id}
+          initialLeads={leads}
+          updateLeadAction={updateSegmentLeadAction}
+          addLeadAction={addSegmentLeadAction}
+          deleteLeadsAction={deleteSegmentLeadsAction}
+          recheckDuplicatesAction={recheckDuplicatesAction}
+        />
+
+        <DeployPanelClient segmentId={segment.id} agents={agents} deployAction={deploySegmentAction} />
+      </div>
+    );
+  }
+
+  const [leads, agentIds, agentsResult, callLogsResult] = await Promise.all([
+    listSegmentLeads(segment.id),
+    getSegmentAgentIds(segment.id),
+    admin.from("crm_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
     admin
-      .from("crm_opportunities")
-      .select("id", { count: "exact", head: true })
-      .eq("call_list_segment_id", id)
-      .eq("archived", false)
-      .in("stage", OPEN_STAGES),
-    admin.from("crm_activities").select("id", { count: "exact", head: true }).eq("call_list_segment_id", id).eq("activity_type", "call"),
-    admin.from("crm_opportunities").select("id", { count: "exact", head: true }).eq("call_list_segment_id", id).eq("stage", "Interested"),
-    admin
-      .from("crm_followups")
-      .select("id", { count: "exact", head: true })
-      .eq("call_list_segment_id", id)
-      .eq("status", "pending")
-      .lte("scheduled_at", new Date().toISOString()),
-    admin.from("crm_opportunities").select("id", { count: "exact", head: true }).eq("call_list_segment_id", id).not("consultation_date", "is", null),
-    admin
-      .from("crm_activities")
-      .select("*")
-      .eq("call_list_segment_id", id)
-      .order("occurred_at", { ascending: false })
-      .limit(100),
-    getSegmentAgentIds(id),
-    listSyncRuns(id),
-    admin.from("crm_users").select("id, full_name").eq("role", "agent").order("full_name"),
+      .from("crm_call_logs")
+      .select("id, created_at, agent_id, business_name, contact_name, outcome, notes, callback_at, appointment_at")
+      .eq("call_list_segment_id", segment.id)
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const agents = ((agentsResult.data ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
 
+  const callLogs: SegmentCallLogView[] = ((callLogsResult.data ?? []) as {
+    id: string;
+    created_at: string;
+    agent_id: string;
+    business_name: string;
+    contact_name: string | null;
+    outcome: string;
+    notes: string;
+    callback_at: string | null;
+    appointment_at: string | null;
+  }[]).map((log) => ({
+    ...log,
+    agent_name: agentNameById.get(log.agent_id) ?? "Unknown agent",
+  }));
+
+  const nowIso = new Date().toISOString();
+  const stats = {
+    totalLeads: leads.length,
+    leadsRemaining: leads.filter((l) => !l.last_outcome).length,
+    callsMade: callLogs.length,
+    interested: leads.filter((l) => l.last_outcome === "Interested").length,
+    callbacksDue: leads.filter((l) => l.callback_at && l.callback_at <= nowIso).length,
+    appointmentsBooked: leads.filter((l) => l.last_outcome === "Appointment Booked").length,
+    promoted: leads.filter((l) => l.promoted_opportunity_id).length,
+  };
+
   return (
-    <div>
-      <SegmentDetailClient
-        basePath="/admin/crm/call-list-segments"
-        segment={segment}
-        serviceLabel={OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] ?? "—"}
-        statusOptions={["New Prospect", "Contacted", "Interested", "Consultation Booked", "Proposal or Application Sent", "Client Won", "Follow-Up Required", "Not Interested"]}
-        stats={{
-          totalLeads: totalLeads ?? 0,
-          leadsRemaining: openLeads ?? 0,
-          callsMade: callsMade ?? 0,
-          interestedLeads: interestedLeads ?? 0,
-          callbacksDue: callbacksDue ?? 0,
-          appointmentsBooked: appointmentsBooked ?? 0,
-        }}
-        leads={(filteredLeads ?? []).map((l) => ({
-          id: l.id,
-          businessName: l.business_name,
-          contactName: l.contact_name,
-          phone: l.phone,
-          status: l.stage,
-          assignedAgentName: l.assigned_agent_id ? agentNameById.get(l.assigned_agent_id) ?? "Unknown" : "Unassigned",
-          archived: l.archived,
-          createdAt: l.created_at,
-        }))}
-        activities={(activities ?? []).map((a) => ({
-          id: a.id,
-          type: a.activity_type,
-          notes: a.notes,
-          occurredAt: a.occurred_at,
-        }))}
-        allAgents={agents}
-        assignedAgentIds={agentIds}
-        syncRuns={syncRuns}
-        filters={{ agent: filters.agent ?? "", status: filters.status ?? "", from: filters.from ?? "", to: filters.to ?? "" }}
-        syncNowAction={syncSegmentNowAction}
-        updateAgentsAction={updateSegmentAgentsAction}
-        disconnectAction={disconnectSegmentAction}
-        reactivateAction={reactivateSegmentAction}
-      />
-    </div>
+    <SegmentPerformanceClient
+      basePath="/admin/crm/call-list-segments"
+      segment={segment}
+      serviceLabel={serviceLabel}
+      leads={leads}
+      agentNameById={agentNameById}
+      allAgents={agents}
+      assignedAgentIds={agentIds}
+      callLogs={callLogs}
+      stats={stats}
+      deployAction={deploySegmentAction}
+      updateStatusAction={updateSegmentStatusAction}
+      promoteAction={promoteSegmentLeadAction}
+    />
   );
 }

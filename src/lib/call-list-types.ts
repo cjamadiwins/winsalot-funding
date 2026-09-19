@@ -2,33 +2,7 @@ import type { CallListTargetField } from "./call-list-column-mapping";
 
 export type CallListCrm = "growth" | "lead_generation";
 
-export type CallListGoogleConnectionRow = {
-  id: string;
-  created_at: string;
-  updated_at: string;
-  crm: CallListCrm;
-  connected_by: string;
-  google_email: string;
-  access_token_encrypted: string;
-  refresh_token_encrypted: string;
-  token_expires_at: string;
-  scope: string;
-  status: "active" | "revoked" | "error";
-  last_error: string | null;
-  revoked_at: string | null;
-  revoked_by: string | null;
-};
-
-export type CallListSyncError = { row: number; message: string };
-
-export type CallListSyncSummary = {
-  newLeads: number;
-  updated: number;
-  duplicatesSkipped: number;
-  dncSkipped: number;
-  archived: number;
-  errors: CallListSyncError[];
-};
+export type CallListSegmentStatus = "draft" | "active" | "completed" | "archived";
 
 export type CallListSegmentRow = {
   id: string;
@@ -36,36 +10,47 @@ export type CallListSegmentRow = {
   updated_at: string;
   crm: CallListCrm;
   name: string;
-  google_connection_id: string;
-  spreadsheet_id: string;
-  spreadsheet_url: string;
-  sheet_tab_name: string;
-  sheet_tab_gid: number;
-  column_mapping: Partial<Record<CallListTargetField, string>>;
+  campaign_name: string | null;
+  industry: string | null;
+  territory: string | null;
+  source_file_name: string | null;
+  source_file_type: "csv" | "xlsx" | null;
+  total_uploaded_rows: number;
   growth_opportunity_type: "lead_generation" | "business_financing" | "both_services" | null;
   leadgen_campaign_id: string | null;
-  status: "active" | "paused" | "error" | "disconnected";
-  last_synced_at: string | null;
-  last_sync_status: "success" | "partial" | "error" | null;
-  last_sync_summary: CallListSyncSummary | null;
+  status: CallListSegmentStatus;
+  deployed_at: string | null;
+  deployed_by: string | null;
   created_by: string;
 };
 
-export type CallListSyncRunRow = {
+export type CallListLeadRow = {
   id: string;
+  created_at: string;
+  updated_at: string;
   segment_id: string;
-  started_at: string;
-  finished_at: string | null;
-  status: "running" | "success" | "partial" | "error";
-  triggered_by: string | null;
-  new_leads_count: number;
-  updated_count: number;
-  duplicates_skipped_count: number;
-  dnc_skipped_count: number;
-  archived_count: number;
-  error_count: number;
-  errors: CallListSyncError[];
-  error_message: string | null;
+  source_row_number: number | null;
+  business_name: string;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  city: string | null;
+  province: string | null;
+  industry: string | null;
+  notes: string | null;
+  extra_fields: Record<string, string>;
+  is_possible_duplicate: boolean;
+  duplicate_reason: string | null;
+  dnc_flag: boolean;
+  last_outcome: string | null;
+  last_contacted_at: string | null;
+  callback_at: string | null;
+  assigned_agent_id: string | null;
+  promoted_opportunity_id: string | null;
+  promoted_leadgen_lead_id: string | null;
+  promoted_at: string | null;
+  created_by: string | null;
 };
 
 export type CallListSegmentAgentRow = {
@@ -73,3 +58,15 @@ export type CallListSegmentAgentRow = {
   agent_id: string;
   assigned_at: string;
 };
+
+export const CALL_LIST_EDITABLE_FIELDS: CallListTargetField[] = [
+  "business_name",
+  "contact_name",
+  "phone",
+  "email",
+  "website",
+  "city",
+  "province",
+  "industry",
+  "notes",
+];

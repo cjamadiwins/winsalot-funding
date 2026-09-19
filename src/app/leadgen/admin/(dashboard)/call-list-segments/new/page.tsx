@@ -1,58 +1,44 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { listGoogleConnections } from "@/lib/call-list-connections";
-import NewSegmentClient from "@/components/crm-call-list/NewSegmentClient";
-import { createSegmentAction, loadSheetPreviewAction, loadSheetTabsAction } from "../actions";
+import UploadSegmentClient from "@/components/crm-call-list/UploadSegmentClient";
+import { uploadSegmentAction } from "../actions";
 
-export default async function NewCallListSegmentPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ googleConnectionId?: string; googleConnectError?: string }>;
-}) {
+export default async function NewLeadgenCallListSegmentPage() {
   await requireLeadgenAdmin();
-  const { googleConnectionId, googleConnectError } = await searchParams;
 
   const admin = getSupabaseAdmin();
-  const [connections, agentsResult, campaignsResult] = await Promise.all([
-    listGoogleConnections("lead_generation"),
-    admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
-    admin.from("leadgen_campaigns").select("id, name, client_id").eq("status", "active").order("name"),
-  ]);
+  const { data: campaigns } = await admin
+    .from("leadgen_campaigns")
+    .select("id, name, client_id")
+    .eq("status", "active")
+    .order("name");
+  const campaignRows = (campaigns ?? []) as { id: string; name: string; client_id: string }[];
 
-  const agents = ((agentsResult.data ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
-
-  const campaigns = (campaignsResult.data ?? []) as { id: string; name: string; client_id: string }[];
-  const clientIds = [...new Set(campaigns.map((c) => c.client_id))];
+  const clientIds = [...new Set(campaignRows.map((c) => c.client_id))];
   const { data: clients } = clientIds.length
     ? await admin.from("leadgen_clients").select("id, name").in("id", clientIds)
     : { data: [] as { id: string; name: string }[] };
   const clientNameById = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
 
-  const typeOptions = campaigns.map((c) => ({
-    value: c.id,
-    label: `${clientNameById.get(c.client_id) ?? "Unknown Client"} — ${c.name}`,
+  const typeOptions = campaignRows.map((campaign) => ({
+    value: campaign.id,
+    label: `${clientNameById.get(campaign.client_id) ?? "Unknown client"} — ${campaign.name}`,
   }));
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-900">New Call List Segment</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Upload Call List</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Lead Generation CRM · Admin-only. Set up the segment, then connect the Google Sheet tab it will sync from.
+        Lead Generation CRM · Admin-only. Upload a CSV or XLSX export (e.g. from LeadSwift) to create a new Draft
+        segment you can clean up before deploying it to agents.
       </p>
 
       <div className="mt-6">
-        <NewSegmentClient
-          listHref="/leadgen/admin/call-list-segments"
-          connectOAuthHref={`/api/google/oauth/connect?returnTo=${encodeURIComponent("/leadgen/admin/call-list-segments/new")}`}
-          initialConnectionId={googleConnectionId}
-          connectError={googleConnectError}
-          connections={connections.map((c) => ({ id: c.id, googleEmail: c.google_email }))}
-          agents={agents}
+        <UploadSegmentClient
           typeOptions={typeOptions}
           typeFieldLabel="Campaign"
-          loadSheetTabsAction={loadSheetTabsAction}
-          loadSheetPreviewAction={loadSheetPreviewAction}
-          createSegmentAction={createSegmentAction}
+          typeFieldName="leadgen_campaign_id"
+          uploadAction={uploadSegmentAction}
         />
       </div>
     </div>

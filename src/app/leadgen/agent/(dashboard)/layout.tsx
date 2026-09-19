@@ -20,6 +20,7 @@ import {
   Wallet,
   PhoneCall,
   Target,
+  Table2,
 } from "lucide-react";
 import { signOutLeadgenAgentAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -28,6 +29,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/agent", icon: <LayoutDashboard /> },
   { label: "My Leads", href: "/leadgen/agent/leads", icon: <Users /> },
   { label: "My Opportunities", href: "/leadgen/agent/my-opportunities", icon: <Target /> },
+  { label: "My Call Lists", href: "/leadgen/agent/call-list-segments", icon: <Table2 /> },
   { label: "Add Lead", href: "/leadgen/agent/leads/new", icon: <UserPlus /> },
   { label: "Call Log", href: "/leadgen/agent/call-log", icon: <PhoneCall /> },
   { label: "My Appointments", href: "/leadgen/agent/appointments", icon: <CalendarCheck /> },

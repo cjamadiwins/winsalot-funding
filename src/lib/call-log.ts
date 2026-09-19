@@ -5,6 +5,10 @@ export const CALL_LOG_OUTCOMES = [
   "Not Interested",
   "Callback",
   "Do Not Call",
+  // Added for the Call List Segments feature (a Call List lead's working
+  // outcomes) - equally valid from the plain agent Call Log form.
+  "Interested",
+  "Appointment Booked",
 ] as const;
 
 export type CallLogOutcome = (typeof CALL_LOG_OUTCOMES)[number];
@@ -23,6 +27,8 @@ export const CALL_LOG_AUTOMATIC_NOTES: Record<CallLogOutcome, string> = {
   "Not Interested": "Not interested",
   Callback: "Callback requested",
   "Do Not Call": "Requested Do Not Call — added to the Do Not Contact list",
+  Interested: "Interested",
+  "Appointment Booked": "Appointment booked",
 };
 
 export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
@@ -32,6 +38,8 @@ export const CALL_LOG_OUTCOME_STYLES: Record<CallLogOutcome, string> = {
   "Not Interested": "bg-rose-100 text-rose-800",
   Callback: "bg-orange-100 text-orange-800",
   "Do Not Call": "bg-red-100 text-red-800",
+  Interested: "bg-emerald-100 text-emerald-800",
+  "Appointment Booked": "bg-indigo-100 text-indigo-800",
 };
 
 export const GROWTH_CRM_BUSINESS_CLIENT_NAME = "Winsalot Corp." as const;
