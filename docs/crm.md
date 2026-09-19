@@ -216,6 +216,21 @@ its header comment for the full design rationale.
   (`src/lib/call-list-deploy.ts`) — from then on, every agent on that roster can see and work
   every lead in the segment (RLS is segment-level, not per-lead), while everyone else cannot.
   Redeploying later (e.g. to reassign agents) is allowed and just updates the roster.
+- **Agent permission model**: agents can only ever read/work leads in a segment deployed to
+  them - uploading, importing, creating/deploying/reassigning/completing/archiving a segment,
+  and the CSV export, all require `requireCrmAdmin`/`requireLeadgenAdmin` at the Server Action/
+  route level *and* have no agent-writable RLS policy on `call_list_segments`/
+  `call_list_google_connections`-successor tables at all - an agent session cannot do any of
+  these even by calling the database directly. A `call_list_leads` row's imported contact
+  fields are similarly locked down at the database layer: migration
+  `20260919160000_call_list_leads_restrict_agent_field_edits.sql` adds a trigger that rejects
+  any agent-authenticated write to anything other than the call-outcome fields
+  (`last_outcome`/`last_contacted_at`/`callback_at`) - this app's own Server Actions never trip
+  it (they write through the service-role client), so it only ever blocks a direct/bypass
+  write attempt. None of this restricts *reading* - an agent still sees every field (business
+  name, contact name, phone, email, etc.) on their assigned leads, rendered as ordinary
+  selectable text with no clipboard/`user-select` restriction, so copying a value into the
+  existing Call Log or elsewhere in the CRM is never blocked.
 - **Working a list** (agent-facing, `src/components/crm-call-list/CallListWorkingClient.tsx`):
   for each lead, the agent records an outcome (`src/lib/call-log.ts`'s shared
   `CALL_LOG_OUTCOMES` — No Answer, Voicemail, Gatekeeper, Not Interested, Callback, Do Not Call,

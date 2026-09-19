@@ -6,6 +6,16 @@ import { PhoneCall, Rocket } from "lucide-react";
 import { CALL_LOG_OUTCOMES, CALL_LOG_OUTCOME_STYLES, type CallLogOutcome } from "@/lib/call-log";
 import type { CallListLeadRow } from "@/lib/call-list-types";
 
+// Deliberately per-lead, one-at-a-time (no row selection, no "export"/
+// "copy all" affordance, no CSV/bulk endpoint reachable from this view -
+// bulk export and CSV download are Admin-only, see
+// SegmentPerformanceClient's export link) - agents work a list lead by
+// lead. Business name/contact/phone/email are still rendered as plain
+// selectable text (never inputs styled read-only, never any
+// user-select/clipboard restriction) so an agent can freely copy/paste a
+// single field into the existing Call Log or elsewhere in the CRM; only
+// bulk/administrative capabilities are restricted here, never normal
+// per-field copying.
 export default function CallListWorkingClient({
   leads,
   logCallAction,
