@@ -3,10 +3,15 @@
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
 import {
+  activeBreakStage,
+  AGENT_LIVE_STATUS_LABELS,
   attendanceRecordStatus,
   ATTENDANCE_RECORD_STATUS_LABELS,
+  computeAgentLiveStatus,
+  computeBreakDurations,
   computeCountdownState,
   computeShiftPayBreakdown,
+  isBreakSeriouslyOverdue,
   type AttendanceRecordStatus,
 } from "@/lib/attendance-pay";
 import {
@@ -326,17 +331,43 @@ export default function AdminAttendanceClient({
         {openRows.map((row) => {
           const agent = agentById.get(row.agent_id);
           const countdown = computeCountdownState(row, now);
+          const liveStatus = computeAgentLiveStatus(row, now);
+          const activeStage = activeBreakStage(row);
+          const seriouslyOverdue = activeStage ? isBreakSeriouslyOverdue(computeBreakDurations(row, new Date(now).toISOString())[activeStage]) : false;
           return (
             <div
               key={row.id}
-              className={`rounded-xl border p-4 ${countdown?.isOverdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-[var(--crm-surface)]"}`}
+              className={`rounded-xl border p-4 ${
+                seriouslyOverdue || liveStatus === "idle"
+                  ? "border-rose-300 bg-rose-50"
+                  : countdown?.isOverdue
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200 bg-[var(--crm-surface)]"
+              }`}
             >
-              <div className="font-medium text-slate-900">{agent?.full_name || agent?.email || "Unknown"}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium text-slate-900">{agent?.full_name || agent?.email || "Unknown"}</div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    liveStatus === "idle"
+                      ? "bg-rose-100 text-rose-700"
+                      : liveStatus === "on_break" || liveStatus === "on_lunch"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  {AGENT_LIVE_STATUS_LABELS[liveStatus]}
+                </span>
+              </div>
               <div className="mt-1 text-xs text-slate-500">Clocked in {new Date(row.clock_in).toLocaleTimeString()}</div>
+              {row.is_on_call && <div className="mt-1 text-xs font-medium text-sky-700">On a Call</div>}
               {countdown && (
                 <p className={`mt-2 text-sm font-semibold tabular-nums ${countdown.isOverdue ? "text-amber-800" : "text-slate-700"}`}>
                   {countdown.label}
                 </p>
+              )}
+              {seriouslyOverdue && (
+                <p className="mt-1 text-sm font-semibold text-rose-700">Overdue - admin has been notified.</p>
               )}
             </div>
           );

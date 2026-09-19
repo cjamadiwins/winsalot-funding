@@ -5,6 +5,9 @@ import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadLeadgenChatUnreadCount } from "@/lib/leadgen-chat-data";
+import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
+import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
+import { pollLeadgenAgentActivityAction } from "./leadgen-activity-actions";
 import {
   LayoutDashboard,
   Users,
@@ -48,9 +51,17 @@ export default async function LeadgenAgentLayout({ children }: { children: React
   const user = await requireLeadgenAgent();
   const agentDisplayName = user.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, chatUnreadCount] = await Promise.all([
+  const [{ data: notifications }, chatUnreadCount, { data: openShift }] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     loadLeadgenChatUnreadCount(supabase, user.id),
+    supabase
+      .from("leadgen_agent_attendance")
+      .select("*")
+      .eq("agent_id", user.id)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
     item.href === "/leadgen/agent/chat" ? { ...item, badgeCount: chatUnreadCount } : item
@@ -93,6 +104,10 @@ export default async function LeadgenAgentLayout({ children }: { children: React
       >
         {children}
       </CrmShell>
+      <AgentActivityMonitor
+        initialRow={(openShift as LeadgenAgentAttendanceRow | null)}
+        pollAction={pollLeadgenAgentActivityAction}
+      />
     </div>
   );
 }
