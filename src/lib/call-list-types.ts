@@ -4,6 +4,26 @@ export type CallListCrm = "growth" | "lead_generation";
 
 export type CallListSegmentStatus = "draft" | "active" | "completed" | "archived";
 
+// Single source of truth for how a segment's status renders as a badge -
+// shared by the Call List Segments list table (CallListSegmentsClient)
+// and the deployed segment detail view (SegmentPerformanceClient), both
+// CRMs, so the two never drift. Display only - CallListSegmentStatus
+// itself, every status transition, and every `segment.status === "..."`
+// check elsewhere are all untouched.
+export const CALL_LIST_SEGMENT_STATUS_LABELS: Record<CallListSegmentStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  completed: "Completed",
+  archived: "Archived",
+};
+
+export const CALL_LIST_SEGMENT_STATUS_STYLES: Record<CallListSegmentStatus, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  active: "bg-emerald-100 text-emerald-800",
+  completed: "bg-sky-100 text-sky-800",
+  archived: "bg-slate-200 text-slate-600",
+};
+
 export type CallListSegmentRow = {
   id: string;
   created_at: string;
