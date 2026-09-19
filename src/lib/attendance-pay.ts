@@ -438,7 +438,16 @@ function formatMmSs(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-const BREAK_ENDED_MESSAGE = "Your break has ended. Please resume calls.";
+// Stage-specific wording for the Agent Idle & Break Alert System's brief
+// ("Your 15-minute break has ended..." / "Your 30-minute lunch break has
+// ended..."), shown the instant a break/lunch's allowed duration is
+// exceeded - distinct from the *admin* overdue alert, which only fires
+// once the agent is still away BREAK_OVERDUE_GRACE_MINUTES past this.
+function breakEndedMessage(stage: BreakStage): string {
+  return stage === "lunch"
+    ? "Your 30-minute lunch break has ended. Please return to work when ready."
+    : "Your 15-minute break has ended. Please return to work when ready.";
+}
 const CLOCK_OUT_DUE_MESSAGE = "Your shift has ended. Please clock out.";
 
 // The single live countdown to show on the attendance card / admin live
@@ -478,7 +487,7 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
       label: `${stageLabel} exceeded — ${formatMmSs(overSeconds)}`,
       seconds: Math.ceil(overSeconds),
       isOverdue: true,
-      overdueMessage: BREAK_ENDED_MESSAGE,
+      overdueMessage: breakEndedMessage(active),
       isDue: false,
       dueMessage: null,
     };
@@ -546,5 +555,175 @@ export function computeCountdownState(row: AttendanceBreakFields, nowMs: number 
     seconds: Math.ceil(-remainingMs / 1000),
     isOverdue: true,
     overdueMessage: CLOCK_OUT_DUE_MESSAGE,
+  };
+}
+
+// ---------------------------------------------------------------------
+// Agent Idle & Break Alert System (migration
+// 20260919180000_agent_idle_break_alerts.sql). Extends the break-tracking
+// above rather than duplicating it: "on a break/lunch" already comes from
+// activeBreakStage, "excess break time" already comes from
+// computeBreakDurations - the only genuinely new inputs are the
+// heartbeat (last_activity_at), the currently-idle marker (idle_since),
+// and the manual on-a-call flag (is_on_call).
+// ---------------------------------------------------------------------
+
+// "After 30 minutes of inactivity: show the agent a warning." /
+// "After 45 minutes of inactivity: automatically change the agent status
+// to Idle."
+export const INACTIVITY_WARNING_MINUTES = 30;
+export const INACTIVITY_IDLE_MINUTES = 45;
+
+// "If the agent has not returned after 20 minutes" (a 15-minute break) /
+// "...after 35 minutes" (the 30-minute lunch) - both are the stage's own
+// allowed duration plus this same 5-minute grace window.
+export const BREAK_OVERDUE_GRACE_MINUTES = 5;
+
+export type AgentIdleFields = {
+  last_activity_at: string;
+  idle_since: string | null;
+  is_on_call: boolean;
+};
+
+// Minutes since the agent's last recorded heartbeat - meaningless (and
+// never consulted) once idle_since is already set, since at that point
+// the agent is simply "Idle" until the next real interaction clears it.
+export function agentInactivityMinutes(row: AgentIdleFields, nowMs: number = Date.now()): number {
+  return Math.max(0, (nowMs - new Date(row.last_activity_at).getTime()) / 60000);
+}
+
+// The compact, five-value status the brief asks the Admin's live view to
+// show for every agent: "Active / Idle / On Break / On Lunch / Clocked
+// Out." Being on an approved break/lunch always wins over Idle (the
+// inactivity timer is never even running during a break - see the
+// exceptions list); being on a call is intentionally folded into "Active"
+// here (it isn't one of the five listed buckets) - see is_on_call on the
+// row itself for that extra detail where it matters.
+export type AgentLiveStatus = "clocked_out" | "active" | "idle" | "on_break" | "on_lunch";
+
+export const AGENT_LIVE_STATUS_LABELS: Record<AgentLiveStatus, string> = {
+  clocked_out: "Clocked Out",
+  active: "Active",
+  idle: "Idle",
+  on_break: "On Break",
+  on_lunch: "On Lunch",
+};
+
+export function computeAgentLiveStatus(
+  row: AttendanceBreakFields & { idle_since: string | null },
+  nowMs: number = Date.now()
+): AgentLiveStatus {
+  void nowMs;
+  if (row.clock_out) return "clocked_out";
+  const stage = activeBreakStage(row);
+  if (stage === "lunch") return "on_lunch";
+  if (stage) return "on_break";
+  if (row.idle_since) return "idle";
+  return "active";
+}
+
+// True once an active break/lunch has run BREAK_OVERDUE_GRACE_MINUTES
+// past its own allowed duration - "Mark the break as Overdue" - a later,
+// separate threshold than computeCountdownState's own `isOverdue` (which
+// fires immediately at the allowed duration itself, for the agent-facing
+// end-of-break alarm). Only ever meaningful for a `duration` where
+// `isOpen` is true; a completed or never-started break can't be overdue.
+export function isBreakSeriouslyOverdue(duration: BreakDuration): boolean {
+  return duration.isOpen && duration.excessMinutes >= BREAK_OVERDUE_GRACE_MINUTES;
+}
+
+export type AgentActivityRow = AttendanceBreakFields &
+  AgentIdleFields & {
+    break1_overdue_notified_at: string | null;
+    lunch_overdue_notified_at: string | null;
+    break2_overdue_notified_at: string | null;
+  };
+
+// The only columns a poll ever writes back to the attendance row - a
+// narrow, explicit set rather than `keyof AgentActivityRow` so TypeScript
+// never widens unrelated fields (like clock_in) to `string | null` just
+// because they happen to share this same row shape.
+type AgentActivityAttendancePatch = Partial<{
+  last_activity_at: string;
+  idle_since: string | null;
+  break1_overdue_notified_at: string;
+  lunch_overdue_notified_at: string;
+  break2_overdue_notified_at: string;
+}>;
+
+const OVERDUE_NOTIFIED_COLUMN: Record<BreakStage, "break1_overdue_notified_at" | "lunch_overdue_notified_at" | "break2_overdue_notified_at"> = {
+  break1: "break1_overdue_notified_at",
+  lunch: "lunch_overdue_notified_at",
+  break2: "break2_overdue_notified_at",
+};
+
+// One agent-facing poll's worth of work, computed once as a pure
+// function so both CRMs' server actions (which differ only in which
+// Supabase table they read/write) execute the exact same decision logic
+// rather than two hand-maintained copies of it. `attendancePatch` is null
+// when nothing on the row needs to change this poll (the common case -
+// most polls are just a heartbeat with no state transition).
+export type AgentActivityPollPlan = {
+  attendancePatch: AgentActivityAttendancePatch | null;
+  idleTransition: "none" | "start" | "end";
+  idleStartIso: string | null; // set only when idleTransition === "start"
+  notifyIdle: boolean; // true exactly when idleTransition === "start"
+  overdueStagesToNotify: BreakStage[]; // newly-crossed-the-line this poll; caller alerts admins for each
+};
+
+export function computeAgentActivityPollPlan(
+  row: AgentActivityRow,
+  input: { hadInteraction: boolean; nowIso?: string }
+): AgentActivityPollPlan {
+  const noop: AgentActivityPollPlan = {
+    attendancePatch: null,
+    idleTransition: "none",
+    idleStartIso: null,
+    notifyIdle: false,
+    overdueStagesToNotify: [],
+  };
+  if (row.clock_out) return noop; // "Clocked-out agents are not monitored."
+
+  const nowIso = input.nowIso ?? new Date().toISOString();
+  const nowMs = new Date(nowIso).getTime();
+  const activeStage = activeBreakStage(row);
+
+  const attendancePatch: AgentActivityAttendancePatch = {};
+  let idleTransition: AgentActivityPollPlan["idleTransition"] = "none";
+  let idleStartIso: string | null = null;
+
+  if (input.hadInteraction) {
+    attendancePatch.last_activity_at = nowIso;
+    if (row.idle_since) {
+      attendancePatch.idle_since = null;
+      idleTransition = "end";
+    }
+  } else if (!activeStage && !row.is_on_call && !row.idle_since) {
+    // Only the working (not on a break/lunch/call, not already Idle)
+    // case ever starts a fresh inactivity clock - the three explicit
+    // exceptions in the brief.
+    if (agentInactivityMinutes(row, nowMs) >= INACTIVITY_IDLE_MINUTES) {
+      attendancePatch.idle_since = nowIso;
+      idleTransition = "start";
+      idleStartIso = nowIso;
+    }
+  }
+
+  const overdueStagesToNotify: BreakStage[] = [];
+  if (activeStage) {
+    const duration = computeBreakDurations(row, nowIso)[activeStage];
+    const alreadyNotified = row[OVERDUE_NOTIFIED_COLUMN[activeStage]];
+    if (isBreakSeriouslyOverdue(duration) && !alreadyNotified) {
+      overdueStagesToNotify.push(activeStage);
+      attendancePatch[OVERDUE_NOTIFIED_COLUMN[activeStage]] = nowIso;
+    }
+  }
+
+  return {
+    attendancePatch: Object.keys(attendancePatch).length > 0 ? attendancePatch : null,
+    idleTransition,
+    idleStartIso,
+    notifyIdle: idleTransition === "start",
+    overdueStagesToNotify,
   };
 }

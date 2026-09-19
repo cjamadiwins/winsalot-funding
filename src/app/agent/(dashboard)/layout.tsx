@@ -6,6 +6,9 @@ import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
+import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
+import type { AgentAttendanceRow } from "@/lib/crm-types";
+import { pollAgentActivityAction } from "./dashboard/activity-actions";
 import {
   LayoutDashboard,
   Mail,
@@ -55,9 +58,17 @@ export default async function AgentLayout({ children }: { children: ReactNode })
 
   const agentDisplayName = crmUser.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, chatUnreadCount] = await Promise.all([
+  const [{ data: notifications }, chatUnreadCount, { data: openShift }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     loadCrmChatUnreadCount(supabase, crmUser.id),
+    supabase
+      .from("agent_attendance")
+      .select("*")
+      .eq("agent_id", crmUser.id)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const navItems: CrmNavItem[] = NAV_ITEMS.map((item) =>
@@ -102,6 +113,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
       >
         {children}
       </CrmShell>
+      <AgentActivityMonitor initialRow={(openShift as AgentAttendanceRow | null)} pollAction={pollAgentActivityAction} />
     </div>
   );
 }

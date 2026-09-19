@@ -45,6 +45,14 @@ export type AgentAttendanceRow = {
   lunch_end: string | null;
   break2_start: string | null;
   break2_end: string | null;
+  // Agent Idle & Break Alert System (migration
+  // 20260919180000_agent_idle_break_alerts.sql) - see src/lib/attendance-pay.ts.
+  last_activity_at: string;
+  idle_since: string | null;
+  is_on_call: boolean;
+  break1_overdue_notified_at: string | null;
+  lunch_overdue_notified_at: string | null;
+  break2_overdue_notified_at: string | null;
 };
 
 // ---------------------------------------------------------------------

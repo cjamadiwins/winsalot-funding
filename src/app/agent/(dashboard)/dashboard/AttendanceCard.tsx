@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 import {
   activeBreakStage,
   attendanceRecordStatus,
   ATTENDANCE_RECORD_STATUS_LABELS,
-  BREAK_STAGE_LABELS,
   BREAK_STAGE_START_LABELS,
   BREAK_STAGES,
   canClockOut,
@@ -34,6 +33,7 @@ import {
   endBreak2Action,
   type AttendanceActionState,
 } from "./attendance-actions";
+import { setOnCallStatusAction } from "./activity-actions";
 
 function formatElapsed(ms: number) {
   const safeMs = Math.max(ms, 0);
@@ -81,7 +81,7 @@ function BreakControl({ stage, openShift, now }: { stage: BreakStage; openShift:
             disabled={endPending}
             className="rounded-full bg-amber-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {endPending ? "Ending..." : `End ${BREAK_STAGE_LABELS[stage]}`}
+            {endPending ? "Ending..." : "Back from Break"}
           </button>
         </form>
       ) : (
@@ -96,6 +96,46 @@ function BreakControl({ stage, openShift, now }: { stage: BreakStage; openShift:
         </form>
       )}
       {completed && !active && <span className="text-xs text-[var(--color-text-muted)]">✓ used</span>}
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
+// "Actively marked as being on a business call" - one of the exceptions
+// the inactivity timer must respect. Disabled during an active break/
+// lunch so an agent can't be in two mutually exclusive states at once.
+function OnCallToggle({ openShift }: { openShift: AgentAttendanceRow }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  // The prop itself is the source of truth (setOnCallStatusAction calls
+  // refresh() on success, which re-fetches this row from the server) -
+  // no local mirrored state to keep in sync, so there's nothing to reset
+  // in an effect when it changes underneath this component.
+  const onCall = openShift.is_on_call;
+  const disabled = activeBreakStage(openShift) !== null;
+
+  function toggle() {
+    startTransition(async () => {
+      const result = await setOnCallStatusAction(!onCall);
+      setError(result.error ?? null);
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={isPending || disabled}
+        title={disabled ? "End your current break before changing call status." : undefined}
+        className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          onCall
+            ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+            : "border-[var(--color-border)] text-[var(--color-ink-strong)] hover:bg-[var(--crm-surface-2)]"
+        }`}
+      >
+        {isPending ? "Updating..." : onCall ? "On a Call — End Call" : "I'm on a Call"}
+      </button>
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );
@@ -260,6 +300,10 @@ export default function AttendanceCard({ openShift }: { openShift: AgentAttendan
               )}
             </div>
           )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <OnCallToggle openShift={openShift} />
+          </div>
 
           <div className="flex flex-wrap gap-3 pt-2">
             {BREAK_STAGES.map((stage) => (
