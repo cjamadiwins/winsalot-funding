@@ -1,6 +1,6 @@
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import UploadSegmentClient from "@/components/crm-call-list/UploadSegmentClient";
-import { uploadSegmentAction } from "../actions";
+import { previewUploadFileAction, uploadSegmentAction } from "../actions";
 
 const OPPORTUNITY_TYPE_OPTIONS = [
   { value: "lead_generation", label: "Lead Generation" },
@@ -24,6 +24,7 @@ export default async function NewCallListSegmentPage() {
           typeOptions={OPPORTUNITY_TYPE_OPTIONS}
           typeFieldLabel="CRM Service"
           typeFieldName="opportunity_type"
+          previewAction={previewUploadFileAction}
           uploadAction={uploadSegmentAction}
         />
       </div>
