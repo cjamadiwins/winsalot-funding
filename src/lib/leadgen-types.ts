@@ -75,6 +75,26 @@ export type LeadgenAgentAttendanceRow = {
   break1_overdue_notified_at: string | null;
   lunch_overdue_notified_at: string | null;
   break2_overdue_notified_at: string | null;
+  // Set while the 30-minute idle acknowledgment is outstanding (migration
+  // 20260919200000_agent_idle_acknowledgment.sql).
+  idle_ack_pending_since: string | null;
+};
+
+// Lead Generation CRM mirror of crm-types.ts's AgentIdleSessionRow - see
+// that file for the full rationale.
+export type LeadgenAgentIdleSessionRow = {
+  id: string;
+  created_at: string;
+  attendance_id: string;
+  agent_id: string;
+  idle_start: string;
+  idle_end: string | null;
+  idle_duration_minutes: number | null;
+  acknowledged_at: string | null;
+  acknowledged_reason: string | null;
+  acknowledged_explanation: string | null;
+  escalated_at: string | null;
+  acknowledged_before_escalation: boolean | null;
 };
 
 export type LeadgenClientRow = {

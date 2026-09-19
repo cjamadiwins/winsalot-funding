@@ -583,7 +583,39 @@ export type AgentIdleFields = {
   last_activity_at: string;
   idle_since: string | null;
   is_on_call: boolean;
+  idle_ack_pending_since: string | null;
 };
+
+// The fixed reason list for the 30-minute idle acknowledgment modal - an
+// agent must pick exactly one to acknowledge, with a required written
+// explanation only when 'other' is picked. Stored as-is in
+// agent_idle_sessions.acknowledged_reason (also enforced by a DB check
+// constraint, so a direct API call can't write anything else).
+export const IDLE_ACK_REASONS = [
+  "working_outside_crm",
+  "business_call",
+  "researching_prospect",
+  "technical_issue",
+  "connectivity_issue",
+  "stepped_away",
+  "other",
+] as const;
+
+export type IdleAckReason = (typeof IDLE_ACK_REASONS)[number];
+
+export const IDLE_ACK_REASON_LABELS: Record<IdleAckReason, string> = {
+  working_outside_crm: "Working on a client/prospect outside the CRM",
+  business_call: "On a business call",
+  researching_prospect: "Researching a prospect",
+  technical_issue: "Technical issue",
+  connectivity_issue: "Internet/connectivity issue",
+  stepped_away: "Stepped away briefly",
+  other: "Other",
+};
+
+export function isIdleAckReason(value: string): value is IdleAckReason {
+  return (IDLE_ACK_REASONS as readonly string[]).includes(value);
+}
 
 // Minutes since the agent's last recorded heartbeat - meaningless (and
 // never consulted) once idle_since is already set, since at that point
@@ -646,6 +678,7 @@ export type AgentActivityRow = AttendanceBreakFields &
 type AgentActivityAttendancePatch = Partial<{
   last_activity_at: string;
   idle_since: string | null;
+  idle_ack_pending_since: string | null;
   break1_overdue_notified_at: string;
   lunch_overdue_notified_at: string;
   break2_overdue_notified_at: string;
@@ -667,8 +700,19 @@ export type AgentActivityPollPlan = {
   attendancePatch: AgentActivityAttendancePatch | null;
   idleTransition: "none" | "start" | "end";
   idleStartIso: string | null; // set only when idleTransition === "start"
-  notifyIdle: boolean; // true exactly when idleTransition === "start"
+  notifyIdle: boolean; // true exactly when idleTransition === "start" (the 45-minute escalation)
   overdueStagesToNotify: BreakStage[]; // newly-crossed-the-line this poll; caller alerts admins for each
+  // The 30-minute idle acknowledgment episode - independent of
+  // idleTransition (which only ever reflects the 45-minute idle_since
+  // marker): "open" is the 30-minute warning first being raised (caller
+  // creates the agent_idle_sessions row), "escalate" is the same episode
+  // reaching 45 minutes unacknowledged (caller marks that row's
+  // escalated_at and fires the existing stronger admin notification),
+  // "resolve_exempted" is the agent entering a break/lunch/on-call state
+  // while a warning was still outstanding (caller closes that row with no
+  // acknowledgment required - the state change itself explains it).
+  idleWarningTransition: "none" | "open" | "escalate" | "resolve_exempted";
+  idleWarningAtIso: string | null;
 };
 
 export function computeAgentActivityPollPlan(
@@ -681,31 +725,56 @@ export function computeAgentActivityPollPlan(
     idleStartIso: null,
     notifyIdle: false,
     overdueStagesToNotify: [],
+    idleWarningTransition: "none",
+    idleWarningAtIso: null,
   };
   if (row.clock_out) return noop; // "Clocked-out agents are not monitored."
 
   const nowIso = input.nowIso ?? new Date().toISOString();
   const nowMs = new Date(nowIso).getTime();
   const activeStage = activeBreakStage(row);
+  const exempted = !!activeStage || row.is_on_call;
 
   const attendancePatch: AgentActivityAttendancePatch = {};
   let idleTransition: AgentActivityPollPlan["idleTransition"] = "none";
   let idleStartIso: string | null = null;
+  let idleWarningTransition: AgentActivityPollPlan["idleWarningTransition"] = "none";
+  let idleWarningAtIso: string | null = null;
 
   if (input.hadInteraction) {
     attendancePatch.last_activity_at = nowIso;
+    // Recovers the 45-minute "Idle" Live Status the same way as before -
+    // deliberately does NOT clear a still-outstanding 30-minute
+    // acknowledgment (idle_ack_pending_since): per the brief, only an
+    // explicit acknowledgment (or entering an exempted state, handled
+    // below) may ever dismiss that - moving the mouse again is not enough.
     if (row.idle_since) {
       attendancePatch.idle_since = null;
       idleTransition = "end";
     }
-  } else if (!activeStage && !row.is_on_call && !row.idle_since) {
-    // Only the working (not on a break/lunch/call, not already Idle)
-    // case ever starts a fresh inactivity clock - the three explicit
-    // exceptions in the brief.
-    if (agentInactivityMinutes(row, nowMs) >= INACTIVITY_IDLE_MINUTES) {
+  }
+
+  if (exempted) {
+    // A legitimate state change supersedes any outstanding warning - the
+    // agent isn't required to acknowledge inactivity that occurred right
+    // before they went on an approved break/lunch/call.
+    if (row.idle_ack_pending_since) {
+      attendancePatch.idle_ack_pending_since = null;
+      idleWarningTransition = "resolve_exempted";
+      idleWarningAtIso = nowIso;
+    }
+  } else if (!input.hadInteraction) {
+    const inactivity = agentInactivityMinutes(row, nowMs);
+    if (!row.idle_ack_pending_since && !row.idle_since && inactivity >= INACTIVITY_WARNING_MINUTES) {
+      attendancePatch.idle_ack_pending_since = nowIso;
+      idleWarningTransition = "open";
+      idleWarningAtIso = nowIso;
+    } else if (row.idle_ack_pending_since && !row.idle_since && inactivity >= INACTIVITY_IDLE_MINUTES) {
       attendancePatch.idle_since = nowIso;
       idleTransition = "start";
       idleStartIso = nowIso;
+      idleWarningTransition = "escalate";
+      idleWarningAtIso = nowIso;
     }
   }
 
@@ -725,5 +794,7 @@ export function computeAgentActivityPollPlan(
     idleStartIso,
     notifyIdle: idleTransition === "start",
     overdueStagesToNotify,
+    idleWarningTransition,
+    idleWarningAtIso,
   };
 }

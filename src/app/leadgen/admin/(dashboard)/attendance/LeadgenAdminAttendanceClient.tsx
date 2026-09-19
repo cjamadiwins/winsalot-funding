@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
-import type { LeadgenAgentAttendanceRow, LeadgenUserRow } from "@/lib/leadgen-types";
+import type { LeadgenAgentAttendanceRow, LeadgenAgentIdleSessionRow, LeadgenUserRow } from "@/lib/leadgen-types";
 import { LEADGEN_BOOKING_TIMEZONE, LEADGEN_BOOKING_TIMEZONE_LABEL } from "@/lib/leadgen-booking";
 import {
   activeBreakStage,
@@ -12,7 +12,9 @@ import {
   computeBreakDurations,
   computeCountdownState,
   computeShiftPayBreakdown,
+  IDLE_ACK_REASON_LABELS,
   isBreakSeriouslyOverdue,
+  isIdleAckReason,
   type AttendanceRecordStatus,
 } from "@/lib/attendance-pay";
 import {
@@ -205,9 +207,11 @@ function ScheduleEditor({ agent }: { agent: LeadgenUserRow }) {
 export default function LeadgenAdminAttendanceClient({
   attendance,
   agents,
+  idleAcknowledgments,
 }: {
   attendance: LeadgenAgentAttendanceRow[];
   agents: LeadgenUserRow[];
+  idleAcknowledgments: LeadgenAgentIdleSessionRow[];
 }) {
   const [agentFilter, setAgentFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
@@ -335,6 +339,41 @@ export default function LeadgenAdminAttendanceClient({
         })}
         {openRows.length === 0 && (
           <p className="text-sm text-slate-500">No agents are currently clocked in.</p>
+        )}
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Idle Acknowledgment History ({idleAcknowledgments.length})
+      </h2>
+      <div className="mt-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200">
+        {idleAcknowledgments.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-slate-500">No idle acknowledgments recorded yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {idleAcknowledgments.map((session) => {
+              const agent = agentById.get(session.agent_id);
+              const reasonLabel = isIdleAckReason(session.acknowledged_reason ?? "")
+                ? IDLE_ACK_REASON_LABELS[session.acknowledged_reason as keyof typeof IDLE_ACK_REASON_LABELS]
+                : session.acknowledged_reason;
+              const acknowledgedTime = session.acknowledged_at
+                ? new Date(session.acknowledged_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                : "—";
+              return (
+                <li key={session.id} className="px-4 py-2.5 text-[13px]">
+                  <span className="font-medium text-slate-900">{agent?.full_name || agent?.email || "Unknown agent"}</span>
+                  <span className="ml-2 text-slate-600">Idle duration: {session.idle_duration_minutes ?? "—"} min</span>
+                  <span className="ml-2 text-slate-600">Reason: {reasonLabel}</span>
+                  <span className="ml-2 text-slate-600">Acknowledged: {acknowledgedTime}</span>
+                  {session.escalated_at && (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Escalated</span>
+                  )}
+                  {session.acknowledged_explanation && (
+                    <p className="mt-0.5 text-slate-500">{session.acknowledged_explanation}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 

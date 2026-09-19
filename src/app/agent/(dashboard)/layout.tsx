@@ -8,7 +8,7 @@ import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
-import { pollAgentActivityAction } from "./dashboard/activity-actions";
+import { pollAgentActivityAction, acknowledgeIdleWarningAction } from "./dashboard/activity-actions";
 import {
   LayoutDashboard,
   Mail,
@@ -113,7 +113,11 @@ export default async function AgentLayout({ children }: { children: ReactNode })
       >
         {children}
       </CrmShell>
-      <AgentActivityMonitor initialRow={(openShift as AgentAttendanceRow | null)} pollAction={pollAgentActivityAction} />
+      <AgentActivityMonitor
+        initialRow={(openShift as AgentAttendanceRow | null)}
+        pollAction={pollAgentActivityAction}
+        acknowledgeIdleAction={acknowledgeIdleWarningAction}
+      />
     </div>
   );
 }

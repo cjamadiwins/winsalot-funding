@@ -1,13 +1,13 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
-import type { AgentAttendanceRow, CrmUserRow } from "@/lib/crm-types";
+import type { AgentAttendanceRow, AgentIdleSessionRow, CrmUserRow } from "@/lib/crm-types";
 import AdminAttendanceClient from "./AdminAttendanceClient";
 
 export default async function AdminAttendancePage() {
   await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: attendance, error: attendanceError }, { data: agents, error: agentsError }] =
+  const [{ data: attendance, error: attendanceError }, { data: agents, error: agentsError }, { data: idleAcknowledgments }] =
     await Promise.all([
       supabase.from("agent_attendance").select("*").order("clock_in", { ascending: false }),
       supabase
@@ -15,6 +15,15 @@ export default async function AdminAttendancePage() {
         .select("*")
         .eq("role", "agent")
         .order("full_name", { ascending: true }),
+      // Admin's idle-acknowledgment history (RLS: admin select-all on
+      // agent_idle_sessions) - only ever acknowledged rows, most recent
+      // first, per the brief's "Admin history" section.
+      supabase
+        .from("agent_idle_sessions")
+        .select("*")
+        .not("acknowledged_at", "is", null)
+        .order("acknowledged_at", { ascending: false })
+        .limit(200),
     ]);
 
   return (
@@ -35,6 +44,7 @@ export default async function AdminAttendancePage() {
           <AdminAttendanceClient
             attendance={(attendance ?? []) as AgentAttendanceRow[]}
             agents={(agents ?? []) as CrmUserRow[]}
+            idleAcknowledgments={(idleAcknowledgments ?? []) as AgentIdleSessionRow[]}
           />
         </div>
       )}
