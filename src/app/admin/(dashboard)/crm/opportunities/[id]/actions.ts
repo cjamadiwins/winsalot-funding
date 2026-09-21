@@ -20,6 +20,16 @@ import {
   type OpportunityStage,
   type OpportunityType,
 } from "@/lib/crm-types";
+import {
+  ARRANGEMENT_CAMPAIGN_STATUSES,
+  ARRANGEMENT_CONVERSION_STATUSES,
+  ARRANGEMENT_FEE_STATUSES,
+  ARRANGEMENT_TYPES,
+  type ArrangementCampaignStatus,
+  type ArrangementConversionStatus,
+  type ArrangementFeeStatus,
+  type ArrangementType,
+} from "@/lib/commercial-arrangement";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -406,4 +416,98 @@ export async function bookConsultationAction(opportunityId: string, input: BookC
   revalidatePath("/admin/crm");
   revalidatePath("/admin/crm/appointments");
   return result;
+}
+
+// Admin-only edit of a business record's Commercial Arrangement - "Only
+// Admin should be able to change" every one of these fields; there is no
+// agent-facing equivalent action, and CommercialArrangementPanel never
+// renders this form for an agent. Conversion tracking
+// (arrangement_conversion_date/arrangement_converted_business) is
+// deliberately NOT editable here - it's only ever set by the guarded
+// markOpportunityConvertedAction below, never hand-edited.
+export async function updateCommercialArrangementAction(opportunityId: string, formData: FormData): Promise<{ error?: string }> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const typeRaw = String(formData.get("arrangement_type") ?? "");
+  const campaignStatusRaw = String(formData.get("arrangement_campaign_status") ?? "");
+  const conversionStatusRaw = String(formData.get("arrangement_conversion_status") ?? "");
+  const feeStatusRaw = String(formData.get("arrangement_fee_status") ?? "");
+
+  const { error } = await supabase
+    .from("crm_opportunities")
+    .update({
+      arrangement_type: (ARRANGEMENT_TYPES as readonly string[]).includes(typeRaw) ? (typeRaw as ArrangementType) : "standard_monthly",
+      arrangement_standard_fee: numberOrNull(formData, "arrangement_standard_fee") ?? 750,
+      arrangement_upfront_payment: numberOrNull(formData, "arrangement_upfront_payment") ?? 0,
+      arrangement_payment_trigger: textOrNull(formData, "arrangement_payment_trigger"),
+      arrangement_attribution_period: textOrNull(formData, "arrangement_attribution_period"),
+      arrangement_service: textOrNull(formData, "arrangement_service"),
+      arrangement_client_services: textOrNull(formData, "arrangement_client_services"),
+      arrangement_campaign_status: (ARRANGEMENT_CAMPAIGN_STATUSES as readonly string[]).includes(campaignStatusRaw)
+        ? (campaignStatusRaw as ArrangementCampaignStatus)
+        : null,
+      arrangement_conversion_status: (ARRANGEMENT_CONVERSION_STATUSES as readonly string[]).includes(conversionStatusRaw)
+        ? (conversionStatusRaw as ArrangementConversionStatus)
+        : null,
+      arrangement_fee_status: (ARRANGEMENT_FEE_STATUSES as readonly string[]).includes(feeStatusRaw) ? (feeStatusRaw as ArrangementFeeStatus) : null,
+      arrangement_special_terms: textOrNull(formData, "arrangement_special_terms"),
+    })
+    .eq("id", opportunityId);
+
+  if (error) return { error: "Failed to save the commercial arrangement." };
+
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  return {};
+}
+
+// Admin-only "Mark as Converted" - a deliberate, explicitly confirmed
+// action (the client-side confirm() dialog is what makes this
+// deliberate), never automatic. Sets the fee to Due at the arrangement's
+// own Standard Fee amount, never Paid - "Payment must remain Due until
+// Admin manually records payment" - and writes a permanent crm_activities
+// audit entry (who/when/converted customer/fee triggered), the same
+// audit mechanism every other admin action on this page already uses.
+export async function markOpportunityConvertedAction(
+  opportunityId: string,
+  convertedBusiness: string
+): Promise<{ error?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const trimmedConvertedBusiness = convertedBusiness.trim();
+  if (!trimmedConvertedBusiness) return { error: "Enter the name of the converted customer/business." };
+
+  const { data: opportunity } = await supabase
+    .from("crm_opportunities")
+    .select("arrangement_standard_fee")
+    .eq("id", opportunityId)
+    .maybeSingle();
+  if (!opportunity) return { error: "Opportunity not found." };
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("crm_opportunities")
+    .update({
+      arrangement_conversion_status: "converted",
+      arrangement_campaign_status: "converted",
+      arrangement_fee_status: "due",
+      arrangement_conversion_date: nowIso.slice(0, 10),
+      arrangement_converted_business: trimmedConvertedBusiness,
+      arrangement_marked_converted_by: admin.id,
+      arrangement_marked_converted_at: nowIso,
+    })
+    .eq("id", opportunityId);
+  if (error) return { error: "Failed to record the conversion." };
+
+  await supabase.from("crm_activities").insert({
+    opportunity_id: opportunityId,
+    agent_id: admin.id,
+    activity_type: "note",
+    notes: `Marked as Converted by ${admin.full_name || admin.email}. Converted customer: ${trimmedConvertedBusiness}. Fee triggered: $${opportunity.arrangement_standard_fee} Due.`,
+    occurred_at: nowIso,
+  });
+
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  return {};
 }

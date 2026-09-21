@@ -32,6 +32,7 @@ import ProspectEmailModal from "@/components/ProspectEmailModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
+import CommercialArrangementPanel from "@/components/crm-ui/CommercialArrangementPanel";
 import {
   addActivityAction,
   bookConsultationAction,
@@ -39,9 +40,11 @@ import {
   deleteOpportunityAction,
   getConsultationOfferedSlotsAction,
   markApplicationSubmittedAction,
+  markOpportunityConvertedAction,
   resubscribeEmailAction,
   sendProspectEmailAction,
   sendDetailedServicePricingEmailAction,
+  updateCommercialArrangementAction,
   updateLeadGenerationPriceAction,
   updateOpportunityAction,
 } from "./actions";
@@ -327,6 +330,14 @@ export default function AdminOpportunityDetailClient({
         opportunity={opportunity}
         isPending={isPending}
         closeAction={closeOpportunityAction}
+      />
+
+      <CommercialArrangementPanel
+        opportunityId={opportunity.id}
+        opportunity={opportunity}
+        editable
+        updateAction={updateCommercialArrangementAction}
+        markConvertedAction={markOpportunityConvertedAction}
       />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">

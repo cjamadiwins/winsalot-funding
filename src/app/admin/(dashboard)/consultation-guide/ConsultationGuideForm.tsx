@@ -31,6 +31,19 @@ import {
   type ConsultationGuideService,
   type CrmConsultationGuideRow,
 } from "@/lib/consultation-guide";
+import {
+  ARRANGEMENT_CAMPAIGN_STATUSES,
+  ARRANGEMENT_CAMPAIGN_STATUS_LABELS,
+  ARRANGEMENT_CONVERSION_STATUSES,
+  ARRANGEMENT_CONVERSION_STATUS_LABELS,
+  ARRANGEMENT_FEE_STATUSES,
+  ARRANGEMENT_FEE_STATUS_LABELS,
+  ARRANGEMENT_INTERNAL_COMPLIANCE_NOTE,
+  ARRANGEMENT_TYPES,
+  ARRANGEMENT_TYPE_LABELS,
+  PERFORMANCE_BASED_TRIAL_DEFAULTS,
+  type ArrangementType,
+} from "@/lib/commercial-arrangement";
 import { previewConsultationCompletionAction, type ConsultationCompletionPreview } from "./actions";
 import AppointmentPicker from "./AppointmentPicker";
 
@@ -173,6 +186,7 @@ export default function ConsultationGuideForm({
   const [error, setError] = useState<string | null>(null);
   const [completePreview, setCompletePreview] = useState<ConsultationCompletionPreview | null>(null);
   const [retryMessage, setRetryMessage] = useState<string | null>(null);
+  const [arrangementType, setArrangementType] = useState<ArrangementType>(guide?.arrangement_type ?? "standard_monthly");
 
   const discovery = guide?.discovery ?? {};
   const leadgenFit = guide?.leadgen_fit ?? {};
@@ -509,17 +523,153 @@ export default function ConsultationGuideForm({
             </div>
           </section>
 
-          {/* 9. Close the Consultation */}
+          {/* 9. Commercial Arrangement / Special Terms */}
           <section className={sectionClasses}>
-            <h2 className={sectionHeadingClasses}>9. Close the Consultation</h2>
+            <h2 className={sectionHeadingClasses}>9. Commercial Arrangement / Special Terms</h2>
+            <div className="mt-4">
+              <span className={labelClasses}>Arrangement Type</span>
+              <select
+                name="arrangement_type"
+                value={arrangementType}
+                onChange={(e) => setArrangementType(e.target.value as ArrangementType)}
+                className={`${inputClasses} mt-1.5 sm:max-w-xs`}
+              >
+                {ARRANGEMENT_TYPES.map((option) => (
+                  <option key={option} value={option}>
+                    {ARRANGEMENT_TYPE_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {arrangementType !== "standard_monthly" && (
+              <div className="mt-5 space-y-4 border-t border-slate-200 pt-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Standard Winsalot Fee</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        name="arrangement_standard_fee"
+                        defaultValue={guide?.arrangement_standard_fee ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_standard_fee}
+                        className={inputClasses}
+                      />
+                    </div>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Upfront Payment</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        name="arrangement_upfront_payment"
+                        defaultValue={guide?.arrangement_upfront_payment ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_upfront_payment}
+                        className={inputClasses}
+                      />
+                    </div>
+                  </label>
+                  <Field
+                    label="Payment Trigger"
+                    name="arrangement_payment_trigger"
+                    defaultValue={guide?.arrangement_payment_trigger ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_payment_trigger}
+                  />
+                  <Field
+                    label="Attribution Period"
+                    name="arrangement_attribution_period"
+                    defaultValue={guide?.arrangement_attribution_period ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_attribution_period}
+                  />
+                  <Field
+                    label="Service"
+                    name="arrangement_service"
+                    defaultValue={guide?.arrangement_service ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_service}
+                  />
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Campaign Status</span>
+                    <select
+                      name="arrangement_campaign_status"
+                      defaultValue={guide?.arrangement_campaign_status ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_campaign_status}
+                      className={inputClasses}
+                    >
+                      {ARRANGEMENT_CAMPAIGN_STATUSES.map((option) => (
+                        <option key={option} value={option}>
+                          {ARRANGEMENT_CAMPAIGN_STATUS_LABELS[option]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Conversion Status</span>
+                    <select
+                      name="arrangement_conversion_status"
+                      defaultValue={guide?.arrangement_conversion_status ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_conversion_status}
+                      className={inputClasses}
+                    >
+                      {ARRANGEMENT_CONVERSION_STATUSES.map((option) => (
+                        <option key={option} value={option}>
+                          {ARRANGEMENT_CONVERSION_STATUS_LABELS[option]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Fee Status</span>
+                    <select
+                      name="arrangement_fee_status"
+                      defaultValue={guide?.arrangement_fee_status ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_fee_status}
+                      className={inputClasses}
+                    >
+                      {ARRANGEMENT_FEE_STATUSES.map((option) => (
+                        <option key={option} value={option}>
+                          {ARRANGEMENT_FEE_STATUS_LABELS[option]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className={labelClasses}>Client Services Being Promoted</span>
+                  <textarea
+                    name="arrangement_client_services"
+                    placeholder="Example: Website Design, Website Redesign & Rebranding"
+                    defaultValue={guide?.arrangement_client_services ?? ""}
+                    className={`${inputClasses} min-h-[60px] resize-y`}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className={labelClasses}>Special Terms</span>
+                  <textarea
+                    name="arrangement_special_terms"
+                    defaultValue={guide?.arrangement_special_terms ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_special_terms}
+                    className={`${inputClasses} min-h-[70px] resize-y`}
+                  />
+                </label>
+
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12.5px] font-semibold text-amber-900">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Internal Only — Never sent to clients</p>
+                  <p className="mt-1">{ARRANGEMENT_INTERNAL_COMPLIANCE_NOTE}</p>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 10. Close the Consultation */}
+          <section className={sectionClasses}>
+            <h2 className={sectionHeadingClasses}>10. Close the Consultation</h2>
             <p className="mt-3 rounded-xl bg-sky-50 px-4 py-3 text-[13.5px] italic text-sky-900">
               &ldquo;{CONSULTATION_GUIDE_CLOSING_LINE}&rdquo;
             </p>
           </section>
 
-          {/* 10. Final Checklist */}
+          {/* 11. Final Checklist */}
           <section className={sectionClasses}>
-            <h2 className={sectionHeadingClasses}>10. Final Checklist</h2>
+            <h2 className={sectionHeadingClasses}>11. Final Checklist</h2>
             <div className="mt-4 space-y-2.5">
               {CONSULTATION_GUIDE_CHECKLIST_ITEMS.map((item) => (
                 <label key={item.key} className="flex items-center gap-2.5 text-[13.5px] text-slate-800">

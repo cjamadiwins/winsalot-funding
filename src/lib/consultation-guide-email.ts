@@ -4,6 +4,7 @@ import { getResendClient } from "./resend";
 import { getEmailSender, getEmailReplyTo } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { buildWinsalotFollowUpEmail, buildWinsalotBusinessFinanceFollowUpEmail, type WinsalotEmailBody } from "./winsalot-consultation-emails";
+import { ARRANGEMENT_TYPE_LABELS, type ArrangementType } from "./commercial-arrangement";
 import type { ConsultationGuideService, CrmConsultationGuideRow } from "./consultation-guide";
 
 // Growth CRM Client Consultation Guide - service-specific completion
@@ -13,20 +14,55 @@ import type { ConsultationGuideService, CrmConsultationGuideRow } from "./consul
 
 export type ConsultationGuideEmailConsultant = { name: string; email: string; userId?: string };
 
+// Appended only for a non-Standard-Monthly arrangement (Performance-Based
+// Trial or Custom Arrangement) - never modifies buildWinsalotFollowUpEmail/
+// buildWinsalotBusinessFinanceFollowUpEmail themselves (both explicitly
+// "do not change wording or functionality" elsewhere), so every other
+// caller of those two functions - the original appointment-completion
+// flow included - is completely unaffected. This is what keeps a
+// Performance-Based Trial client from receiving an email that's silent
+// about (and so could be read as implicitly promising) the standard
+// upfront-monthly arrangement: it states the actual agreed trigger and
+// explicitly does not promise a conversion will happen.
+function appendArrangementNote(email: WinsalotEmailBody, arrangement: { type: ArrangementType; paymentTrigger: string | null } | null): WinsalotEmailBody {
+  if (!arrangement || arrangement.type === "standard_monthly") return email;
+
+  const arrangementLabel = ARRANGEMENT_TYPE_LABELS[arrangement.type].toLowerCase();
+  const triggerLine = arrangement.paymentTrigger
+    ? `As discussed, this campaign is structured under a ${arrangementLabel} arrangement: our service fee becomes due when ${arrangement.paymentTrigger.charAt(0).toLowerCase()}${arrangement.paymentTrigger.slice(1)}`
+    : `As discussed, this campaign is structured under a ${arrangementLabel} arrangement, as agreed during our consultation.`;
+  const disclaimerLine =
+    "Winsalot Corp. generates and qualifies opportunities for your business - we do not guarantee that a prospect will purchase or become a paying client.";
+
+  return {
+    subject: email.subject,
+    text: `${email.text}\n\n${triggerLine}\n\n${disclaimerLine}`,
+    html: `${email.html}<p style="margin:16px 0 0;">${triggerLine}</p><p style="margin:8px 0 0;">${disclaimerLine}</p>`,
+  };
+}
+
 // Builds the exact email a guide's follow-up would send for a given
 // service - shared by the completion-confirmation preview and the real
 // send/retry paths below, so "preview" can never show something
 // different from what "send" actually sends.
 export function buildConsultationGuideFollowUpEmail(
   service: ConsultationGuideService,
-  params: { contactName: string; consultantName: string }
+  params: { contactName: string; consultantName: string },
+  arrangement?: { type: ArrangementType; paymentTrigger: string | null } | null
 ): WinsalotEmailBody {
   if (service === "business_financing") {
-    return buildWinsalotBusinessFinanceFollowUpEmail({ contactName: params.contactName, consultantName: params.consultantName });
+    return appendArrangementNote(
+      buildWinsalotBusinessFinanceFollowUpEmail({ contactName: params.contactName, consultantName: params.consultantName }),
+      arrangement ?? null
+    );
   }
   // Lead Generation reuses the existing appointment-completion email
-  // unchanged - "Do not change its current wording or functionality."
-  return buildWinsalotFollowUpEmail({ contactName: params.contactName, continueUrl: `${getSiteUrl()}/continue-with-winsalot` });
+  // unchanged - "Do not change its current wording or functionality." -
+  // appendArrangementNote only ever adds text after it, never edits it.
+  return appendArrangementNote(
+    buildWinsalotFollowUpEmail({ contactName: params.contactName, continueUrl: `${getSiteUrl()}/continue-with-winsalot` }),
+    arrangement ?? null
+  );
 }
 
 export type ConsultationGuideEmailSendResult =
@@ -44,7 +80,10 @@ export type ConsultationGuideEmailSendResult =
 // cooperated.
 export async function sendConsultationGuideFollowUpEmail(
   admin: SupabaseClient,
-  guide: Pick<CrmConsultationGuideRow, "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service">,
+  guide: Pick<
+    CrmConsultationGuideRow,
+    "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "arrangement_type" | "arrangement_payment_trigger"
+  >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
   const service = guide.service;
@@ -53,10 +92,11 @@ export async function sendConsultationGuideFollowUpEmail(
 
   await admin.from("crm_consultation_guides").update({ follow_up_email_status: "sending" }).eq("id", guide.id);
 
-  const email = buildConsultationGuideFollowUpEmail(service, {
-    contactName: guide.contact_name || "there",
-    consultantName: guide.consultant_name || consultant.name,
-  });
+  const email = buildConsultationGuideFollowUpEmail(
+    service,
+    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultant.name },
+    { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
+  );
 
   try {
     const resend = getResendClient();
@@ -143,17 +183,30 @@ export async function sendConsultationGuideFollowUpEmail(
 // last_resent_* columns change here.
 export async function resendConsultationGuideFollowUpEmail(
   admin: SupabaseClient,
-  guide: Pick<CrmConsultationGuideRow, "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "follow_up_email_resend_count">,
+  guide: Pick<
+    CrmConsultationGuideRow,
+    | "id"
+    | "opportunity_id"
+    | "contact_name"
+    | "business_name"
+    | "email"
+    | "consultant_name"
+    | "service"
+    | "follow_up_email_resend_count"
+    | "arrangement_type"
+    | "arrangement_payment_trigger"
+  >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
   const service = guide.service;
   if (!service) return { status: "failed", error: "No service selected." };
   if (!guide.email) return { status: "failed", error: "No recipient email." };
 
-  const email = buildConsultationGuideFollowUpEmail(service, {
-    contactName: guide.contact_name || "there",
-    consultantName: guide.consultant_name || consultant.name,
-  });
+  const email = buildConsultationGuideFollowUpEmail(
+    service,
+    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultant.name },
+    { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
+  );
 
   try {
     const resend = getResendClient();

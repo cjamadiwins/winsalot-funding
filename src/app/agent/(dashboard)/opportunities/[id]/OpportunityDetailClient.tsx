@@ -19,6 +19,7 @@ import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import CloseOpportunityPanel from "@/components/CloseOpportunityPanel";
+import CommercialArrangementPanel from "@/components/crm-ui/CommercialArrangementPanel";
 import EmailHistoryPanel, { type EmailHistoryEntry } from "@/components/EmailHistoryPanel";
 import ProspectEmailModal from "@/components/ProspectEmailModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
@@ -310,6 +311,8 @@ export default function OpportunityDetailClient({
               </div>
             )}
           </section>
+
+          <CommercialArrangementPanel opportunityId={opportunity.id} opportunity={opportunity} editable={false} />
 
           <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-5">
             <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
