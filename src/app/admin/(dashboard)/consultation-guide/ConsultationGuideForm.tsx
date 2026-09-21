@@ -51,8 +51,6 @@ type ActionResult = {
   id?: string;
   error?: string;
   outcome?: "completed" | "already_completed";
-  followUpEmailStatus?: string;
-  noFollowUpEmailReason?: string | null;
 };
 
 const inputClasses =
@@ -126,8 +124,9 @@ export default function ConsultationGuideForm({
   updatedByName,
   saveAction,
   completeAction,
-  retryFollowUpAction,
+  sendFollowUpAction,
   resendFollowUpAction,
+  updateFollowUpDraftAction,
   deleteAction,
   backHref,
 }: {
@@ -158,15 +157,20 @@ export default function ConsultationGuideForm({
   updatedByName?: string | null;
   saveAction: (formData: FormData) => Promise<ActionResult>;
   completeAction: (formData: FormData) => Promise<ActionResult>;
-  // Only passed for an existing, completed guide whose follow-up email
-  // failed or hasn't sent yet - undefined everywhere else (a brand-new
-  // guide has nothing to retry yet).
-  retryFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
+  // Only passed for an existing, completed guide - powers the "Send Email"
+  // button in the Follow-Up Email section (a brand-new, unsaved guide has
+  // no draft to send yet). This is the ONLY action that ever actually
+  // sends the real email - clicking it is the sole way to send.
+  sendFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
   // Only passed for an existing, completed guide whose follow-up email
   // already sent successfully - a deliberate, separately confirmed resend
   // of that same email, per CJ's "Any email resend must use a separate
   // confirmed Resend Email action."
   resendFollowUpAction?: (id: string) => Promise<{ error?: string; message?: string }>;
+  // Only passed for an existing, completed guide - saves Admin's edits to
+  // the generated draft subject/body ("Edit Email") without sending
+  // anything; Send/Resend above always send whatever this last saved.
+  updateFollowUpDraftAction?: (id: string, subject: string, body: string) => Promise<{ error?: string }>;
   // Only passed for an existing guide (never a brand-new, unsaved one) -
   // powers the "Delete consultation" link at the bottom of the page. Only
   // ever removes the crm_consultation_guides row itself; the linked
@@ -185,8 +189,17 @@ export default function ConsultationGuideForm({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [completePreview, setCompletePreview] = useState<ConsultationCompletionPreview | null>(null);
-  const [retryMessage, setRetryMessage] = useState<string | null>(null);
+  const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
   const [arrangementType, setArrangementType] = useState<ArrangementType>(guide?.arrangement_type ?? "standard_monthly");
+
+  // Follow-Up Email section: local editable copies of the guide's saved
+  // draft, so "Edit Email" never sends anything on its own - only
+  // updateFollowUpDraftAction's own explicit Save Draft click persists an
+  // edit, and only sendFollowUpAction/resendFollowUpAction ever send.
+  const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
+  const [draftSubject, setDraftSubject] = useState(guide?.follow_up_email_subject ?? "");
+  const [draftBody, setDraftBody] = useState(guide?.follow_up_email_body ?? "");
 
   const discovery = guide?.discovery ?? {};
   const leadgenFit = guide?.leadgen_fit ?? {};
@@ -202,7 +215,7 @@ export default function ConsultationGuideForm({
     setMessage(null);
     startTransition(async () => {
       const result = await action(formData);
-      if (result.error && result.outcome !== "completed") {
+      if (result.error) {
         setError(result.error);
         return;
       }
@@ -211,19 +224,10 @@ export default function ConsultationGuideForm({
       if (result.outcome === "already_completed") {
         finalMessage = "This consultation was already marked completed.";
       } else if (result.outcome === "completed") {
-        const statusLabel = result.followUpEmailStatus ? CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS[result.followUpEmailStatus as keyof typeof CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS] : null;
-        if (result.error) {
-          // Completion itself succeeded, but the follow-up email failed to
-          // send - the consultation stays Completed either way (see
-          // completeConsultationGuideAction), so this is a warning, not a
-          // blocking error.
-          setError(result.error);
-          finalMessage = "Consultation marked complete.";
-        } else if (result.noFollowUpEmailReason) {
-          finalMessage = `Consultation marked complete. No follow-up email sent (${result.noFollowUpEmailReason}).`;
-        } else if (statusLabel) {
-          finalMessage = `Consultation marked complete. Follow-up email: ${statusLabel}.`;
-        }
+        // Completing a consultation never sends anything itself - it only
+        // generates and saves a follow-up email draft for Admin to review
+        // in the Follow-Up Email section below and send when ready.
+        finalMessage = "Consultation marked complete. A follow-up email draft has been generated below for your review.";
       }
       setMessage(finalMessage);
 
@@ -255,12 +259,21 @@ export default function ConsultationGuideForm({
     runSave("Consultation marked complete.", completeAction);
   }
 
-  function handleRetryFollowUp() {
-    if (!retryFollowUpAction || !guide) return;
-    setRetryMessage(null);
+  // The one and only click that ever sends the real email - "Clicking Send
+  // Email should be the only action that sends the email." A second
+  // confirm() step here would just add friction to a button that's already
+  // a deliberate, separate click from Save/Complete; the real duplicate-
+  // send guard is the database compare-and-swap inside
+  // sendConsultationGuideFollowUpEmail itself.
+  function handleSendFollowUp() {
+    if (!sendFollowUpAction || !guide) return;
+    if (!confirm(`Send the follow-up email to ${guide.email}? This cannot be undone.`)) return;
+    setFollowUpError(null);
+    setFollowUpMessage(null);
     startTransition(async () => {
-      const result = await retryFollowUpAction(guide.id);
-      setRetryMessage(result.error ?? result.message ?? null);
+      const result = await sendFollowUpAction(guide.id);
+      if (result.error) setFollowUpError(result.error);
+      else setFollowUpMessage(result.message ?? "Follow-up email sent.");
       router.refresh();
     });
   }
@@ -272,10 +285,32 @@ export default function ConsultationGuideForm({
   function handleResendFollowUp() {
     if (!resendFollowUpAction || !guide) return;
     if (!confirm(`Resend the consultation follow-up email to ${guide.email}? This sends an additional copy - it will not change the original send's record.`)) return;
-    setRetryMessage(null);
+    setFollowUpError(null);
+    setFollowUpMessage(null);
     startTransition(async () => {
       const result = await resendFollowUpAction(guide.id);
-      setRetryMessage(result.error ?? result.message ?? null);
+      if (result.error) setFollowUpError(result.error);
+      else setFollowUpMessage(result.message ?? "Follow-up email resent.");
+      router.refresh();
+    });
+  }
+
+  // "Edit Email" save - persists Admin's corrected draft without sending
+  // anything ("Admin must be able to review and edit the email before
+  // sending"). Leaves edit mode on success so the saved text is visibly
+  // what's now on file.
+  function handleSaveFollowUpDraft() {
+    if (!updateFollowUpDraftAction || !guide) return;
+    setFollowUpError(null);
+    setFollowUpMessage(null);
+    startTransition(async () => {
+      const result = await updateFollowUpDraftAction(guide.id, draftSubject, draftBody);
+      if (result.error) {
+        setFollowUpError(result.error);
+        return;
+      }
+      setFollowUpMessage("Draft saved.");
+      setIsEditingFollowUp(false);
       router.refresh();
     });
   }
@@ -338,30 +373,149 @@ export default function ConsultationGuideForm({
       {error && (
         <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</p>
       )}
-      {retryMessage && (
-        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">{retryMessage}</p>
-      )}
+      {/* Follow-Up Email - "add a clearly visible Follow-Up Email section
+          to each completed consultation." Shows the generated draft for
+          review/edit; Send Email is the only action that ever sends it. */}
+      {guide && guide.status === "completed" && guide.service && (
+        <section className="mt-4 rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-slate-900">Follow-Up Email</h2>
+            <span
+              title={guide.follow_up_email_error ?? guide.no_follow_up_email_reason ?? undefined}
+              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES[guide.follow_up_email_status]}`}
+            >
+              {CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS[guide.follow_up_email_status]}
+            </span>
+          </div>
 
-      {guide && guide.status === "completed" && guide.follow_up_email_status === "failed" && retryFollowUpAction && (
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={handleRetryFollowUp}
-          className="mt-3 rounded-[10px] border border-rose-300 bg-rose-50 px-3.5 py-2 text-[12.5px] font-bold text-rose-700 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Retry Follow-Up Email
-        </button>
-      )}
+          {guide.follow_up_email_status === "sent" && guide.follow_up_email_sent_at && (
+            <p className="mt-1 text-[12.5px] font-medium text-emerald-700">
+              Sent {new Date(guide.follow_up_email_sent_at).toLocaleString()}
+              {guide.follow_up_email_resend_count > 0 ? ` — resent ${guide.follow_up_email_resend_count}x since` : ""}
+            </p>
+          )}
 
-      {guide && guide.status === "completed" && guide.follow_up_email_status === "sent" && resendFollowUpAction && (
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={handleResendFollowUp}
-          className="mt-3 rounded-[10px] border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Resend Follow-Up Email{guide.follow_up_email_resend_count > 0 ? ` (sent ${guide.follow_up_email_resend_count}x since)` : ""}
-        </button>
+          {followUpMessage && (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-700">{followUpMessage}</p>
+          )}
+          {followUpError && (
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">{followUpError}</p>
+          )}
+
+          {!guide.email && (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-800">
+              This prospect has no email address on file - add one above and save before sending.
+            </p>
+          )}
+
+          {!guide.follow_up_email_subject || !guide.follow_up_email_body ? (
+            <p className="mt-3 text-[12.5px] text-slate-500">No email draft has been generated for this consultation yet.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recipient Email</span>
+                <p className="mt-0.5 text-[13.5px] font-medium text-slate-800">{guide.email ?? "—"}</p>
+              </div>
+
+              {isEditingFollowUp ? (
+                <>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email Subject</span>
+                    <input
+                      type="text"
+                      value={draftSubject}
+                      onChange={(e) => setDraftSubject(e.target.value)}
+                      className={inputClasses}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email Body</span>
+                    <textarea
+                      value={draftBody}
+                      onChange={(e) => setDraftBody(e.target.value)}
+                      className={`${inputClasses} min-h-[220px] resize-y font-sans`}
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleSaveFollowUpDraft}
+                      className="rounded-[10px] bg-[var(--crm-accent,#3e7ef7)] px-3.5 py-2 text-[12.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Save Draft
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        setDraftSubject(guide.follow_up_email_subject ?? "");
+                        setDraftBody(guide.follow_up_email_body ?? "");
+                        setIsEditingFollowUp(false);
+                      }}
+                      className="rounded-[10px] border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email Subject</span>
+                    <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{guide.follow_up_email_subject}</p>
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email Body / Preview</span>
+                    <pre className="mt-0.5 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-sans text-[12.5px] leading-relaxed text-slate-700">
+                      {guide.follow_up_email_body}
+                    </pre>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {updateFollowUpDraftAction && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          setDraftSubject(guide.follow_up_email_subject ?? "");
+                          setDraftBody(guide.follow_up_email_body ?? "");
+                          setIsEditingFollowUp(true);
+                        }}
+                        className="rounded-[10px] border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Edit Email
+                      </button>
+                    )}
+                    {guide.email && guide.follow_up_email_status !== "sent" && sendFollowUpAction && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleSendFollowUp}
+                        className={`rounded-[10px] border px-3.5 py-2 text-[12.5px] font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          guide.follow_up_email_status === "failed"
+                            ? "border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400"
+                            : "border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-700"
+                        }`}
+                      >
+                        {guide.follow_up_email_status === "failed" ? "Retry Send Email" : "Send Email"}
+                      </button>
+                    )}
+                    {guide.email && guide.follow_up_email_status === "sent" && resendFollowUpAction && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={handleResendFollowUp}
+                        className="rounded-[10px] border border-slate-300 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Resend Email
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       {(linkedAppointmentLabel || appointmentNotFound) && (
@@ -786,20 +940,21 @@ export default function ConsultationGuideForm({
 
             {completePreview.recipientEmail ? (
               <p className="mt-3 text-[13px] text-slate-600">
-                A follow-up email will be sent to <span className="font-semibold text-slate-800">{completePreview.recipientEmail}</span>.
+                A follow-up email draft will be generated and saved for review — it is <span className="font-semibold">not</span> sent
+                automatically. You can review, edit, and send it yourself afterward from the Follow-Up Email section.
               </p>
             ) : (
               <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-800">
-                This prospect has no email address on file. You can still complete this consultation - no follow-up email will be
-                sent, and the reason will be recorded as &ldquo;No recipient email.&rdquo;
+                This prospect has no email address on file. You can still complete this consultation - no follow-up email draft will be
+                generated until an email address is added and saved.
               </p>
             )}
 
             {completePreview.recipientEmail && (
               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Subject</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Draft Preview — Subject</p>
                 <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{completePreview.subject}</p>
-                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview — Body</p>
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Draft Preview — Body</p>
                 <pre className="mt-0.5 max-h-56 overflow-y-auto whitespace-pre-wrap font-sans text-[12.5px] leading-relaxed text-slate-700">
                   {completePreview.bodyText}
                 </pre>
@@ -820,7 +975,7 @@ export default function ConsultationGuideForm({
                 onClick={confirmComplete}
                 className="rounded-[10px] bg-emerald-600 px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {completePreview.recipientEmail ? "Complete & Send Email" : "Complete Without Email"}
+                Complete Consultation
               </button>
             </div>
           </div>

@@ -227,11 +227,14 @@ export type CrmConsultationGuideRow = CommercialArrangementFields & {
   appointment_id: string | null;
   service: ConsultationGuideService | null;
 
-  // Always describes the *original* automatic send from Mark Consultation
-  // Complete (or the first successful Retry after it failed) - a later
-  // deliberate Resend (see follow_up_email_resend_count below) never
-  // changes these, by design ("preserve the original recipient, template,
-  // send time and delivery status").
+  // Always describes the *original* send, from the first successful
+  // manual "Send Follow-Up Email" (or the first successful Retry after
+  // one failed) - a later deliberate Resend (see
+  // follow_up_email_resend_count below) never changes these, by design
+  // ("preserve the original recipient, template, send time and delivery
+  // status"). Marking a consultation Completed never sets this to
+  // anything but its 'not_sent' default - completion only generates the
+  // draft below for review.
   follow_up_email_status: ConsultationGuideFollowUpStatus;
   follow_up_email_sent_at: string | null;
   // The service the sent template actually matched, captured at send time
@@ -243,6 +246,16 @@ export type CrmConsultationGuideRow = CommercialArrangementFields & {
   // Set to "No recipient email" when completed without a recipient
   // address on file; null whenever a send was attempted.
   no_follow_up_email_reason: string | null;
+
+  // The reviewable, Admin-editable draft ("Edit Email") that Send/Resend
+  // actually sends verbatim - generated once automatically the moment the
+  // consultation is marked Completed (see buildFollowUpEmailDraft in
+  // consultation-guide-email.ts), and on-demand for any older guide that
+  // doesn't have one yet (e.g. one completed via a direct data migration
+  // before this feature existed). Null only until a draft has been
+  // generated.
+  follow_up_email_subject: string | null;
+  follow_up_email_body: string | null;
 
   // A deliberate, admin-confirmed "Resend Follow-Up Email" of the same
   // template to the same recipient - only ever offered once the original

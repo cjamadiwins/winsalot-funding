@@ -5,12 +5,20 @@ import { getEmailSender, getEmailReplyTo } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { buildWinsalotFollowUpEmail, buildWinsalotBusinessFinanceFollowUpEmail, type WinsalotEmailBody } from "./winsalot-consultation-emails";
 import { ARRANGEMENT_TYPE_LABELS, type ArrangementType } from "./commercial-arrangement";
-import type { ConsultationGuideService, CrmConsultationGuideRow } from "./consultation-guide";
+import type { ConsultationGuideAnswers, ConsultationGuideService, CrmConsultationGuideRow } from "./consultation-guide";
 
-// Growth CRM Client Consultation Guide - service-specific completion
-// follow-up email. Mirrors winsalot-consultation-completion.ts's role for
-// the appointment-based flow, but for crm_consultation_guides, which can
-// be completed with or without a linked appointment/opportunity at all.
+// Growth CRM Client Consultation Guide - service-specific follow-up email.
+// Mirrors winsalot-consultation-completion.ts's role for the appointment-
+// based flow, but for crm_consultation_guides, which can be completed
+// with or without a linked appointment/opportunity at all.
+//
+// Deliberately review-before-send, never automatic: completing a
+// consultation only ever GENERATES a draft subject/body (saved on the
+// guide row as follow_up_email_subject/follow_up_email_body) - nothing is
+// sent until Admin explicitly clicks Send (or, for an already-sent guide,
+// the separately-confirmed Resend). The saved draft, not a freshly
+// recomputed template, is always what actually gets sent - so an edit
+// Admin makes before clicking Send is exactly what the prospect receives.
 
 export type ConsultationGuideEmailConsultant = { name: string; email: string; userId?: string };
 
@@ -41,10 +49,12 @@ function appendArrangementNote(email: WinsalotEmailBody, arrangement: { type: Ar
   };
 }
 
-// Builds the exact email a guide's follow-up would send for a given
-// service - shared by the completion-confirmation preview and the real
-// send/retry paths below, so "preview" can never show something
-// different from what "send" actually sends.
+// Builds the base service-specific email (subject/text/html) for a given
+// service, with the arrangement note appended - the starting point for a
+// guide's follow-up email DRAFT (see buildFollowUpEmailDraft below).
+// Never sent directly; kept as its own function purely so the base
+// template + arrangement composition stays independently testable/
+// reusable, same as before this change.
 export function buildConsultationGuideFollowUpEmail(
   service: ConsultationGuideService,
   params: { contactName: string; consultantName: string },
@@ -65,38 +75,141 @@ export function buildConsultationGuideFollowUpEmail(
   );
 }
 
+// A short, factual recap of what was actually recorded in Section 8
+// (Consultation Summary) - never invented, only ever lines the guide's
+// own saved answers actually have a value for. This is what lets the
+// generated draft "include...discussion summary, next steps" using the
+// real consultation instead of a one-size-fits-all template.
+function buildConsultationRecapLines(summary: ConsultationGuideAnswers | null | undefined): string[] {
+  const answers = summary ?? {};
+  const lines: string[] = [];
+  if (answers.primary_need) lines.push(`As discussed, your primary need is: ${answers.primary_need}`);
+  if (answers.next_step) lines.push(`Next step: ${answers.next_step}`);
+  return lines;
+}
+
+export type FollowUpEmailDraft = { subject: string; body: string };
+
+// Generates the initial follow-up email draft for a guide - called once,
+// automatically, the moment a consultation is marked Completed (see
+// completeConsultationGuideAction), and never again automatically after
+// that. Nothing is sent here; this only computes the subject/body text
+// that gets saved onto the guide row for Admin to review, edit, and
+// eventually send. Safe to call again later too (e.g. to recompute a
+// draft for a guide completed before this feature existed) since it's
+// pure - same inputs, same output, never sends anything itself.
+export function buildFollowUpEmailDraft(
+  guide: Pick<CrmConsultationGuideRow, "service" | "contact_name" | "consultant_name" | "arrangement_type" | "arrangement_payment_trigger" | "summary">,
+  consultantName: string
+): FollowUpEmailDraft | null {
+  const service = guide.service;
+  if (!service) return null;
+
+  const base = buildConsultationGuideFollowUpEmail(
+    service,
+    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultantName },
+    { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
+  );
+
+  const recapLines = buildConsultationRecapLines(guide.summary);
+  const body = recapLines.length > 0 ? `${base.text}\n\n${recapLines.join("\n")}` : base.text;
+
+  return { subject: base.subject, body };
+}
+
+// Lazily backfills a draft for a completed guide that doesn't have one yet
+// - e.g. one completed directly via a database migration before this
+// review-before-send feature existed (the Web6 Solutions consultation is
+// exactly this case). Called from the guide detail page on every view;
+// a no-op once a draft exists (an Admin edit is never overwritten), and
+// never sends anything itself.
+export async function ensureFollowUpEmailDraft(
+  supabase: SupabaseClient,
+  guide: Pick<
+    CrmConsultationGuideRow,
+    "id" | "service" | "contact_name" | "consultant_name" | "arrangement_type" | "arrangement_payment_trigger" | "summary" | "follow_up_email_subject" | "follow_up_email_body"
+  >,
+  consultantName: string
+): Promise<FollowUpEmailDraft | null> {
+  if (guide.follow_up_email_subject && guide.follow_up_email_body) {
+    return { subject: guide.follow_up_email_subject, body: guide.follow_up_email_body };
+  }
+
+  const draft = buildFollowUpEmailDraft(guide, consultantName);
+  if (!draft) return null;
+
+  await supabase
+    .from("crm_consultation_guides")
+    .update({ follow_up_email_subject: draft.subject, follow_up_email_body: draft.body })
+    .eq("id", guide.id);
+
+  return draft;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Renders the Admin-edited plain-text draft body into the HTML actually
+// sent - a blank line starts a new paragraph, a single line break becomes
+// <br>. Deliberately simple (no markdown, no rich formatting) since the
+// draft is edited in a plain <textarea>, and escapes HTML-special
+// characters so an edited draft can never inject markup into the sent
+// email.
+function textToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 14px;white-space:pre-line;">${escapeHtml(paragraph)}</p>`)
+    .join("");
+}
+
 export type ConsultationGuideEmailSendResult =
   | { status: "sent"; resendEmailId: string; crmLeadEmailId: string | null }
   | { status: "failed"; error: string };
 
-// Sends and tracks the consultation-completion follow-up email for one
-// guide. Called at most once automatically (from the guarded status
-// transition in completeConsultationGuideAction) and again, deliberately,
-// by the admin-only "Retry Follow-Up Email" action for a guide whose
-// prior attempt failed. Never throws - a send failure is recorded on the
-// guide row and returned, but the guide's own 'completed' status is never
-// touched here: the consultation happened and was marked complete by a
-// real admin action, independent of whether Resend/the network
-// cooperated.
+// Sends the guide's currently-saved follow-up email draft (subject/body -
+// whatever Admin last saved, via "Edit Email" or the auto-generated
+// original) - never recomputed from the base template at send time, so
+// what actually goes out always matches exactly what Admin reviewed.
+// Only ever called from an explicit, manual admin click
+// (sendConsultationFollowUpEmailAction) - never automatically, and never
+// from completeConsultationGuideAction, which only generates the draft.
 export async function sendConsultationGuideFollowUpEmail(
   admin: SupabaseClient,
   guide: Pick<
     CrmConsultationGuideRow,
-    "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "arrangement_type" | "arrangement_payment_trigger"
+    "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "follow_up_email_subject" | "follow_up_email_body"
   >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
   const service = guide.service;
   if (!service) return { status: "failed", error: "No service selected." };
   if (!guide.email) return { status: "failed", error: "No recipient email." };
+  if (!guide.follow_up_email_subject || !guide.follow_up_email_body) {
+    return { status: "failed", error: "No email draft has been generated for this consultation yet." };
+  }
 
-  await admin.from("crm_consultation_guides").update({ follow_up_email_status: "sending" }).eq("id", guide.id);
+  // Atomic claim, guarding against a duplicate/concurrent send (a
+  // double-click, or two admins/tabs open on the same guide) - only a
+  // guide currently 'not_sent' or 'failed' can ever be claimed, and the
+  // claim itself is the same compare-and-swap update .eq(...) row-count
+  // pattern completeConsultationGuideAction already uses for its own
+  // draft->completed transition. A second, near-simultaneous call sees
+  // zero rows affected and bails out here, before either one ever calls
+  // Resend - so this can never send two copies of the same email.
+  const { data: claimed, error: claimError } = await admin
+    .from("crm_consultation_guides")
+    .update({ follow_up_email_status: "sending" })
+    .eq("id", guide.id)
+    .in("follow_up_email_status", ["not_sent", "failed"])
+    .select("id")
+    .maybeSingle();
+  if (claimError) return { status: "failed", error: claimError.message };
+  if (!claimed) return { status: "failed", error: "This follow-up email has already been sent or is currently sending." };
 
-  const email = buildConsultationGuideFollowUpEmail(
-    service,
-    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultant.name },
-    { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
-  );
+  const subject = guide.follow_up_email_subject;
+  const text = guide.follow_up_email_body;
+  const html = textToHtml(text);
 
   try {
     const resend = getResendClient();
@@ -104,9 +217,9 @@ export async function sendConsultationGuideFollowUpEmail(
       from: getEmailSender(service === "business_financing" ? "funding" : "growth"),
       to: guide.email,
       replyTo: getEmailReplyTo(),
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
+      subject,
+      text,
+      html,
     });
 
     if (sendError || !sendResult) {
@@ -132,7 +245,7 @@ export async function sendConsultationGuideFollowUpEmail(
           resend_email_id: sendResult.id,
           email_type: emailType,
           to_email: guide.email,
-          subject: email.subject,
+          subject,
           status: "sent",
           status_at: sentAt,
           sent_at: sentAt,
@@ -172,15 +285,15 @@ export async function sendConsultationGuideFollowUpEmail(
 
 // A deliberate, admin-confirmed "Resend Follow-Up Email" of a guide whose
 // original send already succeeded (see resendConsultationFollowUpEmailAction
-// - never automatic, always a confirmed click). Sends the exact same
-// template/recipient as the original via buildConsultationGuideFollowUpEmail,
-// so it can never diverge from what was actually sent the first time, but
-// - unlike sendConsultationGuideFollowUpEmail above - never touches
-// follow_up_email_status/sent_at/service/error/follow_up_crm_lead_email_id:
-// those columns must keep describing the *original* send exactly as CJ
-// asked ("preserve the original recipient, template, send time and
-// delivery status"). Only the separate follow_up_email_resend_count/
-// last_resent_* columns change here.
+// - never automatic, always a confirmed click). Sends whatever is
+// currently saved as the guide's draft (Admin may have edited it again
+// since the original send - "so I can review it and manually send or
+// resend it when I am ready"), but - unlike sendConsultationGuideFollowUpEmail
+// above - never touches follow_up_email_status/sent_at/service/error/
+// follow_up_crm_lead_email_id: those columns must keep describing the
+// *original* send exactly as CJ asked ("preserve the original recipient,
+// template, send time and delivery status"). Only the separate
+// follow_up_email_resend_count/last_resent_* columns change here.
 export async function resendConsultationGuideFollowUpEmail(
   admin: SupabaseClient,
   guide: Pick<
@@ -193,20 +306,21 @@ export async function resendConsultationGuideFollowUpEmail(
     | "consultant_name"
     | "service"
     | "follow_up_email_resend_count"
-    | "arrangement_type"
-    | "arrangement_payment_trigger"
+    | "follow_up_email_subject"
+    | "follow_up_email_body"
   >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
   const service = guide.service;
   if (!service) return { status: "failed", error: "No service selected." };
   if (!guide.email) return { status: "failed", error: "No recipient email." };
+  if (!guide.follow_up_email_subject || !guide.follow_up_email_body) {
+    return { status: "failed", error: "No email draft is saved for this consultation." };
+  }
 
-  const email = buildConsultationGuideFollowUpEmail(
-    service,
-    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultant.name },
-    { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
-  );
+  const subject = guide.follow_up_email_subject;
+  const text = guide.follow_up_email_body;
+  const html = textToHtml(text);
 
   try {
     const resend = getResendClient();
@@ -214,9 +328,9 @@ export async function resendConsultationGuideFollowUpEmail(
       from: getEmailSender(service === "business_financing" ? "funding" : "growth"),
       to: guide.email,
       replyTo: getEmailReplyTo(),
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
+      subject,
+      text,
+      html,
     });
 
     if (sendError || !sendResult) {
@@ -237,7 +351,7 @@ export async function resendConsultationGuideFollowUpEmail(
           resend_email_id: sendResult.id,
           email_type: emailType,
           to_email: guide.email,
-          subject: email.subject,
+          subject,
           status: "sent",
           status_at: sentAt,
           sent_at: sentAt,
