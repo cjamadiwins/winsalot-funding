@@ -145,7 +145,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       initialHiddenFields={hiddenFields}
       updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
       previewLocationsFileAction={previewUploadFileAction}
-      backfillLocationsAction={(formData) => backfillSegmentLocationsAction(segment.id, formData)}
+      backfillLocationsAction={backfillSegmentLocationsAction.bind(null, segment.id)}
     />
   );
 }

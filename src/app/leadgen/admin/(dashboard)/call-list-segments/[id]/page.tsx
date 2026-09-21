@@ -147,7 +147,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       initialHiddenFields={hiddenFields}
       updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
       previewLocationsFileAction={previewUploadFileAction}
-      backfillLocationsAction={(formData) => backfillSegmentLocationsAction(segment.id, formData)}
+      backfillLocationsAction={backfillSegmentLocationsAction.bind(null, segment.id)}
     />
   );
 }

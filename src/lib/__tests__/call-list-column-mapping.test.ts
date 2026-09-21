@@ -95,6 +95,44 @@ describe("applyColumnMapping", () => {
     expect(result.contact_name).toBe("Bob Smith");
     expect(result.notes).toBe("Left voicemail");
   });
+
+  it("parses City/Province/Postal Code/Country out of a single combined address column, preserving the original address verbatim", () => {
+    const headers = ["Business Name", "Address"];
+    const row = ["Prairie Web Design", "123 Main St, Winnipeg, MB R3C 0V8, Canada"];
+    const mapping = guessColumnMapping(buildMappableHeaders(headers));
+    const result = applyColumnMapping(headers, row, mapping);
+    expect(result.street_address).toBe("123 Main St, Winnipeg, MB R3C 0V8, Canada");
+    expect(result.city).toBe("Winnipeg");
+    expect(result.province).toBe("MB");
+    expect(result.postal_code).toBe("R3C 0V8");
+    expect(result.country).toBe("Canada");
+  });
+
+  it("never overwrites an explicit City/Province column with a value parsed from the combined address", () => {
+    const headers = ["Business Name", "Address", "City", "Province"];
+    // Deliberately conflicting - the explicit columns must win.
+    const row = ["Prairie Web Design", "123 Main St, Winnipeg, MB R3C 0V8, Canada", "Brandon", "MB"];
+    const mapping = guessColumnMapping(buildMappableHeaders(headers));
+    const result = applyColumnMapping(headers, row, mapping);
+    expect(result.city).toBe("Brandon");
+    expect(result.province).toBe("MB");
+    // Postal Code/Country had no explicit column, so parsing still fills
+    // those in.
+    expect(result.postal_code).toBe("R3C 0V8");
+    expect(result.country).toBe("Canada");
+  });
+
+  it("leaves City/Province/Postal Code/Country blank rather than guessing when the combined address can't be confidently parsed", () => {
+    const headers = ["Business Name", "Address"];
+    const row = ["Prairie Web Design", "123 Main St"];
+    const mapping = guessColumnMapping(buildMappableHeaders(headers));
+    const result = applyColumnMapping(headers, row, mapping);
+    expect(result.street_address).toBe("123 Main St");
+    expect(result.city).toBe("");
+    expect(result.province).toBe("");
+    expect(result.postal_code).toBe("");
+    expect(result.country).toBe("");
+  });
 });
 
 describe("end-to-end: a realistic LeadSwift CSV export", () => {

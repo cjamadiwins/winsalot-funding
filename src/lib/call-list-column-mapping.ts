@@ -6,6 +6,8 @@
 // Every uploaded column that doesn't map to one of these fixed fields is
 // kept, not discarded - see call_list_leads.extra_fields - so a LeadSwift
 // export with unexpected extra columns is never silently truncated.
+import { parseAddressComponents } from "./address-parser";
+
 export const CALL_LIST_TARGET_FIELDS = [
   "business_name",
   "contact_name",
@@ -235,6 +237,23 @@ export function applyColumnMapping(headers: string[], row: string[], mapping: Pa
   const result = {} as MappedLeadRow;
   for (const field of CALL_LIST_TARGET_FIELDS) {
     result[field] = resolve(mapping[field]);
+  }
+
+  // LeadSwift often puts the whole address in one combined field rather
+  // than separate City/Province/Postal Code/Country columns. When that's
+  // mapped to street_address and this row's own City/Province/Postal
+  // Code/Country cells are blank, best-effort parse the combined address
+  // to fill in just whichever of those is missing - an explicit column's
+  // value for this row always wins over a parsed one (only a currently-
+  // blank field is ever filled in), and street_address itself is never
+  // rewritten, so the original imported address text is always preserved
+  // verbatim regardless of what parsing does or doesn't find.
+  if (result.street_address && (!result.city || !result.province || !result.postal_code || !result.country)) {
+    const parsed = parseAddressComponents(result.street_address);
+    if (!result.city) result.city = parsed.city;
+    if (!result.province) result.province = parsed.province;
+    if (!result.postal_code) result.postal_code = parsed.postalCode;
+    if (!result.country) result.country = parsed.country;
   }
 
   const mappedHeaders = new Set<string>();
