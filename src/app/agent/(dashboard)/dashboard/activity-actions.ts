@@ -3,7 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { computeAgentActivityPollPlan, isIdleAckReason, type AgentActivityRow } from "@/lib/attendance-pay";
+import { computeAgentActivityPollPlan, computeIdleDurationMinutes, isIdleAckReason, type AgentActivityRow } from "@/lib/attendance-pay";
 import { notifyAdminsOfAgentIdle, notifyAdminsOfBreakOverdue, notifyAdminsOfIdleAcknowledgment } from "@/lib/crm-agent-activity-notifications";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 
@@ -64,10 +64,18 @@ export async function pollAgentActivityAction(hadInteraction: boolean): Promise<
   // above (which only ever reflects the 45-minute idle_since marker) -
   // see computeAgentActivityPollPlan's own comment for why these two are
   // now separate.
-  if (plan.idleWarningTransition === "open" && plan.idleWarningAtIso) {
-    await supabase
-      .from("agent_idle_sessions")
-      .insert({ attendance_id: openShift.id, agent_id: crmUser.id, idle_start: plan.idleWarningAtIso });
+  if (plan.idleWarningTransition === "open" && plan.idleWarningAtIso && plan.idleEpisodeStartIso) {
+    // idle_start is the agent's TRUE last-activity timestamp (the actual
+    // start of the inactivity period), not the moment this warning was
+    // raised - alert_at records that separately, so idle_duration_minutes
+    // (computed from idle_start/idle_end) always reflects real total
+    // inactivity time, never just "warning shown to acknowledged."
+    await supabase.from("agent_idle_sessions").insert({
+      attendance_id: openShift.id,
+      agent_id: crmUser.id,
+      idle_start: plan.idleEpisodeStartIso,
+      alert_at: plan.idleWarningAtIso,
+    });
   } else if (plan.idleWarningTransition === "resolve_exempted" && plan.idleWarningAtIso) {
     await supabase
       .from("agent_idle_sessions")
@@ -85,13 +93,19 @@ export async function pollAgentActivityAction(hadInteraction: boolean): Promise<
       .select("id")
       .maybeSingle();
     let sessionId = escalatedSession?.id as string | undefined;
-    if (!sessionId) {
+    if (!sessionId && plan.idleEpisodeStartIso) {
       // Defensive fallback only - the 30-minute warning always opens the
       // row before this branch can ever run, so this insert should never
       // actually be needed in practice.
       const { data: inserted } = await supabase
         .from("agent_idle_sessions")
-        .insert({ attendance_id: openShift.id, agent_id: crmUser.id, idle_start: plan.idleWarningAtIso, escalated_at: plan.idleWarningAtIso })
+        .insert({
+          attendance_id: openShift.id,
+          agent_id: crmUser.id,
+          idle_start: plan.idleEpisodeStartIso,
+          alert_at: plan.idleWarningAtIso,
+          escalated_at: plan.idleWarningAtIso,
+        })
         .select("id")
         .single();
       sessionId = inserted?.id as string | undefined;
@@ -148,7 +162,7 @@ export async function acknowledgeIdleWarningAction(input: { reason: string; expl
 
   let idleDurationMinutes = 0;
   if (session) {
-    idleDurationMinutes = Math.max(0, Math.round((new Date(nowIso).getTime() - new Date(session.idle_start as string).getTime()) / 60000));
+    idleDurationMinutes = computeIdleDurationMinutes(session.idle_start as string, nowIso);
     const { error: sessionUpdateError } = await supabase
       .from("agent_idle_sessions")
       .update({

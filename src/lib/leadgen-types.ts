@@ -90,6 +90,7 @@ export type LeadgenAgentIdleSessionRow = {
   idle_start: string;
   idle_end: string | null;
   idle_duration_minutes: number | null;
+  alert_at: string | null;
   acknowledged_at: string | null;
   acknowledged_reason: string | null;
   acknowledged_explanation: string | null;

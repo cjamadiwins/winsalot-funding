@@ -68,9 +68,20 @@ export type AgentIdleSessionRow = {
   created_at: string;
   attendance_id: string;
   agent_id: string;
+  // The agent's true last-CRM-activity timestamp - i.e. the real start of
+  // this inactivity period, NOT the moment the 30-minute warning appeared
+  // (see alert_at below for that). idle_duration_minutes (a DB-computed
+  // column) is always idle_end - idle_start, so it reflects real total
+  // inactivity time.
   idle_start: string;
   idle_end: string | null;
   idle_duration_minutes: number | null;
+  // When the 30-minute idle warning was actually shown to the agent
+  // (migration 20260921150000_agent_idle_true_start.sql). For rows
+  // created before that migration, this is backfilled from the old
+  // (pre-fix) idle_start value, which held exactly this meaning at the
+  // time.
+  alert_at: string | null;
   acknowledged_at: string | null;
   acknowledged_reason: string | null;
   acknowledged_explanation: string | null;

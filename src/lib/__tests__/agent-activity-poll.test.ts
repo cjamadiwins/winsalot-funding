@@ -5,6 +5,7 @@ import {
   computeAgentActivityPollPlan,
   computeAgentLiveStatus,
   computeBreakDurations,
+  computeIdleDurationMinutes,
   IDLE_ACK_REASONS,
   INACTIVITY_IDLE_MINUTES,
   INACTIVITY_WARNING_MINUTES,
@@ -54,6 +55,7 @@ describe("computeAgentActivityPollPlan - clocked-out and heartbeat basics", () =
       overdueStagesToNotify: [],
       idleWarningTransition: "none",
       idleWarningAtIso: null,
+      idleEpisodeStartIso: null,
     });
   });
 
@@ -84,6 +86,18 @@ describe("computeAgentActivityPollPlan - the 30-minute idle acknowledgment warni
     expect(plan.attendancePatch).toEqual({ idle_ack_pending_since: NOW_ISO });
     expect(plan.idleTransition).toBe("none");
     expect(plan.notifyIdle).toBe(false);
+  });
+
+  it("sets idleEpisodeStartIso to the agent's true last activity time, NOT to the moment the warning is raised", () => {
+    // Poll cadence means the warning can fire a little past exactly 30
+    // minutes (here, 31) - the true idle start must still be the actual
+    // last_activity_at, never "now."
+    const trueLastActivity = minutesAgoIso(31);
+    const row = baseRow({ last_activity_at: trueLastActivity });
+    const plan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(plan.idleWarningTransition).toBe("open");
+    expect(plan.idleEpisodeStartIso).toBe(trueLastActivity);
+    expect(plan.idleEpisodeStartIso).not.toBe(plan.idleWarningAtIso);
   });
 
   it("never re-opens a warning that's already pending", () => {
@@ -145,6 +159,9 @@ describe("computeAgentActivityPollPlan - the 45-minute idle escalation", () => {
     expect(plan.idleWarningTransition).toBe("escalate");
     expect(plan.idleWarningAtIso).toBe(NOW_ISO);
     expect(plan.attendancePatch).toEqual({ idle_since: NOW_ISO });
+    // Still the agent's true last activity, in case the caller's
+    // defensive fallback insert (no open row found to escalate) ever runs.
+    expect(plan.idleEpisodeStartIso).toBe(row.last_activity_at);
   });
 
   it("never escalates to 45 minutes if the 30-minute warning was never opened (e.g. it was already resolved)", () => {
@@ -241,6 +258,60 @@ describe("agentInactivityMinutes / isBreakSeriouslyOverdue", () => {
     const atBoundary = computeBreakDurations(baseRow({ break1_start: minutesAgoIso(15 + BREAK_OVERDUE_GRACE_MINUTES) }), NOW_ISO).break1;
     expect(isBreakSeriouslyOverdue(justUnder)).toBe(false);
     expect(isBreakSeriouslyOverdue(atBoundary)).toBe(true);
+  });
+});
+
+describe("computeIdleDurationMinutes", () => {
+  it("computes whole minutes between idle_start and idle_end", () => {
+    expect(computeIdleDurationMinutes(minutesAgoIso(32), NOW_ISO)).toBe(32);
+  });
+
+  it("is never negative even for a malformed/out-of-order pair", () => {
+    expect(computeIdleDurationMinutes(NOW_ISO, minutesAgoIso(5))).toBe(0);
+  });
+});
+
+// End-to-end regression test for the core bug this fix addresses: idle
+// duration must reflect the agent's TRUE total inactivity time (from
+// their last real activity to acknowledgment), never just "from when the
+// alert appeared to when they acknowledged it." Walks the same sequence
+// of polls a real shift would produce.
+describe("idle duration reflects true total inactivity, end to end", () => {
+  it("an agent who acknowledges immediately after the 30-minute warning still shows ~30 minutes idle, not ~0", () => {
+    const lastRealActivity = minutesAgoIso(30);
+    let row = baseRow({ last_activity_at: lastRealActivity });
+
+    // Poll at the 30-minute mark: warning opens.
+    const openPlan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(openPlan.idleWarningTransition).toBe("open");
+    const idleStart = openPlan.idleEpisodeStartIso!;
+    expect(idleStart).toBe(lastRealActivity);
+    row = { ...row, idle_ack_pending_since: NOW_ISO };
+
+    // Agent acknowledges 90 seconds after the alert appeared - the bug
+    // this fix addresses would have measured only these 90 seconds.
+    const ackIso = new Date(new Date(NOW_ISO).getTime() + 90_000).toISOString();
+    const duration = computeIdleDurationMinutes(idleStart, ackIso);
+
+    // True duration (30 min + 90 sec = 31.5 min, rounds to 32), not ~0-1 minutes.
+    expect(duration).toBe(32);
+  });
+
+  it("an agent who never acknowledges until 45+ minutes shows the full real duration at escalation and beyond", () => {
+    const lastRealActivity = minutesAgoIso(50);
+    const row = baseRow({
+      last_activity_at: lastRealActivity,
+      idle_ack_pending_since: minutesAgoIso(20), // opened 20 min ago (at the 30-min mark)
+    });
+
+    const escalatePlan = computeAgentActivityPollPlan(row, { hadInteraction: false, nowIso: NOW_ISO });
+    expect(escalatePlan.idleWarningTransition).toBe("escalate");
+    expect(escalatePlan.idleEpisodeStartIso).toBe(lastRealActivity);
+
+    // Agent finally acknowledges 5 minutes after escalation (55 min real inactivity).
+    const ackIso = new Date(new Date(NOW_ISO).getTime() + 5 * 60_000).toISOString();
+    const duration = computeIdleDurationMinutes(escalatePlan.idleEpisodeStartIso!, ackIso);
+    expect(duration).toBe(55);
   });
 });
 
