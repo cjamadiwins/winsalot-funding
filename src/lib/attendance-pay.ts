@@ -712,7 +712,17 @@ export type AgentActivityPollPlan = {
   // while a warning was still outstanding (caller closes that row with no
   // acknowledgment required - the state change itself explains it).
   idleWarningTransition: "none" | "open" | "escalate" | "resolve_exempted";
-  idleWarningAtIso: string | null;
+  idleWarningAtIso: string | null; // when THIS transition happened (the alert being raised/escalated/resolved) - never the idle episode's true start
+  // The agent's true last-activity timestamp as of this poll - i.e. the
+  // actual moment the inactivity period began, NOT the moment the 30-
+  // minute warning was raised. Set only alongside idleWarningTransition
+  // "open" (the caller uses it as the new agent_idle_sessions row's
+  // idle_start) and, defensively, "escalate" (only consulted if that
+  // branch's fallback insert ever runs). This is what makes the eventual
+  // idle_duration_minutes measure the agent's real total inactivity time
+  // instead of only "time from when the alert appeared to when they
+  // acknowledged it."
+  idleEpisodeStartIso: string | null;
 };
 
 export function computeAgentActivityPollPlan(
@@ -727,6 +737,7 @@ export function computeAgentActivityPollPlan(
     overdueStagesToNotify: [],
     idleWarningTransition: "none",
     idleWarningAtIso: null,
+    idleEpisodeStartIso: null,
   };
   if (row.clock_out) return noop; // "Clocked-out agents are not monitored."
 
@@ -740,6 +751,7 @@ export function computeAgentActivityPollPlan(
   let idleStartIso: string | null = null;
   let idleWarningTransition: AgentActivityPollPlan["idleWarningTransition"] = "none";
   let idleWarningAtIso: string | null = null;
+  let idleEpisodeStartIso: string | null = null;
 
   if (input.hadInteraction) {
     attendancePatch.last_activity_at = nowIso;
@@ -769,12 +781,18 @@ export function computeAgentActivityPollPlan(
       attendancePatch.idle_ack_pending_since = nowIso;
       idleWarningTransition = "open";
       idleWarningAtIso = nowIso;
+      // The real start of this inactivity period - not nowIso. row's own
+      // last_activity_at is untouched this poll (input.hadInteraction is
+      // false in this branch), so it still holds the agent's true last
+      // meaningful activity, ~30+ minutes ago.
+      idleEpisodeStartIso = row.last_activity_at;
     } else if (row.idle_ack_pending_since && !row.idle_since && inactivity >= INACTIVITY_IDLE_MINUTES) {
       attendancePatch.idle_since = nowIso;
       idleTransition = "start";
       idleStartIso = nowIso;
       idleWarningTransition = "escalate";
       idleWarningAtIso = nowIso;
+      idleEpisodeStartIso = row.last_activity_at;
     }
   }
 
@@ -796,5 +814,17 @@ export function computeAgentActivityPollPlan(
     overdueStagesToNotify,
     idleWarningTransition,
     idleWarningAtIso,
+    idleEpisodeStartIso,
   };
+}
+
+// The agent's true total inactivity time for one idle episode - from
+// idleStart (the real last-activity timestamp the episode began at, see
+// idleEpisodeStartIso above) to idleEnd (when it was acknowledged or
+// otherwise closed). Shared by both CRMs' acknowledgment actions so the
+// figure saved to agent_idle_sessions.idle_duration_minutes, the one
+// reported to Admin in the acknowledgment notification, and the one shown
+// in the Idle Acknowledgment History are always computed identically.
+export function computeIdleDurationMinutes(idleStartIso: string, idleEndIso: string): number {
+  return Math.max(0, Math.round((new Date(idleEndIso).getTime() - new Date(idleStartIso).getTime()) / 60000));
 }
