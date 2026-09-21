@@ -1,5 +1,6 @@
 import type { KpiTone } from "@/components/crm-ui/KpiCard";
 import type { PayrollCurrency } from "@/lib/payroll";
+import type { OpportunityCommercialArrangement } from "@/lib/commercial-arrangement";
 
 export type CrmRole = "admin" | "agent" | "subcontractor";
 
@@ -229,7 +230,7 @@ export const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
   business_finance_follow_up: "Business Finance Follow-Up",
 };
 
-export type CrmOpportunityRow = {
+export type CrmOpportunityRow = OpportunityCommercialArrangement & {
   id: string;
   created_at: string;
   opportunity_type: OpportunityType;

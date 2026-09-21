@@ -5,6 +5,8 @@
 // same convention as growth-crm-campaign-scripts.ts, so the guide's
 // wording can be reviewed/edited in one place without touching page code.
 
+import type { CommercialArrangementFields } from "./commercial-arrangement";
+
 export const CONSULTATION_GUIDE_STATUSES = ["draft", "completed"] as const;
 export type ConsultationGuideStatus = (typeof CONSULTATION_GUIDE_STATUSES)[number];
 
@@ -186,11 +188,13 @@ export const CONSULTATION_GUIDE_SUMMARY_FIELDS = [
   { key: "follow_up_date", label: "Follow-up date" },
 ] as const;
 
-// Section 9: Close the Consultation.
+// Section 10: Close the Consultation (section 9 is Commercial Arrangement
+// / Special Terms - see src/lib/commercial-arrangement.ts - added between
+// Consultation Summary and this section).
 export const CONSULTATION_GUIDE_CLOSING_LINE =
   "Based on what you’ve shared, the next step is for us to confirm the campaign/service details and make sure expectations are clear. I’ll summarize what we discussed and send the appropriate next-step information.";
 
-// Section 10: Final Checklist.
+// Section 11: Final Checklist.
 export const CONSULTATION_GUIDE_CHECKLIST_ITEMS = [
   { key: "confirmed_goal_and_need", label: "Confirmed the client’s main business goal and service need" },
   { key: "confirmed_target_decision_maker", label: "Confirmed target industry, location, and decision-maker" },
@@ -204,7 +208,7 @@ export const CONSULTATION_GUIDE_CHECKLIST_ITEMS = [
 export type ConsultationGuideAnswers = Record<string, string>;
 export type ConsultationGuideChecklist = Record<string, boolean>;
 
-export type CrmConsultationGuideRow = {
+export type CrmConsultationGuideRow = CommercialArrangementFields & {
   id: string;
   created_at: string;
   updated_at: string;

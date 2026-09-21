@@ -24,6 +24,17 @@ import {
   type LeadgenFitStatus,
   type LendingFitStatus,
 } from "@/lib/consultation-guide";
+import {
+  ARRANGEMENT_CAMPAIGN_STATUSES,
+  ARRANGEMENT_CONVERSION_STATUSES,
+  ARRANGEMENT_FEE_STATUSES,
+  ARRANGEMENT_TYPES,
+  type ArrangementCampaignStatus,
+  type ArrangementConversionStatus,
+  type ArrangementFeeStatus,
+  type ArrangementType,
+  type CommercialArrangementFields,
+} from "@/lib/commercial-arrangement";
 
 type ActionResult = {
   id?: string;
@@ -56,6 +67,50 @@ function answersFromForm(formData: FormData, fields: readonly { key: string }[])
     if (value) answers[field.key] = value;
   }
   return answers;
+}
+
+function arrangementTypeOrDefault(formData: FormData): ArrangementType {
+  const value = String(formData.get("arrangement_type") ?? "");
+  return (ARRANGEMENT_TYPES as readonly string[]).includes(value) ? (value as ArrangementType) : "standard_monthly";
+}
+
+function numberOrDefault(formData: FormData, key: string, fallback: number): number {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+// Section 9: Commercial Arrangement / Special Terms. Only the fields
+// relevant when arrangement_type isn't the plain Standard Monthly default
+// are ever populated from the submitted form - a Standard Monthly
+// consultation's campaign/conversion/fee status and special terms stay
+// null, matching "for normal consultations, keep the page clean" (no
+// section-9 inputs are even rendered for that arrangement type, so there
+// is nothing in the form to read for them anyway).
+function arrangementFieldsFromForm(formData: FormData): CommercialArrangementFields {
+  const arrangement_type = arrangementTypeOrDefault(formData);
+  const campaignStatusRaw = String(formData.get("arrangement_campaign_status") ?? "");
+  const conversionStatusRaw = String(formData.get("arrangement_conversion_status") ?? "");
+  const feeStatusRaw = String(formData.get("arrangement_fee_status") ?? "");
+
+  return {
+    arrangement_type,
+    arrangement_standard_fee: numberOrDefault(formData, "arrangement_standard_fee", 750),
+    arrangement_upfront_payment: numberOrDefault(formData, "arrangement_upfront_payment", 0),
+    arrangement_payment_trigger: textOrNull(formData, "arrangement_payment_trigger"),
+    arrangement_attribution_period: textOrNull(formData, "arrangement_attribution_period"),
+    arrangement_service: textOrNull(formData, "arrangement_service"),
+    arrangement_client_services: textOrNull(formData, "arrangement_client_services"),
+    arrangement_campaign_status: (ARRANGEMENT_CAMPAIGN_STATUSES as readonly string[]).includes(campaignStatusRaw)
+      ? (campaignStatusRaw as ArrangementCampaignStatus)
+      : null,
+    arrangement_conversion_status: (ARRANGEMENT_CONVERSION_STATUSES as readonly string[]).includes(conversionStatusRaw)
+      ? (conversionStatusRaw as ArrangementConversionStatus)
+      : null,
+    arrangement_fee_status: (ARRANGEMENT_FEE_STATUSES as readonly string[]).includes(feeStatusRaw) ? (feeStatusRaw as ArrangementFeeStatus) : null,
+    arrangement_special_terms: textOrNull(formData, "arrangement_special_terms"),
+  };
 }
 
 function checklistFromForm(formData: FormData): ConsultationGuideChecklist {
@@ -93,6 +148,7 @@ function fieldsFromForm(formData: FormData) {
     lending_fit_status: LENDING_FIT_STATUSES.includes(lendingStatusRaw as LendingFitStatus) ? (lendingStatusRaw as LendingFitStatus) : null,
     lending_fit: answersFromForm(formData, CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS),
     summary: answersFromForm(formData, CONSULTATION_GUIDE_SUMMARY_FIELDS),
+    ...arrangementFieldsFromForm(formData),
     checklist: checklistFromForm(formData),
     notes: textOrNull(formData, "notes"),
   };
@@ -122,6 +178,24 @@ async function completeLinkedAppointment(appointmentId: string, actor: { userId:
     })
     .eq("id", appointmentId)
     .eq("status", "booked");
+}
+
+// "When the consultation is saved or completed, automatically save the
+// commercial arrangement information to the linked Growth CRM business/
+// prospect record. Do not make the user manually re-enter the same
+// information." - copies exactly the Section 9 fields (never
+// conversion_date/converted_business/etc., which only "Mark as Converted"
+// on the business record itself ever sets) onto the linked opportunity.
+// Runs on every completion that has a linked opportunity, not only a
+// Performance-Based Trial - a Standard Monthly consultation's default
+// values are already what a plain opportunity should show, so this never
+// needs a special case for "don't touch it when it's just Standard."
+async function copyArrangementToOpportunity(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+  arrangement: CommercialArrangementFields
+): Promise<void> {
+  await supabase.from("crm_opportunities").update(arrangement).eq("id", opportunityId);
 }
 
 async function logConsultationActivity(
@@ -265,6 +339,22 @@ export async function completeConsultationGuideAction(id: string | null, formDat
   if (justCompleted) {
     await logConsultationActivity(supabase, fields.opportunity_id, admin.id, `Consultation completed by ${admin.full_name || admin.email}.`);
 
+    if (fields.opportunity_id) {
+      await copyArrangementToOpportunity(supabase, fields.opportunity_id, {
+        arrangement_type: fields.arrangement_type,
+        arrangement_standard_fee: fields.arrangement_standard_fee,
+        arrangement_upfront_payment: fields.arrangement_upfront_payment,
+        arrangement_payment_trigger: fields.arrangement_payment_trigger,
+        arrangement_attribution_period: fields.arrangement_attribution_period,
+        arrangement_service: fields.arrangement_service,
+        arrangement_client_services: fields.arrangement_client_services,
+        arrangement_campaign_status: fields.arrangement_campaign_status,
+        arrangement_conversion_status: fields.arrangement_conversion_status,
+        arrangement_fee_status: fields.arrangement_fee_status,
+        arrangement_special_terms: fields.arrangement_special_terms,
+      });
+    }
+
     if (fields.appointment_id) {
       await completeLinkedAppointment(fields.appointment_id, { userId: admin.id, name: admin.full_name || admin.email });
       revalidatePath("/admin/crm/appointments");
@@ -344,10 +434,11 @@ export async function previewConsultationCompletionAction(formData: FormData): P
     return { error: "Select a service (Lead Generation or Business Finance) before completing this consultation." };
   }
 
-  const email = buildConsultationGuideFollowUpEmail(fields.service, {
-    contactName: fields.contact_name || "there",
-    consultantName: fields.consultant_name || admin.full_name || admin.email,
-  });
+  const email = buildConsultationGuideFollowUpEmail(
+    fields.service,
+    { contactName: fields.contact_name || "there", consultantName: fields.consultant_name || admin.full_name || admin.email },
+    { type: fields.arrangement_type, paymentTrigger: fields.arrangement_payment_trigger }
+  );
 
   return {
     recipientName: fields.contact_name || "—",
