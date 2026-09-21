@@ -452,6 +452,12 @@ export async function updateCommercialArrangementAction(opportunityId: string, f
         : null,
       arrangement_fee_status: (ARRANGEMENT_FEE_STATUSES as readonly string[]).includes(feeStatusRaw) ? (feeStatusRaw as ArrangementFeeStatus) : null,
       arrangement_special_terms: textOrNull(formData, "arrangement_special_terms"),
+      arrangement_total_value: numberOrNull(formData, "arrangement_total_value"),
+      arrangement_milestone_1_amount: numberOrNull(formData, "arrangement_milestone_1_amount"),
+      arrangement_milestone_1_condition: textOrNull(formData, "arrangement_milestone_1_condition"),
+      arrangement_milestone_2_amount: numberOrNull(formData, "arrangement_milestone_2_amount"),
+      arrangement_milestone_2_condition: textOrNull(formData, "arrangement_milestone_2_condition"),
+      arrangement_campaign_start_date: textOrNull(formData, "arrangement_campaign_start_date"),
     })
     .eq("id", opportunityId);
 

@@ -78,6 +78,13 @@ function numberOrDefault(formData: FormData, key: string, fallback: number): num
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function numberOrNull(formData: FormData, key: string): number | null {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Section 9: Commercial Arrangement / Special Terms. Only the fields
 // relevant when arrangement_type isn't the plain Standard Monthly default
 // are ever populated from the submitted form - a Standard Monthly
@@ -107,6 +114,15 @@ function arrangementFieldsFromForm(formData: FormData): CommercialArrangementFie
       : null,
     arrangement_fee_status: (ARRANGEMENT_FEE_STATUSES as readonly string[]).includes(feeStatusRaw) ? (feeStatusRaw as ArrangementFeeStatus) : null,
     arrangement_special_terms: textOrNull(formData, "arrangement_special_terms"),
+    // Custom – Split Payment / Performance Milestones only - null for
+    // every other arrangement_type, same as the section-9 inputs above
+    // that are only ever rendered for a non-Standard-Monthly type.
+    arrangement_total_value: numberOrNull(formData, "arrangement_total_value"),
+    arrangement_milestone_1_amount: numberOrNull(formData, "arrangement_milestone_1_amount"),
+    arrangement_milestone_1_condition: textOrNull(formData, "arrangement_milestone_1_condition"),
+    arrangement_milestone_2_amount: numberOrNull(formData, "arrangement_milestone_2_amount"),
+    arrangement_milestone_2_condition: textOrNull(formData, "arrangement_milestone_2_condition"),
+    arrangement_campaign_start_date: dateOrNull(formData, "arrangement_campaign_start_date"),
   };
 }
 
@@ -345,6 +361,12 @@ export async function completeConsultationGuideAction(id: string | null, formDat
         arrangement_conversion_status: fields.arrangement_conversion_status,
         arrangement_fee_status: fields.arrangement_fee_status,
         arrangement_special_terms: fields.arrangement_special_terms,
+        arrangement_total_value: fields.arrangement_total_value,
+        arrangement_milestone_1_amount: fields.arrangement_milestone_1_amount,
+        arrangement_milestone_1_condition: fields.arrangement_milestone_1_condition,
+        arrangement_milestone_2_amount: fields.arrangement_milestone_2_amount,
+        arrangement_milestone_2_condition: fields.arrangement_milestone_2_condition,
+        arrangement_campaign_start_date: fields.arrangement_campaign_start_date,
       });
     }
 

@@ -11,7 +11,9 @@ import {
   ARRANGEMENT_INTERNAL_COMPLIANCE_NOTE,
   ARRANGEMENT_TYPES,
   ARRANGEMENT_TYPE_LABELS,
+  CUSTOM_SPLIT_PAYMENT_DEFAULTS,
   formatArrangementBanner,
+  isCustomArrangementType,
   type ArrangementType,
   type OpportunityCommercialArrangement,
 } from "@/lib/commercial-arrangement";
@@ -61,6 +63,7 @@ export default function CommercialArrangementPanel({
 
   const banner = formatArrangementBanner(opportunity);
   const alreadyConverted = opportunity.arrangement_conversion_status === "converted";
+  const isSplitPayment = arrangementType === "custom_split_payment";
 
   function handleSave(formData: FormData) {
     if (!updateAction) return;
@@ -95,7 +98,14 @@ export default function CommercialArrangementPanel({
 
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Commercial Arrangement</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Commercial Arrangement</h2>
+        {isCustomArrangementType(opportunity.arrangement_type) && (
+          <span title={ARRANGEMENT_TYPE_LABELS[opportunity.arrangement_type]} className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+            Custom Terms
+          </span>
+        )}
+      </div>
 
       {banner && (
         <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13.5px] font-bold text-sky-900">{banner}</p>
@@ -124,28 +134,98 @@ export default function CommercialArrangementPanel({
             </label>
             {arrangementType !== "standard_monthly" && (
               <>
+                {isSplitPayment && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Total Agreed Service Value</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        name="arrangement_total_value"
+                        defaultValue={opportunity.arrangement_total_value ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_total_value}
+                        className={inputClasses}
+                      />
+                    </div>
+                  </label>
+                )}
                 <label className="flex flex-col gap-1.5">
-                  <span className={labelClasses}>Standard Fee</span>
+                  <span className={labelClasses}>{isSplitPayment ? "Renewal / Ongoing Monthly Rate" : "Standard Fee"}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[13.5px] font-semibold text-slate-500">$</span>
                     <input type="number" min={0} step="0.01" name="arrangement_standard_fee" defaultValue={opportunity.arrangement_standard_fee} className={inputClasses} />
                   </div>
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className={labelClasses}>Upfront Payment</span>
+                  <span className={labelClasses}>{isSplitPayment ? "Upfront Deposit" : "Upfront Payment"}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[13.5px] font-semibold text-slate-500">$</span>
                     <input type="number" min={0} step="0.01" name="arrangement_upfront_payment" defaultValue={opportunity.arrangement_upfront_payment} className={inputClasses} />
                   </div>
                 </label>
+                {isSplitPayment && (
+                  <>
+                    <label className="flex flex-col gap-1.5">
+                      <span className={labelClasses}>First Milestone Amount</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          name="arrangement_milestone_1_amount"
+                          defaultValue={opportunity.arrangement_milestone_1_amount ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_1_amount}
+                          className={inputClasses}
+                        />
+                      </div>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className={labelClasses}>First Milestone Condition</span>
+                      <input
+                        name="arrangement_milestone_1_condition"
+                        defaultValue={opportunity.arrangement_milestone_1_condition ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_1_condition}
+                        className={inputClasses}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className={labelClasses}>Second Milestone Amount</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          name="arrangement_milestone_2_amount"
+                          defaultValue={opportunity.arrangement_milestone_2_amount ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_2_amount}
+                          className={inputClasses}
+                        />
+                      </div>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className={labelClasses}>Second Milestone Condition</span>
+                      <input
+                        name="arrangement_milestone_2_condition"
+                        defaultValue={opportunity.arrangement_milestone_2_condition ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_2_condition}
+                        className={inputClasses}
+                      />
+                    </label>
+                  </>
+                )}
                 <label className="flex flex-col gap-1.5">
-                  <span className={labelClasses}>Payment Trigger</span>
-                  <input name="arrangement_payment_trigger" defaultValue={opportunity.arrangement_payment_trigger ?? ""} className={inputClasses} />
+                  <span className={labelClasses}>{isSplitPayment ? "Conversion Definition" : "Payment Trigger"}</span>
+                  <input
+                    name="arrangement_payment_trigger"
+                    defaultValue={opportunity.arrangement_payment_trigger ?? (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_payment_trigger : "")}
+                    className={inputClasses}
+                  />
                 </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className={labelClasses}>Attribution Period</span>
-                  <input name="arrangement_attribution_period" defaultValue={opportunity.arrangement_attribution_period ?? ""} className={inputClasses} />
-                </label>
+                {!isSplitPayment && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className={labelClasses}>Attribution Period</span>
+                    <input name="arrangement_attribution_period" defaultValue={opportunity.arrangement_attribution_period ?? ""} className={inputClasses} />
+                  </label>
+                )}
                 <label className="flex flex-col gap-1.5">
                   <span className={labelClasses}>Service</span>
                   <input name="arrangement_service" defaultValue={opportunity.arrangement_service ?? ""} className={inputClasses} />
@@ -159,6 +239,10 @@ export default function CommercialArrangementPanel({
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className={labelClasses}>Campaign Start Date</span>
+                  <input type="date" name="arrangement_campaign_start_date" defaultValue={opportunity.arrangement_campaign_start_date ?? ""} className={inputClasses} />
                 </label>
                 <label className="flex flex-col gap-1.5">
                   <span className={labelClasses}>Conversion Status</span>
@@ -191,7 +275,7 @@ export default function CommercialArrangementPanel({
                 <textarea name="arrangement_client_services" defaultValue={opportunity.arrangement_client_services ?? ""} className={`${inputClasses} min-h-[60px] resize-y`} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className={labelClasses}>Special Terms</span>
+                <span className={labelClasses}>{isSplitPayment ? "Additional Commercial Notes" : "Special Terms"}</span>
                 <textarea name="arrangement_special_terms" defaultValue={opportunity.arrangement_special_terms ?? ""} className={`${inputClasses} min-h-[70px] resize-y`} />
               </label>
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12.5px] font-semibold text-amber-900">
@@ -214,11 +298,24 @@ export default function CommercialArrangementPanel({
           <Field label="Arrangement Type" value={ARRANGEMENT_TYPE_LABELS[opportunity.arrangement_type]} />
           {opportunity.arrangement_type !== "standard_monthly" && (
             <>
-              <Field label="Standard Fee" value={`$${opportunity.arrangement_standard_fee}`} />
-              <Field label="Upfront Payment" value={`$${opportunity.arrangement_upfront_payment}`} />
-              <Field label="Payment Trigger" value={opportunity.arrangement_payment_trigger} />
-              <Field label="Attribution Period" value={opportunity.arrangement_attribution_period} />
+              {isSplitPayment && <Field label="Total Agreed Service Value" value={opportunity.arrangement_total_value != null ? `$${opportunity.arrangement_total_value}` : null} />}
+              <Field label={isSplitPayment ? "Renewal / Ongoing Monthly Rate" : "Standard Fee"} value={`$${opportunity.arrangement_standard_fee}`} />
+              <Field label={isSplitPayment ? "Upfront Deposit" : "Upfront Payment"} value={`$${opportunity.arrangement_upfront_payment}`} />
+              {isSplitPayment && (
+                <>
+                  <Field label="First Milestone Amount" value={opportunity.arrangement_milestone_1_amount != null ? `$${opportunity.arrangement_milestone_1_amount}` : null} />
+                  <Field label="First Milestone Condition" value={opportunity.arrangement_milestone_1_condition} />
+                  <Field label="Second Milestone Amount" value={opportunity.arrangement_milestone_2_amount != null ? `$${opportunity.arrangement_milestone_2_amount}` : null} />
+                  <Field label="Second Milestone Condition" value={opportunity.arrangement_milestone_2_condition} />
+                </>
+              )}
+              <Field label={isSplitPayment ? "Conversion Definition" : "Payment Trigger"} value={opportunity.arrangement_payment_trigger} />
+              {!isSplitPayment && <Field label="Attribution Period" value={opportunity.arrangement_attribution_period} />}
               <Field label="Campaign Status" value={opportunity.arrangement_campaign_status ? ARRANGEMENT_CAMPAIGN_STATUS_LABELS[opportunity.arrangement_campaign_status] : null} />
+              <Field
+                label="Campaign Start Date"
+                value={opportunity.arrangement_campaign_start_date ? new Date(opportunity.arrangement_campaign_start_date).toLocaleDateString() : null}
+              />
               <Field label="Conversion Status" value={opportunity.arrangement_conversion_status ? ARRANGEMENT_CONVERSION_STATUS_LABELS[opportunity.arrangement_conversion_status] : null} />
               <Field label="Fee Status" value={opportunity.arrangement_fee_status ? ARRANGEMENT_FEE_STATUS_LABELS[opportunity.arrangement_fee_status] : null} />
               <Field label="Conversion Date" value={opportunity.arrangement_conversion_date ? new Date(opportunity.arrangement_conversion_date).toLocaleDateString() : null} />
@@ -227,7 +324,7 @@ export default function CommercialArrangementPanel({
                 <Field label="Client Services Being Promoted" value={opportunity.arrangement_client_services} />
               </div>
               <div className="sm:col-span-2">
-                <Field label="Special Terms" value={opportunity.arrangement_special_terms} />
+                <Field label={isSplitPayment ? "Additional Commercial Notes" : "Special Terms"} value={opportunity.arrangement_special_terms} />
               </div>
             </>
           )}
