@@ -240,8 +240,11 @@ export type CrmOpportunityRow = {
   contact_name: string | null;
   phone: string;
   email: string | null;
+  street_address: string | null;
   city: string | null;
   province_state: string | null;
+  postal_code: string | null;
+  country: string | null;
   assigned_agent_id: string | null;
   created_by: string | null;
   notes: string | null;
@@ -348,8 +351,11 @@ export type NewCrmOpportunityInput = {
   contact_name?: string;
   phone: string;
   email?: string;
+  street_address?: string;
   city?: string;
   province_state?: string;
+  postal_code?: string;
+  country?: string;
   notes?: string;
 
   industry?: string;

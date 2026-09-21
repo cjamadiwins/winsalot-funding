@@ -51,6 +51,8 @@ export default function CallListWorkingClient({
   const showEmail = !isColumnHidden(hiddenFields, "email");
   const showWebsite = !isColumnHidden(hiddenFields, "website");
   const showIndustry = !isColumnHidden(hiddenFields, "industry");
+  const showCity = !isColumnHidden(hiddenFields, "city");
+  const showProvince = !isColumnHidden(hiddenFields, "province");
   const showNotes = !isColumnHidden(hiddenFields, "notes");
   const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
   const showCallback = !isColumnHidden(hiddenFields, "callback_at");
@@ -112,6 +114,12 @@ export default function CallListWorkingClient({
                     {lead.business_name}
                     {lead.dnc_flag && <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10.5px] font-semibold text-rose-800">DNC</span>}
                   </div>
+                  {(() => {
+                    const cityPart = showCity ? lead.city : null;
+                    const provincePart = showProvince ? lead.province : null;
+                    const location = [cityPart, provincePart].filter(Boolean).join(", ");
+                    return location ? <div className="text-[12px] text-[var(--color-text-muted)]">{location}</div> : null;
+                  })()}
                   {(showContact || showPhone) && (
                     <div className="text-[12.5px] text-[var(--color-text-muted)]">
                       {showContact && lead.contact_name ? `${lead.contact_name} · ` : ""}

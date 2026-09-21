@@ -566,6 +566,7 @@ export default function LeadDetailClient({
               <LabeledInput name="phone" label="Phone Number" defaultValue={lead.phone ?? ""} />
               <LabeledInput name="email" label="Email" type="email" defaultValue={lead.email ?? ""} />
               <LabeledInput name="website" label="Website" defaultValue={lead.website ?? ""} />
+              <LabeledInput name="street_address" label="Street Address" defaultValue={lead.street_address ?? ""} />
               <LabeledInput name="city" label="City" defaultValue={lead.city ?? ""} />
               <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Province</span>
@@ -578,6 +579,8 @@ export default function LeadDetailClient({
                   ))}
                 </select>
               </label>
+              <LabeledInput name="postal_code" label="Postal Code" defaultValue={lead.postal_code ?? ""} />
+              <LabeledInput name="country" label="Country" defaultValue={lead.country ?? ""} />
               <LabeledInput name="lead_source" label="Lead Source" defaultValue={lead.lead_source ?? ""} />
               <label className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold text-slate-600">Notes</span>
@@ -622,6 +625,11 @@ export default function LeadDetailClient({
                 </div>
               )}
               <Row label="Website" value={lead.website} />
+              <Row label="Street Address" value={lead.street_address} />
+              <Row label="City" value={lead.city} />
+              <Row label="Province" value={lead.province} />
+              <Row label="Postal Code" value={lead.postal_code} />
+              <Row label="Country" value={lead.country} />
               <Row label="Lead Source" value={lead.lead_source} />
               <Row label="Date Added" value={new Date(lead.created_at).toLocaleString()} />
               <Row label="Last Contacted" value={lead.last_contacted_at ? new Date(lead.last_contacted_at).toLocaleString() : null} />

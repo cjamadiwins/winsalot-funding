@@ -67,8 +67,11 @@ export async function bulkInsertSegmentLeads(segmentId: string, rows: MappedLead
         phone: row.phone || null,
         email: row.email || null,
         website: row.website || null,
+        street_address: row.street_address || null,
         city: row.city || null,
         province: row.province || null,
+        postal_code: row.postal_code || null,
+        country: row.country || null,
         industry: row.industry || null,
         notes: row.notes || null,
         extra_fields: row.extra_fields,
@@ -116,8 +119,11 @@ export async function addManualSegmentLead(
       phone: fields.phone || null,
       email: fields.email || null,
       website: fields.website || null,
+      street_address: fields.street_address || null,
       city: fields.city || null,
       province: fields.province || null,
+      postal_code: fields.postal_code || null,
+      country: fields.country || null,
       industry: fields.industry || null,
       notes: fields.notes || null,
       extra_fields: {},
@@ -202,7 +208,23 @@ function csvCell(value: string): string {
 // app so Excel opens it correctly.
 export function buildSegmentLeadsCsv(leads: CallListLeadRow[]): string {
   const extraKeys = [...new Set(leads.flatMap((lead) => Object.keys(lead.extra_fields ?? {})))].sort();
-  const header = ["Business Name", "Contact Name", "Phone", "Email", "Website", "City", "Province", "Industry", "Notes", "Last Outcome", "Callback", ...extraKeys];
+  const header = [
+    "Business Name",
+    "Contact Name",
+    "Phone",
+    "Email",
+    "Website",
+    "Street Address",
+    "City",
+    "Province",
+    "Postal Code",
+    "Country",
+    "Industry",
+    "Notes",
+    "Last Outcome",
+    "Callback",
+    ...extraKeys,
+  ];
   const lines = [
     header,
     ...leads.map((lead) => [
@@ -211,8 +233,11 @@ export function buildSegmentLeadsCsv(leads: CallListLeadRow[]): string {
       lead.phone ?? "",
       lead.email ?? "",
       lead.website ?? "",
+      lead.street_address ?? "",
       lead.city ?? "",
       lead.province ?? "",
+      lead.postal_code ?? "",
+      lead.country ?? "",
       lead.industry ?? "",
       lead.notes ?? "",
       lead.last_outcome ?? "",

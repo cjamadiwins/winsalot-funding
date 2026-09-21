@@ -279,8 +279,11 @@ export type LeadgenLeadRow = {
   phone: string | null;
   email: string | null;
   website: string | null;
+  street_address: string | null;
   city: string | null;
   province: string | null;
+  postal_code: string | null;
+  country: string | null;
   lead_source: string | null;
   client_id: string;
   campaign_id: string | null;

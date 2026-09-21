@@ -245,8 +245,11 @@ export default function OpportunityDetailClient({
                 <Field label="Contact Name" value={opportunity.contact_name} />
                 <Field label="Phone" value={opportunity.phone} />
                 <Field label="Email" value={opportunity.email} />
+                <Field label="Street Address" value={opportunity.street_address} />
                 <Field label="City" value={opportunity.city} />
                 <Field label="Province / State" value={opportunity.province_state} />
+                <Field label="Postal Code" value={opportunity.postal_code} />
+                <Field label="Country" value={opportunity.country} />
                 <Field label="Website" value={opportunity.website} />
                 {(opportunity.opportunity_type === "lead_generation" || opportunity.opportunity_type === "both_services") && (
                   <>

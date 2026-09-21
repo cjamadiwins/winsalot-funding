@@ -12,8 +12,10 @@ import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
 import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/crm-call-list/SegmentPerformanceClient";
 import {
   addSegmentLeadAction,
+  backfillSegmentLocationsAction,
   deleteDraftSegmentAction,
   deploySegmentAction,
+  previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
   removeSegmentLeadsAction,
@@ -142,6 +144,8 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       restoreLeadsAction={restoreSegmentLeadsAction}
       initialHiddenFields={hiddenFields}
       updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
+      previewLocationsFileAction={previewUploadFileAction}
+      backfillLocationsAction={(formData) => backfillSegmentLocationsAction(segment.id, formData)}
     />
   );
 }

@@ -55,8 +55,11 @@ export type CallListLeadRow = {
   phone: string | null;
   email: string | null;
   website: string | null;
+  street_address: string | null;
   city: string | null;
   province: string | null;
+  postal_code: string | null;
+  country: string | null;
   industry: string | null;
   notes: string | null;
   extra_fields: Record<string, string>;
@@ -87,8 +90,11 @@ export const CALL_LIST_EDITABLE_FIELDS: CallListTargetField[] = [
   "phone",
   "email",
   "website",
+  "street_address",
   "city",
   "province",
+  "postal_code",
+  "country",
   "industry",
   "notes",
 ];

@@ -131,8 +131,11 @@ export async function updateOpportunityFieldsAction(id: string, formData: FormDa
       contact_name: textOrNull(formData, "contact_name"),
       phone,
       email: textOrNull(formData, "email"),
+      street_address: textOrNull(formData, "street_address"),
       city: textOrNull(formData, "city"),
       province_state: textOrNull(formData, "province_state"),
+      postal_code: textOrNull(formData, "postal_code"),
+      country: textOrNull(formData, "country"),
       notes: textOrNull(formData, "notes"),
 
       industry: textOrNull(formData, "industry"),

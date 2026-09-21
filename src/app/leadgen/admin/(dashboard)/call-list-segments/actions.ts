@@ -25,6 +25,7 @@ import {
 import { deploySegment } from "@/lib/call-list-deploy";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
+import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
 
 const BASE_PATH = "/leadgen/admin/call-list-segments";
 
@@ -214,6 +215,48 @@ export async function promoteSegmentLeadAction(leadId: string): Promise<{ error?
   const result = await promoteToLeadgenLead(leadId, admin.id);
   if ("error" in result) return { error: result.error };
   return { id: result.id, linkedExisting: result.linkedExisting };
+}
+
+// "Update Locations from CSV" (brief's "Existing Imported Lists" section,
+// situation B - address data was never imported for this segment).
+// Re-parses the same LeadSwift-style file, matches each row to an
+// EXISTING call_list_leads row in this segment (by phone, then email,
+// then an unambiguous business name), and fills in only whichever of
+// street address/city/province/postal code/country is currently blank -
+// see src/lib/call-list-backfill.ts for the full non-destructive
+// contract. Never creates a call_list_leads row and never touches
+// business_name/contact/phone/email/notes/status/assignment/call
+// history, on either the staging row or (when a row was already
+// promoted) the resulting leadgen_leads record.
+export async function backfillSegmentLocationsAction(segmentId: string, formData: FormData): Promise<{ error?: string; summary?: BackfillSummary }> {
+  await requireLeadgenAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
+
+  const file = formData.get("file");
+  const mappingRaw = String(formData.get("mapping") ?? "");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV or XLSX file to upload." };
+
+  let mapping: Partial<Record<CallListTargetField, string>>;
+  try {
+    mapping = JSON.parse(mappingRaw);
+  } catch {
+    return { error: "Column mapping is missing or invalid - go back and confirm it again." };
+  }
+  if (!mapping.business_name && !mapping.phone && !mapping.email) {
+    return { error: "Map at least Business Name, Phone, or Email so rows can be matched to existing leads." };
+  }
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const parsed = parseUploadedFile(file.name, buffer);
+    const mappedRows = parsed.rows.map((row) => applyColumnMapping(parsed.headers, row, mapping));
+    const summary = await backfillSegmentLocationsFromFile(segmentId, "lead_generation", mappedRows);
+    revalidatePath(`${BASE_PATH}/${segmentId}`);
+    return { summary };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to process this file." };
+  }
 }
 
 // "Manage Columns" - display-only, CRM-wide (not per-segment) - never

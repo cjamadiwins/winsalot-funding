@@ -26,8 +26,11 @@ export default function OpportunityFieldsForm({
       | "contact_name"
       | "phone"
       | "email"
+      | "street_address"
       | "city"
       | "province_state"
+      | "postal_code"
+      | "country"
       | "notes"
       | "industry"
       | "target_customers"
@@ -78,11 +81,20 @@ export default function OpportunityFieldsForm({
         <Field label="Email Address">
           <input name="email" type="email" defaultValue={defaults?.email ?? ""} className={inputClass} />
         </Field>
+        <Field label="Street Address">
+          <input name="street_address" defaultValue={defaults?.street_address ?? ""} className={inputClass} />
+        </Field>
         <Field label="City">
           <input name="city" defaultValue={defaults?.city ?? ""} className={inputClass} />
         </Field>
         <Field label="Province / State">
           <input name="province_state" defaultValue={defaults?.province_state ?? ""} className={inputClass} />
+        </Field>
+        <Field label="Postal Code">
+          <input name="postal_code" defaultValue={defaults?.postal_code ?? ""} className={inputClass} />
+        </Field>
+        <Field label="Country">
+          <input name="country" defaultValue={defaults?.country ?? ""} className={inputClass} />
         </Field>
       </div>
 
