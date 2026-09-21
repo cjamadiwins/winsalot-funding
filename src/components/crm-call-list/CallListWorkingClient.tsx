@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PhoneCall, Rocket } from "lucide-react";
 import { CALL_LOG_OUTCOMES, CALL_LOG_OUTCOME_STYLES, type CallLogOutcome } from "@/lib/call-log";
 import { isColumnHidden } from "@/lib/call-list-columns";
+import { locationLines } from "@/lib/call-list-card-location";
 import type { CallListLeadRow } from "@/lib/call-list-types";
 
 // Deliberately per-lead, one-at-a-time (no row selection, no "export"/
@@ -55,7 +56,6 @@ export default function CallListWorkingClient({
   const showCity = !isColumnHidden(hiddenFields, "city");
   const showProvince = !isColumnHidden(hiddenFields, "province");
   const showPostalCode = !isColumnHidden(hiddenFields, "postal_code");
-  const showCountry = !isColumnHidden(hiddenFields, "country");
   const showNotes = !isColumnHidden(hiddenFields, "notes");
   const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
   const showCallback = !isColumnHidden(hiddenFields, "callback_at");
@@ -117,26 +117,6 @@ export default function CallListWorkingClient({
                     {lead.business_name}
                     {lead.dnc_flag && <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10.5px] font-semibold text-rose-800">DNC</span>}
                   </div>
-                  {(() => {
-                    const street = showStreetAddress ? lead.street_address?.trim() : "";
-                    const city = showCity ? lead.city?.trim() : "";
-                    const province = showProvince ? lead.province?.trim() : "";
-                    const postalCode = showPostalCode ? lead.postal_code?.trim() : "";
-                    const country = showCountry ? lead.country?.trim() : "";
-
-                    const locality = [city, province].filter(Boolean).join(", ");
-                    const localityWithPostal = [locality, postalCode].filter(Boolean).join(" ");
-                    const secondary = [localityWithPostal, country].filter(Boolean).join(" · ");
-
-                    if (!street && !secondary) return null;
-
-                    return (
-                      <div className="mt-0.5 space-y-0.5 text-[12px] text-[var(--color-text-muted)]">
-                        {street && <div>{street}</div>}
-                        {secondary && secondary !== street && <div>{secondary}</div>}
-                      </div>
-                    );
-                  })()}
                   {(showContact || showPhone) && (
                     <div className="text-[12.5px] text-[var(--color-text-muted)]">
                       {showContact && lead.contact_name ? `${lead.contact_name} · ` : ""}
@@ -150,6 +130,11 @@ export default function CallListWorkingClient({
                       {showWebsite && lead.website ? lead.website : ""}
                     </div>
                   )}
+                  {locationLines(lead, { showStreetAddress, showCity, showProvince, showPostalCode }).map((line) => (
+                    <div key={line} className="text-[12px] text-[var(--color-text-muted)]">
+                      {line}
+                    </div>
+                  ))}
                   {showIndustry && lead.industry && <div className="text-[12.5px] text-[var(--color-text-muted)]">{lead.industry}</div>}
                   {showOutcome && lead.last_outcome && (
                     <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${CALL_LOG_OUTCOME_STYLES[lead.last_outcome as CallLogOutcome] ?? "bg-slate-100 text-slate-700"}`}>
