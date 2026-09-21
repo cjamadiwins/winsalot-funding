@@ -41,6 +41,8 @@ import {
   ARRANGEMENT_INTERNAL_COMPLIANCE_NOTE,
   ARRANGEMENT_TYPES,
   ARRANGEMENT_TYPE_LABELS,
+  CUSTOM_SPLIT_PAYMENT_DEFAULTS,
+  isCustomArrangementType,
   PERFORMANCE_BASED_TRIAL_DEFAULTS,
   type ArrangementType,
 } from "@/lib/commercial-arrangement";
@@ -192,6 +194,7 @@ export default function ConsultationGuideForm({
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
   const [followUpError, setFollowUpError] = useState<string | null>(null);
   const [arrangementType, setArrangementType] = useState<ArrangementType>(guide?.arrangement_type ?? "standard_monthly");
+  const isSplitPayment = arrangementType === "custom_split_payment";
 
   // Follow-Up Email section: local editable copies of the guide's saved
   // draft, so "Edit Email" never sends anything on its own - only
@@ -343,6 +346,14 @@ export default function ConsultationGuideForm({
           ← Back to Consultation Guides
         </Link>
         <div className="flex items-center gap-2">
+          {guide && isCustomArrangementType(arrangementType) && (
+            <span
+              title={ARRANGEMENT_TYPE_LABELS[arrangementType]}
+              className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"
+            >
+              Custom Terms
+            </span>
+          )}
           {showFollowUpBadge && (
             <span
               title={guide!.follow_up_email_error ?? guide!.no_follow_up_email_reason ?? undefined}
@@ -698,9 +709,27 @@ export default function ConsultationGuideForm({
 
             {arrangementType !== "standard_monthly" && (
               <div className="mt-5 space-y-4 border-t border-slate-200 pt-5">
+                {isSplitPayment && (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className={labelClasses}>Total Agreed Service Value</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          name="arrangement_total_value"
+                          defaultValue={guide?.arrangement_total_value ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_total_value}
+                          className={inputClasses}
+                        />
+                      </div>
+                    </label>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
-                    <span className={labelClasses}>Standard Winsalot Fee</span>
+                    <span className={labelClasses}>{isSplitPayment ? "Renewal / Ongoing Monthly Rate" : "Standard Winsalot Fee"}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[13.5px] font-semibold text-slate-500">$</span>
                       <input
@@ -708,13 +737,16 @@ export default function ConsultationGuideForm({
                         min={0}
                         step="0.01"
                         name="arrangement_standard_fee"
-                        defaultValue={guide?.arrangement_standard_fee ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_standard_fee}
+                        defaultValue={
+                          guide?.arrangement_standard_fee ??
+                          (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_standard_fee : PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_standard_fee)
+                        }
                         className={inputClasses}
                       />
                     </div>
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className={labelClasses}>Upfront Payment</span>
+                    <span className={labelClasses}>{isSplitPayment ? "Upfront Deposit" : "Upfront Payment"}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[13.5px] font-semibold text-slate-500">$</span>
                       <input
@@ -722,25 +754,75 @@ export default function ConsultationGuideForm({
                         min={0}
                         step="0.01"
                         name="arrangement_upfront_payment"
-                        defaultValue={guide?.arrangement_upfront_payment ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_upfront_payment}
+                        defaultValue={
+                          guide?.arrangement_upfront_payment ??
+                          (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_upfront_payment : PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_upfront_payment)
+                        }
                         className={inputClasses}
                       />
                     </div>
                   </label>
+                  {isSplitPayment && (
+                    <>
+                      <label className="flex flex-col gap-1.5">
+                        <span className={labelClasses}>First Milestone Amount</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            name="arrangement_milestone_1_amount"
+                            defaultValue={guide?.arrangement_milestone_1_amount ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_1_amount}
+                            className={inputClasses}
+                          />
+                        </div>
+                      </label>
+                      <Field
+                        label="First Milestone Condition"
+                        name="arrangement_milestone_1_condition"
+                        defaultValue={guide?.arrangement_milestone_1_condition ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_1_condition}
+                      />
+                      <label className="flex flex-col gap-1.5">
+                        <span className={labelClasses}>Second Milestone Amount</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13.5px] font-semibold text-slate-500">$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            name="arrangement_milestone_2_amount"
+                            defaultValue={guide?.arrangement_milestone_2_amount ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_2_amount}
+                            className={inputClasses}
+                          />
+                        </div>
+                      </label>
+                      <Field
+                        label="Second Milestone Condition"
+                        name="arrangement_milestone_2_condition"
+                        defaultValue={guide?.arrangement_milestone_2_condition ?? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_milestone_2_condition}
+                      />
+                    </>
+                  )}
                   <Field
-                    label="Payment Trigger"
+                    label={isSplitPayment ? "Conversion Definition" : "Payment Trigger"}
                     name="arrangement_payment_trigger"
-                    defaultValue={guide?.arrangement_payment_trigger ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_payment_trigger}
+                    defaultValue={
+                      guide?.arrangement_payment_trigger ??
+                      (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_payment_trigger : PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_payment_trigger)
+                    }
                   />
-                  <Field
-                    label="Attribution Period"
-                    name="arrangement_attribution_period"
-                    defaultValue={guide?.arrangement_attribution_period ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_attribution_period}
-                  />
+                  {!isSplitPayment && (
+                    <Field
+                      label="Attribution Period"
+                      name="arrangement_attribution_period"
+                      defaultValue={guide?.arrangement_attribution_period ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_attribution_period}
+                    />
+                  )}
                   <Field
                     label="Service"
                     name="arrangement_service"
-                    defaultValue={guide?.arrangement_service ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_service}
+                    defaultValue={guide?.arrangement_service ?? (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_service : PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_service)}
                   />
                   <label className="flex flex-col gap-1.5">
                     <span className={labelClasses}>Campaign Status</span>
@@ -756,6 +838,12 @@ export default function ConsultationGuideForm({
                       ))}
                     </select>
                   </label>
+                  <Field
+                    label="Campaign Start Date"
+                    name="arrangement_campaign_start_date"
+                    type="date"
+                    defaultValue={guide?.arrangement_campaign_start_date ?? ""}
+                  />
                   <label className="flex flex-col gap-1.5">
                     <span className={labelClasses}>Conversion Status</span>
                     <select
@@ -797,10 +885,13 @@ export default function ConsultationGuideForm({
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className={labelClasses}>Special Terms</span>
+                  <span className={labelClasses}>{isSplitPayment ? "Additional Commercial Notes" : "Special Terms"}</span>
                   <textarea
                     name="arrangement_special_terms"
-                    defaultValue={guide?.arrangement_special_terms ?? PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_special_terms}
+                    defaultValue={
+                      guide?.arrangement_special_terms ??
+                      (isSplitPayment ? CUSTOM_SPLIT_PAYMENT_DEFAULTS.arrangement_special_terms : PERFORMANCE_BASED_TRIAL_DEFAULTS.arrangement_special_terms)
+                    }
                     className={`${inputClasses} min-h-[70px] resize-y`}
                   />
                 </label>

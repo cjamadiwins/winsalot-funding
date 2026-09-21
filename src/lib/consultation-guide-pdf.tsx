@@ -167,16 +167,28 @@ export function ConsultationGuidePdfDocument({ guide }: { guide: CrmConsultation
             <Text style={styles.sectionTitle}>Commercial Arrangement / Special Terms</Text>
             <View style={styles.fieldGrid}>
               <Field label="Arrangement Type" value={ARRANGEMENT_TYPE_LABELS[guide.arrangement_type]} />
-              <Field label="Standard Fee" value={`$${guide.arrangement_standard_fee}`} />
-              <Field label="Upfront Payment" value={`$${guide.arrangement_upfront_payment}`} />
-              <Field label="Payment Trigger" value={guide.arrangement_payment_trigger} />
-              <Field label="Attribution Period" value={guide.arrangement_attribution_period} />
+              {guide.arrangement_type === "custom_split_payment" && (
+                <Field label="Total Agreed Service Value" value={guide.arrangement_total_value != null ? `$${guide.arrangement_total_value}` : null} />
+              )}
+              <Field label={guide.arrangement_type === "custom_split_payment" ? "Renewal / Ongoing Monthly Rate" : "Standard Fee"} value={`$${guide.arrangement_standard_fee}`} />
+              <Field label={guide.arrangement_type === "custom_split_payment" ? "Upfront Deposit" : "Upfront Payment"} value={`$${guide.arrangement_upfront_payment}`} />
+              {guide.arrangement_type === "custom_split_payment" && (
+                <>
+                  <Field label="First Milestone Amount" value={guide.arrangement_milestone_1_amount != null ? `$${guide.arrangement_milestone_1_amount}` : null} />
+                  <Field label="First Milestone Condition" value={guide.arrangement_milestone_1_condition} />
+                  <Field label="Second Milestone Amount" value={guide.arrangement_milestone_2_amount != null ? `$${guide.arrangement_milestone_2_amount}` : null} />
+                  <Field label="Second Milestone Condition" value={guide.arrangement_milestone_2_condition} />
+                </>
+              )}
+              <Field label={guide.arrangement_type === "custom_split_payment" ? "Conversion Definition" : "Payment Trigger"} value={guide.arrangement_payment_trigger} />
+              {guide.arrangement_type !== "custom_split_payment" && <Field label="Attribution Period" value={guide.arrangement_attribution_period} />}
               <Field label="Service" value={guide.arrangement_service} />
               <Field label="Campaign Status" value={guide.arrangement_campaign_status ? ARRANGEMENT_CAMPAIGN_STATUS_LABELS[guide.arrangement_campaign_status] : null} />
+              <Field label="Campaign Start Date" value={guide.arrangement_campaign_start_date ? new Date(guide.arrangement_campaign_start_date).toLocaleDateString() : null} />
               <Field label="Conversion Status" value={guide.arrangement_conversion_status ? ARRANGEMENT_CONVERSION_STATUS_LABELS[guide.arrangement_conversion_status] : null} />
               <Field label="Fee Status" value={guide.arrangement_fee_status ? ARRANGEMENT_FEE_STATUS_LABELS[guide.arrangement_fee_status] : null} />
               <Field label="Client Services Being Promoted" value={guide.arrangement_client_services} />
-              <Field label="Special Terms" value={guide.arrangement_special_terms} />
+              <Field label={guide.arrangement_type === "custom_split_payment" ? "Additional Commercial Notes" : "Special Terms"} value={guide.arrangement_special_terms} />
             </View>
             <Text style={styles.reminder}>INTERNAL ONLY: {ARRANGEMENT_INTERNAL_COMPLIANCE_NOTE}</Text>
           </View>

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getResendClient } from "./resend";
 import { getEmailSender, getEmailReplyTo } from "./email-senders";
 import { getSiteUrl } from "./site-url";
-import { buildWinsalotFollowUpEmail, buildWinsalotBusinessFinanceFollowUpEmail, type WinsalotEmailBody } from "./winsalot-consultation-emails";
+import { buildWinsalotFollowUpEmail, buildWinsalotBusinessFinanceFollowUpEmail, firstNameOf, type WinsalotEmailBody } from "./winsalot-consultation-emails";
 import { ARRANGEMENT_TYPE_LABELS, type ArrangementType } from "./commercial-arrangement";
 import type { ConsultationGuideAnswers, ConsultationGuideService, CrmConsultationGuideRow } from "./consultation-guide";
 
@@ -88,6 +88,135 @@ function buildConsultationRecapLines(summary: ConsultationGuideAnswers | null | 
   return lines;
 }
 
+function formatMoney(amount: number | null): string {
+  return `$${Number(amount ?? 0)}`;
+}
+
+// Mid-sentence continuation ("...becomes due when X" / "...means Y") - the
+// same lowercase-first-letter trick appendArrangementNote above already
+// uses for the same reason: a saved field is written admin-facing (capital
+// first letter, its own complete sentence) but needs to flow naturally
+// into a sentence the email builds around it.
+function lowerFirst(text: string): string {
+  return text ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
+}
+
+// Avoids a doubled period when a saved free-text field (a business name
+// ending in "Inc."/"Corp.", or an admin-written condition/definition that
+// already ends its own sentence) lands at the end of a sentence this
+// template builds around it.
+function ensureTrailingPeriod(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+// "October 1" - month + day only, no year, for a same-cycle campaign
+// launch date read naturally in a client email. Parses the stored
+// "YYYY-MM-DD" as a calendar date (not a UTC instant), so the displayed
+// day never shifts depending on the server's timezone.
+function formatCampaignStartDateForEmail(dateIso: string): string {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+}
+
+export type CustomSplitPaymentEmailGuide = Pick<
+  CrmConsultationGuideRow,
+  | "contact_name"
+  | "business_name"
+  | "arrangement_service"
+  | "arrangement_client_services"
+  | "arrangement_total_value"
+  | "arrangement_upfront_payment"
+  | "arrangement_milestone_1_amount"
+  | "arrangement_milestone_1_condition"
+  | "arrangement_milestone_2_amount"
+  | "arrangement_milestone_2_condition"
+  | "arrangement_payment_trigger"
+  | "arrangement_standard_fee"
+  | "arrangement_campaign_start_date"
+  | "summary"
+>;
+
+// Custom – Split Payment / Performance Milestones follow-up email (e.g.
+// Teknokraft Canada Inc.: $250 upfront, $250 + $250 on two conversion
+// milestones, then Winsalot Corp.'s standard $750/month rate afterward).
+// A milestone payment schedule can't be expressed as a short note appended
+// to the generic Lead Generation template the way
+// appendArrangementNote/buildConsultationGuideFollowUpEmail handle
+// Performance-Based Trial above, so this is its own, wholly separate
+// template - but built from exactly the same kind of saved Section 9
+// fields, never invented, and drafted/reviewed/sent through the identical
+// generate-once-then-review pipeline (buildFollowUpEmailDraft below), same
+// as every other service/arrangement combination. Never sent directly.
+function buildCustomSplitPaymentFollowUpEmail(guide: CustomSplitPaymentEmailGuide, consultantName: string): { subject: string; text: string } {
+  const businessName = guide.business_name || "your business";
+  const firstName = firstNameOf(guide.contact_name || "there");
+  const service = guide.arrangement_service || "B2B Lead Generation / Appointment Setting";
+  const clientServices = guide.arrangement_client_services;
+
+  const totalValue = formatMoney(guide.arrangement_total_value);
+  const deposit = formatMoney(guide.arrangement_upfront_payment);
+  const renewalRate = formatMoney(guide.arrangement_standard_fee);
+
+  const milestoneLines = [
+    `${deposit} upfront to begin the campaign`,
+    `${formatMoney(guide.arrangement_milestone_1_amount)} ${
+      guide.arrangement_milestone_1_condition
+        ? lowerFirst(guide.arrangement_milestone_1_condition)
+        : "upon the first successful client conversion generated through Winsalot Corp."
+    }`,
+    `${formatMoney(guide.arrangement_milestone_2_amount)} ${
+      guide.arrangement_milestone_2_condition
+        ? lowerFirst(guide.arrangement_milestone_2_condition)
+        : "upon the second successful client conversion generated through Winsalot Corp."
+    }`,
+  ];
+
+  const lines: string[] = [
+    `Hi ${firstName},`,
+    "",
+    `Thank you for taking the time to speak with me today. I enjoyed our conversation and learning more about ${businessName}'s ${clientServices ? `${clientServices} ` : ""}services.`,
+    "",
+    `As discussed, we have agreed to move forward with Winsalot Corp.'s ${service} service under a custom initial payment arrangement.`,
+    "",
+    `The total value of the initial engagement remains ${totalValue}, structured as follows:`,
+    ...milestoneLines,
+  ];
+
+  if (guide.arrangement_payment_trigger) {
+    lines.push("", `For clarity, a successful conversion means ${ensureTrailingPeriod(lowerFirst(guide.arrangement_payment_trigger))}`);
+  }
+
+  if (clientServices) {
+    lines.push(
+      "",
+      `Our campaign will focus on identifying businesses that may require ${clientServices}, or improvements to their online presence, and booking qualified conversations with the appropriate decision-makers.`
+    );
+  }
+
+  lines.push("", `Following a successful initial engagement, we discussed continuing the partnership at our standard ${renewalRate}/month ${service} service rate.`);
+
+  if (guide.arrangement_campaign_start_date) {
+    const shortDate = formatCampaignStartDateForEmail(guide.arrangement_campaign_start_date);
+    lines.push(
+      "",
+      `We're looking forward to launching your campaign on ${shortDate}. Between now and launch, we'll finalize the targeting, outreach messaging, qualification criteria, and campaign setup so everything is ready to begin.`
+    );
+  }
+
+  const nextStep = guide.summary?.next_step;
+  lines.push(
+    "",
+    nextStep
+      ? `Next step: ${nextStep}`
+      : `The next step is the initial ${deposit} payment, after which we can prepare the campaign, targeting criteria, call approach, and begin outreach.`
+  );
+
+  lines.push("", `We look forward to working with ${ensureTrailingPeriod(businessName)}`, "", "Best regards,", consultantName || "Winsalot Corp.", "Winsalot Corp.");
+
+  return { subject: `${businessName} × Winsalot Corp. — Agreed Next Steps`, text: lines.join("\n") };
+}
+
 export type FollowUpEmailDraft = { subject: string; body: string };
 
 // Generates the initial follow-up email draft for a guide - called once,
@@ -99,15 +228,44 @@ export type FollowUpEmailDraft = { subject: string; body: string };
 // draft for a guide completed before this feature existed) since it's
 // pure - same inputs, same output, never sends anything itself.
 export function buildFollowUpEmailDraft(
-  guide: Pick<CrmConsultationGuideRow, "service" | "contact_name" | "consultant_name" | "arrangement_type" | "arrangement_payment_trigger" | "summary">,
+  guide: Pick<
+    CrmConsultationGuideRow,
+    | "service"
+    | "contact_name"
+    | "business_name"
+    | "consultant_name"
+    | "arrangement_type"
+    | "arrangement_payment_trigger"
+    | "arrangement_service"
+    | "arrangement_client_services"
+    | "arrangement_total_value"
+    | "arrangement_upfront_payment"
+    | "arrangement_milestone_1_amount"
+    | "arrangement_milestone_1_condition"
+    | "arrangement_milestone_2_amount"
+    | "arrangement_milestone_2_condition"
+    | "arrangement_standard_fee"
+    | "arrangement_campaign_start_date"
+    | "summary"
+  >,
   consultantName: string
 ): FollowUpEmailDraft | null {
   const service = guide.service;
   if (!service) return null;
 
+  const resolvedConsultantName = guide.consultant_name || consultantName;
+
+  // Custom – Split Payment / Performance Milestones has its own, wholly
+  // different email structure (a payment schedule, not a template + a
+  // short appended note) - see buildCustomSplitPaymentFollowUpEmail above.
+  if (guide.arrangement_type === "custom_split_payment") {
+    const custom = buildCustomSplitPaymentFollowUpEmail(guide, resolvedConsultantName);
+    return { subject: custom.subject, body: custom.text };
+  }
+
   const base = buildConsultationGuideFollowUpEmail(
     service,
-    { contactName: guide.contact_name || "there", consultantName: guide.consultant_name || consultantName },
+    { contactName: guide.contact_name || "there", consultantName: resolvedConsultantName },
     { type: guide.arrangement_type, paymentTrigger: guide.arrangement_payment_trigger }
   );
 
@@ -127,7 +285,26 @@ export async function ensureFollowUpEmailDraft(
   supabase: SupabaseClient,
   guide: Pick<
     CrmConsultationGuideRow,
-    "id" | "service" | "contact_name" | "consultant_name" | "arrangement_type" | "arrangement_payment_trigger" | "summary" | "follow_up_email_subject" | "follow_up_email_body"
+    | "id"
+    | "service"
+    | "contact_name"
+    | "business_name"
+    | "consultant_name"
+    | "arrangement_type"
+    | "arrangement_payment_trigger"
+    | "arrangement_service"
+    | "arrangement_client_services"
+    | "arrangement_total_value"
+    | "arrangement_upfront_payment"
+    | "arrangement_milestone_1_amount"
+    | "arrangement_milestone_1_condition"
+    | "arrangement_milestone_2_amount"
+    | "arrangement_milestone_2_condition"
+    | "arrangement_standard_fee"
+    | "arrangement_campaign_start_date"
+    | "summary"
+    | "follow_up_email_subject"
+    | "follow_up_email_body"
   >,
   consultantName: string
 ): Promise<FollowUpEmailDraft | null> {

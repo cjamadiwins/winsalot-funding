@@ -264,7 +264,7 @@ export function buildWinsalotCancellationEmail(params: {
 // email is the only place in this file that personalizes by first name
 // rather than the full contact name, per the brief's exact copy. Falls
 // back to the full (trimmed) name if it's already just one word.
-function firstNameOf(fullName: string): string {
+export function firstNameOf(fullName: string): string {
   const trimmed = fullName.trim();
   return trimmed.split(/\s+/)[0] || trimmed;
 }
