@@ -51,8 +51,11 @@ export default function CallListWorkingClient({
   const showEmail = !isColumnHidden(hiddenFields, "email");
   const showWebsite = !isColumnHidden(hiddenFields, "website");
   const showIndustry = !isColumnHidden(hiddenFields, "industry");
+  const showStreetAddress = !isColumnHidden(hiddenFields, "street_address");
   const showCity = !isColumnHidden(hiddenFields, "city");
   const showProvince = !isColumnHidden(hiddenFields, "province");
+  const showPostalCode = !isColumnHidden(hiddenFields, "postal_code");
+  const showCountry = !isColumnHidden(hiddenFields, "country");
   const showNotes = !isColumnHidden(hiddenFields, "notes");
   const showOutcome = !isColumnHidden(hiddenFields, "last_outcome");
   const showCallback = !isColumnHidden(hiddenFields, "callback_at");
@@ -115,10 +118,24 @@ export default function CallListWorkingClient({
                     {lead.dnc_flag && <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10.5px] font-semibold text-rose-800">DNC</span>}
                   </div>
                   {(() => {
-                    const cityPart = showCity ? lead.city : null;
-                    const provincePart = showProvince ? lead.province : null;
-                    const location = [cityPart, provincePart].filter(Boolean).join(", ");
-                    return location ? <div className="text-[12px] text-[var(--color-text-muted)]">{location}</div> : null;
+                    const street = showStreetAddress ? lead.street_address?.trim() : "";
+                    const city = showCity ? lead.city?.trim() : "";
+                    const province = showProvince ? lead.province?.trim() : "";
+                    const postalCode = showPostalCode ? lead.postal_code?.trim() : "";
+                    const country = showCountry ? lead.country?.trim() : "";
+
+                    const locality = [city, province].filter(Boolean).join(", ");
+                    const localityWithPostal = [locality, postalCode].filter(Boolean).join(" ");
+                    const secondary = [localityWithPostal, country].filter(Boolean).join(" · ");
+
+                    if (!street && !secondary) return null;
+
+                    return (
+                      <div className="mt-0.5 space-y-0.5 text-[12px] text-[var(--color-text-muted)]">
+                        {street && <div>{street}</div>}
+                        {secondary && secondary !== street && <div>{secondary}</div>}
+                      </div>
+                    );
                   })()}
                   {(showContact || showPhone) && (
                     <div className="text-[12.5px] text-[var(--color-text-muted)]">
