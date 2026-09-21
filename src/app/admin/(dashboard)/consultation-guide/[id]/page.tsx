@@ -5,22 +5,36 @@ import ConsultationGuideForm from "../ConsultationGuideForm";
 import {
   updateConsultationGuideAction,
   completeConsultationGuideAction,
-  retryConsultationFollowUpEmailAction,
+  sendConsultationFollowUpEmailAction,
   resendConsultationFollowUpEmailAction,
+  updateFollowUpEmailDraftAction,
   deleteConsultationGuideAction,
 } from "../actions";
+import { ensureFollowUpEmailDraft } from "@/lib/consultation-guide-email";
 import type { CrmConsultationGuideRow } from "@/lib/consultation-guide";
 
 // Reopen an existing consultation guide (draft or completed) - "Keep
 // historical consultations available so Admin can reopen them later."
 export default async function ConsultationGuideDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireCrmAdmin();
+  const admin = await requireCrmAdmin();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
   const { data: guide } = await supabase.from("crm_consultation_guides").select("*").eq("id", id).maybeSingle();
   if (!guide) notFound();
-  const guideRow = guide as CrmConsultationGuideRow;
+  let guideRow = guide as CrmConsultationGuideRow;
+
+  // Backfill a follow-up email draft for a completed guide that doesn't
+  // have one yet - e.g. one completed directly via a database migration
+  // before this review-before-send feature existed. Never sends anything;
+  // only generates and saves the editable draft shown in the Follow-Up
+  // Email section below.
+  if (guideRow.status === "completed") {
+    const draft = await ensureFollowUpEmailDraft(supabase, guideRow, admin.full_name || admin.email);
+    if (draft && (draft.subject !== guideRow.follow_up_email_subject || draft.body !== guideRow.follow_up_email_body)) {
+      guideRow = { ...guideRow, follow_up_email_subject: draft.subject, follow_up_email_body: draft.body };
+    }
+  }
 
   let linkedAppointmentLabel: string | null = null;
   if (guideRow.appointment_id) {
@@ -51,8 +65,9 @@ export default async function ConsultationGuideDetailPage({ params }: { params: 
       updatedByName={updatedByName}
       saveAction={updateConsultationGuideAction.bind(null, id)}
       completeAction={completeConsultationGuideAction.bind(null, id)}
-      retryFollowUpAction={retryConsultationFollowUpEmailAction}
+      sendFollowUpAction={sendConsultationFollowUpEmailAction}
       resendFollowUpAction={resendConsultationFollowUpEmailAction}
+      updateFollowUpDraftAction={updateFollowUpEmailDraftAction}
       deleteAction={deleteConsultationGuideAction}
       backHref="/admin/consultation-guide"
     />

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { sendConsultationGuideFollowUpEmail, resendConsultationGuideFollowUpEmail, buildConsultationGuideFollowUpEmail } from "@/lib/consultation-guide-email";
+import { sendConsultationGuideFollowUpEmail, resendConsultationGuideFollowUpEmail, buildFollowUpEmailDraft } from "@/lib/consultation-guide-email";
 import {
   CONSULTATION_GUIDE_CAMPAIGN_EXPECTATION_QUESTIONS,
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
@@ -18,7 +18,6 @@ import {
   LENDING_FIT_STATUSES,
   type ConsultationGuideAnswers,
   type ConsultationGuideChecklist,
-  type ConsultationGuideFollowUpStatus,
   type ConsultationGuideService,
   type CrmConsultationGuideRow,
   type LeadgenFitStatus,
@@ -41,8 +40,6 @@ type ActionResult = {
   error?: string;
   // Only ever set by completeConsultationGuideAction - see there.
   outcome?: "completed" | "already_completed";
-  followUpEmailStatus?: ConsultationGuideFollowUpStatus;
-  noFollowUpEmailReason?: string | null;
 };
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -332,10 +329,6 @@ export async function completeConsultationGuideAction(id: string | null, formDat
     justCompleted = true;
   }
 
-  let followUpEmailStatus: ConsultationGuideFollowUpStatus = "not_sent";
-  let noFollowUpEmailReason: string | null = null;
-  let sendErrorMessage: string | undefined;
-
   if (justCompleted) {
     await logConsultationActivity(supabase, fields.opportunity_id, admin.id, `Consultation completed by ${admin.full_name || admin.email}.`);
 
@@ -361,33 +354,19 @@ export async function completeConsultationGuideAction(id: string | null, formDat
       revalidatePath("/agent/appointments");
     }
 
-    if (!fields.email) {
-      noFollowUpEmailReason = "No recipient email";
-      await supabase.from("crm_consultation_guides").update({ no_follow_up_email_reason: noFollowUpEmailReason }).eq("id", guideId);
-    } else {
-      const supabaseAdmin = getSupabaseAdmin();
-      const { data: guideRow } = await supabaseAdmin.from("crm_consultation_guides").select("*").eq("id", guideId).maybeSingle();
-      if (guideRow) {
-        const result = await sendConsultationGuideFollowUpEmail(supabaseAdmin, guideRow as CrmConsultationGuideRow, {
-          name: admin.full_name || admin.email,
-          email: admin.email,
-        });
-        if (result.status === "sent") {
-          followUpEmailStatus = "sent";
-        } else {
-          followUpEmailStatus = "failed";
-          sendErrorMessage = result.error;
-        }
-      }
+    // Generate (never send) the follow-up email draft from what was just
+    // saved - "I want the CRM to generate and save the follow-up email
+    // content...so I can review it and manually send...when I am ready."
+    // Nothing is emailed here; Admin's own, later, explicit "Send Email"
+    // click on the guide's Follow-Up Email section is the only thing that
+    // ever calls Resend (see sendConsultationGuideFollowUpEmail).
+    const draft = buildFollowUpEmailDraft(fields, admin.full_name || admin.email);
+    if (draft) {
+      await supabase
+        .from("crm_consultation_guides")
+        .update({ follow_up_email_subject: draft.subject, follow_up_email_body: draft.body })
+        .eq("id", guideId);
     }
-  } else {
-    const { data: existing } = await supabase
-      .from("crm_consultation_guides")
-      .select("follow_up_email_status, no_follow_up_email_reason")
-      .eq("id", guideId)
-      .maybeSingle();
-    followUpEmailStatus = (existing?.follow_up_email_status as ConsultationGuideFollowUpStatus) ?? "not_sent";
-    noFollowUpEmailReason = existing?.no_follow_up_email_reason ?? null;
   }
 
   revalidatePath("/admin/consultation-guide");
@@ -397,9 +376,6 @@ export async function completeConsultationGuideAction(id: string | null, formDat
   return {
     id: guideId,
     outcome: justCompleted ? "completed" : "already_completed",
-    followUpEmailStatus,
-    noFollowUpEmailReason,
-    error: sendErrorMessage ? `Consultation marked completed, but the follow-up email failed to send: ${sendErrorMessage}` : undefined,
   };
 }
 
@@ -422,11 +398,14 @@ export type ConsultationCompletionPreview =
       bodyText: string;
     };
 
-// Renders exactly what "Mark Consultation Complete" would send, from the
-// form's current (unsaved) values, without persisting or sending anything
-// - powers the confirmation modal's preview so it can never diverge from
-// what a confirmed completion actually sends. Also doubles as the
-// server-side "a service must be chosen" validation the brief requires.
+// Renders exactly what "Mark Consultation Complete" would GENERATE as the
+// follow-up email draft, from the form's current (unsaved) values, without
+// persisting or sending anything - powers the confirmation modal's preview
+// so it can never diverge from what a confirmed completion actually saves.
+// Also doubles as the server-side "a service must be chosen" validation the
+// brief requires. Completing a consultation never sends this email itself -
+// it only saves it as an editable draft for Admin to review and send later
+// from the guide's own Follow-Up Email section.
 export async function previewConsultationCompletionAction(formData: FormData): Promise<ConsultationCompletionPreview> {
   const admin = await requireCrmAdmin();
   const fields = fieldsFromForm(formData);
@@ -434,28 +413,62 @@ export async function previewConsultationCompletionAction(formData: FormData): P
     return { error: "Select a service (Lead Generation or Business Finance) before completing this consultation." };
   }
 
-  const email = buildConsultationGuideFollowUpEmail(
-    fields.service,
-    { contactName: fields.contact_name || "there", consultantName: fields.consultant_name || admin.full_name || admin.email },
-    { type: fields.arrangement_type, paymentTrigger: fields.arrangement_payment_trigger }
-  );
+  const draft = buildFollowUpEmailDraft(fields, admin.full_name || admin.email);
+  if (!draft) {
+    return { error: "Select a service (Lead Generation or Business Finance) before completing this consultation." };
+  }
 
   return {
     recipientName: fields.contact_name || "—",
     recipientEmail: fields.email,
     service: fields.service,
     serviceLabel: CONSULTATION_GUIDE_SERVICE_LABELS[fields.service],
-    subject: email.subject,
-    bodyText: email.text,
+    subject: draft.subject,
+    bodyText: draft.body,
   };
 }
 
-// Admin-only, controlled "Retry Follow-Up Email" for a completed guide
-// whose automatic send failed - never automatic/repeated on its own. Only
-// available once (guarded on the current follow_up_email_status, not a
-// database compare-and-swap): a deliberate, explicit admin click, same as
-// sendManualWinsalotFollowUpEmail's own manual resend for appointments.
-export async function retryConsultationFollowUpEmailAction(id: string): Promise<{ error?: string; message?: string }> {
+// Admin-only "Edit Email" save for a completed guide's Follow-Up Email
+// section - lets Admin correct the generated draft (subject and/or plain-
+// text body) before ever sending it, and edit it again later for a resend
+// ("Admin must be able to review and edit the email before sending").
+// Never sends anything itself; sendConsultationFollowUpEmailAction /
+// resendConsultationFollowUpEmailAction below always send exactly what was
+// last saved here.
+export async function updateFollowUpEmailDraftAction(id: string, subject: string, body: string): Promise<{ error?: string }> {
+  await requireCrmAdmin();
+  const trimmedSubject = subject.trim();
+  const trimmedBody = body.trim();
+  if (!trimmedSubject || !trimmedBody) {
+    return { error: "Both the subject and body are required." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("crm_consultation_guides")
+    .update({ follow_up_email_subject: trimmedSubject, follow_up_email_body: trimmedBody })
+    .eq("id", id);
+  if (error) return { error: "Failed to save the follow-up email draft." };
+
+  revalidatePath(`/admin/consultation-guide/${id}`);
+  return {};
+}
+
+// Admin-only "Send Email" click from a completed guide's Follow-Up Email
+// section - the ONLY action that ever actually sends the real email
+// (covers both a first send and a retry after a previous send attempt
+// failed). Never automatic on its own, whether the guide was just
+// completed through the normal form or has been sitting Completed with a
+// Not Sent draft for a while, e.g. one completed directly via a database
+// migration before this feature existed ("do not automatically send an
+// email... require a manual click for these existing records"). Always a
+// deliberate, explicit admin click, same as sendManualWinsalotFollowUpEmail's
+// own manual resend for appointments. Duplicate-send protection is a real
+// database compare-and-swap inside sendConsultationGuideFollowUpEmail
+// itself (not just this function's own status check below), so two
+// near-simultaneous clicks - or an accidental double-click - can never
+// both send.
+export async function sendConsultationFollowUpEmailAction(id: string): Promise<{ error?: string; message?: string }> {
   const admin = await requireCrmAdmin();
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -463,10 +476,13 @@ export async function retryConsultationFollowUpEmailAction(id: string): Promise<
   if (!guideRow) return { error: "Consultation guide not found." };
   const guide = guideRow as CrmConsultationGuideRow;
 
-  if (guide.status !== "completed") return { error: "Only a completed consultation can retry its follow-up email." };
+  if (guide.status !== "completed") return { error: "Only a completed consultation can send its follow-up email." };
   if (guide.follow_up_email_status === "sent") return { error: "The follow-up email has already been sent." };
-  if (!guide.service) return { error: "Select a service and save before retrying the follow-up email." };
+  if (!guide.service) return { error: "Select a service and save before sending the follow-up email." };
   if (!guide.email) return { error: "This consultation has no recipient email address on file." };
+  if (!guide.follow_up_email_subject || !guide.follow_up_email_body) {
+    return { error: "No email draft has been generated for this consultation yet." };
+  }
 
   const result = await sendConsultationGuideFollowUpEmail(supabaseAdmin, guide, { name: admin.full_name || admin.email, email: admin.email });
 
@@ -478,14 +494,13 @@ export async function retryConsultationFollowUpEmailAction(id: string): Promise<
   return { message: "Follow-up email sent." };
 }
 
-// Admin-only, explicitly confirmed "Resend Follow-Up Email" for a
-// completed guide whose original send already succeeded - the client-side
-// confirm dialog is what makes this deliberate (see
-// resendConsultationGuideFollowUpEmail in consultation-guide-email.ts for
-// why the original send's own record is never touched). For a guide whose
-// original send hasn't succeeded yet (not_sent/failed), use
-// retryConsultationFollowUpEmailAction above instead - that's still the
-// first successful send, not a resend.
+// Admin-only, explicitly confirmed "Resend Email" for a completed guide
+// whose original send already succeeded - the client-side confirm dialog
+// is what makes this deliberate (see resendConsultationGuideFollowUpEmail
+// in consultation-guide-email.ts for why the original send's own record is
+// never touched). For a guide whose original send hasn't succeeded yet
+// (not_sent/failed), use sendConsultationFollowUpEmailAction above instead
+// - that's still the first successful send, not a resend.
 export async function resendConsultationFollowUpEmailAction(id: string): Promise<{ error?: string; message?: string }> {
   const admin = await requireCrmAdmin();
   const supabaseAdmin = getSupabaseAdmin();
@@ -495,7 +510,7 @@ export async function resendConsultationFollowUpEmailAction(id: string): Promise
   const guide = guideRow as CrmConsultationGuideRow;
 
   if (guide.status !== "completed") return { error: "Only a completed consultation can resend its follow-up email." };
-  if (guide.follow_up_email_status !== "sent") return { error: "This consultation's follow-up email hasn't sent successfully yet - use Retry instead." };
+  if (guide.follow_up_email_status !== "sent") return { error: "This consultation's follow-up email hasn't sent successfully yet - use Send Email instead." };
   if (!guide.service) return { error: "Select a service and save before resending the follow-up email." };
   if (!guide.email) return { error: "This consultation has no recipient email address on file." };
 
