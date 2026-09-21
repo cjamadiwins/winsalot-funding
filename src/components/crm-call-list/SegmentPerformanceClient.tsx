@@ -8,8 +8,11 @@ import StatusBadge from "@/components/crm-ui/StatusBadge";
 import DeployPanelClient from "./DeployPanelClient";
 import RemovedRowsPanel from "./RemovedRowsPanel";
 import ManageColumnsPopover from "./ManageColumnsPopover";
+import BackfillLocationsClient from "./BackfillLocationsClient";
 import { KNOWN_COLUMNS, extraFieldColumnKey, isColumnHidden } from "@/lib/call-list-columns";
 import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES, type CallListLeadRow, type CallListSegmentRow } from "@/lib/call-list-types";
+import type { CallListTargetField } from "@/lib/call-list-column-mapping";
+import type { BackfillSummary } from "@/lib/call-list-backfill";
 
 export type SegmentCallLogView = {
   id: string;
@@ -40,6 +43,8 @@ export default function SegmentPerformanceClient({
   restoreLeadsAction,
   initialHiddenFields,
   updateColumnVisibilityAction,
+  previewLocationsFileAction,
+  backfillLocationsAction,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
@@ -65,6 +70,10 @@ export default function SegmentPerformanceClient({
   restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
   initialHiddenFields: string[];
   updateColumnVisibilityAction: (hiddenFields: string[]) => Promise<{ error?: string }>;
+  previewLocationsFileAction: (
+    formData: FormData
+  ) => Promise<{ error: string } | { headers: string[]; suggestedMapping: Record<CallListTargetField, string | null>; sampleRowCount: number }>;
+  backfillLocationsAction: (formData: FormData) => Promise<{ error?: string; summary?: BackfillSummary }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -194,6 +203,8 @@ export default function SegmentPerformanceClient({
           </a>
         </div>
       </div>
+
+      <BackfillLocationsClient previewAction={previewLocationsFileAction} backfillAction={backfillLocationsAction} />
 
       <DeployPanelClient
         key={[...assignedAgentIds].sort().join(",")}

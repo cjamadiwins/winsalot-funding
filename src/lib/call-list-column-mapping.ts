@@ -12,8 +12,11 @@ export const CALL_LIST_TARGET_FIELDS = [
   "phone",
   "email",
   "website",
+  "street_address",
   "city",
   "province",
+  "postal_code",
+  "country",
   "industry",
   "notes",
 ] as const;
@@ -26,8 +29,11 @@ export const CALL_LIST_TARGET_FIELD_LABELS: Record<CallListTargetField, string> 
   phone: "Phone",
   email: "Email",
   website: "Website",
+  street_address: "Street Address",
   city: "City",
   province: "Province",
+  postal_code: "Postal Code",
+  country: "Country",
   industry: "Industry",
   notes: "Notes",
 };
@@ -93,8 +99,21 @@ const SYNONYMS: Record<CallListTargetField, string[]> = {
   ],
   email: ["email", "email address", "e mail", "business email", "contact email", "primary email"],
   website: ["website", "web site", "url", "site", "web", "web address", "domain", "homepage"],
+  street_address: [
+    "street address",
+    "address",
+    "address line 1",
+    "address1",
+    "address 1",
+    "mailing address",
+    "business address",
+    "street",
+    "addr",
+  ],
   city: ["city", "town", "municipality"],
   province: ["province", "state", "province state", "province/state", "state province", "region"],
+  postal_code: ["postal code", "postal", "post code", "postcode", "zip code", "zip", "zipcode", "zip postal code"],
+  country: ["country", "nation"],
   industry: ["industry", "category", "sector", "niche", "vertical", "business category", "business type", "type"],
   notes: ["notes", "note", "comments", "comment", "description"],
 };
@@ -182,8 +201,11 @@ export type MappedLeadRow = {
   phone: string;
   email: string;
   website: string;
+  street_address: string;
   city: string;
   province: string;
+  postal_code: string;
+  country: string;
   industry: string;
   notes: string;
   extra_fields: Record<string, string>;
