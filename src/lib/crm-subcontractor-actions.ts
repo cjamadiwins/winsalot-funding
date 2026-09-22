@@ -31,7 +31,12 @@ import {
   type SubcontractorReferralCommissionStatus,
   type SubcontractorLendingReferralStatus,
 } from "./crm-subcontractor-types";
-import { buildPartnerOverviewEmailDraft, sendPartnerOverviewEmail } from "./crm-referral-partner-email";
+import {
+  buildPartnerOverviewEmailDraft,
+  sendPartnerOverviewEmail,
+  buildServicesSellingPointsEmailDraft,
+  sendServicesSellingPointsEmail,
+} from "./crm-referral-partner-email";
 
 type ActionResult = { error?: string };
 
@@ -73,6 +78,33 @@ async function insertAuditRow(
     performed_by_name: params.performedByName,
     reason: params.reason,
     details: params.details,
+  });
+}
+
+// Append-only send history (crm_subcontractor_partner_email_log,
+// migration 20260922220000) - inserted once per successful send,
+// alongside (never instead of) that template's own status/sent_at
+// columns. See that migration's header comment.
+async function insertPartnerEmailLog(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  params: {
+    subcontractorId: string;
+    templateKey: "partnership_overview" | "services_selling_points";
+    recipientEmail: string;
+    subject: string;
+    body: string;
+    sentBy: string;
+    resendEmailId: string;
+  }
+) {
+  await supabase.from("crm_subcontractor_partner_email_log").insert({
+    subcontractor_id: params.subcontractorId,
+    template_key: params.templateKey,
+    recipient_email: params.recipientEmail,
+    subject: params.subject,
+    body: params.body,
+    sent_by: params.sentBy,
+    resend_email_id: params.resendEmailId,
   });
 }
 
@@ -772,10 +804,16 @@ export async function createReferralPartnerAction(formData: FormData): Promise<A
 
   if (error || !inserted) return { error: `Failed to create referral partner: ${error?.message ?? "unknown error"}` };
 
-  const draft = buildPartnerOverviewEmailDraft(inserted);
+  const overviewDraft = buildPartnerOverviewEmailDraft(inserted);
+  const servicesDraft = buildServicesSellingPointsEmailDraft(inserted);
   await supabase
     .from("crm_subcontractors")
-    .update({ partner_overview_email_subject: draft.subject, partner_overview_email_body: draft.body })
+    .update({
+      partner_overview_email_subject: overviewDraft.subject,
+      partner_overview_email_body: overviewDraft.body,
+      services_email_subject: servicesDraft.subject,
+      services_email_body: servicesDraft.body,
+    })
     .eq("id", inserted.id);
 
   await insertAuditRow(supabase, {
@@ -1329,6 +1367,98 @@ export async function sendReferralPartnerOverviewEmailAction(subcontractorId: st
     performedByName: admin.full_name || admin.email,
     reason: null,
     details: { resend_email_id: result.resendEmailId },
+  });
+
+  await insertPartnerEmailLog(supabaseAdmin, {
+    subcontractorId,
+    templateKey: "partnership_overview",
+    recipientEmail: partner.email as string,
+    subject: partner.partner_overview_email_subject as string,
+    body: partner.partner_overview_email_body as string,
+    sentBy: admin.id,
+    resendEmailId: result.resendEmailId,
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Send Services & Selling Points Email - a second, separate
+// manual email template on the same referral partner (brief: "must be
+// separate from the existing partnership email"). Same
+// generate-once/review/edit/reset/send-manually shape as the Partner
+// Overview Email above; its own status/sent_at columns so sending or
+// resetting this template can never touch that one.
+// ---------------------------------------------------------------------
+
+export async function saveServicesEmailDraftAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!subject || !body) return { error: "Subject and body cannot be empty." };
+
+  const { error } = await supabase
+    .from("crm_subcontractors")
+    .update({ services_email_subject: subject, services_email_body: body })
+    .eq("id", subcontractorId);
+  if (error) return { error: `Failed to save this draft: ${error.message}` };
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function resetServicesEmailDraftAction(subcontractorId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: partner } = await supabase.from("crm_subcontractors").select("full_name").eq("id", subcontractorId).maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+
+  const draft = buildServicesSellingPointsEmailDraft(partner);
+  const { error } = await supabase
+    .from("crm_subcontractors")
+    .update({ services_email_subject: draft.subject, services_email_body: draft.body })
+    .eq("id", subcontractorId);
+  if (error) return { error: `Failed to reset this draft: ${error.message}` };
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function sendServicesEmailAction(subcontractorId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: partner } = await supabaseAdmin
+    .from("crm_subcontractors")
+    .select("id, email, services_email_subject, services_email_body")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+
+  const result = await sendServicesSellingPointsEmail(supabaseAdmin, partner);
+  if (result.status === "failed") return { error: result.error };
+
+  await insertAuditRow(supabaseAdmin, {
+    subcontractorId,
+    action: "services_email_sent",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { resend_email_id: result.resendEmailId },
+  });
+
+  await insertPartnerEmailLog(supabaseAdmin, {
+    subcontractorId,
+    templateKey: "services_selling_points",
+    recipientEmail: partner.email as string,
+    subject: partner.services_email_subject as string,
+    body: partner.services_email_body as string,
+    sentBy: admin.id,
+    resendEmailId: result.resendEmailId,
   });
 
   revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);

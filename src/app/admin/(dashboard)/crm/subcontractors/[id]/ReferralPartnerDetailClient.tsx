@@ -14,12 +14,15 @@ import {
   LENDING_REFERRAL_STATUS_BADGE_CLASSES,
   PARTNER_OVERVIEW_EMAIL_STATUS_LABELS,
   PARTNER_OVERVIEW_EMAIL_STATUS_BADGE_CLASSES,
+  PARTNER_EMAIL_TEMPLATE_LABELS,
   SUBCONTRACTOR_AUDIT_ACTION_LABELS,
   summarizeReferralPartnerFinancials,
   type SubcontractorProfileRow,
   type SubcontractorReferralRevenueRow,
   type SubcontractorLendingReferralRow,
   type SubcontractorAuditLogRow,
+  type SubcontractorPartnerEmailLogRow,
+  type PartnerOverviewEmailStatus,
 } from "@/lib/crm-subcontractor-types";
 import { SUBCONTRACTOR_CURRENCIES, SUBCONTRACTOR_CURRENCY_LABELS, formatSubcontractorCurrency } from "@/lib/subcontractor-payroll";
 
@@ -37,6 +40,7 @@ type Props = {
   revenueRows: SubcontractorReferralRevenueRow[];
   lendingRows: SubcontractorLendingReferralRow[];
   auditLog: SubcontractorAuditLogRow[];
+  emailLog: SubcontractorPartnerEmailLogRow[];
   updateProfileAction: (subcontractorId: string, formData: FormData) => Promise<ActionResult>;
   setStatusAction: (subcontractorId: string, status: string, formData: FormData) => Promise<ActionResult>;
   linkOpportunityAction: (subcontractorId: string, formData: FormData) => Promise<ActionResult>;
@@ -52,6 +56,9 @@ type Props = {
   saveOverviewEmailDraftAction: (subcontractorId: string, formData: FormData) => Promise<ActionResult>;
   resetOverviewEmailDraftAction: (subcontractorId: string) => Promise<ActionResult>;
   sendOverviewEmailAction: (subcontractorId: string) => Promise<ActionResult>;
+  saveServicesEmailDraftAction: (subcontractorId: string, formData: FormData) => Promise<ActionResult>;
+  resetServicesEmailDraftAction: (subcontractorId: string) => Promise<ActionResult>;
+  sendServicesEmailAction: (subcontractorId: string) => Promise<ActionResult>;
 };
 
 const inputClasses =
@@ -83,6 +90,133 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+// One template's Preview/Edit/Reset/Send card - shared by every entry in
+// PARTNER_EMAIL_TEMPLATES so the Partnership Overview and Services &
+// Selling Points sections stay pixel-identical in behavior, each backed
+// entirely by its own subject/body/status/sentAt/error columns (never
+// shared state), so sending or resetting one can never touch the other.
+function PartnerEmailCard({
+  recipientEmail,
+  subject,
+  body,
+  status,
+  sentAt,
+  errorMessage,
+  isPending,
+  onSaveDraft,
+  onReset,
+  onSend,
+}: {
+  recipientEmail: string | null;
+  subject: string | null;
+  body: string | null;
+  status: PartnerOverviewEmailStatus;
+  sentAt: string | null;
+  errorMessage: string | null;
+  isPending: boolean;
+  onSaveDraft: (subject: string, body: string) => void;
+  onReset: () => void;
+  onSend: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draftSubject, setDraftSubject] = useState(subject ?? "");
+  const [draftBody, setDraftBody] = useState(body ?? "");
+
+  return (
+    <div>
+      {status === "sent" && sentAt && <p className="mb-3 text-[12.5px] font-medium text-emerald-700">Sent {new Date(sentAt).toLocaleString()}</p>}
+      {errorMessage && <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">{errorMessage}</p>}
+      {!recipientEmail && (
+        <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-800">
+          Add an email address above before sending.
+        </p>
+      )}
+
+      {editing ? (
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClasses}>Subject</span>
+            <input type="text" value={draftSubject} onChange={(e) => setDraftSubject(e.target.value)} className={inputClasses} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClasses}>Body</span>
+            <textarea value={draftBody} onChange={(e) => setDraftBody(e.target.value)} className={`${inputClasses} min-h-[220px] resize-y font-sans`} />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                onSaveDraft(draftSubject, draftBody);
+                setEditing(false);
+              }}
+              className={buttonClasses}
+            >
+              Save Draft
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                setDraftSubject(subject ?? "");
+                setDraftBody(body ?? "");
+                setEditing(false);
+              }}
+              className={smallButtonClasses}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <span className={labelClasses}>Recipient Email</span>
+            <p className="mt-0.5 text-[13.5px] font-medium text-slate-800">{recipientEmail ?? "—"}</p>
+          </div>
+          <div>
+            <span className={labelClasses}>Subject</span>
+            <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{subject ?? "—"}</p>
+          </div>
+          <div>
+            <span className={labelClasses}>Body / Preview</span>
+            <pre className="mt-0.5 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-sans text-[12.5px] leading-relaxed text-slate-700">
+              {body ?? "No draft generated yet."}
+            </pre>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                setDraftSubject(subject ?? "");
+                setDraftBody(body ?? "");
+                setEditing(true);
+              }}
+              className={smallButtonClasses}
+            >
+              Edit Email
+            </button>
+            <button type="button" disabled={isPending} onClick={onReset} className={smallButtonClasses}>
+              Reset to Default
+            </button>
+            {recipientEmail && status !== "sent" && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={onSend}
+                className="rounded-full border border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {status === "failed" ? "Retry Send Email" : "Send Email"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReferralPartnerDetailClient({
   partner,
   linkedOpportunities,
@@ -92,6 +226,7 @@ export default function ReferralPartnerDetailClient({
   revenueRows,
   lendingRows,
   auditLog,
+  emailLog,
   updateProfileAction,
   setStatusAction,
   linkOpportunityAction,
@@ -107,15 +242,16 @@ export default function ReferralPartnerDetailClient({
   saveOverviewEmailDraftAction,
   resetOverviewEmailDraftAction,
   sendOverviewEmailAction,
+  saveServicesEmailDraftAction,
+  resetServicesEmailDraftAction,
+  sendServicesEmailAction,
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [draftSubject, setDraftSubject] = useState(partner.partner_overview_email_subject ?? "");
-  const [draftBody, setDraftBody] = useState(partner.partner_overview_email_body ?? "");
   const [collectingRevenueId, setCollectingRevenueId] = useState<string | null>(null);
   const [recordingLendingId, setRecordingLendingId] = useState<string | null>(null);
+  const [expandedEmailLogId, setExpandedEmailLogId] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<ActionResult>, onDone?: () => void) {
     setError(null);
@@ -591,7 +727,7 @@ export default function ReferralPartnerDetailClient({
         </form>
       </Section>
 
-      <Section title="Internal Note (Admin Only — Not Included in Partner Overview Email)">
+      <Section title="Internal Note (Admin Only — Not Included in Either Email)">
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
           <li>
             {partner.full_name} receives {partner.lead_gen_revenue_share_percent ?? 40}%; Winsalot Corp. retains{" "}
@@ -609,107 +745,90 @@ export default function ReferralPartnerDetailClient({
       </Section>
 
       <Section
-        title="Send Partner Overview Email"
+        title={`Send Email — ${PARTNER_EMAIL_TEMPLATE_LABELS.partnership_overview}`}
         right={
           <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${PARTNER_OVERVIEW_EMAIL_STATUS_BADGE_CLASSES[partner.partner_overview_email_status]}`}>
             {PARTNER_OVERVIEW_EMAIL_STATUS_LABELS[partner.partner_overview_email_status]}
           </span>
         }
       >
-        {partner.partner_overview_email_status === "sent" && partner.partner_overview_email_sent_at && (
-          <p className="mb-3 text-[12.5px] font-medium text-emerald-700">Sent {new Date(partner.partner_overview_email_sent_at).toLocaleString()}</p>
-        )}
-        {partner.partner_overview_email_error && (
-          <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">{partner.partner_overview_email_error}</p>
-        )}
-        {!partner.email && (
-          <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-800">
-            Add an email address above before sending.
-          </p>
-        )}
+        <PartnerEmailCard
+          recipientEmail={partner.email}
+          subject={partner.partner_overview_email_subject}
+          body={partner.partner_overview_email_body}
+          status={partner.partner_overview_email_status}
+          sentAt={partner.partner_overview_email_sent_at}
+          errorMessage={partner.partner_overview_email_error}
+          isPending={isPending}
+          onSaveDraft={(subject, body) => {
+            const formData = new FormData();
+            formData.set("subject", subject);
+            formData.set("body", body);
+            runAction(() => saveOverviewEmailDraftAction(partner.id, formData));
+          }}
+          onReset={() => runAction(() => resetOverviewEmailDraftAction(partner.id))}
+          onSend={() => runAction(() => sendOverviewEmailAction(partner.id))}
+        />
+      </Section>
 
-        {editingEmail ? (
-          <div className="space-y-3">
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClasses}>Subject</span>
-              <input type="text" value={draftSubject} onChange={(e) => setDraftSubject(e.target.value)} className={inputClasses} />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClasses}>Body</span>
-              <textarea value={draftBody} onChange={(e) => setDraftBody(e.target.value)} className={`${inputClasses} min-h-[220px] resize-y font-sans`} />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => {
-                  const formData = new FormData();
-                  formData.set("subject", draftSubject);
-                  formData.set("body", draftBody);
-                  runAction(() => saveOverviewEmailDraftAction(partner.id, formData), () => setEditingEmail(false));
-                }}
-                className={buttonClasses}
-              >
-                Save Draft
-              </button>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => {
-                  setDraftSubject(partner.partner_overview_email_subject ?? "");
-                  setDraftBody(partner.partner_overview_email_body ?? "");
-                  setEditingEmail(false);
-                }}
-                className={smallButtonClasses}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+      <Section
+        title={`Send Email — ${PARTNER_EMAIL_TEMPLATE_LABELS.services_selling_points}`}
+        right={
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${PARTNER_OVERVIEW_EMAIL_STATUS_BADGE_CLASSES[partner.services_email_status]}`}>
+            {PARTNER_OVERVIEW_EMAIL_STATUS_LABELS[partner.services_email_status]}
+          </span>
+        }
+      >
+        <PartnerEmailCard
+          recipientEmail={partner.email}
+          subject={partner.services_email_subject}
+          body={partner.services_email_body}
+          status={partner.services_email_status}
+          sentAt={partner.services_email_sent_at}
+          errorMessage={partner.services_email_error}
+          isPending={isPending}
+          onSaveDraft={(subject, body) => {
+            const formData = new FormData();
+            formData.set("subject", subject);
+            formData.set("body", body);
+            runAction(() => saveServicesEmailDraftAction(partner.id, formData));
+          }}
+          onReset={() => runAction(() => resetServicesEmailDraftAction(partner.id))}
+          onSend={() => runAction(() => sendServicesEmailAction(partner.id))}
+        />
+      </Section>
+
+      <Section title="Email History">
+        {emailLog.length === 0 ? (
+          <p className="text-sm text-slate-500">No emails sent yet.</p>
         ) : (
-          <div className="space-y-3">
-            <div>
-              <span className={labelClasses}>Recipient Email</span>
-              <p className="mt-0.5 text-[13.5px] font-medium text-slate-800">{partner.email ?? "—"}</p>
-            </div>
-            <div>
-              <span className={labelClasses}>Subject</span>
-              <p className="mt-0.5 text-[13.5px] font-semibold text-slate-900">{partner.partner_overview_email_subject ?? "—"}</p>
-            </div>
-            <div>
-              <span className={labelClasses}>Body / Preview</span>
-              <pre className="mt-0.5 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-sans text-[12.5px] leading-relaxed text-slate-700">
-                {partner.partner_overview_email_body ?? "No draft generated yet."}
-              </pre>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => {
-                  setDraftSubject(partner.partner_overview_email_subject ?? "");
-                  setDraftBody(partner.partner_overview_email_body ?? "");
-                  setEditingEmail(true);
-                }}
-                className={smallButtonClasses}
-              >
-                Edit Email
-              </button>
-              <button type="button" disabled={isPending} onClick={() => runAction(() => resetOverviewEmailDraftAction(partner.id))} className={smallButtonClasses}>
-                Reset to Default
-              </button>
-              {partner.email && partner.partner_overview_email_status !== "sent" && (
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => runAction(() => sendOverviewEmailAction(partner.id))}
-                  className="rounded-full border border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {partner.partner_overview_email_status === "failed" ? "Retry Send Email" : "Send Email"}
-                </button>
-              )}
-            </div>
-          </div>
+          <ul className="space-y-2 text-xs text-slate-600">
+            {emailLog.map((entry) => (
+              <li key={entry.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-slate-800">
+                    {PARTNER_EMAIL_TEMPLATE_LABELS[entry.template_key]}{" "}
+                    <span className="font-normal text-slate-400">
+                      · to {entry.recipient_email} · {new Date(entry.created_at).toLocaleString()}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedEmailLogId(expandedEmailLogId === entry.id ? null : entry.id)}
+                    className="text-xs font-semibold text-sky-600 hover:text-sky-700"
+                  >
+                    {expandedEmailLogId === entry.id ? "Hide" : "View"}
+                  </button>
+                </div>
+                <p className="mt-1 font-medium text-slate-700">{entry.subject}</p>
+                {expandedEmailLogId === entry.id && (
+                  <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-sans text-[12.5px] leading-relaxed text-slate-700">
+                    {entry.body}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 

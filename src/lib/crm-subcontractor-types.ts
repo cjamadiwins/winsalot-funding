@@ -57,6 +57,11 @@ export type SubcontractorProfileRow = {
   partner_overview_email_status: PartnerOverviewEmailStatus;
   partner_overview_email_sent_at: string | null;
   partner_overview_email_error: string | null;
+  services_email_subject: string | null;
+  services_email_body: string | null;
+  services_email_status: PartnerOverviewEmailStatus;
+  services_email_sent_at: string | null;
+  services_email_error: string | null;
 };
 
 // ---------------------------------------------------------------------
@@ -93,6 +98,18 @@ export function isReferralPartner(subcontractor: Pick<SubcontractorProfileRow, "
   return subcontractor.partner_type === "referral_partner";
 }
 
+// Every referral partner email template a subcontractor's profile can
+// hold a draft/send state for (migrations 20260922120000/20260922220000).
+// "Send" status/labels below are shared across every template - the same
+// not_sent/sending/sent/failed shape applies regardless of which one.
+export const PARTNER_EMAIL_TEMPLATES = ["partnership_overview", "services_selling_points"] as const;
+export type PartnerEmailTemplateKey = (typeof PARTNER_EMAIL_TEMPLATES)[number];
+
+export const PARTNER_EMAIL_TEMPLATE_LABELS: Record<PartnerEmailTemplateKey, string> = {
+  partnership_overview: "Partnership Overview & Referral Structure",
+  services_selling_points: "Services & Selling Points",
+};
+
 export const PARTNER_OVERVIEW_EMAIL_STATUSES = ["not_sent", "sending", "sent", "failed"] as const;
 export type PartnerOverviewEmailStatus = (typeof PARTNER_OVERVIEW_EMAIL_STATUSES)[number];
 
@@ -108,6 +125,23 @@ export const PARTNER_OVERVIEW_EMAIL_STATUS_BADGE_CLASSES: Record<PartnerOverview
   sending: "bg-sky-100 text-sky-800",
   sent: "bg-emerald-100 text-emerald-800",
   failed: "bg-rose-100 text-rose-800",
+};
+
+// Append-only send history (crm_subcontractor_partner_email_log,
+// migration 20260922220000) - one row per actual send, across every
+// template. Never updated after insert; a resend of the same template
+// gets its own new row, so nothing here ever contradicts what was
+// actually sent at the time.
+export type SubcontractorPartnerEmailLogRow = {
+  id: string;
+  created_at: string;
+  subcontractor_id: string;
+  template_key: PartnerEmailTemplateKey;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  sent_by: string | null;
+  resend_email_id: string | null;
 };
 
 // Lead Generation recurring revenue-share tracking (crm_subcontractor_referral_revenue).
@@ -345,7 +379,8 @@ export type SubcontractorAuditAction =
   | "referral_revenue_commission_paid"
   | "lending_referral_recorded"
   | "lending_referral_commission_paid"
-  | "partner_overview_email_sent";
+  | "partner_overview_email_sent"
+  | "services_email_sent";
 
 export const SUBCONTRACTOR_AUDIT_ACTION_LABELS: Record<SubcontractorAuditAction, string> = {
   created: "Subcontractor created",
@@ -371,6 +406,7 @@ export const SUBCONTRACTOR_AUDIT_ACTION_LABELS: Record<SubcontractorAuditAction,
   lending_referral_recorded: "Lending referral recorded",
   lending_referral_commission_paid: "Lending commission paid",
   partner_overview_email_sent: "Partner Overview Email sent",
+  services_email_sent: "Services & Selling Points Email sent",
 };
 
 export type SubcontractorAuditLogRow = {
