@@ -9,6 +9,7 @@ import {
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
   CONSULTATION_GUIDE_CLOSING_LINE,
   CONSULTATION_GUIDE_DISCOVERY_QUESTIONS,
+  CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS,
   CONSULTATION_GUIDE_FOLLOW_UP_STATUS_LABELS,
   CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES,
   CONSULTATION_GUIDE_INTERNAL_REMINDER,
@@ -600,17 +601,44 @@ export default function ConsultationGuideForm({
                 ))}
               </div>
             </div>
-            <label className="mt-4 flex items-start gap-2 text-[13px] font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                name="follow_up_email_template"
-                value="pricing_next_steps"
-                defaultChecked={guide?.follow_up_email_template === "pricing_next_steps"}
-                className="mt-0.5 h-4 w-4"
-              />
-              Use the &ldquo;Pricing &amp; Next Steps&rdquo; follow-up email (for a prospect Winsalot Corp. needs portfolio/positioning
-              material from before outreach can start) instead of the standard follow-up email.
-            </label>
+            <div className="mt-4">
+              <span className={labelClasses}>Follow-Up Email Template</span>
+              <div className="mt-2 flex flex-col gap-2">
+                <label className="flex items-start gap-2 text-[13px] font-semibold text-slate-700">
+                  <input
+                    type="radio"
+                    name="follow_up_email_template"
+                    value="standard"
+                    defaultChecked={!guide?.follow_up_email_template || guide.follow_up_email_template === "standard"}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  {CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS.standard} follow-up email.
+                </label>
+                <label className="flex items-start gap-2 text-[13px] font-semibold text-slate-700">
+                  <input
+                    type="radio"
+                    name="follow_up_email_template"
+                    value="pricing_next_steps"
+                    defaultChecked={guide?.follow_up_email_template === "pricing_next_steps"}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  Use the &ldquo;{CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS.pricing_next_steps}&rdquo; follow-up email (for a
+                  prospect Winsalot Corp. needs portfolio/positioning material from before outreach can start).
+                </label>
+                <label className="flex items-start gap-2 text-[13px] font-semibold text-slate-700">
+                  <input
+                    type="radio"
+                    name="follow_up_email_template"
+                    value="performance_case_study"
+                    defaultChecked={guide?.follow_up_email_template === "performance_case_study"}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  Use the &ldquo;{CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS.performance_case_study}&rdquo; follow-up email (for a
+                  prospect whose main concern is trust/proof of performance before committing - includes a Previous Campaign Experience
+                  section).
+                </label>
+              </div>
+            </div>
           </section>
 
           {/* 2. Start the Conversation */}
