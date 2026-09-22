@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  SUBCONTRACTOR_STATUSES,
   SUBCONTRACTOR_STATUS_BADGE_CLASSES,
   SUBCONTRACTOR_STATUS_LABELS,
   REFERRAL_PARTNER_MARKET_OPTIONS,
@@ -198,6 +199,26 @@ export default function SubcontractorsListClient({
                     className={`${inputClasses} mt-1`}
                   />
                 </div>
+                <div>
+                  <label className={labelClasses}>Default Currency</label>
+                  <select name="currency" required defaultValue="CAD" className={`${inputClasses} mt-1`}>
+                    {SUBCONTRACTOR_CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {SUBCONTRACTOR_CURRENCY_LABELS[c]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClasses}>Status</label>
+                  <select name="status" required defaultValue="pending_onboarding" className={`${inputClasses} mt-1`}>
+                    {SUBCONTRACTOR_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {SUBCONTRACTOR_STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={labelClasses}>Primary Markets</label>
@@ -215,8 +236,8 @@ export default function SubcontractorsListClient({
                 <textarea name="notes" rows={2} className={`${inputClasses} mt-1`} />
               </div>
               <p className="text-xs text-slate-500">
-                Created as Active immediately - no onboarding agreement, training, or CRM access applies to a referral
-                partner. Link prospects/clients and record referral revenue from this partner&apos;s detail page.
+                No onboarding agreement, training, or CRM access applies to a referral partner. Link prospects/clients
+                and record referral revenue from this partner&apos;s detail page.
               </p>
               <button type="submit" disabled={isPending} className={buttonClasses}>
                 Add Referral Partner
@@ -297,6 +318,7 @@ export default function SubcontractorsListClient({
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Primary Markets</th>
+              <th className="px-4 py-3">Currency</th>
               <th className="px-4 py-3">Lead Gen Share</th>
               <th className="px-4 py-3">Lending Share</th>
               <th className="px-4 py-3">Status</th>
@@ -308,6 +330,7 @@ export default function SubcontractorsListClient({
               <tr key={partner.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-3 font-medium text-slate-900">{partner.full_name}</td>
                 <td className="px-4 py-3 text-slate-600">{partner.primary_markets?.join(", ") || "—"}</td>
+                <td className="px-4 py-3 text-slate-600">{partner.currency}</td>
                 <td className="px-4 py-3 text-slate-600">
                   {partner.lead_gen_revenue_share_percent !== null ? `${partner.lead_gen_revenue_share_percent}%` : "—"}
                 </td>
@@ -329,7 +352,7 @@ export default function SubcontractorsListClient({
 
             {referralPartnerRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No subcontractors / referral partners yet.
                 </td>
               </tr>

@@ -21,6 +21,7 @@ import {
   type SubcontractorLendingReferralRow,
   type SubcontractorAuditLogRow,
 } from "@/lib/crm-subcontractor-types";
+import { SUBCONTRACTOR_CURRENCIES, SUBCONTRACTOR_CURRENCY_LABELS, formatSubcontractorCurrency } from "@/lib/subcontractor-payroll";
 
 type ActionResult = { error?: string };
 
@@ -80,10 +81,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
   );
-}
-
-function formatUsd(amount: number): string {
-  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function ReferralPartnerDetailClient({
@@ -197,6 +194,16 @@ export default function ReferralPartnerDetailClient({
                   className={`${inputClasses} mt-1`}
                 />
               </div>
+              <div>
+                <label className={labelClasses}>Default Currency</label>
+                <select name="currency" required defaultValue={partner.currency} className={`${inputClasses} mt-1`}>
+                  {SUBCONTRACTOR_CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {SUBCONTRACTOR_CURRENCY_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className={labelClasses}>Primary Markets</label>
@@ -236,6 +243,10 @@ export default function ReferralPartnerDetailClient({
               <div>
                 <dt className="text-xs text-slate-500">Date Added</dt>
                 <dd className="font-medium text-slate-800">{new Date(partner.created_at).toLocaleDateString()}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Default Currency</dt>
+                <dd className="font-medium text-slate-800">{SUBCONTRACTOR_CURRENCY_LABELS[partner.currency]}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Primary Markets</dt>
@@ -281,10 +292,10 @@ export default function ReferralPartnerDetailClient({
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Referrals" value={String(referralsCount)} />
           <Stat label="Active Clients" value={String(activeClientsCount)} />
-          <Stat label="Monthly Recurring Revenue" value={formatUsd(financials.monthlyRecurringRevenue)} />
-          <Stat label="Total Revenue Generated" value={formatUsd(financials.totalRevenueGenerated)} />
-          <Stat label="Partner Commission / Revenue Share" value={formatUsd(financials.partnerShareTotal)} />
-          <Stat label="Winsalot Share" value={formatUsd(financials.winsalotShareTotal)} />
+          <Stat label="Monthly Recurring Revenue" value={formatSubcontractorCurrency(financials.monthlyRecurringRevenue, partner.currency)} />
+          <Stat label="Total Revenue Generated" value={formatSubcontractorCurrency(financials.totalRevenueGenerated, partner.currency)} />
+          <Stat label="Partner Commission / Revenue Share" value={formatSubcontractorCurrency(financials.partnerShareTotal, partner.currency)} />
+          <Stat label="Winsalot Share" value={formatSubcontractorCurrency(financials.winsalotShareTotal, partner.currency)} />
         </div>
       </Section>
 
@@ -389,10 +400,10 @@ export default function ReferralPartnerDetailClient({
                   <td className="py-2 pr-3 text-slate-600">
                     {row.period_start} → {row.period_end}
                   </td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.monthly_amount)}</td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.amount_collected)}</td>
-                  <td className="py-2 pr-3 font-semibold text-slate-800">{formatUsd(row.partner_share)}</td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.winsalot_share)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.monthly_amount, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.amount_collected, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 font-semibold text-slate-800">{formatSubcontractorCurrency(row.partner_share, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.winsalot_share, row.currency_snapshot)}</td>
                   <td className="py-2 pr-3 text-slate-600">{REFERRAL_PAYMENT_STATUS_LABELS[row.payment_status]}</td>
                   <td className="py-2 pr-3 text-slate-600">{REFERRAL_COMMISSION_STATUS_LABELS[row.commission_status]}</td>
                   <td className="py-2 pr-3">
@@ -494,10 +505,10 @@ export default function ReferralPartnerDetailClient({
                 <tr key={row.id} className="border-b border-slate-100 align-top last:border-0">
                   <td className="py-2 pr-3 font-medium text-slate-800">{row.business_name}</td>
                   <td className="py-2 pr-3 text-slate-600">{row.funded_at ?? "—"}</td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.lender_commission_received)}</td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.clawback_adjustment)}</td>
-                  <td className="py-2 pr-3 font-semibold text-slate-800">{formatUsd(row.partner_share)}</td>
-                  <td className="py-2 pr-3 text-slate-600">{formatUsd(row.winsalot_share)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.lender_commission_received, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.clawback_adjustment, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 font-semibold text-slate-800">{formatSubcontractorCurrency(row.partner_share, row.currency_snapshot)}</td>
+                  <td className="py-2 pr-3 text-slate-600">{formatSubcontractorCurrency(row.winsalot_share, row.currency_snapshot)}</td>
                   <td className="py-2 pr-3">
                     <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${LENDING_REFERRAL_STATUS_BADGE_CLASSES[row.commission_status]}`}>
                       {LENDING_REFERRAL_STATUS_LABELS[row.commission_status]}
