@@ -70,6 +70,36 @@ export const CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES: Record<ConsultationGuid
   failed: "bg-rose-100 text-rose-700",
 };
 
+// Which follow-up email template a guide's draft is generated from -
+// independent of arrangement_type (Commercial Arrangement is about
+// pricing/payment structure; this is about which prospect-specific email
+// copy is used, e.g. a prospect Winsalot needs portfolio/positioning
+// material from before outreach, still at the standard $750/month rate).
+// "standard" (the default for every existing and future guide unless
+// explicitly changed) is the plain service-specific template
+// buildConsultationGuideFollowUpEmail already builds - see
+// consultation-guide-email.ts's buildFollowUpEmailDraft for where this
+// branches. Scoped, per-prospect templates are added here one at a time,
+// never altering "standard" or any other prospect's generated email.
+export const CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES = ["standard", "pricing_next_steps"] as const;
+export type ConsultationGuideFollowUpEmailTemplate = (typeof CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES)[number];
+
+export const CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS: Record<ConsultationGuideFollowUpEmailTemplate, string> = {
+  standard: "Standard",
+  pricing_next_steps: "Pricing & Next Steps",
+};
+
+// Shown as an internal-only banner above the Send Email button in the
+// Follow-Up Email section (ConsultationGuideForm.tsx) whenever
+// follow_up_email_template === "pricing_next_steps" - never persisted
+// into follow_up_email_subject/body, so it can never end up in the actual
+// customer email. A plain client-safe string builder (this file has no
+// "server-only" import, unlike consultation-guide-email.ts) since the
+// form that renders it is a Client Component.
+export function buildPricingNextStepsInternalWarning(businessName: string): string {
+  return `Before sending: Confirm the ${businessName} consultation details are correct. The standard Lead Generation rate is $750/month. Do not mention a pilot, discount, or custom arrangement unless separately approved by Admin.`;
+}
+
 // Section 2: Start the Conversation.
 export const CONSULTATION_GUIDE_OPENING_LINE =
   "Thanks for meeting with me. I’d like to understand your business, your growth goals, what you’re doing now to win customers, and where you need the most support. Then I can explain where Winsalot Corp. may be able to help.";
@@ -256,6 +286,11 @@ export type CrmConsultationGuideRow = CommercialArrangementFields & {
   // generated.
   follow_up_email_subject: string | null;
   follow_up_email_body: string | null;
+  // Which template generated (and will regenerate, if ever backfilled)
+  // this draft - see CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES above.
+  // Null/"standard" for every guide except one explicitly switched to a
+  // scoped, prospect-specific template.
+  follow_up_email_template: ConsultationGuideFollowUpEmailTemplate | null;
 
   // A deliberate, admin-confirmed "Resend Follow-Up Email" of the same
   // template to the same recipient - only ever offered once the original

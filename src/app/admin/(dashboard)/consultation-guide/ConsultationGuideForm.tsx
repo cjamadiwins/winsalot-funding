@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  buildPricingNextStepsInternalWarning,
   CONSULTATION_GUIDE_CAMPAIGN_EXPECTATION_QUESTIONS,
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
   CONSULTATION_GUIDE_CLOSING_LINE,
@@ -482,6 +483,14 @@ export default function ConsultationGuideForm({
                       {guide.follow_up_email_body}
                     </pre>
                   </div>
+                  {guide.follow_up_email_template === "pricing_next_steps" && guide.follow_up_email_status !== "sent" && (
+                    // Internal-only - shown here in the Admin UI only, never
+                    // saved into follow_up_email_subject/body, so it can
+                    // never reach the customer email.
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-[12.5px] font-semibold text-amber-900">
+                      {buildPricingNextStepsInternalWarning(guide.business_name || "this")}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {updateFollowUpDraftAction && (
                       <button
@@ -591,6 +600,17 @@ export default function ConsultationGuideForm({
                 ))}
               </div>
             </div>
+            <label className="mt-4 flex items-start gap-2 text-[13px] font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                name="follow_up_email_template"
+                value="pricing_next_steps"
+                defaultChecked={guide?.follow_up_email_template === "pricing_next_steps"}
+                className="mt-0.5 h-4 w-4"
+              />
+              Use the &ldquo;Pricing &amp; Next Steps&rdquo; follow-up email (for a prospect Winsalot Corp. needs portfolio/positioning
+              material from before outreach can start) instead of the standard follow-up email.
+            </label>
           </section>
 
           {/* 2. Start the Conversation */}

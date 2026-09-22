@@ -217,6 +217,119 @@ function buildCustomSplitPaymentFollowUpEmail(guide: CustomSplitPaymentEmailGuid
   return { subject: `${businessName} × Winsalot Corp. — Agreed Next Steps`, text: lines.join("\n") };
 }
 
+// The exact plain-text line the "Pricing & Next Steps" template writes for
+// its call to action - recognized specifically by renderPricingNextStepsHtml
+// below to render a real button with no visible URL underneath it. Kept as
+// its own constant so the builder and the renderer can never drift apart
+// on the exact wording either expects.
+const CONTINUE_CTA_LABEL = "Continue With Winsalot Corp.";
+
+// The template's own section headings - recognized by
+// renderPricingNextStepsHtml to render as bold section labels rather than
+// plain body copy, since this template (unlike every other one above) is
+// explicitly structured into named sections.
+const PRICING_NEXT_STEPS_SECTION_HEADINGS = new Set([
+  "Thank You",
+  "What We Discussed",
+  "How Our Process Works",
+  "Investment",
+  "Campaign Materials Needed",
+  "Information Still Required",
+  "Next Step",
+]);
+
+export type PricingNextStepsEmailGuide = Pick<CrmConsultationGuideRow, "contact_name" | "business_name">;
+
+// "Pricing & Next Steps" follow-up email - scoped, for now, to Unique Web
+// World Digital Marketing (follow_up_email_template ===
+// "pricing_next_steps"): a prospect Winsalot Corp. needs portfolio,
+// completed-work, and positioning material from before outreach can
+// accurately represent them, still at the standard $750/month Lead
+// Generation rate - explicitly never a pilot, discount, or custom
+// arrangement (see buildPricingNextStepsInternalWarning above, shown only
+// to Admin). A wholly fixed, structured template (unlike the arrangement-
+// driven templates above, there is no special commercial arrangement data
+// to pull in) - only the recipient's name/business and the standing
+// public continue-with-Winsalot link are ever substituted. Never sent
+// directly; goes through the same generate-once-then-review pipeline as
+// every other template (buildFollowUpEmailDraft below).
+function buildPricingNextStepsFollowUpEmail(guide: PricingNextStepsEmailGuide, consultantName: string): { subject: string; text: string } {
+  const businessName = guide.business_name || "your business";
+  const firstName = firstNameOf(guide.contact_name || "there");
+  const continueUrl = `${getSiteUrl()}/continue-with-winsalot`;
+
+  const lines: string[] = [
+    `Hi ${firstName},`,
+    "",
+    "Thank You",
+    "",
+    `Thank you for taking the time to speak with us today about ${businessName}'s website design, SEO, and digital marketing services.`,
+    "",
+    "What We Discussed",
+    "",
+    "Winsalot Corp. can help generate qualified B2B opportunities for your website design, SEO, and digital marketing services through targeted outbound prospecting and appointment setting.",
+    "",
+    "How Our Process Works",
+    "",
+    [
+      "1. Confirm campaign positioning and target market",
+      "2. Conduct B2B outbound prospecting and cold calling",
+      "3. Qualify interested decision-makers",
+      "4. Book consultations or next-step conversations",
+      `5. ${businessName} handles the consultation, proposal, and closing process`,
+      "6. Winsalot Corp. tracks campaign activity and appointments",
+    ].join("\n"),
+    "",
+    "Investment",
+    "",
+    "$750/month",
+    "",
+    "Campaign Materials Needed",
+    "",
+    `To help our agents accurately represent ${businessName} during outbound outreach, please provide:\n- Portfolio examples\n- Completed website/project examples\n- SEO or digital marketing examples where appropriate\n- Service descriptions\n- Pricing or starting price ranges where you are comfortable sharing them\n- Key points you'd like our agents to emphasize`,
+    "",
+    "Information Still Required",
+    "",
+    "Service pricing/cost structure and any additional campaign information are still pending confirmation with your business partner.",
+    "",
+    "Next Step",
+    "",
+    "Once we receive the outstanding campaign information above, Winsalot Corp. can finalize the outreach approach and prepare the campaign for activation.",
+    "",
+    `${CONTINUE_CTA_LABEL}: ${continueUrl}`,
+    "",
+    "Best regards,",
+    consultantName || "Winsalot Corp.",
+    "Winsalot Corp.",
+  ];
+
+  return { subject: `${businessName} — Pricing & Next Steps with Winsalot Corp.`, text: lines.join("\n") };
+}
+
+// Renders the "Pricing & Next Steps" template's plain-text draft to HTML -
+// a dedicated renderer, entirely separate from textToHtml below, so this
+// template's own section-heading and CTA-button styling can never affect
+// how any other guide's draft (every other arrangement/service
+// combination) is rendered at send time. Falls back to textToHtml's own
+// plain-paragraph styling for any line that isn't a recognized heading or
+// the CTA line - safe even if Admin's own edits add ordinary prose.
+function renderPricingNextStepsHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const trimmed = paragraph.trim();
+      if (trimmed.startsWith(`${CONTINUE_CTA_LABEL}: `)) {
+        const url = trimmed.slice(`${CONTINUE_CTA_LABEL}: `.length).trim();
+        return `<p style="margin:20px 0;"><a href="${escapeHtml(url)}" style="display:inline-block;background:#1e3a8a;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">${CONTINUE_CTA_LABEL}</a></p>`;
+      }
+      if (PRICING_NEXT_STEPS_SECTION_HEADINGS.has(trimmed)) {
+        return `<p style="margin:18px 0 6px;font-weight:700;color:#0f172a;">${escapeHtml(trimmed)}</p>`;
+      }
+      return `<p style="margin:0 0 14px;white-space:pre-line;">${escapeHtml(paragraph)}</p>`;
+    })
+    .join("");
+}
+
 export type FollowUpEmailDraft = { subject: string; body: string };
 
 // Generates the initial follow-up email draft for a guide - called once,
@@ -246,6 +359,7 @@ export function buildFollowUpEmailDraft(
     | "arrangement_milestone_2_condition"
     | "arrangement_standard_fee"
     | "arrangement_campaign_start_date"
+    | "follow_up_email_template"
     | "summary"
   >,
   consultantName: string
@@ -254,6 +368,15 @@ export function buildFollowUpEmailDraft(
   if (!service) return null;
 
   const resolvedConsultantName = guide.consultant_name || consultantName;
+
+  // "Pricing & Next Steps" (Unique Web World Digital Marketing, for now) -
+  // a wholly fixed, structured template, checked first since it overrides
+  // every other template choice below regardless of arrangement_type
+  // (this prospect is Standard Monthly, no special arrangement at all).
+  if (guide.follow_up_email_template === "pricing_next_steps") {
+    const pricingNextSteps = buildPricingNextStepsFollowUpEmail(guide, resolvedConsultantName);
+    return { subject: pricingNextSteps.subject, body: pricingNextSteps.text };
+  }
 
   // Custom – Split Payment / Performance Milestones has its own, wholly
   // different email structure (a payment schedule, not a template + a
@@ -302,6 +425,7 @@ export async function ensureFollowUpEmailDraft(
     | "arrangement_milestone_2_condition"
     | "arrangement_standard_fee"
     | "arrangement_campaign_start_date"
+    | "follow_up_email_template"
     | "summary"
     | "follow_up_email_subject"
     | "follow_up_email_body"
@@ -340,6 +464,15 @@ function textToHtml(text: string): string {
     .join("");
 }
 
+// Picks the same renderer buildFollowUpEmailDraft used to generate this
+// guide's draft in the first place - "pricing_next_steps" gets its real
+// CTA button and bold section headings, every other guide (the overwhelming
+// majority, unaffected by this template) gets the plain paragraph
+// rendering exactly as before.
+function renderFollowUpEmailHtml(template: CrmConsultationGuideRow["follow_up_email_template"], text: string): string {
+  return template === "pricing_next_steps" ? renderPricingNextStepsHtml(text) : textToHtml(text);
+}
+
 export type ConsultationGuideEmailSendResult =
   | { status: "sent"; resendEmailId: string; crmLeadEmailId: string | null }
   | { status: "failed"; error: string };
@@ -355,7 +488,16 @@ export async function sendConsultationGuideFollowUpEmail(
   admin: SupabaseClient,
   guide: Pick<
     CrmConsultationGuideRow,
-    "id" | "opportunity_id" | "contact_name" | "business_name" | "email" | "consultant_name" | "service" | "follow_up_email_subject" | "follow_up_email_body"
+    | "id"
+    | "opportunity_id"
+    | "contact_name"
+    | "business_name"
+    | "email"
+    | "consultant_name"
+    | "service"
+    | "follow_up_email_subject"
+    | "follow_up_email_body"
+    | "follow_up_email_template"
   >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
@@ -386,7 +528,7 @@ export async function sendConsultationGuideFollowUpEmail(
 
   const subject = guide.follow_up_email_subject;
   const text = guide.follow_up_email_body;
-  const html = textToHtml(text);
+  const html = renderFollowUpEmailHtml(guide.follow_up_email_template, text);
 
   try {
     const resend = getResendClient();
@@ -485,6 +627,7 @@ export async function resendConsultationGuideFollowUpEmail(
     | "follow_up_email_resend_count"
     | "follow_up_email_subject"
     | "follow_up_email_body"
+    | "follow_up_email_template"
   >,
   consultant: ConsultationGuideEmailConsultant
 ): Promise<ConsultationGuideEmailSendResult> {
@@ -497,7 +640,7 @@ export async function resendConsultationGuideFollowUpEmail(
 
   const subject = guide.follow_up_email_subject;
   const text = guide.follow_up_email_body;
-  const html = textToHtml(text);
+  const html = renderFollowUpEmailHtml(guide.follow_up_email_template, text);
 
   try {
     const resend = getResendClient();

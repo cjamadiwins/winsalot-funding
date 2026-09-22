@@ -9,6 +9,7 @@ import {
   CONSULTATION_GUIDE_CAMPAIGN_EXPECTATION_QUESTIONS,
   CONSULTATION_GUIDE_CHECKLIST_ITEMS,
   CONSULTATION_GUIDE_DISCOVERY_QUESTIONS,
+  CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES,
   CONSULTATION_GUIDE_LEADGEN_FIT_QUESTIONS,
   CONSULTATION_GUIDE_LENDING_FIT_QUESTIONS,
   CONSULTATION_GUIDE_SERVICES,
@@ -18,6 +19,7 @@ import {
   LENDING_FIT_STATUSES,
   type ConsultationGuideAnswers,
   type ConsultationGuideChecklist,
+  type ConsultationGuideFollowUpEmailTemplate,
   type ConsultationGuideService,
   type CrmConsultationGuideRow,
   type LeadgenFitStatus,
@@ -126,6 +128,15 @@ function arrangementFieldsFromForm(formData: FormData): CommercialArrangementFie
   };
 }
 
+// Which follow-up email template this guide's draft is generated from -
+// "standard" (the default, unchecked) for every consultation unless
+// Admin explicitly picks a scoped, prospect-specific template like
+// "Pricing & Next Steps" (for now, Unique Web World Digital Marketing).
+function followUpEmailTemplateFromForm(formData: FormData): ConsultationGuideFollowUpEmailTemplate {
+  const raw = String(formData.get("follow_up_email_template") ?? "");
+  return (CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES as readonly string[]).includes(raw) ? (raw as ConsultationGuideFollowUpEmailTemplate) : "standard";
+}
+
 function checklistFromForm(formData: FormData): ConsultationGuideChecklist {
   const checklist: ConsultationGuideChecklist = {};
   for (const item of CONSULTATION_GUIDE_CHECKLIST_ITEMS) {
@@ -164,6 +175,7 @@ function fieldsFromForm(formData: FormData) {
     ...arrangementFieldsFromForm(formData),
     checklist: checklistFromForm(formData),
     notes: textOrNull(formData, "notes"),
+    follow_up_email_template: followUpEmailTemplateFromForm(formData),
   };
 }
 
