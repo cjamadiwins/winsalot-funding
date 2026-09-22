@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AdminDashboardGreeting from "@/components/crm-ui/AdminDashboardGreeting";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { isDueToday, isOverdue, OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_STYLES, type CrmFollowUpWithOpportunity, type CrmOpportunityRow, type CrmUserRow } from "@/lib/crm-types";
@@ -195,7 +196,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Good Afternoon, Winsalot Corp.
+            <AdminDashboardGreeting />
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
