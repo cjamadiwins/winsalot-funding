@@ -4,6 +4,7 @@ import {
   deriveSubcontractorOnboardingChecklist,
   onboardingProgressSummary,
   requiredTrainingComplete,
+  isReferralPartner,
   SUBCONTRACTOR_STATUS_LABELS,
   SUBCONTRACTOR_STATUS_BADGE_CLASSES,
   type SubcontractorAgreementRow,
@@ -13,7 +14,7 @@ import {
   type SubcontractorTrainingModuleRow,
   type SubcontractorTrainingProgressRow,
 } from "@/lib/crm-subcontractor-types";
-import { createSubcontractorAction } from "@/lib/crm-subcontractor-actions";
+import { createSubcontractorAction, createReferralPartnerAction } from "@/lib/crm-subcontractor-actions";
 import SubcontractorsListClient from "./SubcontractorsListClient";
 
 export default async function AdminSubcontractorsPage() {
@@ -48,35 +49,42 @@ export default async function AdminSubcontractorsPage() {
   const permissionRows = (permissions ?? []) as SubcontractorPermissionsRow[];
   const loginRows = (logins ?? []) as { id: string; subcontractor_id: string; active: boolean }[];
 
-  const rows = subcontractorRows.map((sub) => {
-    const assignment = assignmentRows.find((a) => a.subcontractor_id === sub.id);
-    const latestAgreement = agreementRows.find((a) => a.subcontractor_id === sub.id);
-    const progressByModuleId = new Map(
-      progressRows.filter((p) => p.subcontractor_id === sub.id).map((p) => [p.module_id, p])
-    );
-    const trainingComplete = requiredTrainingComplete(moduleRows, progressByModuleId);
-    const permission = permissionRows.find((p) => p.subcontractor_id === sub.id);
-    const login = loginRows.find((l) => l.subcontractor_id === sub.id);
+  // Referral partners (partner_type = 'referral_partner') skip the
+  // Contractor onboarding checklist entirely - none of agreement/
+  // training/CRM access applies to them (see migration 20260922120000).
+  const rows = subcontractorRows
+    .filter((sub) => !isReferralPartner(sub))
+    .map((sub) => {
+      const assignment = assignmentRows.find((a) => a.subcontractor_id === sub.id);
+      const latestAgreement = agreementRows.find((a) => a.subcontractor_id === sub.id);
+      const progressByModuleId = new Map(
+        progressRows.filter((p) => p.subcontractor_id === sub.id).map((p) => [p.module_id, p])
+      );
+      const trainingComplete = requiredTrainingComplete(moduleRows, progressByModuleId);
+      const permission = permissionRows.find((p) => p.subcontractor_id === sub.id);
+      const login = loginRows.find((l) => l.subcontractor_id === sub.id);
 
-    const checklist = deriveSubcontractorOnboardingChecklist({
-      subcontractor: sub,
-      hasCurrentAgreement: Boolean(latestAgreement),
-      hasCurrentAssignment: Boolean(assignment),
-      requiredModulesComplete: trainingComplete,
-      crmAccessGranted: Boolean(login?.active),
+      const checklist = deriveSubcontractorOnboardingChecklist({
+        subcontractor: sub,
+        hasCurrentAgreement: Boolean(latestAgreement),
+        hasCurrentAssignment: Boolean(assignment),
+        requiredModulesComplete: trainingComplete,
+        crmAccessGranted: Boolean(login?.active),
+      });
+
+      return {
+        subcontractor: sub,
+        clientName: assignment?.crm_clients?.company_name ?? null,
+        agreementSigned: Boolean(latestAgreement),
+        trainingComplete,
+        paymentSetupComplete: Boolean(sub.currency && sub.pay_type),
+        crmAccessGranted: Boolean(login?.active),
+        crmAccess: permission?.crm_access ?? "no_access",
+        progressSummary: onboardingProgressSummary(checklist),
+      };
     });
 
-    return {
-      subcontractor: sub,
-      clientName: assignment?.crm_clients?.company_name ?? null,
-      agreementSigned: Boolean(latestAgreement),
-      trainingComplete,
-      paymentSetupComplete: Boolean(sub.currency && sub.pay_type),
-      crmAccessGranted: Boolean(login?.active),
-      crmAccess: permission?.crm_access ?? "no_access",
-      progressSummary: onboardingProgressSummary(checklist),
-    };
-  });
+  const referralPartnerRows = subcontractorRows.filter(isReferralPartner);
 
   return (
     <div>
@@ -92,8 +100,10 @@ export default async function AdminSubcontractorsPage() {
 
       <SubcontractorsListClient
         rows={rows}
+        referralPartnerRows={referralPartnerRows}
         clients={(clients ?? []).map((c) => ({ id: c.id, company_name: c.company_name }))}
         createSubcontractorAction={createSubcontractorAction}
+        createReferralPartnerAction={createReferralPartnerAction}
       />
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
