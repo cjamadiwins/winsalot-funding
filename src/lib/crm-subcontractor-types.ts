@@ -27,7 +27,8 @@ export const SUBCONTRACTOR_STATUS_BADGE_CLASSES: Record<SubcontractorStatus, str
   terminated: "bg-slate-300 text-slate-700",
 };
 
-// Full crm_subcontractors row (migration 0135, extended by 0136).
+// Full crm_subcontractors row (migration 0135, extended by 0136, extended
+// again by 20260922120000 with partner_type + referral-partner fields).
 export type SubcontractorProfileRow = {
   id: string;
   created_at: string;
@@ -47,7 +48,183 @@ export type SubcontractorProfileRow = {
   active: boolean;
   deactivated_at: string | null;
   deactivated_by: string | null;
+  partner_type: SubcontractorPartnerType;
+  primary_markets: string[] | null;
+  lead_gen_revenue_share_percent: number | null;
+  lending_commission_share_percent: number | null;
+  partner_overview_email_subject: string | null;
+  partner_overview_email_body: string | null;
+  partner_overview_email_status: PartnerOverviewEmailStatus;
+  partner_overview_email_sent_at: string | null;
+  partner_overview_email_error: string | null;
 };
+
+// ---------------------------------------------------------------------
+// Referral Partners (migration 20260922120000) - a second kind of row in
+// the same crm_subcontractors table, for an introducer paid a recurring
+// revenue/commission share (e.g. Tony) rather than the full Contractor
+// onboarding/agreement/training/payroll lifecycle above. See that
+// migration's header comment for the full design rationale.
+// ---------------------------------------------------------------------
+
+export const SUBCONTRACTOR_PARTNER_TYPES = ["contractor", "referral_partner"] as const;
+export type SubcontractorPartnerType = (typeof SUBCONTRACTOR_PARTNER_TYPES)[number];
+
+export const SUBCONTRACTOR_PARTNER_TYPE_LABELS: Record<SubcontractorPartnerType, string> = {
+  contractor: "Contractor",
+  referral_partner: "Subcontractor / Referral Partner",
+};
+
+// Fixed checkbox list a referral partner's Primary Markets are chosen
+// from - covers Tony's own profile plus the Ideal Lead Generation Clients
+// categories from the Partner Overview email, so the same list works for
+// future referral partners without a schema change (primary_markets is a
+// plain text[], not an enum column).
+export const REFERRAL_PARTNER_MARKET_OPTIONS = [
+  "Website Design",
+  "Website Development",
+  "SEO",
+  "Digital Marketing",
+  "IT & Professional B2B Services",
+  "Business Lending Referrals",
+] as const;
+
+export function isReferralPartner(subcontractor: Pick<SubcontractorProfileRow, "partner_type">): boolean {
+  return subcontractor.partner_type === "referral_partner";
+}
+
+export const PARTNER_OVERVIEW_EMAIL_STATUSES = ["not_sent", "sending", "sent", "failed"] as const;
+export type PartnerOverviewEmailStatus = (typeof PARTNER_OVERVIEW_EMAIL_STATUSES)[number];
+
+export const PARTNER_OVERVIEW_EMAIL_STATUS_LABELS: Record<PartnerOverviewEmailStatus, string> = {
+  not_sent: "Not Sent",
+  sending: "Sending…",
+  sent: "Sent",
+  failed: "Failed",
+};
+
+export const PARTNER_OVERVIEW_EMAIL_STATUS_BADGE_CLASSES: Record<PartnerOverviewEmailStatus, string> = {
+  not_sent: "bg-slate-100 text-slate-700",
+  sending: "bg-sky-100 text-sky-800",
+  sent: "bg-emerald-100 text-emerald-800",
+  failed: "bg-rose-100 text-rose-800",
+};
+
+// Lead Generation recurring revenue-share tracking (crm_subcontractor_referral_revenue).
+export type SubcontractorReferralPaymentStatus = "unpaid" | "partial" | "paid";
+export type SubcontractorReferralCommissionStatus = "not_due" | "due" | "paid";
+
+export const REFERRAL_PAYMENT_STATUS_LABELS: Record<SubcontractorReferralPaymentStatus, string> = {
+  unpaid: "Unpaid",
+  partial: "Partially Collected",
+  paid: "Collected",
+};
+
+export const REFERRAL_COMMISSION_STATUS_LABELS: Record<SubcontractorReferralCommissionStatus, string> = {
+  not_due: "Not Due",
+  due: "Due",
+  paid: "Paid",
+};
+
+export type SubcontractorReferralRevenueRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  subcontractor_id: string;
+  client_id: string;
+  period_start: string;
+  period_end: string;
+  monthly_amount: number;
+  amount_collected: number;
+  revenue_share_percent_snapshot: number;
+  partner_share: number;
+  winsalot_share: number;
+  payment_status: SubcontractorReferralPaymentStatus;
+  payment_date: string | null;
+  commission_status: SubcontractorReferralCommissionStatus;
+  commission_paid_at: string | null;
+  notes: string | null;
+};
+
+// Business Lending Commission Share tracking (crm_subcontractor_lending_referrals).
+export type SubcontractorLendingReferralStatus = "pending_funding" | "funded_awaiting_commission" | "commission_received" | "paid_to_partner";
+
+export const LENDING_REFERRAL_STATUS_LABELS: Record<SubcontractorLendingReferralStatus, string> = {
+  pending_funding: "Pending Funding",
+  funded_awaiting_commission: "Funded - Awaiting Commission",
+  commission_received: "Commission Received",
+  paid_to_partner: "Paid to Partner",
+};
+
+export const LENDING_REFERRAL_STATUS_BADGE_CLASSES: Record<SubcontractorLendingReferralStatus, string> = {
+  pending_funding: "bg-slate-100 text-slate-700",
+  funded_awaiting_commission: "bg-amber-100 text-amber-800",
+  commission_received: "bg-sky-100 text-sky-800",
+  paid_to_partner: "bg-emerald-100 text-emerald-800",
+};
+
+export type SubcontractorLendingReferralRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  subcontractor_id: string;
+  opportunity_id: string | null;
+  business_name: string;
+  funded_at: string | null;
+  commission_share_percent_snapshot: number;
+  lender_commission_received: number;
+  clawback_adjustment: number;
+  commission_received_at: string | null;
+  partner_share: number;
+  winsalot_share: number;
+  commission_status: SubcontractorLendingReferralStatus;
+  commission_paid_at: string | null;
+  notes: string | null;
+};
+
+// A referral partner's total financial picture, derived from their
+// revenue-share and lending-referral rows - never stored, always computed
+// from the underlying ledger rows so it can never drift out of sync with
+// them (same philosophy as onboardingProgressSummary above).
+export type ReferralPartnerFinancialSummary = {
+  monthlyRecurringRevenue: number;
+  totalRevenueGenerated: number;
+  partnerShareTotal: number;
+  winsalotShareTotal: number;
+};
+
+// Monthly Recurring Revenue Generated: for each client, the monthly_amount
+// of their most recent revenue-share period (by period_start) - not a sum
+// across every historical period, which would double-count past months.
+export function summarizeReferralPartnerFinancials(
+  revenueRows: Pick<SubcontractorReferralRevenueRow, "client_id" | "period_start" | "monthly_amount" | "amount_collected" | "partner_share" | "winsalot_share">[],
+  lendingRows: Pick<SubcontractorLendingReferralRow, "lender_commission_received" | "clawback_adjustment" | "partner_share" | "winsalot_share">[]
+): ReferralPartnerFinancialSummary {
+  const latestByClient = new Map<string, (typeof revenueRows)[number]>();
+  for (const row of revenueRows) {
+    const current = latestByClient.get(row.client_id);
+    if (!current || row.period_start > current.period_start) latestByClient.set(row.client_id, row);
+  }
+
+  const monthlyRecurringRevenue = Array.from(latestByClient.values()).reduce((sum, row) => sum + row.monthly_amount, 0);
+
+  const leadGenCollected = revenueRows.reduce((sum, row) => sum + row.amount_collected, 0);
+  const leadGenPartnerShare = revenueRows.reduce((sum, row) => sum + row.partner_share, 0);
+  const leadGenWinsalotShare = revenueRows.reduce((sum, row) => sum + row.winsalot_share, 0);
+
+  const lendingNetCollected = lendingRows.reduce((sum, row) => sum + Math.max(row.lender_commission_received - row.clawback_adjustment, 0), 0);
+  const lendingPartnerShare = lendingRows.reduce((sum, row) => sum + row.partner_share, 0);
+  const lendingWinsalotShare = lendingRows.reduce((sum, row) => sum + row.winsalot_share, 0);
+
+  return {
+    monthlyRecurringRevenue: Math.round(monthlyRecurringRevenue * 100) / 100,
+    totalRevenueGenerated: Math.round((leadGenCollected + lendingNetCollected) * 100) / 100,
+    partnerShareTotal: Math.round((leadGenPartnerShare + lendingPartnerShare) * 100) / 100,
+    winsalotShareTotal: Math.round((leadGenWinsalotShare + lendingWinsalotShare) * 100) / 100,
+  };
+}
 
 export type SubcontractorClientAssignmentRow = {
   id: string;
@@ -157,7 +334,16 @@ export type SubcontractorAuditAction =
   | "payroll_paid"
   | "status_changed"
   | "deactivated"
-  | "reactivated";
+  | "reactivated"
+  | "referral_prospect_linked"
+  | "referral_prospect_unlinked"
+  | "referral_client_linked"
+  | "referral_client_unlinked"
+  | "referral_revenue_recorded"
+  | "referral_revenue_commission_paid"
+  | "lending_referral_recorded"
+  | "lending_referral_commission_paid"
+  | "partner_overview_email_sent";
 
 export const SUBCONTRACTOR_AUDIT_ACTION_LABELS: Record<SubcontractorAuditAction, string> = {
   created: "Subcontractor created",
@@ -174,6 +360,15 @@ export const SUBCONTRACTOR_AUDIT_ACTION_LABELS: Record<SubcontractorAuditAction,
   status_changed: "Status changed",
   deactivated: "Deactivated",
   reactivated: "Reactivated",
+  referral_prospect_linked: "Prospect linked",
+  referral_prospect_unlinked: "Prospect unlinked",
+  referral_client_linked: "Client linked",
+  referral_client_unlinked: "Client unlinked",
+  referral_revenue_recorded: "Revenue recorded",
+  referral_revenue_commission_paid: "Revenue share commission paid",
+  lending_referral_recorded: "Lending referral recorded",
+  lending_referral_commission_paid: "Lending commission paid",
+  partner_overview_email_sent: "Partner Overview Email sent",
 };
 
 export type SubcontractorAuditLogRow = {

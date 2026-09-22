@@ -22,11 +22,16 @@ import { renderSubcontractorAgreementTemplate } from "./crm-subcontractor-agreem
 import {
   SUBCONTRACTOR_CRM_ACCESS_OPTIONS,
   SUBCONTRACTOR_STATUSES,
+  REFERRAL_PARTNER_MARKET_OPTIONS,
   type SubcontractorAuditAction,
   type SubcontractorCrmAccess,
   type SubcontractorPaymentStatus,
   type SubcontractorStatus,
+  type SubcontractorReferralPaymentStatus,
+  type SubcontractorReferralCommissionStatus,
+  type SubcontractorLendingReferralStatus,
 } from "./crm-subcontractor-types";
+import { buildPartnerOverviewEmailDraft, sendPartnerOverviewEmail } from "./crm-referral-partner-email";
 
 type ActionResult = { error?: string };
 
@@ -686,5 +691,637 @@ export async function updateOwnTrainingProgressAction(moduleId: string, status: 
 
   revalidatePath("/subcontractor/training");
   revalidatePath("/subcontractor/dashboard");
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Referral Partners (migration 20260922120000) - a second kind of
+// crm_subcontractors row (partner_type = 'referral_partner') for an
+// introducer paid a recurring revenue/commission share (e.g. Tony)
+// instead of the Contractor onboarding/agreement/training/payroll
+// lifecycle above. Entirely separate action set from every Contractor
+// action above - none of those are touched, and none of these touch a
+// Contractor row.
+// ---------------------------------------------------------------------
+
+function parsePercent(formData: FormData, key: string): number | null {
+  const raw = formData.get(key);
+  if (raw === null || String(raw).trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 100) return null;
+  return value;
+}
+
+function parseReferralMarkets(formData: FormData): string[] {
+  return formData
+    .getAll("primary_markets")
+    .map((v) => String(v))
+    .filter((v) => (REFERRAL_PARTNER_MARKET_OPTIONS as readonly string[]).includes(v));
+}
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Referral partners skip the Contractor onboarding checklist entirely
+// (brief: no agreement/training/CRM-login applies) - created directly as
+// 'active', and currency/pay_type/pay_rate are filled with unused filler
+// values purely to satisfy those columns' existing NOT NULL constraints
+// (migration 0135) - never read or shown anywhere for a referral_partner
+// row.
+export async function createReferralPartnerAction(formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const primaryMarkets = parseReferralMarkets(formData);
+  const leadGenPercent = parsePercent(formData, "lead_gen_revenue_share_percent");
+  const lendingPercent = parsePercent(formData, "lending_commission_share_percent");
+
+  if (!fullName) return { error: "Full name is required." };
+  if (leadGenPercent === null) return { error: "Enter a Lead Generation revenue share between 0 and 100." };
+  if (lendingPercent === null) return { error: "Enter a Business Lending commission share between 0 and 100." };
+
+  const { data: inserted, error } = await supabase
+    .from("crm_subcontractors")
+    .insert({
+      full_name: fullName,
+      email,
+      phone,
+      notes,
+      currency: "USD",
+      pay_type: "fixed",
+      pay_rate: 0,
+      status: "active",
+      active: true,
+      partner_type: "referral_partner",
+      primary_markets: primaryMarkets.length > 0 ? primaryMarkets : null,
+      lead_gen_revenue_share_percent: leadGenPercent,
+      lending_commission_share_percent: lendingPercent,
+      created_by: admin.id,
+    })
+    .select("id, full_name, lead_gen_revenue_share_percent, lending_commission_share_percent")
+    .single();
+
+  if (error || !inserted) return { error: `Failed to create referral partner: ${error?.message ?? "unknown error"}` };
+
+  const draft = buildPartnerOverviewEmailDraft(inserted);
+  await supabase
+    .from("crm_subcontractors")
+    .update({ partner_overview_email_subject: draft.subject, partner_overview_email_body: draft.body })
+    .eq("id", inserted.id);
+
+  await insertAuditRow(supabase, {
+    subcontractorId: inserted.id,
+    action: "created",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { full_name: fullName, partner_type: "referral_partner" },
+  });
+
+  revalidatePath("/admin/crm/subcontractors");
+  return {};
+}
+
+export async function updateReferralPartnerProfileAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase
+    .from("crm_subcontractors")
+    .select("lead_gen_revenue_share_percent, lending_commission_share_percent")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!existing) return { error: "Referral partner not found." };
+
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const primaryMarkets = parseReferralMarkets(formData);
+  const leadGenPercent = parsePercent(formData, "lead_gen_revenue_share_percent");
+  const lendingPercent = parsePercent(formData, "lending_commission_share_percent");
+
+  if (!fullName) return { error: "Full name is required." };
+  if (leadGenPercent === null) return { error: "Enter a Lead Generation revenue share between 0 and 100." };
+  if (lendingPercent === null) return { error: "Enter a Business Lending commission share between 0 and 100." };
+
+  const { error } = await supabase
+    .from("crm_subcontractors")
+    .update({
+      full_name: fullName,
+      email,
+      phone,
+      notes,
+      primary_markets: primaryMarkets.length > 0 ? primaryMarkets : null,
+      lead_gen_revenue_share_percent: leadGenPercent,
+      lending_commission_share_percent: lendingPercent,
+    })
+    .eq("id", subcontractorId);
+
+  if (error) return { error: `Failed to update referral partner: ${error.message}` };
+
+  const compensationChanged =
+    existing.lead_gen_revenue_share_percent !== leadGenPercent || existing.lending_commission_share_percent !== lendingPercent;
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: compensationChanged ? "compensation_changed" : "profile_updated",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: compensationChanged
+      ? {
+          from: { lead_gen_revenue_share_percent: existing.lead_gen_revenue_share_percent, lending_commission_share_percent: existing.lending_commission_share_percent },
+          to: { lead_gen_revenue_share_percent: leadGenPercent, lending_commission_share_percent: lendingPercent },
+        }
+      : null,
+  });
+
+  revalidatePath("/admin/crm/subcontractors");
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Referral Partners - linking a prospect (crm_opportunities) or
+// client (crm_clients) to a partner. The relationship lives as a plain
+// column on those tables (see migration 20260922120000's header comment
+// for why), so it stays attached automatically as that same row's own
+// stage/status changes - no separate "assignment" table to keep in sync.
+// ---------------------------------------------------------------------
+
+export async function linkReferralPartnerToOpportunityAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const opportunityId = String(formData.get("opportunity_id") ?? "").trim();
+  if (!opportunityId) return { error: "Select a prospect to link." };
+
+  const { data: opportunity } = await supabase.from("crm_opportunities").select("id, business_name").eq("id", opportunityId).maybeSingle();
+  if (!opportunity) return { error: "Prospect not found." };
+
+  const { error } = await supabase.from("crm_opportunities").update({ referral_partner_id: subcontractorId }).eq("id", opportunityId);
+  if (error) return { error: `Failed to link this prospect: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_prospect_linked",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { opportunity_id: opportunityId, business_name: opportunity.business_name },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  return {};
+}
+
+export async function unlinkReferralPartnerFromOpportunityAction(opportunityId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: opportunity } = await supabase
+    .from("crm_opportunities")
+    .select("id, business_name, referral_partner_id")
+    .eq("id", opportunityId)
+    .maybeSingle();
+  if (!opportunity?.referral_partner_id) return { error: "This prospect has no referral partner linked." };
+
+  const subcontractorId = opportunity.referral_partner_id as string;
+  const { error } = await supabase.from("crm_opportunities").update({ referral_partner_id: null }).eq("id", opportunityId);
+  if (error) return { error: `Failed to unlink this prospect: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_prospect_unlinked",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { opportunity_id: opportunityId, business_name: opportunity.business_name },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  revalidatePath(`/admin/crm/opportunities/${opportunityId}`);
+  return {};
+}
+
+export async function linkReferralPartnerToClientAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const clientId = String(formData.get("client_id") ?? "").trim();
+  if (!clientId) return { error: "Select a client to link." };
+
+  const { data: client } = await supabase.from("crm_clients").select("id, company_name").eq("id", clientId).maybeSingle();
+  if (!client) return { error: "Client not found." };
+
+  const { error } = await supabase.from("crm_clients").update({ referral_partner_id: subcontractorId }).eq("id", clientId);
+  if (error) return { error: `Failed to link this client: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_client_linked",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { client_id: clientId, company_name: client.company_name },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  revalidatePath(`/admin/crm/clients/${clientId}`);
+  return {};
+}
+
+export async function unlinkReferralPartnerFromClientAction(clientId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: client } = await supabase.from("crm_clients").select("id, company_name, referral_partner_id").eq("id", clientId).maybeSingle();
+  if (!client?.referral_partner_id) return { error: "This client has no referral partner linked." };
+
+  const subcontractorId = client.referral_partner_id as string;
+  const { error } = await supabase.from("crm_clients").update({ referral_partner_id: null }).eq("id", clientId);
+  if (error) return { error: `Failed to unlink this client: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_client_unlinked",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { client_id: clientId, company_name: client.company_name },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  revalidatePath(`/admin/crm/clients/${clientId}`);
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Lead Generation recurring revenue-share ledger. Tony's share is
+// always a *generated* column computed off amount_collected (never
+// monthly_amount) - see migration 20260922120000 - so "do not calculate
+// the revenue share on unpaid invoices" is enforced by the database
+// itself, not just by this action's own logic.
+// ---------------------------------------------------------------------
+
+export async function recordReferralRevenuePeriodAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: partner } = await supabase
+    .from("crm_subcontractors")
+    .select("lead_gen_revenue_share_percent")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+  if (partner.lead_gen_revenue_share_percent === null) return { error: "Set this partner's Lead Generation revenue share percentage first." };
+
+  const clientId = String(formData.get("client_id") ?? "").trim();
+  const periodStart = String(formData.get("period_start") ?? "").trim();
+  const periodEnd = String(formData.get("period_end") ?? "").trim();
+  const monthlyAmount = parseNonNegativeAmount(formData, "monthly_amount");
+  const amountCollected = parseNonNegativeAmount(formData, "amount_collected");
+  const paymentDate = String(formData.get("payment_date") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!clientId) return { error: "Select a client." };
+  if (!periodStart || !periodEnd) return { error: "Period start and end are required." };
+  if (periodEnd < periodStart) return { error: "Period end must be on or after period start." };
+  if (monthlyAmount === null) return { error: "Monthly amount must be zero or a positive number." };
+  if (amountCollected === null) return { error: "Amount collected must be zero or a positive number." };
+  if (amountCollected > 0 && !paymentDate) return { error: "A payment date is required once an amount has been collected." };
+
+  const paymentStatus: SubcontractorReferralPaymentStatus = amountCollected <= 0 ? "unpaid" : amountCollected >= monthlyAmount ? "paid" : "partial";
+
+  const { error } = await supabase.from("crm_subcontractor_referral_revenue").insert({
+    subcontractor_id: subcontractorId,
+    client_id: clientId,
+    period_start: periodStart,
+    period_end: periodEnd,
+    monthly_amount: monthlyAmount,
+    amount_collected: amountCollected,
+    revenue_share_percent_snapshot: partner.lead_gen_revenue_share_percent,
+    payment_status: paymentStatus,
+    payment_date: paymentDate,
+    commission_status: amountCollected > 0 ? "due" : "not_due",
+    notes,
+    created_by: admin.id,
+  });
+
+  if (error) return { error: `Failed to record this period's revenue: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_revenue_recorded",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { client_id: clientId, period_start: periodStart, period_end: periodEnd, monthly_amount: monthlyAmount, amount_collected: amountCollected },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function recordReferralRevenueCollectedAction(revenueId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase
+    .from("crm_subcontractor_referral_revenue")
+    .select("id, subcontractor_id, monthly_amount, commission_status")
+    .eq("id", revenueId)
+    .maybeSingle();
+  if (!existing) return { error: "Revenue record not found." };
+
+  const amountCollected = parseNonNegativeAmount(formData, "amount_collected");
+  const paymentDate = String(formData.get("payment_date") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (amountCollected === null) return { error: "Amount collected must be zero or a positive number." };
+  if (amountCollected > 0 && !paymentDate) return { error: "A payment date is required once an amount has been collected." };
+
+  const monthlyAmount = existing.monthly_amount as number;
+  const paymentStatus: SubcontractorReferralPaymentStatus = amountCollected <= 0 ? "unpaid" : amountCollected >= monthlyAmount ? "paid" : "partial";
+  const commissionStatus: SubcontractorReferralCommissionStatus =
+    existing.commission_status === "paid" ? "paid" : amountCollected > 0 ? "due" : "not_due";
+
+  const { error } = await supabase
+    .from("crm_subcontractor_referral_revenue")
+    .update({ amount_collected: amountCollected, payment_date: paymentDate, payment_status: paymentStatus, commission_status: commissionStatus, notes })
+    .eq("id", revenueId);
+
+  if (error) return { error: `Failed to record revenue received: ${error.message}` };
+
+  const subcontractorId = existing.subcontractor_id as string;
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_revenue_recorded",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { revenue_id: revenueId, amount_collected: amountCollected },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function markReferralRevenueCommissionPaidAction(revenueId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase
+    .from("crm_subcontractor_referral_revenue")
+    .select("id, subcontractor_id, partner_share, commission_status")
+    .eq("id", revenueId)
+    .maybeSingle();
+  if (!existing) return { error: "Revenue record not found." };
+  if (existing.commission_status === "paid") return { error: "This commission has already been paid." };
+  if (!existing.partner_share || (existing.partner_share as number) <= 0) return { error: "No commission is due yet on this period." };
+
+  const { error } = await supabase
+    .from("crm_subcontractor_referral_revenue")
+    .update({ commission_status: "paid", commission_paid_at: todayIsoDate() })
+    .eq("id", revenueId);
+
+  if (error) return { error: `Failed to record commission paid: ${error.message}` };
+
+  const subcontractorId = existing.subcontractor_id as string;
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "referral_revenue_commission_paid",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { revenue_id: revenueId, amount: existing.partner_share },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Business Lending Commission Share ledger. Payable only after
+// Winsalot actually receives the lender's commission - lender_commission_received
+// defaults to 0 at creation, so partner_share (a generated column, net of
+// clawback_adjustment) stays 0 until Admin explicitly records it.
+// ---------------------------------------------------------------------
+
+function deriveLendingReferralStatus(input: { lenderCommissionReceived: number; fundedAt: string | null }): SubcontractorLendingReferralStatus {
+  if (input.lenderCommissionReceived > 0) return "commission_received";
+  if (input.fundedAt) return "funded_awaiting_commission";
+  return "pending_funding";
+}
+
+export async function recordLendingReferralAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: partner } = await supabase
+    .from("crm_subcontractors")
+    .select("lending_commission_share_percent")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+  if (partner.lending_commission_share_percent === null) return { error: "Set this partner's Business Lending commission share percentage first." };
+
+  const businessName = String(formData.get("business_name") ?? "").trim();
+  if (!businessName) return { error: "Business name is required." };
+
+  const opportunityId = String(formData.get("opportunity_id") ?? "").trim() || null;
+  const fundedAt = String(formData.get("funded_at") ?? "").trim() || null;
+  const lenderCommissionReceived = parseNonNegativeAmount(formData, "lender_commission_received") ?? 0;
+  const clawbackAdjustment = parseNonNegativeAmount(formData, "clawback_adjustment") ?? 0;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  const { error } = await supabase.from("crm_subcontractor_lending_referrals").insert({
+    subcontractor_id: subcontractorId,
+    opportunity_id: opportunityId,
+    business_name: businessName,
+    funded_at: fundedAt,
+    commission_share_percent_snapshot: partner.lending_commission_share_percent,
+    lender_commission_received: lenderCommissionReceived,
+    clawback_adjustment: clawbackAdjustment,
+    commission_received_at: lenderCommissionReceived > 0 ? todayIsoDate() : null,
+    commission_status: deriveLendingReferralStatus({ lenderCommissionReceived, fundedAt }),
+    notes,
+    created_by: admin.id,
+  });
+
+  if (error) return { error: `Failed to record this lending referral: ${error.message}` };
+
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "lending_referral_recorded",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { business_name: businessName, lender_commission_received: lenderCommissionReceived },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function recordLendingReferralCommissionReceivedAction(lendingReferralId: string, formData: FormData): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase
+    .from("crm_subcontractor_lending_referrals")
+    .select("id, subcontractor_id, funded_at, commission_status")
+    .eq("id", lendingReferralId)
+    .maybeSingle();
+  if (!existing) return { error: "Lending referral not found." };
+  if (existing.commission_status === "paid_to_partner") return { error: "This deal's commission has already been paid to the partner." };
+
+  const lenderCommissionReceived = parseNonNegativeAmount(formData, "lender_commission_received");
+  const clawbackAdjustment = parseNonNegativeAmount(formData, "clawback_adjustment");
+  const fundedAt = String(formData.get("funded_at") ?? "").trim() || (existing.funded_at as string | null);
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (lenderCommissionReceived === null) return { error: "Lender commission received must be zero or a positive number." };
+  if (clawbackAdjustment === null) return { error: "Clawback adjustment must be zero or a positive number." };
+
+  const { error } = await supabase
+    .from("crm_subcontractor_lending_referrals")
+    .update({
+      lender_commission_received: lenderCommissionReceived,
+      clawback_adjustment: clawbackAdjustment,
+      funded_at: fundedAt,
+      commission_received_at: lenderCommissionReceived > 0 ? todayIsoDate() : null,
+      commission_status: deriveLendingReferralStatus({ lenderCommissionReceived, fundedAt }),
+      notes,
+    })
+    .eq("id", lendingReferralId);
+
+  if (error) return { error: `Failed to record commission received: ${error.message}` };
+
+  const subcontractorId = existing.subcontractor_id as string;
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "lending_referral_recorded",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { lending_referral_id: lendingReferralId, lender_commission_received: lenderCommissionReceived },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function markLendingReferralCommissionPaidAction(lendingReferralId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing } = await supabase
+    .from("crm_subcontractor_lending_referrals")
+    .select("id, subcontractor_id, partner_share, commission_status")
+    .eq("id", lendingReferralId)
+    .maybeSingle();
+  if (!existing) return { error: "Lending referral not found." };
+  if (existing.commission_status === "paid_to_partner") return { error: "This commission has already been paid." };
+  if (!existing.partner_share || (existing.partner_share as number) <= 0) return { error: "No commission is due yet on this deal." };
+
+  const { error } = await supabase
+    .from("crm_subcontractor_lending_referrals")
+    .update({ commission_status: "paid_to_partner", commission_paid_at: todayIsoDate() })
+    .eq("id", lendingReferralId);
+
+  if (error) return { error: `Failed to record commission paid: ${error.message}` };
+
+  const subcontractorId = existing.subcontractor_id as string;
+  await insertAuditRow(supabase, {
+    subcontractorId,
+    action: "lending_referral_commission_paid",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { lending_referral_id: lendingReferralId, amount: existing.partner_share },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+// ---------------------------------------------------------------------
+// Admin: Send Partner Overview Email - generate-once, review/edit,
+// send-manually. See src/lib/crm-referral-partner-email.ts's header
+// comment; never sent automatically.
+// ---------------------------------------------------------------------
+
+export async function saveReferralPartnerOverviewEmailDraftAction(subcontractorId: string, formData: FormData): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!subject || !body) return { error: "Subject and body cannot be empty." };
+
+  const { error } = await supabase
+    .from("crm_subcontractors")
+    .update({ partner_overview_email_subject: subject, partner_overview_email_body: body })
+    .eq("id", subcontractorId);
+  if (error) return { error: `Failed to save this draft: ${error.message}` };
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function resetReferralPartnerOverviewEmailDraftAction(subcontractorId: string): Promise<ActionResult> {
+  await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: partner } = await supabase
+    .from("crm_subcontractors")
+    .select("full_name, lead_gen_revenue_share_percent, lending_commission_share_percent")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+
+  const draft = buildPartnerOverviewEmailDraft(partner);
+  const { error } = await supabase
+    .from("crm_subcontractors")
+    .update({ partner_overview_email_subject: draft.subject, partner_overview_email_body: draft.body })
+    .eq("id", subcontractorId);
+  if (error) return { error: `Failed to reset this draft: ${error.message}` };
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
+  return {};
+}
+
+export async function sendReferralPartnerOverviewEmailAction(subcontractorId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: partner } = await supabaseAdmin
+    .from("crm_subcontractors")
+    .select("id, email, partner_overview_email_subject, partner_overview_email_body")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (!partner) return { error: "Referral partner not found." };
+
+  const result = await sendPartnerOverviewEmail(supabaseAdmin, partner);
+  if (result.status === "failed") return { error: result.error };
+
+  await insertAuditRow(supabaseAdmin, {
+    subcontractorId,
+    action: "partner_overview_email_sent",
+    performedById: admin.id,
+    performedByName: admin.full_name || admin.email,
+    reason: null,
+    details: { resend_email_id: result.resendEmailId },
+  });
+
+  revalidatePath(`/admin/crm/subcontractors/${subcontractorId}`);
   return {};
 }
