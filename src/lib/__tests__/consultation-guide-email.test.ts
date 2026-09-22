@@ -272,6 +272,91 @@ describe("buildFollowUpEmailDraft - Custom – Split Payment / Performance Miles
   });
 });
 
+describe("buildFollowUpEmailDraft - Performance & Case Study (The Creative Horse / Mustafa)", () => {
+  const creativeHorseGuide: CrmConsultationGuideRow = {
+    ...baseGuide,
+    business_name: "The Creative Horse",
+    contact_name: "Mustafa",
+    consultant_name: "C.J. Amadi",
+    follow_up_email_template: "performance_case_study",
+    arrangement_type: "custom_split_payment",
+    arrangement_standard_fee: 750,
+    arrangement_upfront_payment: 300,
+    arrangement_service: "B2B Lead Generation / Appointment Setting",
+    arrangement_client_services: "SEO, Website Design, and Tech Automation",
+    arrangement_total_value: 750,
+    arrangement_milestone_1_amount: 200,
+    arrangement_milestone_1_condition: "Upon the first Winsalot-generated prospect converting into a paying client of The Creative Horse.",
+    arrangement_milestone_2_amount: 250,
+    arrangement_milestone_2_condition: "Remaining balance of the initial engagement.",
+    arrangement_special_terms:
+      "The exact definition of a \"conversion\" must be confirmed before any agreement is finalized. Preferably, conversion should mean that a Winsalot-generated prospect signs an agreement with The Creative Horse and/or makes the first payment.",
+  } as CrmConsultationGuideRow;
+
+  it("overrides every other template choice, regardless of arrangement_type, the same way pricing_next_steps does", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft({ ...creativeHorseGuide, arrangement_type: "standard_monthly" }, "C.J. Amadi");
+    expect(draft?.subject).toBe("The Creative Horse — Next Steps & Case Studies with Winsalot Corp.");
+    expect(draft?.body).toContain("Previous Campaign Experience");
+  });
+
+  it("greets Mustafa and confirms the standard price, the custom payment structure, and the total value", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(creativeHorseGuide, "C.J. Amadi");
+
+    expect(draft?.body).toContain("Hi Mustafa,");
+    expect(draft?.body).toContain("$750/month");
+    expect(draft?.body).toContain("$300 initial deposit");
+    expect(draft?.body).toContain("$200");
+    expect(draft?.body).toContain("$250");
+    expect(draft?.body).toContain("Total initial engagement value: $750");
+    expect(draft?.body).toContain("subject to a final written agreement before campaign activation");
+  });
+
+  it("includes the verified Brent's Essentials and Mantra Collab case studies, positioned as appointment activity - never claimed conversions", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(creativeHorseGuide, "C.J. Amadi");
+
+    expect(draft?.body).toContain("Brent's Essentials");
+    expect(draft?.body).toContain("2 booked appointments to 5 and then to 8 booked appointments");
+    expect(draft?.body).toContain("Mantra Collab");
+    expect(draft?.body).toContain("2-3 appointments during the campaign period");
+    expect(draft?.body).toContain("We do not guarantee that every appointment will convert into a paying customer");
+  });
+
+  it("never guarantees conversions, revenue, or specific campaign results", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(creativeHorseGuide, "C.J. Amadi");
+
+    expect(draft?.body).toContain("We're not able to guarantee conversions, revenue, or specific campaign results");
+    for (const forbidden of ["guaranteed results", "guaranteed conversions", "guaranteed revenue"]) {
+      expect(draft?.body.toLowerCase()).not.toContain(forbidden);
+    }
+  });
+
+  it("invites Mustafa to review the case-study information and then confirm whether he wants to proceed", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(creativeHorseGuide, "C.J. Amadi");
+    expect(draft?.body).toContain("Please take your time reviewing this information, and let us know how you'd like to proceed.");
+  });
+
+  it("never includes arrangement_special_terms (the internal-only conversion-definition note) in the client-facing email", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(creativeHorseGuide, "C.J. Amadi");
+    expect(draft?.body).not.toContain("must be confirmed before any agreement is finalized");
+  });
+
+  it("leaves every other guide's draft (including other custom_split_payment prospects like Teknokraft) completely unaffected", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const teknokraftDraft = buildFollowUpEmailDraft(
+      { ...baseGuide, business_name: "Teknokraft Canada Inc.", arrangement_type: "custom_split_payment", arrangement_upfront_payment: 250, follow_up_email_template: "standard" },
+      "C.J. Amadi"
+    );
+    expect(teknokraftDraft?.body).not.toContain("Previous Campaign Experience");
+    expect(teknokraftDraft?.body).not.toContain("Brent's Essentials");
+  });
+});
+
 describe("buildFollowUpEmailDraft - Pricing & Next Steps (Unique Web World Digital Marketing)", () => {
   const uniqueWebWorldGuide: CrmConsultationGuideRow = {
     ...baseGuide,

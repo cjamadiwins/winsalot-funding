@@ -330,6 +330,134 @@ function renderPricingNextStepsHtml(text: string): string {
     .join("");
 }
 
+// The template's own section headings - recognized by
+// renderPerformanceCaseStudyHtml to render as bold section labels, same
+// technique as PRICING_NEXT_STEPS_SECTION_HEADINGS above, so the case
+// studies stay "visually clean and easy to scan" in the actual sent
+// email, not just in the admin's plain-text preview.
+const PERFORMANCE_CASE_STUDY_SECTION_HEADINGS = new Set([
+  "Previous Campaign Experience",
+  "Brent's Essentials",
+  "Mantra Collab",
+  "Pricing & Proposed Arrangement",
+  "Next Steps",
+]);
+
+export type PerformanceCaseStudyEmailGuide = Pick<
+  CrmConsultationGuideRow,
+  | "contact_name"
+  | "business_name"
+  | "arrangement_total_value"
+  | "arrangement_upfront_payment"
+  | "arrangement_milestone_1_amount"
+  | "arrangement_milestone_1_condition"
+  | "arrangement_milestone_2_amount"
+  | "arrangement_milestone_2_condition"
+  | "arrangement_standard_fee"
+>;
+
+// "Performance & Case Study" follow-up email - scoped, for now, to The
+// Creative Horse / Mustafa (follow_up_email_template ===
+// "performance_case_study"): a prospect whose main objection is trust and
+// proof of performance before committing to the full payment. Built from
+// the same custom-split-payment arrangement fields as
+// buildCustomSplitPaymentFollowUpEmail above (so the $300/$200/$250
+// figures can never drift from what's actually saved on Section 9), plus
+// a fixed "Previous Campaign Experience" section using only verified
+// Winsalot campaign results (Brent's Essentials, Mantra Collab) - never
+// claims a conversion/sale that isn't recorded in the CRM. Never sent
+// directly; goes through the same generate-once-then-review pipeline as
+// every other template (buildFollowUpEmailDraft below).
+function buildPerformanceCaseStudyFollowUpEmail(guide: PerformanceCaseStudyEmailGuide, consultantName: string): { subject: string; text: string } {
+  const businessName = guide.business_name || "your business";
+  const firstName = firstNameOf(guide.contact_name || "there");
+  const deposit = formatMoney(guide.arrangement_upfront_payment);
+  const milestone1 = formatMoney(guide.arrangement_milestone_1_amount);
+  const milestone2 = formatMoney(guide.arrangement_milestone_2_amount);
+  const totalValue = formatMoney(guide.arrangement_total_value);
+  const standardFee = formatMoney(guide.arrangement_standard_fee);
+
+  const lines: string[] = [
+    `Hi ${firstName},`,
+    "",
+    `Thank you for taking the time to speak with me about ${businessName} and how Winsalot Corp. may be able to help.`,
+    "",
+    "We understand that your main priority is performance and conversion - you want confidence that the opportunities we generate have a realistic chance of converting into paying customers before committing to the full arrangement.",
+    "",
+    "Previous Campaign Experience",
+    "",
+    "We understand that your biggest concern is whether Winsalot can perform and whether the opportunities we generate have a realistic chance of converting.",
+    "",
+    "While every campaign, industry, offer, and sales process is different, we have previously managed outbound lead-generation campaigns for businesses including Brent's Essentials and Mantra Collab.",
+    "",
+    "Brent's Essentials",
+    "",
+    "For Brent's Essentials, our campaign focused on outbound B2B prospecting and booking 15-minute consultations. During the campaign, appointment activity progressed from 2 booked appointments to 5 and then to 8 booked appointments as the campaign continued.",
+    "This demonstrated our ability to consistently work a campaign, generate business conversations, and create appointment opportunities for the client.",
+    "",
+    "Mantra Collab",
+    "",
+    "For Mantra Collab, we created a customized outbound campaign designed around the client's target services and market. The campaign focused on generating qualified business opportunities and approximately 2-3 appointments during the campaign period.",
+    "The campaign demonstrated our ability to adapt our scripts, targeting, and outreach process around a client's specific offer.",
+    "",
+    "These examples are intended to show how Winsalot approaches campaigns and generates opportunities. We do not guarantee that every appointment will convert into a paying customer because final conversion depends on several factors, including the client's offer, pricing, sales presentation, follow-up process, and ability to close the opportunity.",
+    "",
+    "Our responsibility is to create and manage the outbound prospecting process, identify interested businesses, qualify opportunities, and help put our clients in front of potential customers.",
+    "",
+    "Pricing & Proposed Arrangement",
+    "",
+    `Winsalot Corp.'s standard Lead Generation / Appointment Setting service is ${standardFee}/month.`,
+    "",
+    "As discussed, we're also open to a custom payment structure for this initial engagement:",
+    `- ${deposit} initial deposit`,
+    guide.arrangement_milestone_1_condition
+      ? `- ${milestone1} ${lowerFirst(guide.arrangement_milestone_1_condition)}`
+      : `- ${milestone1} upon your first qualifying conversion`,
+    guide.arrangement_milestone_2_condition
+      ? `- ${milestone2} ${lowerFirst(guide.arrangement_milestone_2_condition)}`
+      : `- ${milestone2} remaining balance`,
+    `Total initial engagement value: ${totalValue}`,
+    "",
+    "This structure - including the exact definition of a qualifying \"conversion\" - remains subject to a final written agreement before campaign activation.",
+    "",
+    "Next Steps",
+    "",
+    [
+      "1. We will prepare a concise case-study/performance overview using only accurate, verifiable campaign results.",
+      "2. We'll send that information to you for your review.",
+      "3. We'll confirm together the exact definition of a converted client.",
+      `4. We'll confirm the ${deposit} / ${milestone1} / ${milestone2} payment structure in writing before campaign activation.`,
+      "5. We'll follow up with you after you've had a chance to review the case-study information.",
+    ].join("\n"),
+    "",
+    "We're not able to guarantee conversions, revenue, or specific campaign results - every business, offer, and market is different - but we're confident in our ability to run a structured, well-managed outbound campaign on your behalf.",
+    "",
+    "Please take your time reviewing this information, and let us know how you'd like to proceed.",
+    "",
+    "Best regards,",
+    consultantName || "Winsalot Corp.",
+    "Winsalot Corp.",
+  ];
+
+  return { subject: `${businessName} — Next Steps & Case Studies with Winsalot Corp.`, text: lines.join("\n") };
+}
+
+// Renders the "Performance & Case Study" template's plain-text draft to
+// HTML - same bold-section-heading technique as renderPricingNextStepsHtml,
+// entirely separate so it can never affect any other guide's rendering.
+function renderPerformanceCaseStudyHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const trimmed = paragraph.trim();
+      if (PERFORMANCE_CASE_STUDY_SECTION_HEADINGS.has(trimmed)) {
+        return `<p style="margin:18px 0 6px;font-weight:700;color:#0f172a;">${escapeHtml(trimmed)}</p>`;
+      }
+      return `<p style="margin:0 0 14px;white-space:pre-line;">${escapeHtml(paragraph)}</p>`;
+    })
+    .join("");
+}
+
 export type FollowUpEmailDraft = { subject: string; body: string };
 
 // Generates the initial follow-up email draft for a guide - called once,
@@ -376,6 +504,15 @@ export function buildFollowUpEmailDraft(
   if (guide.follow_up_email_template === "pricing_next_steps") {
     const pricingNextSteps = buildPricingNextStepsFollowUpEmail(guide, resolvedConsultantName);
     return { subject: pricingNextSteps.subject, body: pricingNextSteps.text };
+  }
+
+  // "Performance & Case Study" (The Creative Horse / Mustafa, for now) -
+  // also a wholly fixed, structured template, checked before the generic
+  // custom_split_payment branch below since it needs that same arrangement
+  // data PLUS the fixed case-study section neither other template has.
+  if (guide.follow_up_email_template === "performance_case_study") {
+    const performanceCaseStudy = buildPerformanceCaseStudyFollowUpEmail(guide, resolvedConsultantName);
+    return { subject: performanceCaseStudy.subject, body: performanceCaseStudy.text };
   }
 
   // Custom – Split Payment / Performance Milestones has its own, wholly
@@ -470,7 +607,9 @@ function textToHtml(text: string): string {
 // majority, unaffected by this template) gets the plain paragraph
 // rendering exactly as before.
 function renderFollowUpEmailHtml(template: CrmConsultationGuideRow["follow_up_email_template"], text: string): string {
-  return template === "pricing_next_steps" ? renderPricingNextStepsHtml(text) : textToHtml(text);
+  if (template === "pricing_next_steps") return renderPricingNextStepsHtml(text);
+  if (template === "performance_case_study") return renderPerformanceCaseStudyHtml(text);
+  return textToHtml(text);
 }
 
 export type ConsultationGuideEmailSendResult =

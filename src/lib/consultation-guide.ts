@@ -81,12 +81,18 @@ export const CONSULTATION_GUIDE_FOLLOW_UP_STATUS_STYLES: Record<ConsultationGuid
 // consultation-guide-email.ts's buildFollowUpEmailDraft for where this
 // branches. Scoped, per-prospect templates are added here one at a time,
 // never altering "standard" or any other prospect's generated email.
-export const CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES = ["standard", "pricing_next_steps"] as const;
+export const CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES = ["standard", "pricing_next_steps", "performance_case_study"] as const;
 export type ConsultationGuideFollowUpEmailTemplate = (typeof CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATES)[number];
 
 export const CONSULTATION_GUIDE_FOLLOW_UP_EMAIL_TEMPLATE_LABELS: Record<ConsultationGuideFollowUpEmailTemplate, string> = {
   standard: "Standard",
   pricing_next_steps: "Pricing & Next Steps",
+  // For a prospect whose main objection is trust/proof of performance
+  // before committing (for now, The Creative Horse / Mustafa) - adds a
+  // Previous Campaign Experience section (verified case studies) on top
+  // of the custom-split-payment arrangement fields. See
+  // buildPerformanceCaseStudyFollowUpEmail in consultation-guide-email.ts.
+  performance_case_study: "Performance & Case Study",
 };
 
 // Shown as an internal-only banner above the Send Email button in the
