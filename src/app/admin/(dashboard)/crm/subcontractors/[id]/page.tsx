@@ -15,6 +15,7 @@ import {
   type SubcontractorTrainingProgressRow,
   type SubcontractorReferralRevenueRow,
   type SubcontractorLendingReferralRow,
+  type SubcontractorPartnerEmailLogRow,
 } from "@/lib/crm-subcontractor-types";
 import {
   changeSubcontractorClientAssignmentAction,
@@ -38,6 +39,9 @@ import {
   saveReferralPartnerOverviewEmailDraftAction,
   resetReferralPartnerOverviewEmailDraftAction,
   sendReferralPartnerOverviewEmailAction,
+  saveServicesEmailDraftAction,
+  resetServicesEmailDraftAction,
+  sendServicesEmailAction,
 } from "@/lib/crm-subcontractor-actions";
 import SubcontractorDetailClient from "./SubcontractorDetailClient";
 import ReferralPartnerDetailClient from "./ReferralPartnerDetailClient";
@@ -60,6 +64,7 @@ export default async function AdminSubcontractorDetailPage({ params }: { params:
       { data: revenueRows },
       { data: lendingRows },
       { data: auditLog },
+      { data: emailLog },
     ] = await Promise.all([
       supabase.from("crm_opportunities").select("id, business_name, stage").eq("referral_partner_id", id).order("business_name"),
       supabase.from("crm_clients").select("id, company_name, status").eq("referral_partner_id", id).order("company_name"),
@@ -68,6 +73,7 @@ export default async function AdminSubcontractorDetailPage({ params }: { params:
       supabase.from("crm_subcontractor_referral_revenue").select("*").eq("subcontractor_id", id).order("period_start", { ascending: false }),
       supabase.from("crm_subcontractor_lending_referrals").select("*").eq("subcontractor_id", id).order("created_at", { ascending: false }),
       supabase.from("crm_subcontractor_audit_log").select("*").eq("subcontractor_id", id).order("created_at", { ascending: false }),
+      supabase.from("crm_subcontractor_partner_email_log").select("*").eq("subcontractor_id", id).order("created_at", { ascending: false }),
     ]);
 
     return (
@@ -80,6 +86,7 @@ export default async function AdminSubcontractorDetailPage({ params }: { params:
         revenueRows={(revenueRows ?? []) as SubcontractorReferralRevenueRow[]}
         lendingRows={(lendingRows ?? []) as SubcontractorLendingReferralRow[]}
         auditLog={(auditLog ?? []) as SubcontractorAuditLogRow[]}
+        emailLog={(emailLog ?? []) as SubcontractorPartnerEmailLogRow[]}
         updateProfileAction={updateReferralPartnerProfileAction}
         setStatusAction={setSubcontractorStatusAction}
         linkOpportunityAction={linkReferralPartnerToOpportunityAction}
@@ -95,6 +102,9 @@ export default async function AdminSubcontractorDetailPage({ params }: { params:
         saveOverviewEmailDraftAction={saveReferralPartnerOverviewEmailDraftAction}
         resetOverviewEmailDraftAction={resetReferralPartnerOverviewEmailDraftAction}
         sendOverviewEmailAction={sendReferralPartnerOverviewEmailAction}
+        saveServicesEmailDraftAction={saveServicesEmailDraftAction}
+        resetServicesEmailDraftAction={resetServicesEmailDraftAction}
+        sendServicesEmailAction={sendServicesEmailAction}
       />
     );
   }

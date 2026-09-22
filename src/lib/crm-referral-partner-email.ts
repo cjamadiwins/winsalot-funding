@@ -132,6 +132,102 @@ export function buildPartnerOverviewEmailDraft(
   };
 }
 
+// Builds the "Services & Selling Points" email draft - never sent
+// directly. Unlike buildPartnerOverviewEmailDraft, this template's
+// content is entirely fixed (no revenue-share/commission numbers to
+// substitute) except the greeting, which still uses the partner's own
+// first name rather than hardcoding Tony's.
+export function buildServicesSellingPointsEmailDraft(partner: Pick<SubcontractorProfileRow, "full_name">): PartnerOverviewEmailDraft {
+  const firstName = firstNameOf(partner.full_name || "there");
+
+  const lines: string[] = [
+    `Hi ${firstName},`,
+    "",
+    "As discussed, I wanted to give you a clear overview of what Winsalot Corp. provides and the main benefits you can communicate when speaking with potential clients.",
+    "",
+    "What Winsalot Corp. Provides",
+    "",
+    "1. B2B Lead Generation & Appointment Setting",
+    "",
+    "We help businesses create new sales opportunities through targeted outbound prospecting and appointment setting.",
+    "Our team handles the outreach, follow-up, qualification, and appointment-setting process so the client can focus on consultations, proposals, and closing business.",
+    "",
+    "This service is especially suitable for businesses such as:",
+    "- Website Design companies",
+    "- Website Development companies",
+    "- SEO companies",
+    "- Digital Marketing agencies",
+    "- Website Redesign and Rebranding providers",
+    "- Other B2B service businesses",
+    "",
+    "What the client receives",
+    "- Targeted outbound calling",
+    "- Prospecting to businesses in their preferred market",
+    "- Qualification of interested prospects",
+    "- Appointment setting",
+    "- Follow-up activity",
+    "- Call and lead tracking",
+    "- CRM-supported campaign management",
+    "- Visibility into campaign activity and results",
+    "",
+    "Benefits of Working With Winsalot",
+    "",
+    "Save Time",
+    "The client does not have to spend hours cold calling and searching for new opportunities. Our team handles the outbound prospecting.",
+    "",
+    "More Sales Conversations",
+    "Our objective is to create qualified conversations and appointments so the client has more opportunities to present their services.",
+    "",
+    "Dedicated Outbound Team",
+    "Instead of hiring, training, and managing an internal SDR team, the client can use Winsalot's existing outbound infrastructure.",
+    "",
+    "Structured Campaigns",
+    "We do more than provide a contact list. We run organized outreach campaigns, track activity, follow up, and move interested prospects toward appointments.",
+    "",
+    "Focus on Closing",
+    "Winsalot handles the top-of-funnel prospecting work, allowing the client to concentrate on consultations, proposals, relationships, and closing sales.",
+    "",
+    "Campaign Visibility",
+    "Our CRM allows campaign activity, leads, appointments, call logs, and other relevant information to be tracked.",
+    "",
+    "How to Position the Service",
+    "",
+    "A simple way to explain Winsalot is:",
+    '"Winsalot Corp. acts as an outsourced B2B prospecting and appointment-setting team. They identify businesses that may need your service, conduct the outbound outreach, qualify interest, and help create appointments so your team can focus on closing the opportunities."',
+    "",
+    "2. Business Lending Support",
+    "",
+    "Winsalot Corp. also assists eligible businesses that are looking for commercial financing.",
+    "We work with lending and funding partners and help businesses explore suitable financing options based on their revenue, operating history, financial profile, and lender requirements.",
+    "",
+    "Winsalot does not charge the business a separate fee for this support. Compensation is generally paid by the applicable lender or funding partner when a transaction successfully funds.",
+    "Funding approval, amount, pricing, repayment terms, and eligibility are determined by the lender.",
+    "",
+    "How to Position Business Lending",
+    "",
+    "You can say:",
+    '"Winsalot Corp. also works with business funding partners and can help eligible businesses explore commercial financing options without having to approach multiple lenders on their own."',
+    "",
+    "Your Role as a Referral Partner",
+    "",
+    "Your main role is to identify businesses that may benefit from either service, introduce Winsalot, and connect interested prospects with us.",
+    "You do not need to handle the full sales presentation, underwriting, campaign setup, or onboarding. Winsalot will take over once the prospect is interested.",
+    "Please avoid guaranteeing appointments, sales conversions, financing approvals, funding amounts, or specific financing terms.",
+    "",
+    "We are looking forward to building the partnership and helping you create additional value for the businesses you already work with.",
+    "",
+    "Best regards,",
+    "C.J. Amadi",
+    "Winsalot Corp.",
+    "Empowering Businesses, One Solution at a Time.",
+  ];
+
+  return {
+    subject: "Winsalot Corp. Services & Key Selling Points",
+    body: lines.join("\n"),
+  };
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -206,6 +302,68 @@ export async function sendPartnerOverviewEmail(
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : "Unknown error sending Partner Overview Email.";
     await admin.from("crm_subcontractors").update({ partner_overview_email_status: "failed", partner_overview_email_error: errorDetail }).eq("id", partner.id);
+    return { status: "failed", error: errorDetail };
+  }
+}
+
+// Sends the partner's currently-saved Services & Selling Points draft -
+// same review-before-send, compare-and-swap-claim shape as
+// sendPartnerOverviewEmail above, targeting the separate services_email_*
+// columns so sending this template can never touch the Partnership
+// Overview template's own status/sent_at.
+export async function sendServicesSellingPointsEmail(
+  admin: SupabaseClient,
+  partner: Pick<SubcontractorProfileRow, "id" | "email" | "services_email_subject" | "services_email_body">
+): Promise<PartnerOverviewEmailSendResult> {
+  if (!partner.email) return { status: "failed", error: "No recipient email on file for this partner." };
+  if (!partner.services_email_subject || !partner.services_email_body) {
+    return { status: "failed", error: "No email draft has been generated for this partner yet." };
+  }
+
+  const { data: claimed, error: claimError } = await admin
+    .from("crm_subcontractors")
+    .update({ services_email_status: "sending" })
+    .eq("id", partner.id)
+    .in("services_email_status", ["not_sent", "failed"])
+    .select("id")
+    .maybeSingle();
+  if (claimError) return { status: "failed", error: claimError.message };
+  if (!claimed) return { status: "failed", error: "This email has already been sent or is currently sending." };
+
+  const subject = partner.services_email_subject;
+  const text = partner.services_email_body;
+  const html = textToHtml(text);
+
+  try {
+    const resend = getResendClient();
+    const { data: sendResult, error: sendError } = await resend.emails.send({
+      from: getEmailSender("growth"),
+      to: partner.email,
+      replyTo: getEmailReplyTo(),
+      subject,
+      text,
+      html,
+    });
+
+    if (sendError || !sendResult) {
+      const errorDetail = sendError?.message ?? "Unknown Resend error.";
+      await admin.from("crm_subcontractors").update({ services_email_status: "failed", services_email_error: errorDetail }).eq("id", partner.id);
+      return { status: "failed", error: errorDetail };
+    }
+
+    await admin
+      .from("crm_subcontractors")
+      .update({
+        services_email_status: "sent",
+        services_email_sent_at: new Date().toISOString(),
+        services_email_error: null,
+      })
+      .eq("id", partner.id);
+
+    return { status: "sent", resendEmailId: sendResult.id };
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : "Unknown error sending Services & Selling Points Email.";
+    await admin.from("crm_subcontractors").update({ services_email_status: "failed", services_email_error: errorDetail }).eq("id", partner.id);
     return { status: "failed", error: errorDetail };
   }
 }
