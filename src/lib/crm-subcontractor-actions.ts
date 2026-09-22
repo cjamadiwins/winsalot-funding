@@ -740,10 +740,14 @@ export async function createReferralPartnerAction(formData: FormData): Promise<A
   const primaryMarkets = parseReferralMarkets(formData);
   const leadGenPercent = parsePercent(formData, "lead_gen_revenue_share_percent");
   const lendingPercent = parsePercent(formData, "lending_commission_share_percent");
+  const currency = String(formData.get("currency") ?? "CAD").trim();
+  const status = String(formData.get("status") ?? "pending_onboarding").trim();
 
   if (!fullName) return { error: "Full name is required." };
   if (leadGenPercent === null) return { error: "Enter a Lead Generation revenue share between 0 and 100." };
   if (lendingPercent === null) return { error: "Enter a Business Lending commission share between 0 and 100." };
+  if (!isValidCurrency(currency)) return { error: "Choose a valid currency." };
+  if (!isValidStatus(status)) return { error: "Choose a valid status." };
 
   const { data: inserted, error } = await supabase
     .from("crm_subcontractors")
@@ -752,10 +756,10 @@ export async function createReferralPartnerAction(formData: FormData): Promise<A
       email,
       phone,
       notes,
-      currency: "USD",
+      currency,
       pay_type: "fixed",
       pay_rate: 0,
-      status: "active",
+      status,
       active: true,
       partner_type: "referral_partner",
       primary_markets: primaryMarkets.length > 0 ? primaryMarkets : null,
@@ -763,7 +767,7 @@ export async function createReferralPartnerAction(formData: FormData): Promise<A
       lending_commission_share_percent: lendingPercent,
       created_by: admin.id,
     })
-    .select("id, full_name, lead_gen_revenue_share_percent, lending_commission_share_percent")
+    .select("id, full_name, currency, lead_gen_revenue_share_percent, lending_commission_share_percent")
     .single();
 
   if (error || !inserted) return { error: `Failed to create referral partner: ${error?.message ?? "unknown error"}` };
@@ -805,10 +809,12 @@ export async function updateReferralPartnerProfileAction(subcontractorId: string
   const primaryMarkets = parseReferralMarkets(formData);
   const leadGenPercent = parsePercent(formData, "lead_gen_revenue_share_percent");
   const lendingPercent = parsePercent(formData, "lending_commission_share_percent");
+  const currency = String(formData.get("currency") ?? "").trim();
 
   if (!fullName) return { error: "Full name is required." };
   if (leadGenPercent === null) return { error: "Enter a Lead Generation revenue share between 0 and 100." };
   if (lendingPercent === null) return { error: "Enter a Business Lending commission share between 0 and 100." };
+  if (!isValidCurrency(currency)) return { error: "Choose a valid currency." };
 
   const { error } = await supabase
     .from("crm_subcontractors")
@@ -817,6 +823,7 @@ export async function updateReferralPartnerProfileAction(subcontractorId: string
       email,
       phone,
       notes,
+      currency,
       primary_markets: primaryMarkets.length > 0 ? primaryMarkets : null,
       lead_gen_revenue_share_percent: leadGenPercent,
       lending_commission_share_percent: lendingPercent,
@@ -977,7 +984,7 @@ export async function recordReferralRevenuePeriodAction(subcontractorId: string,
 
   const { data: partner } = await supabase
     .from("crm_subcontractors")
-    .select("lead_gen_revenue_share_percent")
+    .select("currency, lead_gen_revenue_share_percent")
     .eq("id", subcontractorId)
     .maybeSingle();
   if (!partner) return { error: "Referral partner not found." };
@@ -1008,6 +1015,7 @@ export async function recordReferralRevenuePeriodAction(subcontractorId: string,
     monthly_amount: monthlyAmount,
     amount_collected: amountCollected,
     revenue_share_percent_snapshot: partner.lead_gen_revenue_share_percent,
+    currency_snapshot: partner.currency,
     payment_status: paymentStatus,
     payment_date: paymentDate,
     commission_status: amountCollected > 0 ? "due" : "not_due",
@@ -1127,7 +1135,7 @@ export async function recordLendingReferralAction(subcontractorId: string, formD
 
   const { data: partner } = await supabase
     .from("crm_subcontractors")
-    .select("lending_commission_share_percent")
+    .select("currency, lending_commission_share_percent")
     .eq("id", subcontractorId)
     .maybeSingle();
   if (!partner) return { error: "Referral partner not found." };
@@ -1148,6 +1156,7 @@ export async function recordLendingReferralAction(subcontractorId: string, formD
     business_name: businessName,
     funded_at: fundedAt,
     commission_share_percent_snapshot: partner.lending_commission_share_percent,
+    currency_snapshot: partner.currency,
     lender_commission_received: lenderCommissionReceived,
     clawback_adjustment: clawbackAdjustment,
     commission_received_at: lenderCommissionReceived > 0 ? todayIsoDate() : null,
@@ -1283,7 +1292,7 @@ export async function resetReferralPartnerOverviewEmailDraftAction(subcontractor
 
   const { data: partner } = await supabase
     .from("crm_subcontractors")
-    .select("full_name, lead_gen_revenue_share_percent, lending_commission_share_percent")
+    .select("full_name, currency, lead_gen_revenue_share_percent, lending_commission_share_percent")
     .eq("id", subcontractorId)
     .maybeSingle();
   if (!partner) return { error: "Referral partner not found." };

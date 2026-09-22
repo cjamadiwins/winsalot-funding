@@ -138,6 +138,7 @@ export type SubcontractorReferralRevenueRow = {
   monthly_amount: number;
   amount_collected: number;
   revenue_share_percent_snapshot: number;
+  currency_snapshot: SubcontractorCurrency;
   partner_share: number;
   winsalot_share: number;
   payment_status: SubcontractorReferralPaymentStatus;
@@ -174,6 +175,7 @@ export type SubcontractorLendingReferralRow = {
   business_name: string;
   funded_at: string | null;
   commission_share_percent_snapshot: number;
+  currency_snapshot: SubcontractorCurrency;
   lender_commission_received: number;
   clawback_adjustment: number;
   commission_received_at: string | null;
