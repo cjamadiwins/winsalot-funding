@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AdminDashboardGreeting from "@/components/crm-ui/AdminDashboardGreeting";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
@@ -282,7 +283,7 @@ export default async function LeadgenAdminDashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Good Afternoon, Winsalot Corp.
+            <AdminDashboardGreeting />
           </h1>
           <p className="mt-1 text-sm text-slate-500">Here&apos;s what&apos;s happening across every client and campaign today.</p>
         </div>
