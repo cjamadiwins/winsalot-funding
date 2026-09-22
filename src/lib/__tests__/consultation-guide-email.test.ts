@@ -272,7 +272,112 @@ describe("buildFollowUpEmailDraft - Custom – Split Payment / Performance Miles
   });
 });
 
+describe("buildFollowUpEmailDraft - Pricing & Next Steps (Unique Web World Digital Marketing)", () => {
+  const uniqueWebWorldGuide: CrmConsultationGuideRow = {
+    ...baseGuide,
+    business_name: "Unique Web World Digital Marketing",
+    contact_name: "Rahulbaheti",
+    consultant_name: "C.J. Amadi",
+    arrangement_type: "standard_monthly",
+    follow_up_email_template: "pricing_next_steps",
+  } as CrmConsultationGuideRow;
+
+  it("overrides the standard template regardless of arrangement_type, and discloses every required section", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(uniqueWebWorldGuide, "C.J. Amadi");
+
+    expect(draft?.body).toContain("Hi Rahulbaheti,");
+    expect(draft?.body).toContain("Thank You");
+    expect(draft?.body).toContain("What We Discussed");
+    expect(draft?.body).toContain("How Our Process Works");
+    expect(draft?.body).toContain("1. Confirm campaign positioning and target market");
+    expect(draft?.body).toContain("6. Winsalot Corp. tracks campaign activity and appointments");
+    expect(draft?.body).toContain("Investment");
+    expect(draft?.body).toContain("$750/month");
+    expect(draft?.body).toContain("Campaign Materials Needed");
+    expect(draft?.body).toContain("Portfolio examples");
+    expect(draft?.body).toContain("Information Still Required");
+    expect(draft?.body).toContain("Next Step");
+    expect(draft?.body).toContain("Continue With Winsalot Corp.: https://app.winsalotcorp.com/continue-with-winsalot");
+    expect(draft?.body).toContain("Best regards,\nC.J. Amadi\nWinsalot Corp.");
+  });
+
+  it("never mentions a pilot, discount, performance-based arrangement, or custom payment plan", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const draft = buildFollowUpEmailDraft(uniqueWebWorldGuide, "C.J. Amadi");
+
+    for (const forbidden of ["pilot", "discount", "performance-based", "custom payment", "custom arrangement"]) {
+      expect(draft?.body.toLowerCase()).not.toContain(forbidden);
+    }
+  });
+
+  it("is unaffected by any Commercial Arrangement fields - this prospect is plain Standard Monthly", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    // Even if arrangement_type were somehow set to something else, the
+    // template selector checks follow_up_email_template first.
+    const draft = buildFollowUpEmailDraft({ ...uniqueWebWorldGuide, arrangement_type: "performance_based_trial" }, "C.J. Amadi");
+    expect(draft?.subject).toBe("Unique Web World Digital Marketing — Pricing & Next Steps with Winsalot Corp.");
+    expect(draft?.body).toContain("$750/month");
+  });
+
+  it("leaves every other guide's draft completely unaffected (follow_up_email_template defaults to standard)", async () => {
+    const { buildFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
+    const standardDraft = buildFollowUpEmailDraft(baseGuide, "Taylor Admin");
+    expect(standardDraft?.body).not.toContain("How Our Process Works");
+    expect(standardDraft?.body).toContain("Continue With Winsalot Corp.: https://app.winsalotcorp.com/continue-with-winsalot");
+  });
+});
+
+describe("sendConsultationGuideFollowUpEmail - Pricing & Next Steps HTML rendering", () => {
+  beforeEach(() => {
+    emailsSendMock.mockClear();
+  });
+
+  it("renders a real CTA button with no visible raw URL, and bold section headings, for this template only", async () => {
+    const draftGuide = {
+      ...baseGuide,
+      business_name: "Unique Web World Digital Marketing",
+      follow_up_email_template: "pricing_next_steps" as const,
+      follow_up_email_subject: "Unique Web World Digital Marketing — Pricing & Next Steps with Winsalot Corp.",
+      follow_up_email_body:
+        "Hi Rahulbaheti,\n\nInvestment\n\n$750/month\n\nContinue With Winsalot Corp.: https://app.winsalotcorp.com/continue-with-winsalot",
+    };
+    const { client } = makeFakeClient(draftGuide);
+    const { sendConsultationGuideFollowUpEmail } = await import("@/lib/consultation-guide-email");
+
+    const result = await sendConsultationGuideFollowUpEmail(client as never, draftGuide, { name: "C.J. Amadi", email: "cj@winsalotcorp.com" });
+
+    expect(result.status).toBe("sent");
+    const sentEmail = emailsSendMock.mock.calls[0][0];
+    expect(sentEmail.html).toContain('<a href="https://app.winsalotcorp.com/continue-with-winsalot"');
+    expect(sentEmail.html).toContain(">Continue With Winsalot Corp.</a>");
+    // The bare URL must never appear as visible text outside the href.
+    expect(sentEmail.html.replace(/href="[^"]*"/, "")).not.toContain("https://app.winsalotcorp.com/continue-with-winsalot");
+    expect(sentEmail.html).toContain("font-weight:700");
+  });
+
+  it("renders every other guide with the original plain-paragraph HTML, unaffected by this template's renderer", async () => {
+    const standardGuide = {
+      ...baseGuide,
+      follow_up_email_subject: "Thank you for speaking with Winsalot Corp.",
+      follow_up_email_body: "Continue With Winsalot Corp.: https://app.winsalotcorp.com/continue-with-winsalot",
+    };
+    const { client } = makeFakeClient(standardGuide);
+    const { sendConsultationGuideFollowUpEmail } = await import("@/lib/consultation-guide-email");
+
+    await sendConsultationGuideFollowUpEmail(client as never, standardGuide, { name: "Taylor Admin", email: "taylor@winsalotcorp.com" });
+
+    const sentEmail = emailsSendMock.mock.calls[0][0];
+    expect(sentEmail.html).not.toContain("<a href=");
+    expect(sentEmail.html).toContain("https://app.winsalotcorp.com/continue-with-winsalot");
+  });
+});
+
 describe("ensureFollowUpEmailDraft", () => {
+  beforeEach(() => {
+    emailsSendMock.mockClear();
+  });
+
   it("never overwrites an already-generated (possibly admin-edited) draft", async () => {
     const { client, getGuide } = makeFakeClient({ ...baseGuide, follow_up_email_subject: "Edited subject", follow_up_email_body: "Edited body" });
     const { ensureFollowUpEmailDraft } = await import("@/lib/consultation-guide-email");
