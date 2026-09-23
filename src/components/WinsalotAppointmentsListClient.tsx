@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { OPPORTUNITY_TYPES, OPPORTUNITY_TYPE_LABELS, type OpportunityType } from "@/lib/crm-types";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
@@ -135,6 +135,16 @@ export default function WinsalotAppointmentsListClient({
   isAdmin: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [view, setView] = useState<"active" | "completed">("active");
+  useEffect(() => {
+    const id = decodeURIComponent(window.location.hash.slice("#appointment-".length));
+    if (window.location.hash.startsWith("#appointment-") && appointments.some((appt) => appt.id === id && appt.status !== "booked")) {
+      requestAnimationFrame(() => {
+        setView("completed");
+        requestAnimationFrame(() => document.getElementById(`appointment-${id}`)?.scrollIntoView());
+      });
+    }
+  }, [appointments]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"view" | "edit" | "reschedule" | "cancel" | "followup" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -329,13 +339,23 @@ export default function WinsalotAppointmentsListClient({
     setEmailMode(null);
   }
 
-  if (appointments.length === 0) {
-    return <p className="text-sm text-slate-500">No appointments yet.</p>;
-  }
+  const visibleAppointments = appointments.filter((appt) =>
+    view === "completed" ? appt.status !== "booked" : appt.status === "booked"
+  );
 
   return (
-    <ul className="space-y-3">
-      {appointments.map((appt) => {
+    <div>
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Appointment view">
+        {(["active", "completed"] as const).map((option) => (
+          <button key={option} type="button" onClick={() => setView(option)} aria-pressed={view === option}
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${view === option ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            {option === "active" ? "Active Appointments" : "Completed / Past Appointments"}
+          </button>
+        ))}
+      </div>
+      {visibleAppointments.length === 0 && <p className="text-sm text-slate-500">No {view === "active" ? "active" : "completed or past"} appointments.</p>}
+      <ul className="space-y-3">
+      {visibleAppointments.map((appt) => {
         const start = new Date(appt.appointment_start_at);
         const isExpanded = expandedId === appt.id;
 
@@ -726,6 +746,7 @@ export default function WinsalotAppointmentsListClient({
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </div>
   );
 }
