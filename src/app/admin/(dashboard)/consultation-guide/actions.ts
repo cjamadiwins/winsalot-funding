@@ -189,10 +189,10 @@ function fieldsFromForm(formData: FormData) {
 // that isn't currently "booked" (already completed via the old flow,
 // cancelled, or no-show) is left untouched rather than erroring, since the
 // guide's own completion above is what actually matters to the caller.
-async function completeLinkedAppointment(appointmentId: string, actor: { userId: string; name: string }): Promise<void> {
+async function completeLinkedAppointment(appointmentId: string, actor: { userId: string; name: string }): Promise<{ error?: string }> {
   const admin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
-  await admin
+  const { data, error } = await admin
     .from("winsalot_appointments")
     .update({
       status: "completed",
@@ -202,7 +202,13 @@ async function completeLinkedAppointment(appointmentId: string, actor: { userId:
       updated_at: nowIso,
     })
     .eq("id", appointmentId)
-    .eq("status", "booked");
+    .eq("status", "booked")
+    .select("id");
+  if (error) return { error: "The consultation was saved, but its linked appointment could not be completed. Please retry." };
+  if (data?.length) return {};
+  const { data: existing, error: readError } = await admin.from("winsalot_appointments").select("status").eq("id", appointmentId).maybeSingle();
+  if (readError || !existing) return { error: "The linked appointment could not be found. Please check the consultation record." };
+  return existing.status === "completed" ? {} : { error: `The linked appointment is ${existing.status} and could not be completed.` };
 }
 
 // "When the consultation is saved or completed, automatically save the
@@ -382,12 +388,6 @@ export async function completeConsultationGuideAction(id: string | null, formDat
       });
     }
 
-    if (fields.appointment_id) {
-      await completeLinkedAppointment(fields.appointment_id, { userId: admin.id, name: admin.full_name || admin.email });
-      revalidatePath("/admin/crm/appointments");
-      revalidatePath("/agent/appointments");
-    }
-
     // Generate (never send) the follow-up email draft from what was just
     // saved - "I want the CRM to generate and save the follow-up email
     // content...so I can review it and manually send...when I am ready."
@@ -401,6 +401,15 @@ export async function completeConsultationGuideAction(id: string | null, formDat
         .update({ follow_up_email_subject: draft.subject, follow_up_email_body: draft.body })
         .eq("id", guideId);
     }
+  }
+
+  // Also reconcile an already-completed guide on a retry, without repeating
+  // its email draft or activity entry. The linked appointment must not stay booked.
+  if (fields.appointment_id) {
+    const linked = await completeLinkedAppointment(fields.appointment_id, { userId: admin.id, name: admin.full_name || admin.email });
+    if (linked.error) return { id: guideId, error: linked.error };
+    revalidatePath("/admin/crm/appointments");
+    revalidatePath("/agent/appointments");
   }
 
   revalidatePath("/admin/consultation-guide");
