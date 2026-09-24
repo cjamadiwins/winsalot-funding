@@ -22,7 +22,8 @@ import {
 import { leadgenWeekStartsInMonth } from "./leadgen-performance-history";
 import type { LeadgenPerformanceAppointment } from "./leadgen-performance";
 
-const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";\nconst LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
+const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
+const LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
 
 type AgentIdentity = {
   id: string;
