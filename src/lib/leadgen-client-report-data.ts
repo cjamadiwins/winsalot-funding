@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow } from "./leadgen-types";
+import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenClientOpportunityRow } from "./leadgen-types";
 import { buildLeadgenClientReport, type LeadgenReportPeriod } from "./leadgen-client-report";
 
 export async function loadLeadgenClientReport(
@@ -8,14 +8,19 @@ export async function loadLeadgenClientReport(
   client: LeadgenClientRow,
   period: LeadgenReportPeriod
 ) {
-  const [{ data: leads, error: leadsError }, { data: appointments, error: appointmentsError }, { data: campaigns, error: campaignsError }] =
-    await Promise.all([
-      supabase.from("leadgen_leads").select("*").eq("client_id", client.id),
-      supabase.from("leadgen_appointments").select("*").eq("client_id", client.id),
-      supabase.from("leadgen_campaigns").select("*").eq("client_id", client.id).order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: leads, error: leadsError },
+    { data: appointments, error: appointmentsError },
+    { data: campaigns, error: campaignsError },
+    { data: opportunities, error: opportunitiesError },
+  ] = await Promise.all([
+    supabase.from("leadgen_leads").select("*").eq("client_id", client.id),
+    supabase.from("leadgen_appointments").select("*").eq("client_id", client.id),
+    supabase.from("leadgen_campaigns").select("*").eq("client_id", client.id).order("created_at", { ascending: false }),
+    supabase.from("leadgen_client_opportunities").select("*").eq("client_id", client.id),
+  ]);
 
-  const error = leadsError ?? appointmentsError ?? campaignsError;
+  const error = leadsError ?? appointmentsError ?? campaignsError ?? opportunitiesError;
   if (error) throw new Error(error.message);
 
   return buildLeadgenClientReport({
@@ -24,5 +29,6 @@ export async function loadLeadgenClientReport(
     leads: (leads ?? []) as LeadgenLeadRow[],
     appointments: (appointments ?? []) as LeadgenAppointmentRow[],
     campaigns: (campaigns ?? []) as LeadgenCampaignRow[],
+    opportunities: (opportunities ?? []) as LeadgenClientOpportunityRow[],
   });
 }

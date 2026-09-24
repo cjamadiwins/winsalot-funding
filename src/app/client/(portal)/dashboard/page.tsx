@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Phone, UserCheck, Star, CalendarCheck, CheckCircle2, TrendingUp } from "lucide-react";
 import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -6,12 +7,17 @@ import {
   LEADGEN_PAYMENT_MODEL_LABELS,
   LEADGEN_PAYMENT_STATUS_LABELS,
   LEADGEN_MILESTONE_STATUS_LABELS,
+  LEADGEN_PIPELINE_STAGES,
+  LEADGEN_ACTIVITY_TYPE_LABELS,
   leadgenPaymentOutstanding,
+  derivePipelineStage,
   type LeadgenAppointmentRow,
   type LeadgenLeadRow,
   type LeadgenCampaignRow,
   type LeadgenClientPaymentConfigRow,
   type LeadgenClientPaymentMilestoneRow,
+  type LeadgenClientOpportunityRow,
+  type LeadgenClientActivityRow,
 } from "@/lib/leadgen-types";
 import { computeClientDashboardSummary, ownersReachedCount } from "@/lib/client-portal-dashboard";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
@@ -86,6 +92,34 @@ export default async function ClientPortalDashboardPage() {
     : [];
   const paymentOutstanding = paymentConfig ? leadgenPaymentOutstanding(paymentConfig) : null;
 
+  // RLS (leadgen_client_opportunities_client_select_own /
+  // leadgen_client_activities_client_select_own) scopes both to this
+  // client's own rows. Pipeline stage is never stored - always derived
+  // live, same as on the /client/pipeline page (derivePipelineStage()).
+  const [{ data: opportunities }, { data: activities }] = await Promise.all([
+    supabase.from("leadgen_client_opportunities").select("*").eq("client_id", client.id).order("created_at", { ascending: false }),
+    supabase.from("leadgen_client_activities").select("*").eq("client_id", client.id).order("occurred_at", { ascending: false }).limit(5),
+  ]);
+  const allOpportunities = (opportunities ?? []) as LeadgenClientOpportunityRow[];
+  const recentActivity = (activities ?? []) as LeadgenClientActivityRow[];
+
+  const appointmentsByLead = new Map<string, LeadgenAppointmentRow[]>();
+  for (const appt of allAppointments) {
+    if (!appt.lead_id) continue;
+    const list = appointmentsByLead.get(appt.lead_id) ?? [];
+    list.push(appt);
+    appointmentsByLead.set(appt.lead_id, list);
+  }
+  const opportunityByLead = new Map<string, LeadgenClientOpportunityRow>();
+  for (const opp of allOpportunities) {
+    if (!opportunityByLead.has(opp.lead_id)) opportunityByLead.set(opp.lead_id, opp);
+  }
+  const stageCounts = new Map<string, number>(LEADGEN_PIPELINE_STAGES.map((s) => [s, 0]));
+  for (const lead of allLeads) {
+    const stage = derivePipelineStage(lead, appointmentsByLead.get(lead.id) ?? [], opportunityByLead.get(lead.id) ?? null);
+    if (stage) stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + 1);
+  }
+
   const summary = computeClientDashboardSummary(allLeads, allAppointments);
   const valueByLabel = new Map(summary.stats.map((s) => [s.label, s.value]));
 
@@ -101,11 +135,6 @@ export default async function ClientPortalDashboardPage() {
 
   const hasQualificationCriteria = (primaryCampaign?.qualification_criteria?.length ?? 0) > 0;
   const hasSecondaryIndustries = (primaryCampaign?.secondary_industries?.length ?? 0) > 0;
-
-  const recentActivity = allLeads
-    .filter((l) => l.last_contacted_at)
-    .sort((a, b) => (b.last_contacted_at ?? "").localeCompare(a.last_contacted_at ?? ""))
-    .slice(0, 5);
 
   return (
     <div>
@@ -235,6 +264,23 @@ export default async function ClientPortalDashboardPage() {
         </section>
       )}
 
+      <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Pipeline</h2>
+          <Link href="/client/pipeline" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+            View Pipeline →
+          </Link>
+        </div>
+        <p className="mt-2 text-[13px] text-slate-700">
+          {LEADGEN_PIPELINE_STAGES.map((stage, i) => (
+            <span key={stage}>
+              {i > 0 && <span className="text-slate-300"> · </span>}
+              {stage} <span className="font-semibold text-slate-900">{stageCounts.get(stage) ?? 0}</span>
+            </span>
+          ))}
+        </p>
+      </section>
+
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {kpis.map((stat) => (
           <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} href={stat.href} />
@@ -264,18 +310,23 @@ export default async function ClientPortalDashboardPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Recent Activity</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Recent Activity</h2>
+            <Link href="/client/activity" className="text-[12px] font-semibold text-sky-600 hover:text-sky-700">
+              View All
+            </Link>
+          </div>
           {recentActivity.length === 0 ? (
             <p className="mt-3 text-[13.5px] text-slate-500">No recent activity yet.</p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {recentActivity.map((lead) => (
-                <li key={lead.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
+              {recentActivity.map((activity) => (
+                <li key={activity.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{lead.business_name}</span>
-                    <span className="text-[12px] text-slate-500">{lead.status}</span>
+                    <span className="font-semibold text-slate-900">{LEADGEN_ACTIVITY_TYPE_LABELS[activity.activity_type]}</span>
+                    <span className="text-[12px] text-slate-500">{new Date(activity.occurred_at).toLocaleDateString()}</span>
                   </div>
-                  <p className="mt-1 text-slate-600">Last contacted {new Date(lead.last_contacted_at as string).toLocaleDateString()}</p>
+                  <p className="mt-1 text-slate-600">{activity.summary}</p>
                 </li>
               ))}
             </ul>

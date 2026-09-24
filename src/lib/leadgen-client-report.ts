@@ -1,4 +1,4 @@
-import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow } from "./leadgen-types";
+import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenClientOpportunityRow } from "./leadgen-types";
 import { isLeadgenAppointmentCountable } from "./leadgen-types";
 
 export type LeadgenReportPeriod = { from: string; to: string };
@@ -16,6 +16,10 @@ export type LeadgenClientReport = {
   // respectively.
   leadsContacted: number;
   appointmentsCompleted: number;
+  // Phase 3: period-scoped count of Completed appointments whose
+  // resulting opportunity was marked Won - the numerator for
+  // appointmentToWonRate below.
+  appointmentsWon: number;
   appointments: LeadgenAppointmentRow[];
   summary: string;
   nextStep: string;
@@ -34,18 +38,24 @@ export type LeadgenConversionBreakdown = {
   interestedRate: number | null;
   leadToAppointmentRate: number | null;
   appointmentCompletionRate: number | null;
+  // Phase 3 - needs the Won/Lost concept from leadgen_client_opportunities,
+  // so it wasn't available when the other four ratios shipped in Phase 1.
+  appointmentToWonRate: number | null;
 };
 
 function ratioPct(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Math.round((numerator / denominator) * 100) : null;
 }
 
-export function buildLeadgenConversionBreakdown(report: Pick<LeadgenClientReport, "leadsAdded" | "leadsContacted" | "interestedLeads" | "appointmentsBooked" | "appointmentsCompleted">): LeadgenConversionBreakdown {
+export function buildLeadgenConversionBreakdown(
+  report: Pick<LeadgenClientReport, "leadsAdded" | "leadsContacted" | "interestedLeads" | "appointmentsBooked" | "appointmentsCompleted" | "appointmentsWon">
+): LeadgenConversionBreakdown {
   return {
     contactRate: ratioPct(report.leadsContacted, report.leadsAdded),
     interestedRate: ratioPct(report.interestedLeads, report.leadsContacted),
     leadToAppointmentRate: ratioPct(report.appointmentsBooked, report.leadsContacted),
     appointmentCompletionRate: ratioPct(report.appointmentsCompleted, report.appointmentsBooked),
+    appointmentToWonRate: ratioPct(report.appointmentsWon, report.appointmentsCompleted),
   };
 }
 
@@ -91,8 +101,10 @@ export function buildLeadgenClientReport(input: {
   leads: LeadgenLeadRow[];
   appointments: LeadgenAppointmentRow[];
   campaigns: LeadgenCampaignRow[];
+  opportunities?: LeadgenClientOpportunityRow[];
 }): LeadgenClientReport {
   const { client, period, leads, campaigns } = input;
+  const opportunities = input.opportunities ?? [];
   const appointments = input.appointments
     .filter((appointment) => appointment.appointment_date >= period.from && appointment.appointment_date <= period.to)
     .sort((a, b) => `${b.appointment_date}T${b.appointment_time}`.localeCompare(`${a.appointment_date}T${a.appointment_time}`));
@@ -101,6 +113,8 @@ export function buildLeadgenClientReport(input: {
   const appointmentsBooked = appointments.filter((appointment) => isLeadgenAppointmentCountable(appointment.status)).length;
   const leadsContacted = leads.filter((lead) => inPeriod(lead.last_contacted_at, period)).length;
   const appointmentsCompleted = appointments.filter((appointment) => appointment.status === "Completed").length;
+  const wonAppointmentIds = new Set(opportunities.filter((o) => o.client_outcome === "Won" && o.appointment_id).map((o) => o.appointment_id));
+  const appointmentsWon = appointments.filter((appointment) => appointment.status === "Completed" && wonAppointmentIds.has(appointment.id)).length;
   const campaign = campaigns.find((item) => item.status === "active") ?? campaigns[0] ?? null;
 
   const summary = `${leadsAdded} lead${leadsAdded === 1 ? " was" : "s were"} generated, ${interestedLeads} ${interestedLeads === 1 ? "was" : "were"} interested or qualified, and ${appointmentsBooked} appointment${appointmentsBooked === 1 ? " was" : "s were"} booked during this reporting period.`;
@@ -119,6 +133,7 @@ export function buildLeadgenClientReport(input: {
     appointmentsBooked,
     leadsContacted,
     appointmentsCompleted,
+    appointmentsWon,
     appointments,
     summary,
     nextStep,
