@@ -12,7 +12,7 @@ import CampaignPaymentSetupPanel from "@/components/crm-clients/CampaignPaymentS
 import { loadLeadgenClientReport } from "@/lib/leadgen-client-report-data";
 import { resolveLeadgenReportMonth } from "@/lib/leadgen-client-report";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenClientRow, LeadgenCampaignRow } from "@/lib/leadgen-types";
+import type { LeadgenClientRow, LeadgenCampaignRow, LeadgenClientPaymentConfigRow, LeadgenClientPaymentMilestoneRow } from "@/lib/leadgen-types";
 import {
   updateClientAction,
   archiveClientAction,
@@ -36,6 +36,14 @@ import {
 } from "./portal-actions";
 import { sendClientReportAction } from "./report-actions";
 import { updateLeadgenCampaignConfigAction } from "./campaign-actions";
+import {
+  updateLeadgenPaymentConfigAction,
+  updatePaymentProgressAction,
+  markDepositReceivedAction,
+  updateLeadgenPaymentMilestoneAction,
+  markMilestoneReceivedAction,
+  deleteLeadgenPaymentMilestoneAction,
+} from "./payment-actions";
 
 export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ report_month?: string }> }) {
   await requireCrmAdmin();
@@ -70,6 +78,23 @@ export default async function ClientProfilePage({ params, searchParams }: { para
           .order("created_at", { ascending: false })
       ).data as LeadgenCampaignRow[] | null
     : null;
+
+  const paymentConfig = detail.client.leadgen_client_id
+    ? ((
+        await getSupabaseAdmin().from("leadgen_client_payment_configs").select("*").eq("client_id", detail.client.leadgen_client_id).maybeSingle()
+      ).data as LeadgenClientPaymentConfigRow | null)
+    : null;
+  const paymentMilestones = paymentConfig
+    ? (
+        (
+          await getSupabaseAdmin()
+            .from("leadgen_client_payment_milestones")
+            .select("*")
+            .eq("payment_config_id", paymentConfig.id)
+            .order("milestone_order", { ascending: true })
+        ).data as LeadgenClientPaymentMilestoneRow[] | null
+      ) ?? []
+    : [];
   const { month: reportMonth, period: reportPeriod } = resolveLeadgenReportMonth(query.report_month);
   let clientReport = null;
   if (detail.client.leadgen_client_id) {
@@ -119,6 +144,16 @@ export default async function ClientProfilePage({ params, searchParams }: { para
           leadgenClientId={detail.client.leadgen_client_id}
           campaigns={leadgenCampaigns ?? []}
           updateAction={updateLeadgenCampaignConfigAction}
+          paymentConfig={paymentConfig}
+          paymentMilestones={paymentMilestones}
+          paymentActions={{
+            updatePaymentConfigAction: updateLeadgenPaymentConfigAction,
+            updatePaymentProgressAction: updatePaymentProgressAction,
+            markDepositReceivedAction: markDepositReceivedAction,
+            updatePaymentMilestoneAction: updateLeadgenPaymentMilestoneAction,
+            markMilestoneReceivedAction: markMilestoneReceivedAction,
+            deletePaymentMilestoneAction: deleteLeadgenPaymentMilestoneAction,
+          }}
         />
       )}
 

@@ -170,6 +170,88 @@ export type LeadgenCampaignRow = {
   current_stage: string | null;
 };
 
+// Campaign & Payment Setup, Phase 2 (migration
+// 20260924212620_leadgen_client_payment_configs.sql) - admin-controlled
+// payment arrangement for a Lead Gen CRM client. RLS on both tables is
+// admin-write / client-view-own with NO client (or agent) write policy at
+// all, so a client session cannot mark itself paid even in principle -
+// see the migration's own header comment for the full rationale.
+export const LEADGEN_PAYMENT_MODELS = ["standard_monthly", "staged", "performance_based", "custom"] as const;
+export type LeadgenPaymentModel = (typeof LEADGEN_PAYMENT_MODELS)[number];
+export const LEADGEN_PAYMENT_MODEL_LABELS: Record<LeadgenPaymentModel, string> = {
+  standard_monthly: "Standard Monthly",
+  staged: "Staged Payment",
+  performance_based: "Performance-Based",
+  custom: "Custom",
+};
+
+export const LEADGEN_PAYMENT_STATUSES = ["not_started", "in_progress", "paid_in_full", "overdue", "waived"] as const;
+export type LeadgenPaymentStatus = (typeof LEADGEN_PAYMENT_STATUSES)[number];
+export const LEADGEN_PAYMENT_STATUS_LABELS: Record<LeadgenPaymentStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  paid_in_full: "Paid in Full",
+  overdue: "Overdue",
+  waived: "Waived",
+};
+
+export type LeadgenClientPaymentConfigRow = {
+  id: string;
+  client_id: string;
+  payment_model: LeadgenPaymentModel;
+  currency: "CAD" | "USD";
+  total_campaign_fee: number | null;
+  deposit_required: number | null;
+  deposit_received: boolean;
+  deposit_received_at: string | null;
+  deposit_received_by: string | null;
+  recurring_monthly_amount: number | null;
+  amount_paid: number;
+  payment_status: LeadgenPaymentStatus;
+  attribution_period_days: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+};
+
+export const LEADGEN_MILESTONE_STATUSES = ["pending", "due", "received"] as const;
+export type LeadgenMilestoneStatus = (typeof LEADGEN_MILESTONE_STATUSES)[number];
+export const LEADGEN_MILESTONE_STATUS_LABELS: Record<LeadgenMilestoneStatus, string> = {
+  pending: "Pending",
+  due: "Due",
+  received: "Received",
+};
+
+export type LeadgenClientPaymentMilestoneRow = {
+  id: string;
+  payment_config_id: string;
+  client_id: string;
+  milestone_order: number;
+  label: string;
+  amount: number | null;
+  trigger_description: string | null;
+  // Phase 3: null means no automatic trigger (e.g. a deposit); when set,
+  // this milestone becomes Due once the client's Nth Won opportunity is
+  // recorded. Inert until Phase 3 wires the automation that reads it.
+  auto_trigger_on_nth_won: number | null;
+  status: LeadgenMilestoneStatus;
+  received_at: string | null;
+  received_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// "Outstanding" is deliberately never stored - see the migration's
+// comment on amount_paid. Guards against a negative result if amount_paid
+// somehow exceeds the fee (e.g. the fee was lowered after a partial
+// payment) rather than showing a confusing negative balance.
+export function leadgenPaymentOutstanding(config: Pick<LeadgenClientPaymentConfigRow, "total_campaign_fee" | "amount_paid">): number | null {
+  if (config.total_campaign_fee === null) return null;
+  return Math.max(0, config.total_campaign_fee - config.amount_paid);
+}
+
 // Client Portal Access management (migration 0114) - a Growth CRM
 // concept, but this type describes the leadgen_client_id-scoped
 // crm_client_portal_activity row itself, so it lives alongside the other
