@@ -4,6 +4,18 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenLeadRow, type LeadgenCampaignRow } from "@/lib/leadgen-types";
 import { computeClientDashboardSummary, ownersReachedCount } from "@/lib/client-portal-dashboard";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
+import StatusBadge from "@/components/crm-ui/StatusBadge";
+
+const CAMPAIGN_STATUS_BADGE_CLASSES: Record<LeadgenCampaignRow["status"], string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  paused: "bg-amber-100 text-amber-800",
+  completed: "bg-slate-100 text-slate-700",
+};
+
+function formatCampaignDate(value: string | null): string | null {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
 
 export default async function ClientPortalDashboardPage() {
   const { client } = await requireLeadgenPortalClient();
@@ -27,15 +39,18 @@ export default async function ClientPortalDashboardPage() {
   const summary = computeClientDashboardSummary(allLeads, allAppointments);
   const valueByLabel = new Map(summary.stats.map((s) => [s.label, s.value]));
 
-  const kpis: { label: string; value: string; tone: KpiTone; icon: typeof Phone }[] = [
-    { label: "Total Leads", value: String(valueByLabel.get("Total Leads") ?? 0), tone: "blue", icon: Phone },
-    { label: "Leads Contacted", value: String(valueByLabel.get("Leads Contacted") ?? 0), tone: "indigo", icon: UserCheck },
-    { label: "Interested Leads", value: String(valueByLabel.get("Interested Leads") ?? 0), tone: "green", icon: Star },
-    { label: "Follow-Ups", value: String(valueByLabel.get("Follow-Ups") ?? 0), tone: "amber", icon: TrendingUp },
-    { label: "Appointments Booked", value: String(valueByLabel.get("Appointments Booked") ?? 0), tone: "green", icon: CalendarCheck },
-    { label: "Completed Appointments", value: String(valueByLabel.get("Completed Appointments") ?? 0), tone: "teal", icon: CheckCircle2 },
-    { label: "Conversion Rate", value: `${valueByLabel.get("Conversion Rate") ?? 0}%`, tone: "indigo", icon: TrendingUp },
+  const kpis: { label: string; value: string; tone: KpiTone; icon: typeof Phone; href: string }[] = [
+    { label: "Total Leads", value: String(valueByLabel.get("Total Leads") ?? 0), tone: "blue", icon: Phone, href: "/client/leads" },
+    { label: "Leads Contacted", value: String(valueByLabel.get("Leads Contacted") ?? 0), tone: "indigo", icon: UserCheck, href: "/client/leads?filter=contacted" },
+    { label: "Interested Leads", value: String(valueByLabel.get("Interested Leads") ?? 0), tone: "green", icon: Star, href: "/client/leads?filter=interested" },
+    { label: "Follow-Ups", value: String(valueByLabel.get("Follow-Ups") ?? 0), tone: "amber", icon: TrendingUp, href: "/client/leads?filter=follow-up" },
+    { label: "Appointments Booked", value: String(valueByLabel.get("Appointments Booked") ?? 0), tone: "green", icon: CalendarCheck, href: "/client/appointments?filter=upcoming" },
+    { label: "Completed Appointments", value: String(valueByLabel.get("Completed Appointments") ?? 0), tone: "teal", icon: CheckCircle2, href: "/client/appointments?filter=completed" },
+    { label: "Conversion Rate", value: `${valueByLabel.get("Conversion Rate") ?? 0}%`, tone: "indigo", icon: TrendingUp, href: "/client/reports#conversion-rate" },
   ];
+
+  const hasQualificationCriteria = (primaryCampaign?.qualification_criteria?.length ?? 0) > 0;
+  const hasSecondaryIndustries = (primaryCampaign?.secondary_industries?.length ?? 0) > 0;
 
   const recentActivity = allLeads
     .filter((l) => l.last_contacted_at)
@@ -49,9 +64,70 @@ export default async function ClientPortalDashboardPage() {
         {primaryCampaign ? `${primaryCampaign.name} · ${primaryCampaign.status}` : "Your campaign performance at a glance."}
       </p>
 
+      {primaryCampaign && (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaign Summary</h2>
+            <StatusBadge label={primaryCampaign.status} className={CAMPAIGN_STATUS_BADGE_CLASSES[primaryCampaign.status]} />
+          </div>
+          <p className="mt-2 text-[15px] font-semibold text-slate-900">{primaryCampaign.name}</p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
+            {primaryCampaign.service_type && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Service</dt>
+                <dd className="text-slate-700">{primaryCampaign.service_type}</dd>
+              </div>
+            )}
+            {primaryCampaign.target_industry && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Target Industry</dt>
+                <dd className="text-slate-700">
+                  {primaryCampaign.target_industry}
+                  {hasSecondaryIndustries && <span className="text-slate-500"> (+ {primaryCampaign.secondary_industries.join(", ")})</span>}
+                </dd>
+              </div>
+            )}
+            {primaryCampaign.territory && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Territory</dt>
+                <dd className="text-slate-700">{primaryCampaign.territory}</dd>
+              </div>
+            )}
+            {formatCampaignDate(primaryCampaign.start_date) && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Start Date</dt>
+                <dd className="text-slate-700">{formatCampaignDate(primaryCampaign.start_date)}</dd>
+              </div>
+            )}
+            {primaryCampaign.assigned_team && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Assigned Team</dt>
+                <dd className="text-slate-700">{primaryCampaign.assigned_team}</dd>
+              </div>
+            )}
+            {primaryCampaign.current_stage && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Current Stage</dt>
+                <dd className="text-slate-700">{primaryCampaign.current_stage}</dd>
+              </div>
+            )}
+          </dl>
+          {hasQualificationCriteria && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Qualified Lead Criteria</dt>
+              <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[13px] text-slate-700">
+                {primaryCampaign.qualification_criteria.map((criterion) => (
+                  <li key={criterion}>{criterion}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {kpis.map((stat) => (
-          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} />
+          <KpiCard key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} icon={<stat.icon />} href={stat.href} />
         ))}
       </div>
 

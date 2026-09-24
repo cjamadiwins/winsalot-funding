@@ -154,6 +154,20 @@ export type LeadgenCampaignRow = {
   // migration 0077.
   pilot_label: string | null;
   appointment_goal: number | null;
+  // Campaign & Payment Setup, Phase 1 (migration
+  // 20260924210229_leadgen_campaign_config_fields.sql) - admin-controlled
+  // via the Growth CRM's Client page; view-only for agents/clients (RLS:
+  // leadgen_campaigns_admin_all is the only write policy on this table).
+  // Free text throughout, deliberately not enum-constrained, so a future
+  // client's industry/service/territory never needs a schema change.
+  campaign_type: string | null;
+  service_type: string | null;
+  target_industry: string | null;
+  secondary_industries: string[];
+  territory: string | null;
+  qualification_criteria: string[];
+  assigned_team: string | null;
+  current_stage: string | null;
 };
 
 // Client Portal Access management (migration 0114) - a Growth CRM

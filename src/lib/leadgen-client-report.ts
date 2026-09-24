@@ -10,10 +10,44 @@ export type LeadgenClientReport = {
   leadsAdded: number;
   interestedLeads: number;
   appointmentsBooked: number;
+  // Added for the Conversion Metrics breakdown (requirement #15) - both
+  // scoped to the same reporting period as leadsAdded/appointmentsBooked
+  // above, contacted-by-last_contacted_at and Completed-by-status
+  // respectively.
+  leadsContacted: number;
+  appointmentsCompleted: number;
   appointments: LeadgenAppointmentRow[];
   summary: string;
   nextStep: string;
 };
+
+// Deeper, period-scoped conversion breakdown for the Reports page
+// (requirement #15's "distinguish Contact Rate / Interested Rate /
+// Lead-to-Appointment Conversion / Appointment Completion Rate" - kept off
+// the Dashboard's single headline Conversion Rate KPI to stay compact
+// there). Each ratio is independently period-scoped against the report's
+// own already-derived counts, the same convention the report already uses
+// for leadsAdded/interestedLeads/appointmentsBooked - not a strict
+// lead-by-lead funnel across period boundaries.
+export type LeadgenConversionBreakdown = {
+  contactRate: number | null;
+  interestedRate: number | null;
+  leadToAppointmentRate: number | null;
+  appointmentCompletionRate: number | null;
+};
+
+function ratioPct(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : null;
+}
+
+export function buildLeadgenConversionBreakdown(report: Pick<LeadgenClientReport, "leadsAdded" | "leadsContacted" | "interestedLeads" | "appointmentsBooked" | "appointmentsCompleted">): LeadgenConversionBreakdown {
+  return {
+    contactRate: ratioPct(report.leadsContacted, report.leadsAdded),
+    interestedRate: ratioPct(report.interestedLeads, report.leadsContacted),
+    leadToAppointmentRate: ratioPct(report.appointmentsBooked, report.leadsContacted),
+    appointmentCompletionRate: ratioPct(report.appointmentsCompleted, report.appointmentsBooked),
+  };
+}
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -65,6 +99,8 @@ export function buildLeadgenClientReport(input: {
   const leadsAdded = leads.filter((lead) => inPeriod(lead.created_at, period)).length;
   const interestedLeads = leads.filter((lead) => lead.status === "Interested" && inPeriod(lead.last_contacted_at, period)).length;
   const appointmentsBooked = appointments.filter((appointment) => isLeadgenAppointmentCountable(appointment.status)).length;
+  const leadsContacted = leads.filter((lead) => inPeriod(lead.last_contacted_at, period)).length;
+  const appointmentsCompleted = appointments.filter((appointment) => appointment.status === "Completed").length;
   const campaign = campaigns.find((item) => item.status === "active") ?? campaigns[0] ?? null;
 
   const summary = `${leadsAdded} lead${leadsAdded === 1 ? " was" : "s were"} generated, ${interestedLeads} ${interestedLeads === 1 ? "was" : "were"} interested or qualified, and ${appointmentsBooked} appointment${appointmentsBooked === 1 ? " was" : "s were"} booked during this reporting period.`;
@@ -81,6 +117,8 @@ export function buildLeadgenClientReport(input: {
     leadsAdded,
     interestedLeads,
     appointmentsBooked,
+    leadsContacted,
+    appointmentsCompleted,
     appointments,
     summary,
     nextStep,
