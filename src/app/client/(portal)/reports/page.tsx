@@ -40,7 +40,7 @@ export default async function ClientPortalReportsPage({ searchParams }: { search
         </p>
 
         <h3 className="mt-5 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Deeper Breakdown — {report.period.from} to {report.period.to}</h3>
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-[13px] sm:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-[13px] sm:grid-cols-5">
           <div>
             <dt className="text-[11px] uppercase tracking-wide text-slate-400">Contact Rate</dt>
             <dd className="mt-0.5 text-[18px] font-bold text-slate-900">{formatRate(breakdown.contactRate)}</dd>
@@ -56,6 +56,10 @@ export default async function ClientPortalReportsPage({ searchParams }: { search
           <div>
             <dt className="text-[11px] uppercase tracking-wide text-slate-400">Appointment Completion</dt>
             <dd className="mt-0.5 text-[18px] font-bold text-slate-900">{formatRate(breakdown.appointmentCompletionRate)}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] uppercase tracking-wide text-slate-400">Appointment → Won</dt>
+            <dd className="mt-0.5 text-[18px] font-bold text-slate-900">{formatRate(breakdown.appointmentToWonRate)}</dd>
           </div>
         </dl>
       </section>

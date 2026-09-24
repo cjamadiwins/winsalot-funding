@@ -252,6 +252,68 @@ export function leadgenPaymentOutstanding(config: Pick<LeadgenClientPaymentConfi
   return Math.max(0, config.total_campaign_fee - config.amount_paid);
 }
 
+// Opportunity Pipeline, Phase 3 (migration
+// 20260924214016_leadgen_client_opportunities.sql). One row per completed
+// consultation, auto-created by a DB trigger the moment an appointment
+// first transitions to Completed - never created, edited, or deleted by
+// application code. `client_outcome` is the only client-editable field
+// (RLS + a column-level GRANT restrict a client's UPDATE to exactly
+// client_outcome/closed_date/deal_value/updated_at - see the migration).
+// Not to be confused with `leadgen_opportunity_scores` ("Opportunity
+// Finder"), an unrelated agent-facing lead-triage/scoring feature.
+export const LEADGEN_OPPORTUNITY_OUTCOMES = ["Pending", "Follow-Up Needed", "Proposal Sent", "Won", "Lost"] as const;
+export type LeadgenOpportunityOutcome = (typeof LEADGEN_OPPORTUNITY_OUTCOMES)[number];
+
+export type LeadgenClientOpportunityRow = {
+  id: string;
+  lead_id: string;
+  appointment_id: string | null;
+  client_id: string;
+  campaign_id: string | null;
+  client_outcome: LeadgenOpportunityOutcome;
+  closed_date: string | null;
+  deal_value: number | null;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+// Pipeline stage is NEVER stored - always derived from the underlying
+// lead/appointment/opportunity rows at read time, the same rule this repo
+// already follows for every other derived status (see
+// deriveCrmOnboardingStage() in src/lib/crm-agreement-types.ts), so it can
+// never drift out of sync with the data it's computed from. A lead that
+// hasn't been contacted yet isn't part of the pipeline at all (null).
+export const LEADGEN_PIPELINE_STAGES = [
+  "Contacted",
+  "Interested",
+  "Consultation Booked",
+  "Consultation Completed",
+  "Proposal Sent",
+  "Won",
+  "Lost",
+] as const;
+export type LeadgenPipelineStage = (typeof LEADGEN_PIPELINE_STAGES)[number];
+
+export function derivePipelineStage(
+  lead: Pick<LeadgenLeadRow, "status" | "last_contacted_at">,
+  appointments: Pick<LeadgenAppointmentRow, "status">[],
+  opportunity: Pick<LeadgenClientOpportunityRow, "client_outcome"> | null
+): LeadgenPipelineStage | null {
+  if (opportunity) {
+    if (opportunity.client_outcome === "Won") return "Won";
+    if (opportunity.client_outcome === "Lost") return "Lost";
+    if (opportunity.client_outcome === "Proposal Sent") return "Proposal Sent";
+    // Pending / Follow-Up Needed - an opportunity only exists once the
+    // consultation it came from has already completed.
+    return "Consultation Completed";
+  }
+  if (appointments.some((a) => isLeadgenAppointmentCountable(a.status) && a.status !== "Completed")) return "Consultation Booked";
+  if (lead.status === "Interested") return "Interested";
+  if (lead.last_contacted_at) return "Contacted";
+  return null;
+}
+
 // Client Portal Access management (migration 0114) - a Growth CRM
 // concept, but this type describes the leadgen_client_id-scoped
 // crm_client_portal_activity row itself, so it lives alongside the other
@@ -425,6 +487,8 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "appointment_reminder_sent",
   "appointment_reminder_auto_sent",
   "mantra_collab_intro_sent",
+  "opportunity_created",
+  "opportunity_outcome_changed",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -447,6 +511,8 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   appointment_reminder_sent: "Appointment reminder sent",
   appointment_reminder_auto_sent: "Automatic 24-hour appointment reminder sent",
   mantra_collab_intro_sent: "Mantra Collab intro email sent",
+  opportunity_created: "Added to pipeline",
+  opportunity_outcome_changed: "Pipeline outcome updated",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -459,6 +525,19 @@ export type LeadgenLeadActivityRow = {
   notes: string | null;
   client_visible: boolean;
   client_summary: string | null;
+  occurred_at: string;
+};
+
+// The client-visible mirror of LeadgenLeadActivityRow above (migration
+// 0115) - structurally can't carry the internal `notes` column at all,
+// since it's a separate table. This is the source for the Client
+// Portal's Recent Activity feed.
+export type LeadgenClientActivityRow = {
+  id: string;
+  lead_id: string;
+  client_id: string;
+  activity_type: LeadgenActivityType;
+  summary: string;
   occurred_at: string;
 };
 
