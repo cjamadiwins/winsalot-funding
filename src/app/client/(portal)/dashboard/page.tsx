@@ -48,6 +48,14 @@ function formatCampaignDate(value: string | null): string | null {
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Display-only formatting - leadgen_campaigns.status stays lowercase in
+// the database (its CHECK constraint and every filter/query still expect
+// "active"/"paused"/"completed"); this only changes what the client sees
+// (e.g. "active" -> "Active", "not_started" -> "Not Started").
+function formatCampaignStatusLabel(status: string): string {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function formatMoney(value: number | null, currency: string): string {
   if (value === null) return "—";
   return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -140,14 +148,14 @@ export default async function ClientPortalDashboardPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {client.name}</h1>
       <p className="mt-1 text-sm text-slate-500">
-        {primaryCampaign ? `${primaryCampaign.name} · ${primaryCampaign.status}` : "Your campaign performance at a glance."}
+        {primaryCampaign ? `${primaryCampaign.name} · ${formatCampaignStatusLabel(primaryCampaign.status)}` : "Your campaign performance at a glance."}
       </p>
 
       {primaryCampaign && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaign Summary</h2>
-            <StatusBadge label={primaryCampaign.status} className={CAMPAIGN_STATUS_BADGE_CLASSES[primaryCampaign.status]} />
+            <StatusBadge label={formatCampaignStatusLabel(primaryCampaign.status)} className={CAMPAIGN_STATUS_BADGE_CLASSES[primaryCampaign.status]} />
           </div>
           <p className="mt-2 text-[15px] font-semibold text-slate-900">{primaryCampaign.name}</p>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
