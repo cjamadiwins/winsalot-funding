@@ -1,7 +1,18 @@
 import { Phone, UserCheck, Star, CalendarCheck, CheckCircle2, TrendingUp } from "lucide-react";
 import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow, type LeadgenLeadRow, type LeadgenCampaignRow } from "@/lib/leadgen-types";
+import {
+  LEADGEN_APPOINTMENT_STATUS_STYLES,
+  LEADGEN_PAYMENT_MODEL_LABELS,
+  LEADGEN_PAYMENT_STATUS_LABELS,
+  LEADGEN_MILESTONE_STATUS_LABELS,
+  leadgenPaymentOutstanding,
+  type LeadgenAppointmentRow,
+  type LeadgenLeadRow,
+  type LeadgenCampaignRow,
+  type LeadgenClientPaymentConfigRow,
+  type LeadgenClientPaymentMilestoneRow,
+} from "@/lib/leadgen-types";
 import { computeClientDashboardSummary, ownersReachedCount } from "@/lib/client-portal-dashboard";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
@@ -12,9 +23,28 @@ const CAMPAIGN_STATUS_BADGE_CLASSES: Record<LeadgenCampaignRow["status"], string
   completed: "bg-slate-100 text-slate-700",
 };
 
+const PAYMENT_STATUS_BADGE_CLASSES: Record<LeadgenClientPaymentConfigRow["payment_status"], string> = {
+  not_started: "bg-slate-100 text-slate-700",
+  in_progress: "bg-amber-100 text-amber-800",
+  paid_in_full: "bg-emerald-100 text-emerald-800",
+  overdue: "bg-rose-100 text-rose-800",
+  waived: "bg-slate-100 text-slate-700",
+};
+
+const MILESTONE_STATUS_BADGE_CLASSES: Record<LeadgenClientPaymentMilestoneRow["status"], string> = {
+  pending: "bg-slate-100 text-slate-700",
+  due: "bg-amber-100 text-amber-800",
+  received: "bg-emerald-100 text-emerald-800",
+};
+
 function formatCampaignDate(value: string | null): string | null {
   if (!value) return null;
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatMoney(value: number | null, currency: string): string {
+  if (value === null) return "—";
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
 export default async function ClientPortalDashboardPage() {
@@ -35,6 +65,26 @@ export default async function ClientPortalDashboardPage() {
   const allAppointments = (appointments ?? []) as LeadgenAppointmentRow[];
   const allCampaigns = (campaigns ?? []) as LeadgenCampaignRow[];
   const primaryCampaign = allCampaigns.find((c) => c.status === "active") ?? allCampaigns[0] ?? null;
+
+  // RLS (leadgen_client_payment_configs_client_select_own /
+  // _milestones_client_select_own) is the actual boundary here - there is
+  // no client write policy on either table at all, so this fetch is
+  // read-only by construction, not just by convention. Never selects the
+  // admin-only `notes` column's contents into anything client-visible.
+  const { data: paymentConfigRow } = await supabase.from("leadgen_client_payment_configs").select("*").eq("client_id", client.id).maybeSingle();
+  const paymentConfig = paymentConfigRow as LeadgenClientPaymentConfigRow | null;
+  const paymentMilestones = paymentConfig
+    ? (
+        (
+          await supabase
+            .from("leadgen_client_payment_milestones")
+            .select("*")
+            .eq("payment_config_id", paymentConfig.id)
+            .order("milestone_order", { ascending: true })
+        ).data as LeadgenClientPaymentMilestoneRow[] | null
+      ) ?? []
+    : [];
+  const paymentOutstanding = paymentConfig ? leadgenPaymentOutstanding(paymentConfig) : null;
 
   const summary = computeClientDashboardSummary(allLeads, allAppointments);
   const valueByLabel = new Map(summary.stats.map((s) => [s.label, s.value]));
@@ -121,6 +171,66 @@ export default async function ClientPortalDashboardPage() {
                 ))}
               </ul>
             </div>
+          )}
+        </section>
+      )}
+
+      {paymentConfig && (
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Payment Summary</h2>
+            <StatusBadge label={LEADGEN_PAYMENT_STATUS_LABELS[paymentConfig.payment_status]} className={PAYMENT_STATUS_BADGE_CLASSES[paymentConfig.payment_status]} />
+          </div>
+          <p className="mt-2 text-[13.5px] font-semibold text-slate-900">{LEADGEN_PAYMENT_MODEL_LABELS[paymentConfig.payment_model]}</p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-4">
+            {paymentConfig.total_campaign_fee !== null && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Campaign Fee</dt>
+                <dd className="text-slate-700">{formatMoney(paymentConfig.total_campaign_fee, paymentConfig.currency)}</dd>
+              </div>
+            )}
+            {paymentConfig.deposit_required !== null && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Deposit</dt>
+                <dd className="text-slate-700">
+                  {formatMoney(paymentConfig.deposit_required, paymentConfig.currency)} — {paymentConfig.deposit_received ? "Received" : "Pending"}
+                </dd>
+              </div>
+            )}
+            {paymentConfig.recurring_monthly_amount !== null && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Monthly Amount</dt>
+                <dd className="text-slate-700">{formatMoney(paymentConfig.recurring_monthly_amount, paymentConfig.currency)}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Total Paid</dt>
+              <dd className="text-slate-700">{formatMoney(paymentConfig.amount_paid, paymentConfig.currency)}</dd>
+            </div>
+            {paymentOutstanding !== null && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Outstanding</dt>
+                <dd className="text-slate-700">{formatMoney(paymentOutstanding, paymentConfig.currency)}</dd>
+              </div>
+            )}
+          </dl>
+          {paymentMilestones.length > 0 && (
+            <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-[13px]">
+              {paymentMilestones.map((milestone) => (
+                <li key={milestone.id} className="flex items-center justify-between gap-2">
+                  <span className="text-slate-700">
+                    {milestone.label}
+                    {milestone.trigger_description && <span className="text-slate-500"> — {milestone.trigger_description}</span>}
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="font-semibold text-slate-900">{formatMoney(milestone.amount, paymentConfig.currency)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${MILESTONE_STATUS_BADGE_CLASSES[milestone.status]}`}>
+                      {LEADGEN_MILESTONE_STATUS_LABELS[milestone.status]}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}
