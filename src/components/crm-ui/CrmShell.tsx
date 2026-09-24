@@ -142,6 +142,7 @@ export default function CrmShell({
   userLabel,
   signOutAction,
   rightSlot,
+  fullWidthPaths,
   clientLocalTime,
   children,
 }: {
@@ -157,6 +158,13 @@ export default function CrmShell({
   userLabel?: string;
   signOutAction: () => void | Promise<void>;
   rightSlot?: ReactNode;
+  // Pathnames (exact match against usePathname()) that should render
+  // without the persistent desktop sidebar - e.g. a wide table page that
+  // needs the full page width. Nav stays reachable at every breakpoint
+  // through the same off-canvas menu the mobile/tablet view already uses,
+  // just no longer gated to below the `lg` breakpoint. Omit for the
+  // original always-on sidebar every other page keeps.
+  fullWidthPaths?: string[];
   clientLocalTime: {
     initialPreferences: TimeZonePreferences;
     saveLocationsAction: (
@@ -177,33 +185,38 @@ export default function CrmShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const hideSidebar = !!(pathname && fullWidthPaths?.includes(pathname));
 
   return (
     <div className="flex min-h-screen bg-[var(--crm-bg,#f4f7fa)]">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] lg:flex">
-        <Link
-          href={homeHref}
-          className={
-            brandLogoSrc
-              ? "flex flex-col items-center border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-6"
-              : "flex flex-col gap-0.5 border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-5 leading-tight"
-          }
-        >
-          <BrandHeader brandTitle={brandTitle} brandSubtitle={brandSubtitle} logoSrc={brandLogoSrc} />
-        </Link>
-        <SidebarNav navItems={navItems} pathname={pathname} homeHref={homeHref} />
-        <div className="border-t border-[var(--crm-sidebar-border,#33496a)] px-3 py-3">
-          {userLabel && (
-            <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-sidebar-text-muted,#8ca1be)]">{userLabel}</div>
-          )}
-          <SignOutButton signOutAction={signOutAction} />
-        </div>
-      </aside>
+      {!hideSidebar && (
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] lg:flex">
+          <Link
+            href={homeHref}
+            className={
+              brandLogoSrc
+                ? "flex flex-col items-center border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-6"
+                : "flex flex-col gap-0.5 border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-5 leading-tight"
+            }
+          >
+            <BrandHeader brandTitle={brandTitle} brandSubtitle={brandSubtitle} logoSrc={brandLogoSrc} />
+          </Link>
+          <SidebarNav navItems={navItems} pathname={pathname} homeHref={homeHref} />
+          <div className="border-t border-[var(--crm-sidebar-border,#33496a)] px-3 py-3">
+            {userLabel && (
+              <div className="truncate px-3 pb-2 text-[12px] text-[var(--crm-sidebar-text-muted,#8ca1be)]">{userLabel}</div>
+            )}
+            <SignOutButton signOutAction={signOutAction} />
+          </div>
+        </aside>
+      )}
 
-      {/* Mobile / tablet off-canvas sidebar */}
+      {/* Off-canvas sidebar - always on mobile/tablet; also the only way
+          to reach nav on a `fullWidthPaths` page, so it isn't gated to
+          below `lg` there. */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className={`fixed inset-0 z-50 ${hideSidebar ? "" : "lg:hidden"}`}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} aria-hidden="true" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-[var(--crm-sidebar,#223a55)] shadow-2xl">
             <div className="flex items-start justify-between border-b border-[var(--crm-sidebar-border,#33496a)] px-5 py-4">
@@ -233,8 +246,14 @@ export default function CrmShell({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile / tablet top bar */}
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] px-4 py-3 lg:hidden">
+        {/* Top bar - mobile/tablet on every page; also stays on screen at
+            desktop width for a `fullWidthPaths` page, since that's the
+            only nav entry point once the persistent sidebar is hidden. */}
+        <header
+          className={`sticky top-0 z-40 flex items-center justify-between border-b border-[var(--crm-sidebar-border,#33496a)] bg-[var(--crm-sidebar,#223a55)] px-4 py-3 ${
+            hideSidebar ? "" : "lg:hidden"
+          }`}
+        >
           <button
             type="button"
             onClick={() => setMobileOpen(true)}

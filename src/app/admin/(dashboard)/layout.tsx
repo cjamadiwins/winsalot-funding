@@ -125,6 +125,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         brandLogoSrc="/winsalot-logo.png"
         homeHref="/admin/crm"
         navItems={navItems}
+        fullWidthPaths={["/admin/crm/onboarding"]}
         userLabel={user.email}
         signOutAction={signOutAction}
         clientLocalTime={{
