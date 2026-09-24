@@ -40,6 +40,12 @@ type Recipient = {
   leadgenAgentId?: string;
 };
 
+type WeeklyAgentSnapshot = {
+  recipient: Recipient;
+  growth?: ReturnType<typeof computeCrmAgentPerformance>["current"];
+  leadgen?: ReturnType<typeof computeLeadgenAgentPerformance>;
+};
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
@@ -170,6 +176,59 @@ function buildEmail(input: {
   };
 }
 
+
+function buildAdminEmail(input: {
+  snapshots: WeeklyAgentSnapshot[];
+  rangeLabel: string;
+}): { subject: string; html: string; text: string } {
+  const cards = input.snapshots
+    .map(({ recipient, growth, leadgen }) => {
+      const growthBlock = growth
+        ? `<div style="margin-top:12px"><strong>Growth CRM</strong><br>Consultations: ${growth.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}<br>Opportunity leads added: ${growth.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}<br>Emails delivered: ${growth.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}<br>Overall: ${growth.overallPercentage}% — ${escapeHtml(CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growth.overallPercentage)])}</div>`
+        : "";
+      const leadgenBlock = leadgen
+        ? `<div style="margin-top:12px"><strong>Lead Generation CRM</strong><br>Appointments booked: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}<br>Overall: ${leadgen.percentage}% — ${escapeHtml(LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(leadgen.percentage)])}</div>`
+        : "";
+      return `<div style="margin-top:16px;border:1px solid #dbe4ee;border-radius:14px;padding:16px"><div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(recipient.name)}</div><div style="margin-top:3px;font-size:12px;color:#64748b">${escapeHtml(recipient.email)}</div>${growthBlock}${leadgenBlock}</div>`;
+    })
+    .join("");
+
+  const textLines = [
+    `Winsalot weekly agent performance summary — ${input.rangeLabel}`,
+    "",
+    ...input.snapshots.flatMap(({ recipient, growth, leadgen }) => {
+      const lines = [recipient.name, recipient.email];
+      if (growth) {
+        lines.push(
+          `Growth: ${growth.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET} consultations, ${growth.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET} opportunity leads, ${growth.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET} emails delivered, ${growth.overallPercentage}% overall`
+        );
+      }
+      if (leadgen) {
+        lines.push(`Lead Generation: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET} appointments, ${leadgen.percentage}% overall`);
+      }
+      return [...lines, ""];
+    }),
+  ];
+
+  return {
+    subject: `Admin summary: Winsalot weekly agent performance — ${input.rangeLabel}`,
+    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
+      <div style="max-width:760px;margin:0 auto;padding:28px 14px">
+        <div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)">
+          <div style="text-align:center;margin-bottom:18px">
+            <img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" />
+          </div>
+          <h1 style="margin:0 0 8px;font-size:25px;text-align:center">Weekly Admin Performance Summary</h1>
+          <p style="margin:0;text-align:center;color:#475569">All active agent results for <strong>${escapeHtml(input.rangeLabel)}</strong>.</p>
+          ${cards}
+          <p style="margin:24px 0 0;color:#475569;font-size:13px"><strong>Winsalot Corp.</strong><br>Empowering Businesses, One Solution at a Time.</p>
+        </div>
+      </div>
+    </body></html>`,
+    text: textLines.join("\n"),
+  };
+}
+
 export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?: Date } = {}) {
   const now = options.now ?? new Date();
   const admin = getSupabaseAdmin();
@@ -203,12 +262,14 @@ export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?:
 
   const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
   const results: Array<{ email: string; outcome: "sent" | "dry-run" | "failed"; resendId?: string; error?: string }> = [];
+  const snapshots: WeeklyAgentSnapshot[] = [];
 
   for (const recipient of recipients.values()) {
     const growth = recipient.crmAgentId ? computeCrmAgentPerformance(recordsResult, recipient.crmAgentId, now).current : undefined;
     const leadgen = recipient.leadgenAgentId ? computeLeadgenAgentPerformance(allAppointments, recipient.leadgenAgentId, now) : undefined;
     const email = buildEmail({ recipient, growth, leadgen });
     const weekKey = growth?.periodStart ?? leadgen?.weekStart ?? crmDateKey(now);
+    snapshots.push({ recipient, growth, leadgen });
 
     if (options.dryRun) {
       results.push({ email: recipient.email, outcome: "dry-run" });
@@ -235,9 +296,43 @@ export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?:
     else results.push({ email: recipient.email, outcome: "sent", resendId: data?.id });
   }
 
+  const firstSnapshot = snapshots[0];
+  const rangeLabel = firstSnapshot?.growth
+    ? crmWeeklyRangeLabel(firstSnapshot.growth.periodStart, firstSnapshot.growth.periodEnd)
+    : firstSnapshot?.leadgen
+      ? leadgenWeekRangeLabel(firstSnapshot.leadgen.weekStart, firstSnapshot.leadgen.weekEnd)
+      : leadgenDateKey(now);
+  const adminEmailAddress = (process.env.AGENT_REPORT_ADMIN_EMAIL || "info@winsalotcorp.com").trim().toLowerCase();
+  const adminEmail = buildAdminEmail({ snapshots, rangeLabel });
+  const adminWeekKey = firstSnapshot?.growth?.periodStart ?? firstSnapshot?.leadgen?.weekStart ?? crmDateKey(now);
+
+  if (options.dryRun) {
+    results.push({ email: adminEmailAddress, outcome: "dry-run" });
+  } else {
+    const { data, error } = await getResendClient().emails.send(
+      {
+        from: getEmailSender("growth"),
+        to: adminEmailAddress,
+        replyTo: getEmailReplyTo(),
+        subject: adminEmail.subject,
+        html: adminEmail.html,
+        text: adminEmail.text,
+        tags: [
+          { name: "category", value: "admin-weekly-agent-summary" },
+          { name: "report_week", value: adminWeekKey },
+        ],
+      },
+      { idempotencyKey: `admin-weekly-agent-summary-${adminWeekKey}` }
+    );
+    if (error) results.push({ email: adminEmailAddress, outcome: "failed", error: error.message });
+    else results.push({ email: adminEmailAddress, outcome: "sent", resendId: data?.id });
+  }
+
   return {
     reportDate: leadgenDateKey(now),
-    recipientCount: recipients.size,
+    agentRecipientCount: recipients.size,
+    adminRecipient: adminEmailAddress,
+    recipientCount: recipients.size + 1,
     sent: results.filter((result) => result.outcome === "sent").length,
     failed: results.filter((result) => result.outcome === "failed").length,
     dryRun: !!options.dryRun,
