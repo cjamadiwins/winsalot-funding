@@ -8,10 +8,11 @@ import ClientProfileClient from "@/components/crm-clients/ClientProfileClient";
 import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccessPanel";
 import ClientReportsPanel from "@/components/crm-clients/ClientReportsPanel";
 import LeadgenClientLinkPanel from "@/components/crm-clients/LeadgenClientLinkPanel";
+import CampaignPaymentSetupPanel from "@/components/crm-clients/CampaignPaymentSetupPanel";
 import { loadLeadgenClientReport } from "@/lib/leadgen-client-report-data";
 import { resolveLeadgenReportMonth } from "@/lib/leadgen-client-report";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { LeadgenClientRow } from "@/lib/leadgen-types";
+import type { LeadgenClientRow, LeadgenCampaignRow } from "@/lib/leadgen-types";
 import {
   updateClientAction,
   archiveClientAction,
@@ -34,6 +35,7 @@ import {
   resetClientAccessAction,
 } from "./portal-actions";
 import { sendClientReportAction } from "./report-actions";
+import { updateLeadgenCampaignConfigAction } from "./campaign-actions";
 
 export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ report_month?: string }> }) {
   await requireCrmAdmin();
@@ -55,6 +57,19 @@ export default async function ClientProfilePage({ params, searchParams }: { para
 
   const linkedLeadgenClient = unlinkedLeadgenClients.find((c) => c.id === detail.client.leadgen_client_id) ?? null;
   const portalUsers = detail.client.leadgen_client_id ? await fetchPortalUsersForLeadgenClient(detail.client.leadgen_client_id) : [];
+  // Service-role client, same reason as reportAdmin below - a Growth CRM
+  // admin's auth.uid() may have no matching leadgen_users row at all
+  // (they're separate identities), so leadgen_campaigns_admin_all's RLS
+  // check wouldn't necessarily pass for the regular session-bound client.
+  const leadgenCampaigns = detail.client.leadgen_client_id
+    ? (
+        await getSupabaseAdmin()
+          .from("leadgen_campaigns")
+          .select("*")
+          .eq("client_id", detail.client.leadgen_client_id)
+          .order("created_at", { ascending: false })
+      ).data as LeadgenCampaignRow[] | null
+    : null;
   const { month: reportMonth, period: reportPeriod } = resolveLeadgenReportMonth(query.report_month);
   let clientReport = null;
   if (detail.client.leadgen_client_id) {
@@ -97,6 +112,15 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         linkAction={linkLeadgenClientAction}
         createAndLinkAction={createAndLinkLeadgenClientAction}
       />
+
+      {detail.client.leadgen_client_id && (
+        <CampaignPaymentSetupPanel
+          crmClientId={id}
+          leadgenClientId={detail.client.leadgen_client_id}
+          campaigns={leadgenCampaigns ?? []}
+          updateAction={updateLeadgenCampaignConfigAction}
+        />
+      )}
 
       <ClientReportsPanel
         crmClientId={id}
