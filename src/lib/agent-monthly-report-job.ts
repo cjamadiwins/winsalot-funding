@@ -23,6 +23,7 @@ import { leadgenWeekStartsInMonth } from "./leadgen-performance-history";
 import type { LeadgenPerformanceAppointment } from "./leadgen-performance";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
+const LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
 
 type AgentIdentity = {
   id: string;
@@ -146,7 +147,7 @@ function buildEmail(input: {
 
   return {
     subject: `Your Winsalot performance report — ${input.monthLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:680px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#2563eb">WINSALOT CORP.</div><h1 style="margin:10px 0 8px;font-size:25px">Monthly Agent Performance</h1><p style="margin:0;color:#475569">Hi ${escapeHtml(greetingName)}, here is your private performance report for <strong>${escapeHtml(input.monthLabel)}</strong>.</p>${sections}<p style="margin:24px 0 0;color:#475569;font-size:13px">Thank you for your work.<br><strong>Winsalot Corp.</strong></p></div></div></body></html>`,
+    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:680px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="text-align:center;margin-bottom:18px"><img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" /></div><h1 style="margin:10px 0 8px;font-size:25px;text-align:center">Monthly Agent Performance</h1><p style="margin:0;color:#475569">Hi ${escapeHtml(greetingName)}, here is your private performance report for <strong>${escapeHtml(input.monthLabel)}</strong>.</p>${sections}<p style="margin:24px 0 0;color:#475569;font-size:13px">Thank you for your work.<br><strong>Winsalot Corp.</strong></p></div></div></body></html>`,
     text: textLines.join("\n"),
   };
 }
@@ -199,7 +200,7 @@ function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): 
 
   return {
     subject: `Admin summary: Winsalot agent performance — ${monthLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:760px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#2563eb">WINSALOT CORP.</div><h1 style="margin:10px 0 8px;font-size:25px">Monthly Agent Summary</h1><p style="margin:0;color:#475569">Administrative overview for <strong>${escapeHtml(monthLabel)}</strong>. Each agent received a separate private report containing only their own results.</p>${cards}<p style="margin:24px 0 0;color:#475569;font-size:13px"><a href="https://growth.winsalotcorp.com/admin/crm/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Growth performance reports →</a><br><a href="https://leads.winsalotcorp.com/leadgen/admin/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Lead Generation performance reports →</a></p></div></div></body></html>`,
+    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:760px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="text-align:center;margin-bottom:18px"><img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" /></div><h1 style="margin:10px 0 8px;font-size:25px;text-align:center">Monthly Agent Summary</h1><p style="margin:0;color:#475569">Administrative overview for <strong>${escapeHtml(monthLabel)}</strong>. Each agent received a separate private report containing only their own results.</p>${cards}<p style="margin:24px 0 0;color:#475569;font-size:13px"><a href="https://growth.winsalotcorp.com/admin/crm/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Growth performance reports →</a><br><a href="https://leads.winsalotcorp.com/leadgen/admin/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Lead Generation performance reports →</a></p></div></div></body></html>`,
     text,
   };
 }
