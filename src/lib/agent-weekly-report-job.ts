@@ -23,6 +23,13 @@ import {
   leadgenWeekRangeLabel,
   type LeadgenPerformanceAppointment,
 } from "./leadgen-performance";
+import {
+  LEADGEN_WEEKLY_CALL_TARGET,
+  LEADGEN_WEEKLY_EMAIL_TARGET,
+  computeLeadgenAgentActivityKpis,
+  type LeadgenKpiCallLogRow,
+  type LeadgenKpiEmailRow,
+} from "./leadgen-agent-kpi";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 const LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
@@ -44,6 +51,7 @@ type WeeklyAgentSnapshot = {
   recipient: Recipient;
   growth?: ReturnType<typeof computeCrmAgentPerformance>["current"];
   leadgen?: ReturnType<typeof computeLeadgenAgentPerformance>;
+  leadgenActivity?: ReturnType<typeof computeLeadgenAgentActivityKpis>;
 };
 
 function escapeHtml(value: string): string {
@@ -91,6 +99,7 @@ function buildEmail(input: {
   recipient: Recipient;
   growth?: ReturnType<typeof computeCrmAgentPerformance>["current"];
   leadgen?: ReturnType<typeof computeLeadgenAgentPerformance>;
+  leadgenActivity?: ReturnType<typeof computeLeadgenAgentActivityKpis>;
 }): { subject: string; html: string; text: string } {
   const greetingName = input.recipient.name.trim().split(/\s+/)[0] || "Agent";
   const weekStart = input.growth?.periodStart ?? input.leadgen?.weekStart ?? crmDateKey(new Date());
@@ -136,12 +145,22 @@ function buildEmail(input: {
     sections += section(
       "Lead Generation CRM",
       `Overall: ${l.percentage}% — ${status}`,
-      metricRow("Appointments booked", l.bookedThisWeek, LEADGEN_WEEKLY_APPOINTMENT_TARGET, l.percentage),
+      metricRow("Appointments booked", l.bookedThisWeek, LEADGEN_WEEKLY_APPOINTMENT_TARGET, l.percentage) +
+        (input.leadgenActivity
+          ? metricRow("Calls logged", input.leadgenActivity.callsThisWeek, LEADGEN_WEEKLY_CALL_TARGET, input.leadgenActivity.weeklyCallProgressPct) +
+            metricRow("Emails sent", input.leadgenActivity.emailsThisWeek, LEADGEN_WEEKLY_EMAIL_TARGET, input.leadgenActivity.weeklyEmailProgressPct)
+          : ""),
       "https://leads.winsalotcorp.com/leadgen/agent/performance"
     );
     textLines.push(
       "Lead Generation CRM",
       `Appointments booked: ${l.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}`,
+      ...(input.leadgenActivity
+        ? [
+            `Calls logged: ${input.leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}`,
+            `Emails sent: ${input.leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}`,
+          ]
+        : []),
       `Overall: ${l.percentage}% — ${status}`,
       ""
     );
@@ -182,12 +201,12 @@ function buildAdminEmail(input: {
   rangeLabel: string;
 }): { subject: string; html: string; text: string } {
   const cards = input.snapshots
-    .map(({ recipient, growth, leadgen }) => {
+    .map(({ recipient, growth, leadgen, leadgenActivity }) => {
       const growthBlock = growth
         ? `<div style="margin-top:12px"><strong>Growth CRM</strong><br>Consultations: ${growth.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}<br>Opportunity leads added: ${growth.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}<br>Emails delivered: ${growth.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}<br>Overall: ${growth.overallPercentage}% — ${escapeHtml(CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growth.overallPercentage)])}</div>`
         : "";
       const leadgenBlock = leadgen
-        ? `<div style="margin-top:12px"><strong>Lead Generation CRM</strong><br>Appointments booked: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}<br>Overall: ${leadgen.percentage}% — ${escapeHtml(LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(leadgen.percentage)])}</div>`
+        ? `<div style="margin-top:12px"><strong>Lead Generation CRM</strong><br>Appointments booked: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}${leadgenActivity ? `<br>Calls logged: ${leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}<br>Emails sent: ${leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}` : ""}<br>Overall: ${leadgen.percentage}% — ${escapeHtml(LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(leadgen.percentage)])}</div>`
         : "";
       return `<div style="margin-top:16px;border:1px solid #dbe4ee;border-radius:14px;padding:16px"><div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(recipient.name)}</div><div style="margin-top:3px;font-size:12px;color:#64748b">${escapeHtml(recipient.email)}</div>${growthBlock}${leadgenBlock}</div>`;
     })
@@ -196,7 +215,7 @@ function buildAdminEmail(input: {
   const textLines = [
     `Winsalot weekly agent performance summary — ${input.rangeLabel}`,
     "",
-    ...input.snapshots.flatMap(({ recipient, growth, leadgen }) => {
+    ...input.snapshots.flatMap(({ recipient, growth, leadgen, leadgenActivity }) => {
       const lines = [recipient.name, recipient.email];
       if (growth) {
         lines.push(
@@ -205,6 +224,10 @@ function buildAdminEmail(input: {
       }
       if (leadgen) {
         lines.push(`Lead Generation: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET} appointments, ${leadgen.percentage}% overall`);
+        if (leadgenActivity) {
+          lines.push(`Lead Generation calls: ${leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}`);
+          lines.push(`Lead Generation emails sent: ${leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}`);
+        }
       }
       return [...lines, ""];
     }),
@@ -233,13 +256,15 @@ export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?:
   const now = options.now ?? new Date();
   const admin = getSupabaseAdmin();
 
-  const [{ data: crmAgents }, { data: leadgenAgents }, recordsResult, { data: appointments }] = await Promise.all([
+  const [{ data: crmAgents }, { data: leadgenAgents }, recordsResult, { data: appointments }, { data: callLogs }, { data: leadgenEmails }] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
     admin
       .from("leadgen_appointments")
       .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("leadgen_call_logs").select("agent_id, created_at"),
+    admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
   ]);
 
   const recipients = new Map<string, Recipient>();
@@ -261,15 +286,20 @@ export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?:
   }
 
   const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
+  const allCallLogs = (callLogs ?? []) as LeadgenKpiCallLogRow[];
+  const allLeadgenEmails = (leadgenEmails ?? []) as LeadgenKpiEmailRow[];
   const results: Array<{ email: string; outcome: "sent" | "dry-run" | "failed"; resendId?: string; error?: string }> = [];
   const snapshots: WeeklyAgentSnapshot[] = [];
 
   for (const recipient of recipients.values()) {
     const growth = recipient.crmAgentId ? computeCrmAgentPerformance(recordsResult, recipient.crmAgentId, now).current : undefined;
     const leadgen = recipient.leadgenAgentId ? computeLeadgenAgentPerformance(allAppointments, recipient.leadgenAgentId, now) : undefined;
-    const email = buildEmail({ recipient, growth, leadgen });
+    const leadgenActivity = recipient.leadgenAgentId
+      ? computeLeadgenAgentActivityKpis(allCallLogs, allLeadgenEmails, [], recipient.leadgenAgentId, now)
+      : undefined;
+    const email = buildEmail({ recipient, growth, leadgen, leadgenActivity });
     const weekKey = growth?.periodStart ?? leadgen?.weekStart ?? crmDateKey(now);
-    snapshots.push({ recipient, growth, leadgen });
+    snapshots.push({ recipient, growth, leadgen, leadgenActivity });
 
     if (options.dryRun) {
       results.push({ email: recipient.email, outcome: "dry-run" });
