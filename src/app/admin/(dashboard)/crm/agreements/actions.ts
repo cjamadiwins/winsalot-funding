@@ -15,6 +15,7 @@ import {
   PILOT_TYPES,
   PAYMENT_STATUSES,
   isAgreementLocked,
+  isPerformanceBasedFirst,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
@@ -72,8 +73,16 @@ async function getActiveAgreementTemplate(
 }
 
 function templateKindFor(campaignType: CampaignType): AgreementTemplateKind {
-  return campaignType === "free_pilot" ? "pilot_program_agreement" : "client_service_agreement";
+  if (campaignType === "free_pilot") return "pilot_program_agreement";
+  if (campaignType === "performance_based_first") return "performance_based_first_agreement";
+  return "client_service_agreement";
 }
+
+// The brief's own default Campaign Fee for a Performance-Based First
+// Campaign - pre-filled into a fresh draft so the admin isn't starting
+// from $0 (which buildPerformanceBasedFirstFeesStatement would otherwise
+// render as "$0 CAD Campaign Fee"), but still fully editable before send.
+const PERFORMANCE_BASED_FIRST_DEFAULT_FEE = 750;
 
 // Item 2: "Allow the admin to start the onboarding workflow from an
 // existing Growth CRM opportunity. If no client record exists, allow the
@@ -111,8 +120,13 @@ export async function startOnboardingFromOpportunityAction(
   if (!template) return { error: "No agreement template is configured." };
 
   // A free pilot is always $0/$0 - forced here at creation time so the
-  // fee is never even transiently non-zero, not just hidden by the UI.
+  // fee is never even transiently non-zero, not just hidden by the UI. A
+  // Performance-Based First Campaign starts at the brief's own default
+  // $750 Campaign Fee (fully editable in draft) with setup_fee forced to
+  // 0 - its "Upfront Payment: $0" promise is about the upfront fee, not
+  // the Campaign Fee itself, which becomes due only on conversion.
   const isPilot = campaignType === "free_pilot";
+  const isPBF = campaignType === "performance_based_first";
 
   const { data: agreement, error: insertError } = await supabase
     .from("crm_client_agreements")
@@ -126,8 +140,8 @@ export async function startOnboardingFromOpportunityAction(
       business_email: opportunity.email,
       service_type: "qualified_leads",
       monthly_target: 1,
-      monthly_fee: 0,
-      setup_fee: isPilot ? 0 : null,
+      monthly_fee: isPBF ? PERFORMANCE_BASED_FIRST_DEFAULT_FEE : 0,
+      setup_fee: isPilot || isPBF ? 0 : null,
       created_by: admin.id,
       updated_by: admin.id,
     })
@@ -234,6 +248,7 @@ export async function createAgreementForClientAction(
   if (!template) return { error: "No agreement template is configured." };
 
   const isPilot = campaignType === "free_pilot";
+  const isPBF = campaignType === "performance_based_first";
 
   const { data: agreement, error } = await supabase
     .from("crm_client_agreements")
@@ -246,8 +261,8 @@ export async function createAgreementForClientAction(
       business_email: businessEmail,
       service_type: "qualified_leads",
       monthly_target: 1,
-      monthly_fee: 0,
-      setup_fee: isPilot ? 0 : null,
+      monthly_fee: isPBF ? PERFORMANCE_BASED_FIRST_DEFAULT_FEE : 0,
+      setup_fee: isPilot || isPBF ? 0 : null,
       created_by: admin.id,
       updated_by: admin.id,
     })
@@ -312,6 +327,7 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
   if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Monthly target must be a positive number." };
 
   const isPilot = agreement.campaign_type === "free_pilot";
+  const isPBF = isPerformanceBasedFirst(agreement);
   const pilotType: PilotType = isPilot && PILOT_TYPES.includes(input.pilotType) ? input.pilotType : "free";
   const isPaidPilot = isPilot && pilotType === "paid";
 
@@ -344,7 +360,7 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
     target_type: input.targetType,
     monthly_target: input.monthlyTarget,
     monthly_fee: isPilot ? (isPaidPilot ? input.monthlyFee : 0) : input.monthlyFee,
-    setup_fee: isPilot ? (isPaidPilot ? input.setupFee : 0) : input.setupFee,
+    setup_fee: isPilot ? (isPaidPilot ? input.setupFee : 0) : isPBF ? 0 : input.setupFee,
     currency: input.currency,
     target_industries: input.targetIndustries,
     target_locations: input.targetLocations,
@@ -400,7 +416,7 @@ export async function sendAgreementAction(agreementId: string, reviewedConfirmat
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be sent." };
   if (!agreement.monthly_fee && agreement.monthly_fee !== 0) return { error: "Monthly fee is required before sending." };
-  if (agreement.campaign_type !== "free_pilot") {
+  if (agreement.campaign_type === "standard_monthly") {
     if (!agreement.payment_due_terms) return { error: "Payment due terms are required before sending." };
     if (!agreement.cancellation_terms) return { error: "Cancellation terms are required before sending." };
   }
@@ -528,6 +544,7 @@ export async function recordAgreementInvoiceAction(
     .maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.campaign_type === "free_pilot") return { error: "Free pilot programs do not use invoices." };
+  if (isPerformanceBasedFirst(agreement)) return { error: "A Performance-Based First Campaign uses its own conversion/payment tracking, not this invoice tracker." };
   if (agreement.status !== "signed") return { error: "The agreement must be signed before recording an invoice." };
 
   const { data: submission } = await supabase
@@ -1112,6 +1129,161 @@ export async function closePilotAction(agreementId: string): Promise<ActionResul
 }
 
 // ---------------------------------------------------------------------
+// Performance-Based First Campaign lifecycle (migration
+// 20260925170634): Campaign Agreed -> Agreement Signed -> the Client
+// notifies Winsalot Corp of a conversion (admin records it) -> the
+// Campaign Fee is due -> admin generates/links a real invoice and
+// records payment, exactly like a Paid Pilot's own payment tracking
+// (migration 0144) - reusing payment_status/payment_due_date/invoice_id
+// rather than duplicating a second mechanism.
+// ---------------------------------------------------------------------
+
+// The admin's own record of the Client's notice ("Web6 Solutions agrees
+// to notify Winsalot Corp when a Winsalot-generated prospect becomes a
+// paying customer") - there is no client-facing self-service action for
+// this (the agreement is signed by the client, but conversion is reported
+// to Winsalot Corp outside the app, e.g. by email or phone, exactly like
+// every other client-communication event in this pipeline). Recording it
+// here is what makes the Campaign Fee due.
+export async function recordConversionNotificationAction(agreementId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, status, conversion_status, client_id, opportunity_id, monthly_fee, currency")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (!isPerformanceBasedFirst(agreement)) return { error: "Only a Performance-Based First Campaign agreement can record a conversion." };
+  if (agreement.status !== "signed") return { error: "The agreement must be signed before recording a conversion." };
+  if (agreement.conversion_status === "converted") return { error: "A conversion has already been recorded for this agreement." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ conversion_status: "converted", converted_at: new Date().toISOString(), payment_status: "pending", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: "Failed to record the conversion." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "performance_conversion_recorded",
+    notes: `Client-notified conversion recorded by ${performedByName(admin)} - the $${Number(agreement.monthly_fee).toLocaleString()} ${agreement.currency} Campaign Fee is now due.`,
+  });
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// Mirrors generatePilotInvoiceAction (migration 0144) exactly, but for a
+// converted Performance-Based First Campaign - builds the same FormData
+// createInvoiceAction itself expects rather than duplicating invoice
+// creation. Only reachable once the Client's conversion has actually been
+// recorded (the fee isn't due before then).
+export async function generatePerformanceBasedFirstInvoiceAction(agreementId: string): Promise<ActionResult & { invoiceId?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, conversion_status, status, client_id, opportunity_id, monthly_fee, currency, contact_person, payment_due_date, invoice_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (!isPerformanceBasedFirst(agreement)) return { error: "Only a Performance-Based First Campaign agreement can have this invoice generated." };
+  if (agreement.status !== "signed") return { error: "The agreement must be signed before generating an invoice." };
+  if (agreement.conversion_status !== "converted") return { error: "Record the Client's conversion notice before generating an invoice." };
+  if (agreement.invoice_id) return { error: "An invoice already exists for this agreement - open it from the Invoices page instead." };
+
+  const lineItems: LineItemInput[] = [{ description: "Campaign Fee", quantity: 1, unit_price: Number(agreement.monthly_fee) }];
+
+  const formData = new FormData();
+  formData.set("client_id", agreement.client_id);
+  formData.set("billing_contact_name", agreement.contact_person);
+  formData.set("currency", agreement.currency);
+  formData.set("line_items", JSON.stringify(lineItems));
+  if (agreement.payment_due_date) formData.set("due_date", agreement.payment_due_date);
+
+  const result = await createInvoiceAction(formData);
+  if (result.error || !result.invoiceId) return { error: result.error ?? "Failed to generate the invoice." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ invoice_id: result.invoiceId, payment_status: "pending", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: `Invoice created, but failed to link it to the agreement: ${error.message}` };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "onboarding_invoice_recorded",
+    notes: `Invoice generated for the Performance-Based First Campaign fee by ${performedByName(admin)}.`,
+  });
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath("/admin/crm/invoices");
+  return { invoiceId: result.invoiceId };
+}
+
+// Mirrors linkPilotInvoiceAction - covers an invoice the admin already
+// created manually on the Invoices page before using Generate Invoice above.
+export async function linkPerformanceBasedFirstInvoiceAction(agreementId: string, invoiceId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, campaign_type, conversion_status, client_id, invoice_id")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (!isPerformanceBasedFirst(agreement)) return { error: "Only a Performance-Based First Campaign agreement can have an invoice linked." };
+  if (agreement.conversion_status !== "converted") return { error: "Record the Client's conversion notice before linking an invoice." };
+  if (agreement.invoice_id) return { error: "This agreement already has a linked invoice." };
+
+  const { data: invoice } = await supabase.from("crm_invoices").select("id, client_id").eq("id", invoiceId).maybeSingle();
+  if (!invoice) return { error: "Invoice not found." };
+  if (invoice.client_id !== agreement.client_id) return { error: "That invoice belongs to a different client." };
+
+  const { error } = await supabase
+    .from("crm_client_agreements")
+    .update({ invoice_id: invoiceId, payment_status: "pending", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (error) return { error: "Failed to link this invoice." };
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// Mirrors updatePilotPaymentStatusAction - the admin's own quick
+// payment-status editor for a converted Performance-Based First Campaign
+// fee, independent of any linked invoice's own status.
+export async function updatePerformanceBasedFirstPaymentStatusAction(agreementId: string, status: PaymentStatus): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  if (!PAYMENT_STATUSES.includes(status)) return { error: "Invalid payment status." };
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("campaign_type, conversion_status").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (!isPerformanceBasedFirst(agreement)) return { error: "Payment status only applies to a Performance-Based First Campaign here." };
+  if (agreement.conversion_status !== "converted") return { error: "Record the Client's conversion notice before updating payment status." };
+
+  const { error } = await supabase.from("crm_client_agreements").update({ payment_status: status, updated_by: admin.id }).eq("id", agreementId);
+  if (error) return { error: "Failed to update the payment status." };
+
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// ---------------------------------------------------------------------
 // The Manage action (migration 0099): a direct Edit/Delete on any
 // onboarding record from the dashboard, without walking the full
 // agreement lifecycle. Contact info/phone/the manual Client Status
@@ -1176,12 +1348,13 @@ export async function updateOnboardingRecordAction(agreementId: string, input: M
     if (!input.monthlyTarget || input.monthlyTarget <= 0) return { error: "Target must be a positive number." };
 
     const isPilot = input.campaignType === "free_pilot";
+    const isPBF = input.campaignType === "performance_based_first";
     const pilotType: PilotType = isPilot && PILOT_TYPES.includes(input.pilotType) ? input.pilotType : "free";
     const isPaidPilot = isPilot && pilotType === "paid";
     updates.service_type = input.serviceType;
     updates.monthly_target = input.monthlyTarget;
     updates.monthly_fee = isPilot ? (isPaidPilot ? input.monthlyFee : 0) : input.monthlyFee;
-    updates.setup_fee = isPilot ? (isPaidPilot ? input.setupFee : 0) : input.setupFee;
+    updates.setup_fee = isPilot ? (isPaidPilot ? input.setupFee : 0) : isPBF ? 0 : input.setupFee;
     updates.currency = input.currency;
     updates.campaign_start_date = input.campaignStartDate;
     updates.pilot_type = isPilot ? pilotType : "free";

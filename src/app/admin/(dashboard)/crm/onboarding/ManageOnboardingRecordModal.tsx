@@ -88,6 +88,7 @@ export default function ManageOnboardingRecordModal({
   }
 
   const isPilot = form.campaignType === "free_pilot";
+  const isPBF = form.campaignType === "performance_based_first";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8 sm:items-center">
@@ -196,7 +197,7 @@ export default function ManageOnboardingRecordModal({
             )}
             {(!isPilot || form.pilotType === "paid") && (
               <>
-                <Field label={isPilot ? "Pilot Fee" : "Monthly Price"}>
+                <Field label={isPilot ? "Pilot Fee" : isPBF ? "Campaign Fee" : "Monthly Price"}>
                   {manage.isLocked ? <ReadOnly value={`$${form.monthlyFee}`} /> : <input type="number" min={0} step="0.01" value={form.monthlyFee} onChange={(e) => set("monthlyFee", e.target.value)} className={inputClass} />}
                 </Field>
                 <Field label="Currency">

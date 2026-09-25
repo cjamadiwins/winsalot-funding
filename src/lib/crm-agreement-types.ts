@@ -43,15 +43,24 @@ export const INVOICE_TRACKER_STATUS_LABELS: Record<InvoiceTrackerStatus, string>
 export const INTAKE_CONFIG_STATUSES = ["draft", "sent"] as const;
 export type IntakeConfigStatus = (typeof INTAKE_CONFIG_STATUSES)[number];
 
-export const AGREEMENT_TEMPLATE_KINDS = ["client_service_agreement", "pilot_program_agreement"] as const;
+export const AGREEMENT_TEMPLATE_KINDS = ["client_service_agreement", "pilot_program_agreement", "performance_based_first_agreement"] as const;
 export type AgreementTemplateKind = (typeof AGREEMENT_TEMPLATE_KINDS)[number];
 
-export const CAMPAIGN_TYPES = ["standard_monthly", "free_pilot"] as const;
+// 'performance_based_first' (migration 20260925170634) is deliberately
+// its own third value - a real, ongoing client agreement (unlike
+// 'free_pilot'), but the $750 CAD Campaign Fee is not due upfront (unlike
+// 'standard_monthly'): it only becomes payable once the Client notifies
+// Winsalot Corp that a Winsalot-generated prospect converted into a
+// paying customer. Never classified as either of the other two values -
+// see isPerformanceBasedFirst() below, the single source of truth for
+// which agreements this applies to.
+export const CAMPAIGN_TYPES = ["standard_monthly", "free_pilot", "performance_based_first"] as const;
 export type CampaignType = (typeof CAMPAIGN_TYPES)[number];
 
 export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   standard_monthly: "Standard Monthly Campaign",
   free_pilot: "Free Pilot Program",
+  performance_based_first: "Performance-Based First Campaign",
 };
 
 export const PILOT_STATUSES = ["not_started", "active", "results_review", "converted", "extended", "closed"] as const;
@@ -96,6 +105,19 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
 
 export const AGREEMENT_CURRENCIES = ["CAD", "USD"] as const;
 export type AgreementCurrency = (typeof AGREEMENT_CURRENCIES)[number];
+
+// Performance-Based First Campaign only (migration 20260925170634):
+// whether the Client has yet notified Winsalot Corp that a
+// Winsalot-generated prospect became a paying customer - the event that
+// makes the Campaign Fee due. Every other campaign_type stays at the
+// harmless 'not_converted' default and never reads this column.
+export const CONVERSION_STATUSES = ["not_converted", "converted"] as const;
+export type ConversionStatus = (typeof CONVERSION_STATUSES)[number];
+
+export const CONVERSION_STATUS_LABELS: Record<ConversionStatus, string> = {
+  not_converted: "Not Converted",
+  converted: "Converted",
+};
 
 // The Manage action's admin-only "Client Status" label (migration 0099) -
 // a separate, purely informational tracking field. It is never read by
@@ -182,6 +204,14 @@ export type CrmClientAgreementRow = {
   payment_status: PaymentStatus;
   payment_due_date: string | null;
   invoice_id: string | null;
+
+  // Performance-Based First Campaign only (migration 20260925170634) -
+  // see CONVERSION_STATUSES above. payment_status/payment_due_date/
+  // invoice_id above are reused (not duplicated) for tracking the
+  // Campaign Fee once conversion_status is 'converted' and the fee
+  // becomes due - exactly like a Paid Pilot's own payment tracking.
+  conversion_status: ConversionStatus;
+  converted_at: string | null;
 
   admin_reviewed_confirmation: boolean;
 
@@ -468,6 +498,42 @@ export function buildPilotServicesStatement(agreement: Pick<CrmClientAgreementRo
   return `Winsalot Corp. will provide ${descriptor} time-limited pilot program to the Client, consisting of prospecting, outreach, and qualification activities directed at the Client's target industries and locations, for the purpose of generating ${serviceNounPlural(agreement.service_type)} on the Client's behalf, for the agreed pilot duration and scope set out in this Agreement.`;
 }
 
+// Single source of truth for "this agreement is a Performance-Based First
+// Campaign" - never a Free Pilot Program and never a Standard Monthly
+// Campaign, regardless of any other field on the row (mirrors
+// isPaidPilot() above).
+export function isPerformanceBasedFirst(agreement: Pick<CrmClientAgreementRow, "campaign_type">): boolean {
+  return agreement.campaign_type === "performance_based_first";
+}
+
+export const PERFORMANCE_BASED_FIRST_DOC_LABEL = "Performance-Based First Campaign Agreement";
+
+// Dynamic "Campaign Fee" section body - the seeded template's own stored
+// body is just a human-readable placeholder (see the migration's header
+// comment); this is the one place the actual required wording is
+// generated, exactly like buildPilotFeesStatement() does for a pilot, so
+// the admin preview, PDF, and public sign page can never show three
+// different figures for the same agreement. The Campaign Fee itself
+// (agreement.monthly_fee) is admin-set per client - this never hardcodes
+// $750, even though that's the brief's own default for a first campaign.
+export function buildPerformanceBasedFirstFeesStatement(
+  agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency">
+): string {
+  const fee = Number(agreement.monthly_fee);
+  return [
+    "This is a Performance-Based First Campaign.",
+    "",
+    `Campaign Fee: $${fee.toLocaleString()} ${agreement.currency}`,
+    "Upfront Payment: $0",
+    "",
+    `For this first campaign only, the Client will not pay the Campaign Fee upfront. The full $${fee.toLocaleString()} ${agreement.currency} Campaign Fee becomes payable when an appointment generated by Winsalot Corp results in a completed paid sale for the Client.`,
+    "",
+    "The Client agrees to notify Winsalot Corp when a Winsalot-generated prospect becomes a paying customer.",
+    "",
+    "After the first successful conversion and payment of the Campaign Fee, any future campaigns will operate under Winsalot Corp's standard payment structure, with the applicable monthly campaign fee paid upfront before the campaign begins.",
+  ].join("\n");
+}
+
 // Renders every template section for one agreement, substituting
 // placeholders. The "monthly_target" section's body is fully replaced by
 // buildAgreementTargetStatement() (rather than just token-substituted)
@@ -491,6 +557,7 @@ export function renderAgreementTemplate(
     monthly_target: String(agreement.monthly_target),
   };
   const isPilot = agreement.campaign_type === "free_pilot";
+  const isPBF = isPerformanceBasedFirst(agreement);
 
   return template.content.map((section) => {
     if (section.key === "monthly_target") {
@@ -501,6 +568,9 @@ export function renderAgreementTemplate(
     }
     if (isPilot && section.key === "services") {
       return { ...section, body: buildPilotServicesStatement(agreement) };
+    }
+    if (isPBF && section.key === "fees") {
+      return { ...section, title: "Campaign Fee", body: buildPerformanceBasedFirstFeesStatement(agreement) };
     }
     const body = section.body.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => replacements[token] ?? `{{${token}}}`);
     return { ...section, title: section.title.replace(/\{\{(\w+)\}\}/g, (_m, t: string) => replacements[t] ?? `{{${t}}}`), body };
@@ -673,6 +743,50 @@ export function nextRequiredPilotAction(stage: PilotStage): string {
       return "Continue onboarding on the new pilot agreement";
     case "Pilot Closed":
       return "None - pilot closed";
+  }
+}
+
+// ---------------------------------------------------------------------
+// Performance-Based First Campaign stage - derived, never stored, same
+// walk-the-pipeline style as deriveCrmPilotStage above. Simpler than the
+// pilot lifecycle (no Results Review/Convert/Extend/Close - this is an
+// ordinary ongoing campaign, not a time-boxed trial) - it only adds the
+// conversion-then-payment steps a standard agreement's own invoice
+// tracker doesn't have. Once payment_status reaches 'paid', the admin
+// activates the campaign the same way a standard agreement does
+// (activateCampaignAction reads crm_clients.status directly, not this
+// derived stage), so this stage machine deliberately stops at "Fee Paid".
+// ---------------------------------------------------------------------
+export const PERFORMANCE_BASED_FIRST_STAGES = [
+  "Campaign Agreed",
+  "Agreement Signed - Awaiting Conversion",
+  "Conversion Recorded - Fee Due",
+  "Fee Paid",
+] as const;
+export type PerformanceBasedFirstStage = (typeof PERFORMANCE_BASED_FIRST_STAGES)[number];
+
+export function derivePerformanceBasedFirstStage(
+  agreement: Pick<CrmClientAgreementRow, "status" | "conversion_status" | "payment_status">
+): PerformanceBasedFirstStage {
+  if (agreement.payment_status === "paid") return "Fee Paid";
+  if (agreement.conversion_status === "converted") return "Conversion Recorded - Fee Due";
+  if (agreement.status === "signed") return "Agreement Signed - Awaiting Conversion";
+  return "Campaign Agreed";
+}
+
+// Human-readable "what to do next" for a Performance-Based First Campaign
+// row on the onboarding dashboard, mirroring derivePerformanceBasedFirstStage's
+// own precedence.
+export function nextRequiredPerformanceBasedFirstAction(stage: PerformanceBasedFirstStage): string {
+  switch (stage) {
+    case "Campaign Agreed":
+      return "Review and send the agreement";
+    case "Agreement Signed - Awaiting Conversion":
+      return "Waiting for the Client to notify a conversion";
+    case "Conversion Recorded - Fee Due":
+      return "Generate/send the invoice and record payment";
+    case "Fee Paid":
+      return "Start the Client's next campaign under the standard payment structure";
   }
 }
 

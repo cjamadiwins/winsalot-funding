@@ -3,13 +3,16 @@ import {
   buildAgreementTargetStatement,
   buildPilotFeesStatement,
   buildPilotServicesStatement,
+  buildPerformanceBasedFirstFeesStatement,
   renderAgreementTemplate,
   deriveCrmOnboardingStage,
   deriveCrmPilotStage,
+  derivePerformanceBasedFirstStage,
   findIntakeAgreementConflicts,
   agreedTargetLabel,
   isAgreementLocked,
   isPaidPilot,
+  isPerformanceBasedFirst,
   pilotTotalCost,
   pilotProgramLabel,
   signedAgreementNotificationTitle,
@@ -34,6 +37,7 @@ const standardBase = {
 };
 const freePilotBase = { ...standardBase, campaign_type: "free_pilot" as const, monthly_fee: 0, setup_fee: 0 };
 const paidPilotBase = { ...standardBase, campaign_type: "free_pilot" as const, pilot_type: "paid" as const, monthly_fee: 1200, setup_fee: 300 };
+const performanceBasedFirstBase = { ...standardBase, campaign_type: "performance_based_first" as const, monthly_fee: 750, setup_fee: 0 };
 
 describe("buildAgreementTargetStatement", () => {
   it("uses 'target' and 'leads' by default", () => {
@@ -107,6 +111,15 @@ describe("renderAgreementTemplate", () => {
     const rendered = renderAgreementTemplate(servicesTemplate, { ...paidPilotBase, service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 15 });
     expect(rendered[0].body).toBe(buildPilotServicesStatement(paidPilotBase));
     expect(rendered[0].body.toLowerCase()).not.toContain("complimentary");
+  });
+
+  it("always replaces a Performance-Based First Campaign's 'fees' section dynamically, regardless of the template's own stored body", () => {
+    const feesTemplate: Pick<CrmAgreementTemplateRow, "content"> = {
+      content: [{ key: "fees", title: "Campaign Fee", body: "placeholder - replaced verbatim" }],
+    };
+    const rendered = renderAgreementTemplate(feesTemplate, { ...performanceBasedFirstBase, service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 15 });
+    expect(rendered[0].title).toBe("Campaign Fee");
+    expect(rendered[0].body).toBe(buildPerformanceBasedFirstFeesStatement(performanceBasedFirstBase));
   });
 });
 
@@ -212,6 +225,53 @@ describe("buildPilotFeesStatement", () => {
     const body = buildPilotFeesStatement({ ...paidPilotBase, setup_fee: null });
     expect(body).toContain("Setup Fee: $0");
     expect(body).toContain("Total Pilot Cost: $1,200");
+  });
+});
+
+describe("isPerformanceBasedFirst", () => {
+  it("is true only for a performance_based_first agreement", () => {
+    expect(isPerformanceBasedFirst(performanceBasedFirstBase)).toBe(true);
+    expect(isPerformanceBasedFirst(standardBase)).toBe(false);
+    expect(isPerformanceBasedFirst(freePilotBase)).toBe(false);
+  });
+});
+
+describe("buildPerformanceBasedFirstFeesStatement", () => {
+  it("shows the Campaign Fee, $0 upfront payment, and the conversion-trigger wording", () => {
+    const body = buildPerformanceBasedFirstFeesStatement(performanceBasedFirstBase);
+    expect(body).toContain("This is a Performance-Based First Campaign.");
+    expect(body).toContain("Campaign Fee: $750 CAD");
+    expect(body).toContain("Upfront Payment: $0");
+    expect(body).toContain("the Client will not pay the Campaign Fee upfront");
+    expect(body).toContain("The Client agrees to notify Winsalot Corp when a Winsalot-generated prospect becomes a paying customer.");
+    expect(body).toContain("any future campaigns will operate under Winsalot Corp's standard payment structure");
+  });
+
+  it("uses the agreement's own fee and currency, never a hardcoded $750", () => {
+    const body = buildPerformanceBasedFirstFeesStatement({ monthly_fee: 900, currency: "USD" });
+    expect(body).toContain("Campaign Fee: $900 USD");
+    expect(body).not.toContain("$750");
+  });
+});
+
+describe("derivePerformanceBasedFirstStage", () => {
+  it("Campaign Agreed - draft or sent, not yet converted", () => {
+    expect(derivePerformanceBasedFirstStage({ status: "draft", conversion_status: "not_converted", payment_status: "not_required" })).toBe("Campaign Agreed");
+    expect(derivePerformanceBasedFirstStage({ status: "sent", conversion_status: "not_converted", payment_status: "not_required" })).toBe("Campaign Agreed");
+  });
+
+  it("Agreement Signed - Awaiting Conversion", () => {
+    expect(derivePerformanceBasedFirstStage({ status: "signed", conversion_status: "not_converted", payment_status: "not_required" })).toBe(
+      "Agreement Signed - Awaiting Conversion"
+    );
+  });
+
+  it("Conversion Recorded - Fee Due", () => {
+    expect(derivePerformanceBasedFirstStage({ status: "signed", conversion_status: "converted", payment_status: "pending" })).toBe("Conversion Recorded - Fee Due");
+  });
+
+  it("Fee Paid - takes priority regardless of anything else", () => {
+    expect(derivePerformanceBasedFirstStage({ status: "signed", conversion_status: "converted", payment_status: "paid" })).toBe("Fee Paid");
   });
 });
 

@@ -7,6 +7,8 @@ import { renderAgreementPdfBuffer } from "./crm-agreement-pdf";
 import {
   AGREEMENT_SERVICE_TYPE_LABELS,
   pilotProgramLabel,
+  isPerformanceBasedFirst,
+  PERFORMANCE_BASED_FIRST_DOC_LABEL,
   signedAgreementNotificationTitle,
   intakeSubmittedNotificationTitle,
   type CrmAgreementTemplateRow,
@@ -42,14 +44,16 @@ function ctaButtonHtml(url: string, label: string): string {
 export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, token: string): Promise<{ error?: string }> {
   const signUrl = `${getSiteUrl()}/agreement-sign/${token}`;
   const isPilot = agreement.campaign_type === "free_pilot";
-  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
+  const isPBF = isPerformanceBasedFirst(agreement);
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : isPBF ? PERFORMANCE_BASED_FIRST_DOC_LABEL : "Service Agreement";
+  const agreementPhrase = isPilot ? pilotAgreementPhrase(agreement) : isPBF ? "performance-based first campaign agreement" : "service agreement";
   const subject = `Your Winsalot Corp. ${docLabel} is ready to sign - ${agreement.legal_business_name}`;
   const greeting = agreement.contact_person.trim().split(/\s+/)[0] || "there";
 
   const text = [
     `Hi ${greeting},`,
     "",
-    `Your Winsalot Corp. ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${agreement.legal_business_name} is ready for your review and signature.`,
+    `Your Winsalot Corp. ${agreementPhrase} for ${agreement.legal_business_name} is ready for your review and signature.`,
     "",
     `Please review and sign here: ${signUrl}`,
     "",
@@ -62,7 +66,7 @@ export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, t
 
   const html = textToSimpleHtml([
     `Hi ${escapeHtml(greeting)},`,
-    `Your Winsalot Corp. ${isPilot ? pilotAgreementPhrase(agreement) : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
+    `Your Winsalot Corp. ${agreementPhrase} for ${escapeHtml(agreement.legal_business_name)} is ready for your review and signature.`,
   ]) + ctaButtonHtml(signUrl, `Review and Sign ${isPilot ? "Pilot Agreement" : "Agreement"}`) + textToSimpleHtml([
     "If you have any questions, just reply to this email.",
     "Best regards,<br>Winsalot Corp.<br>Empowering Businesses, One Solution at a Time.",
@@ -103,13 +107,15 @@ export async function sendSignedAgreementClientCopy(
   template: Pick<CrmAgreementTemplateRow, "content">
 ): Promise<{ error?: string }> {
   const isPilot = agreement.campaign_type === "free_pilot";
-  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Service Agreement";
+  const isPBF = isPerformanceBasedFirst(agreement);
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : isPBF ? PERFORMANCE_BASED_FIRST_DOC_LABEL : "Service Agreement";
+  const agreementPhrase = isPilot ? "pilot program agreement" : isPBF ? "performance-based first campaign agreement" : "service agreement";
   const pdfBuffer = await renderAgreementPdfBuffer({ agreement, template });
   const filename = `Winsalot-Corp-Agreement-${agreement.legal_business_name.replace(/[^a-z0-9]+/gi, "-")}.pdf`;
   const subject = `Signed: Winsalot Corp. ${docLabel} - ${agreement.legal_business_name}`;
 
   const text = [
-    `The ${isPilot ? "pilot program agreement" : "service agreement"} for ${agreement.legal_business_name} has been signed.`,
+    `The ${agreementPhrase} for ${agreement.legal_business_name} has been signed.`,
     "",
     `Signed by: ${agreement.signer_full_name} (${agreement.signer_job_title || "n/a"})`,
     `Signed at: ${agreement.accepted_at}`,
@@ -117,7 +123,7 @@ export async function sendSignedAgreementClientCopy(
     "A copy of the signed agreement is attached to this email.",
   ].join("\n");
   const html = textToSimpleHtml([
-    `The ${isPilot ? "pilot program agreement" : "service agreement"} for ${escapeHtml(agreement.legal_business_name)} has been signed.`,
+    `The ${agreementPhrase} for ${escapeHtml(agreement.legal_business_name)} has been signed.`,
     `Signed by: ${escapeHtml(agreement.signer_full_name ?? "")} (${escapeHtml(agreement.signer_job_title || "n/a")})`,
     "A copy of the signed agreement is attached to this email.",
   ]);
