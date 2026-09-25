@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { normalizeLeadgenRole } from "@/lib/leadgen-role";
 
 export async function leadgenLoginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -20,7 +21,7 @@ export async function leadgenLoginAction(formData: FormData) {
 
   const { data: leadgenUser } = await supabase
     .from("leadgen_users")
-    .select("id")
+    .select("id, role")
     .eq("id", data.user.id)
     .eq("active", true)
     .maybeSingle();
@@ -32,6 +33,14 @@ export async function leadgenLoginAction(formData: FormData) {
         "This account is not set up for the Lead Generation CRM. Ask an admin to add you."
       )}`
     );
+  }
+
+  const role = normalizeLeadgenRole(leadgenUser.role);
+  if (role !== "admin" && role !== "agent") {
+    await supabase.auth.signOut();
+    redirect(`/leadgen/login?error=${encodeURIComponent(
+      role === "client" ? "This account is for the Client Portal. Sign in at /client instead." : "Your account role needs administrator review."
+    )}`);
   }
 
   // /leadgen itself is the role router - it sends admin/agent/client to
