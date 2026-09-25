@@ -5,8 +5,11 @@ import {
   renderAgreementTemplate,
   AGREEMENT_SERVICE_TYPE_LABELS,
   PAYMENT_STATUS_LABELS,
+  CONVERSION_STATUS_LABELS,
   pilotProgramLabel,
   pilotTotalCost,
+  isPerformanceBasedFirst,
+  PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "./crm-agreement-types";
@@ -62,7 +65,8 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
   const sections = renderAgreementTemplate(template, agreement);
   const isPilot = agreement.campaign_type === "free_pilot";
   const isPaid = isPilot && agreement.pilot_type === "paid";
-  const docLabel = isPilot ? pilotProgramLabel(agreement) : "Client Service Agreement";
+  const isPBF = isPerformanceBasedFirst(agreement);
+  const docLabel = isPilot ? pilotProgramLabel(agreement) : isPBF ? PERFORMANCE_BASED_FIRST_DOC_LABEL : "Client Service Agreement";
 
   return (
     <Document title={`${docLabel} - ${agreement.legal_business_name}`}>
@@ -78,7 +82,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
           </View>
           <View>
-            <Text style={styles.docTitle}>{isPilot ? docLabel.toUpperCase() : "CLIENT SERVICE AGREEMENT"}</Text>
+            <Text style={styles.docTitle}>{isPilot || isPBF ? docLabel.toUpperCase() : "CLIENT SERVICE AGREEMENT"}</Text>
             <Text style={styles.docMeta}>Version {agreement.version}</Text>
             <Text style={styles.docMeta}>Status: {agreement.status}</Text>
           </View>
@@ -130,6 +134,35 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
                 <View>
                   <Text style={styles.label}>Payment Due Date</Text>
                   <Text style={styles.value}>{formatDate(agreement.payment_due_date)}</Text>
+                </View>
+              </View>
+            )}
+          </>
+        ) : isPBF ? (
+          <>
+            <View style={styles.sectionRow}>
+              <View>
+                <Text style={styles.label}>Campaign Fee</Text>
+                <Text style={styles.value}>{formatCurrency(agreement.monthly_fee, agreement.currency)}</Text>
+              </View>
+              <View>
+                <Text style={styles.label}>Upfront Payment</Text>
+                <Text style={styles.value}>$0.00</Text>
+              </View>
+              <View>
+                <Text style={styles.label}>Conversion Status</Text>
+                <Text style={styles.value}>{CONVERSION_STATUS_LABELS[agreement.conversion_status]}</Text>
+              </View>
+            </View>
+            {agreement.conversion_status === "converted" && (
+              <View style={styles.sectionRow}>
+                <View>
+                  <Text style={styles.label}>Payment Status</Text>
+                  <Text style={styles.value}>{PAYMENT_STATUS_LABELS[agreement.payment_status]}</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Converted</Text>
+                  <Text style={styles.value}>{formatDate(agreement.converted_at)}</Text>
                 </View>
               </View>
             )}

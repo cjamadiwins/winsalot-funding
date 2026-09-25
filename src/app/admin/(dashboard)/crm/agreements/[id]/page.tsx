@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { renderAgreementTemplate, type CrmAgreementTemplateRow, type CrmClientAgreementRow, type CrmPilotResultsRow } from "@/lib/crm-agreement-types";
+import { renderAgreementTemplate, isPerformanceBasedFirst, type CrmAgreementTemplateRow, type CrmClientAgreementRow, type CrmPilotResultsRow } from "@/lib/crm-agreement-types";
 import { retryAgreementAdminNotificationEmailAction } from "../actions";
 import AgreementDetailClient from "./AgreementDetailClient";
 
@@ -31,17 +31,19 @@ export default async function AdminAgreementDetailPage({
 
   if (!template) notFound();
 
-  // A Paid Pilot links to a real crm_invoices row (migration 0144) - if
-  // it already has one, fetch just that one for the "View Invoice" link;
+  // A Paid Pilot or a converted Performance-Based First Campaign links to
+  // a real crm_invoices row (migrations 0144/20260925170634) - if it
+  // already has one, fetch just that one for the "View Invoice" link;
   // otherwise offer the client's own other invoices as something to link
   // instead of generating a duplicate.
   const isPaidPilot = agreement.campaign_type === "free_pilot" && agreement.pilot_type === "paid";
+  const usesInvoiceLinking = isPaidPilot || isPerformanceBasedFirst(agreement);
   const invoiceSelect = "id, invoice_number, status, total, currency";
   const [{ data: linkedPilotInvoice }, { data: linkableInvoices }] = await Promise.all([
-    isPaidPilot && agreement.invoice_id
+    usesInvoiceLinking && agreement.invoice_id
       ? supabase.from("crm_invoices").select(invoiceSelect).eq("id", agreement.invoice_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    isPaidPilot && !agreement.invoice_id
+    usesInvoiceLinking && !agreement.invoice_id
       ? supabase.from("crm_invoices").select(invoiceSelect).eq("client_id", agreement.client_id).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);

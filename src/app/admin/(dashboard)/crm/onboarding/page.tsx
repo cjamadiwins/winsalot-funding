@@ -5,11 +5,15 @@ import {
   nextRequiredAction,
   deriveCrmPilotStage,
   nextRequiredPilotAction,
+  derivePerformanceBasedFirstStage,
+  nextRequiredPerformanceBasedFirstAction,
   isAgreementLocked,
+  isPerformanceBasedFirst,
   AGREEMENT_SERVICE_TYPE_LABELS,
   INVOICE_TRACKER_STATUS_LABELS,
   CAMPAIGN_TYPE_LABELS,
   PAYMENT_STATUS_LABELS,
+  CONVERSION_STATUS_LABELS,
   type CrmClientAgreementRow,
   type CrmIntakeConfigRow,
   type CrmAgreementInvoiceRow,
@@ -56,6 +60,7 @@ export default async function AdminCrmOnboardingPage() {
     const invoice = invoiceByAgreement.get(agreement.id) ?? null;
     const clientStatus = client?.status ?? "Prospect";
     const isPilot = agreement.campaign_type === "free_pilot";
+    const isPBF = isPerformanceBasedFirst(agreement);
 
     const stage = isPilot
       ? deriveCrmPilotStage({
@@ -63,13 +68,19 @@ export default async function AdminCrmOnboardingPage() {
           intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
           submission: hasSubmission ? { id: "x" } : null,
         })
-      : deriveCrmOnboardingStage({
-          agreement: { status: agreement.status },
-          intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
-          submission: hasSubmission ? { id: "x" } : null,
-          invoice: invoice ? { status: invoice.status } : null,
-          clientStatus,
-        });
+      : isPBF
+        ? derivePerformanceBasedFirstStage({
+            status: agreement.status,
+            conversion_status: agreement.conversion_status,
+            payment_status: agreement.payment_status,
+          })
+        : deriveCrmOnboardingStage({
+            agreement: { status: agreement.status },
+            intakeConfig: intakeConfig ? { status: intakeConfig.status } : null,
+            submission: hasSubmission ? { id: "x" } : null,
+            invoice: invoice ? { status: invoice.status } : null,
+            clientStatus,
+          });
 
     return {
       agreementId: agreement.id,
@@ -81,12 +92,18 @@ export default async function AdminCrmOnboardingPage() {
       monthlyTarget: agreement.monthly_target,
       monthlyFee: agreement.monthly_fee,
       stage,
-      nextAction: isPilot ? nextRequiredPilotAction(stage as Parameters<typeof nextRequiredPilotAction>[0]) : nextRequiredAction(stage as Parameters<typeof nextRequiredAction>[0]),
+      nextAction: isPilot
+        ? nextRequiredPilotAction(stage as Parameters<typeof nextRequiredPilotAction>[0])
+        : isPBF
+          ? nextRequiredPerformanceBasedFirstAction(stage as Parameters<typeof nextRequiredPerformanceBasedFirstAction>[0])
+          : nextRequiredAction(stage as Parameters<typeof nextRequiredAction>[0]),
       agreementStatus: agreement.status,
       isPilot,
+      isPBF,
       pilotType: agreement.pilot_type,
       paymentStatus: agreement.payment_status,
       pilotStatus: agreement.pilot_status,
+      conversionStatus: agreement.conversion_status,
       intakeConfigId: intakeConfig?.id ?? null,
       intakeStatus: intakeConfig ? (hasSubmission ? "Received" : intakeConfig.status === "sent" ? "Sent" : "Draft") : "Not started",
       invoiceId: invoice?.id ?? null,
@@ -94,12 +111,14 @@ export default async function AdminCrmOnboardingPage() {
         ? agreement.pilot_type === "paid"
           ? PAYMENT_STATUS_LABELS[agreement.payment_status]
           : "Not Applicable (Free Pilot)"
-        : invoice
-          ? INVOICE_TRACKER_STATUS_LABELS[invoice.status]
-          : "Not started",
+        : isPBF
+          ? `${CONVERSION_STATUS_LABELS[agreement.conversion_status]}${agreement.conversion_status === "converted" ? ` — ${PAYMENT_STATUS_LABELS[agreement.payment_status]}` : ""}`
+          : invoice
+            ? INVOICE_TRACKER_STATUS_LABELS[invoice.status]
+            : "Not started",
       paymentReceived: invoice?.status === "payment_received",
       campaignStatus: clientStatus,
-      canRecordInvoice: !isPilot && agreement.status === "signed" && hasSubmission && !invoice,
+      canRecordInvoice: !isPilot && !isPBF && agreement.status === "signed" && hasSubmission && !invoice,
       manualStatus: agreement.manual_status,
       manage: {
         legalBusinessName: agreement.legal_business_name,

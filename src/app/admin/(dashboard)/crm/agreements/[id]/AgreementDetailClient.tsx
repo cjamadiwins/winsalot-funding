@@ -19,6 +19,10 @@ import {
   linkPilotInvoiceAction,
   updatePilotPaymentStatusAction,
   markAgreementReviewedAction,
+  recordConversionNotificationAction,
+  generatePerformanceBasedFirstInvoiceAction,
+  linkPerformanceBasedFirstInvoiceAction,
+  updatePerformanceBasedFirstPaymentStatusAction,
   type AgreementDraftInput,
   type PilotResultsInput,
   type ConvertPilotInput,
@@ -35,8 +39,11 @@ import {
   PILOT_TYPE_LABELS,
   PAYMENT_STATUSES,
   PAYMENT_STATUS_LABELS,
+  CONVERSION_STATUS_LABELS,
   pilotProgramLabel,
   pilotTotalCost,
+  isPerformanceBasedFirst,
+  PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
@@ -119,6 +126,7 @@ export default function AgreementDetailClient({
   const router = useRouter();
   const isPilot = agreement.campaign_type === "free_pilot";
   const isPaidPilot = isPilot && agreement.pilot_type === "paid";
+  const isPBF = isPerformanceBasedFirst(agreement);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [copyLinkMessage, setCopyLinkMessage] = useState<string | null>(null);
@@ -190,12 +198,18 @@ export default function AgreementDetailClient({
               {pilotProgramLabel(agreement)}
             </span>
           )}
+          {isPBF && (
+            <span className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-800">
+              {PERFORMANCE_BASED_FIRST_DOC_LABEL}
+            </span>
+          )}
           <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold capitalize text-indigo-800">{agreement.status}</span>
         </div>
       </div>
       <p className="text-sm text-slate-500">
         Agreement {agreement.agreement_number} · Version {agreement.version}
         {isPilot && <span className="ml-2 capitalize text-slate-400">· Pilot status: {agreement.pilot_status.replace(/_/g, " ")}</span>}
+        {isPBF && <span className="ml-2 capitalize text-slate-400">· Conversion: {CONVERSION_STATUS_LABELS[agreement.conversion_status]}</span>}
       </p>
 
       {error && <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -322,6 +336,10 @@ export default function AgreementDetailClient({
                   </>
                 )}
               </>
+            ) : isPBF ? (
+              <Field label="Campaign Fee">
+                <input type="number" min={0} step="0.01" value={draft.monthlyFee} onChange={(e) => set("monthlyFee", Number(e.target.value))} className={inputClass} />
+              </Field>
             ) : (
               <>
                 <Field label="Monthly Fee">
@@ -371,6 +389,12 @@ export default function AgreementDetailClient({
               Paid Pilot — Total Pilot Cost: ${(Number(draft.monthlyFee) + Number(draft.setupFee ?? 0)).toLocaleString()} {draft.currency}
             </p>
           )}
+          {isPBF && (
+            <p className="rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
+              Performance-Based First Campaign — Campaign Fee: ${Number(draft.monthlyFee).toLocaleString()} {draft.currency} · Upfront Payment: $0 · due when a
+              Winsalot-generated prospect converts into a paying customer.
+            </p>
+          )}
           <Field label="Additional Notes">
             <textarea value={draft.additionalNotes ?? ""} onChange={(e) => set("additionalNotes", e.target.value || null)} rows={3} className={`${inputClass} resize-y`} />
           </Field>
@@ -416,6 +440,15 @@ export default function AgreementDetailClient({
                 <Info label="Results-Review Date" value={agreement.results_review_date ?? "-"} />
                 <Info label="Expected Call Volume / Lead-List Size" value={agreement.expected_call_volume ?? "-"} />
                 <Info label="Qualification Criteria" value={agreement.qualification_criteria ?? "-"} />
+              </>
+            ) : isPBF ? (
+              <>
+                <Info label="Campaign Fee" value={`$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}`} />
+                <Info label="Upfront Payment" value="$0" />
+                <Info label="Start Date" value={agreement.campaign_start_date ?? "-"} />
+                <Info label="Conversion Status" value={CONVERSION_STATUS_LABELS[agreement.conversion_status]} />
+                {agreement.conversion_status === "converted" && <Info label="Converted" value={agreement.converted_at ?? "-"} />}
+                {agreement.conversion_status === "converted" && <Info label="Payment Status" value={PAYMENT_STATUS_LABELS[agreement.payment_status]} />}
               </>
             ) : (
               <>
@@ -508,6 +541,104 @@ export default function AgreementDetailClient({
                   </div>
                 ) : (
                   <p className="text-sm text-slate-500">An invoice can be generated once this pilot agreement is signed.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isPBF && (
+            <p className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
+              {PERFORMANCE_BASED_FIRST_DOC_LABEL} — Campaign Fee: ${agreement.monthly_fee.toLocaleString()} {agreement.currency} · Upfront Payment: $0
+            </p>
+          )}
+
+          {isPBF && agreement.status === "signed" && agreement.conversion_status !== "converted" && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-bold text-slate-900">Conversion</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Record it once the Client notifies Winsalot Corp that a Winsalot-generated prospect has become a paying customer. The Campaign Fee becomes
+                due immediately.
+              </p>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!confirm("Record that the Client has notified Winsalot Corp of a conversion? The Campaign Fee will become due.")) return;
+                  runAction(() => recordConversionNotificationAction(agreement.id));
+                }}
+                className={`${buttonClasses} mt-3`}
+              >
+                {isPending ? "Recording…" : "Record Conversion Notification"}
+              </button>
+            </div>
+          )}
+
+          {isPBF && agreement.conversion_status === "converted" && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-bold text-slate-900">Payment — Campaign Fee Due</h3>
+              <p className="mt-1 text-[12.5px] text-slate-500">Converted {agreement.converted_at ? new Date(agreement.converted_at).toLocaleString() : "-"}</p>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <Field label="Payment Status">
+                  <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)} className={inputClass}>
+                    {PAYMENT_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {PAYMENT_STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button
+                  type="button"
+                  disabled={isPending || paymentStatus === agreement.payment_status}
+                  onClick={() => runAction(() => updatePerformanceBasedFirstPaymentStatusAction(agreement.id, paymentStatus))}
+                  className={buttonClasses}
+                >
+                  {isPending ? "Saving…" : "Save Payment Status"}
+                </button>
+              </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                {linkedPilotInvoice ? (
+                  <p className="text-sm text-slate-700">
+                    Invoice{" "}
+                    <Link href={`/admin/crm/invoices/${linkedPilotInvoice.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
+                      {linkedPilotInvoice.invoice_number}
+                    </Link>{" "}
+                    — {linkedPilotInvoice.status} · ${linkedPilotInvoice.total.toLocaleString()} {linkedPilotInvoice.currency}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap items-end gap-3">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => runAction(() => generatePerformanceBasedFirstInvoiceAction(agreement.id))}
+                      className={buttonClasses}
+                    >
+                      {isPending ? "Generating…" : "Generate Invoice"}
+                    </button>
+                    {linkableInvoices.length > 0 && (
+                      <>
+                        <Field label="Or link an existing invoice">
+                          <select value={selectedLinkInvoiceId} onChange={(e) => setSelectedLinkInvoiceId(e.target.value)} className={inputClass}>
+                            <option value="">Select…</option>
+                            {linkableInvoices.map((inv) => (
+                              <option key={inv.id} value={inv.id}>
+                                {inv.invoice_number} — {inv.status} · ${inv.total.toLocaleString()} {inv.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <button
+                          type="button"
+                          disabled={isPending || !selectedLinkInvoiceId}
+                          onClick={() => runAction(() => linkPerformanceBasedFirstInvoiceAction(agreement.id, selectedLinkInvoiceId))}
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Link Invoice
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -818,7 +949,7 @@ export default function AgreementDetailClient({
             </div>
           )}
 
-          {!isPilot && agreement.status === "signed" && hasSubmission && !invoice && (
+          {!isPilot && !isPBF && agreement.status === "signed" && hasSubmission && !invoice && (
             <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
               {!showRecordInvoice ? (
                 <button type="button" onClick={() => setShowRecordInvoice(true)} className={buttonClasses}>

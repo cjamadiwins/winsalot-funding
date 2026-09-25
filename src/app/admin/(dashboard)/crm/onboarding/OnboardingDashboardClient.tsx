@@ -10,8 +10,9 @@ import {
   startPilotResultsReviewAction,
   deleteOnboardingRecordAction,
   markOnboardingRecordReviewedAction,
+  recordConversionNotificationAction,
 } from "../agreements/actions";
-import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus } from "@/lib/crm-agreement-types";
+import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus, ConversionStatus } from "@/lib/crm-agreement-types";
 import ManageOnboardingRecordModal from "./ManageOnboardingRecordModal";
 import ManageMenu, { type ManageMenuItem } from "@/components/crm-ui/ManageMenu";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
@@ -53,9 +54,11 @@ export type OnboardingRow = {
   nextAction: string;
   agreementStatus: string;
   isPilot: boolean;
+  isPBF: boolean;
   pilotType: PilotType;
   paymentStatus: PaymentStatus;
   pilotStatus: string;
+  conversionStatus: ConversionStatus;
   intakeConfigId: string | null;
   intakeStatus: string;
   invoiceId: string | null;
@@ -164,7 +167,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                 {
                   key: "mark-payment-pending",
                   label: "Mark Payment Pending",
-                  hidden: !(!row.isPilot && row.invoiceId && row.invoiceStatusLabel === "Invoice Sent"),
+                  hidden: !(!row.isPilot && !row.isPBF && row.invoiceId && row.invoiceStatusLabel === "Invoice Sent"),
                   disabled: isPending,
                   onSelect: () => runAction(() => updateAgreementInvoiceStatusAction(row.invoiceId!, "payment_pending")),
                 },
@@ -173,6 +176,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                   label: "Mark Payment Received",
                   hidden: !(
                     !row.isPilot &&
+                    !row.isPBF &&
                     row.invoiceId &&
                     !row.paymentReceived &&
                     (row.invoiceStatusLabel === "Invoice Sent" || row.invoiceStatusLabel === "Payment Pending")
@@ -186,11 +190,21 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                 {
                   key: "activate-campaign",
                   label: "Activate Campaign",
-                  hidden: !(!row.isPilot && row.paymentReceived && row.campaignStatus !== "Active"),
+                  hidden: !(!row.isPilot && !row.isPBF && row.paymentReceived && row.campaignStatus !== "Active"),
                   disabled: isPending,
                   onSelect: () => {
                     if (!confirm(`Activate the campaign for ${row.clientName}?`)) return;
                     runAction(() => activateCampaignAction(row.clientId));
+                  },
+                },
+                {
+                  key: "record-conversion",
+                  label: "Record Conversion Notification",
+                  hidden: !(row.isPBF && row.agreementStatus === "signed" && row.conversionStatus !== "converted"),
+                  disabled: isPending,
+                  onSelect: () => {
+                    if (!confirm(`Record that ${row.clientName} has notified Winsalot Corp of a conversion? The Campaign Fee will become due.`)) return;
+                    runAction(() => recordConversionNotificationAction(row.agreementId));
                   },
                 },
                 {
@@ -247,7 +261,13 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.serviceTypeLabel}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.monthlyTarget}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">
-                    {row.isPilot ? (row.pilotType === "paid" ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)` : "$0 (Free Pilot)") : `$${row.monthlyFee.toLocaleString()}`}
+                    {row.isPilot
+                      ? row.pilotType === "paid"
+                        ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)`
+                        : "$0 (Free Pilot)"
+                      : row.isPBF
+                        ? `$${row.monthlyFee.toLocaleString()} (Due on Conversion)`
+                        : `$${row.monthlyFee.toLocaleString()}`}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <StatusBadge label={row.stage} className="bg-indigo-100 text-indigo-800" />
