@@ -797,6 +797,143 @@ export async function archiveAgreementAction(agreementId: string): Promise<Actio
 }
 
 // ---------------------------------------------------------------------
+// Client Agreements list page (View/Edit/Delete): a Draft can be edited
+// in place or permanently deleted (both already handled by
+// updateAgreementDraftAction above and deleteDraftAgreementAction below).
+// An agreement that has already been sent, signed, or otherwise
+// finalized is never overwritten or permanently deleted - "Edit" instead
+// creates a brand-new draft version (createNewAgreementVersionAction),
+// exactly the same "new version, never an overwrite" technique
+// convertPilotToPaidCampaignAction/extendPilotAction already use for
+// their own narrower pilot-specific cases, generalized here for any
+// campaign_type so it works from the plain Client Agreements list; the
+// original row is only ever moved to `status = 'superseded'`, never
+// touched otherwise - its agreement number, version, signer/consent
+// fields, timestamps, and audit trail (crm_agreement_events) all stay
+// exactly as they were. "Delete" on a finalized agreement archives it
+// instead (reusing the existing archiveAgreementAction above) rather
+// than deleting anything.
+// ---------------------------------------------------------------------
+
+// Permanently deletes a Draft agreement (and only a Draft - the database
+// itself never enforces this, so it's re-checked here against a fresh
+// read rather than trusted from the client). A signed/sent/superseded/
+// archived agreement is never reachable through this action; use
+// archiveAgreementAction for those instead.
+export async function deleteDraftAgreementAction(agreementId: string): Promise<ActionResult> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase
+    .from("crm_client_agreements")
+    .select("id, status, client_id, opportunity_id, legal_business_name")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.status !== "draft") return { error: "Only a draft agreement can be permanently deleted. Archive it instead." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "onboarding_record_deleted",
+    notes: `Draft agreement "${agreement.legal_business_name}" permanently deleted by ${performedByName(admin)}.`,
+  });
+
+  const { error } = await supabase.from("crm_client_agreements").delete().eq("id", agreementId);
+  if (error) return { error: `Failed to delete this agreement: ${error.message}` };
+
+  revalidatePath("/admin/crm/agreements");
+  revalidatePath("/admin/crm/onboarding");
+  return {};
+}
+
+// "Editing a finalized agreement should create a new agreement version
+// while preserving the previous version." Copies every commercial/legal
+// field forward into a brand-new draft (version + 1, supersedes_id
+// pointing back at the original), then marks the original `superseded` -
+// never mutates its signed data. Deliberately excludes conversion_status/
+// payment_status/payment_due_date/invoice_id/converted_at (those start
+// fresh on the new version, same as convertPilotToPaidCampaignAction
+// already does for pilot->standard conversion) and declines to run at
+// all for a pilot that's already past `not_started`, since that pilot's
+// own Convert/Extend/Close actions on the agreement detail page are the
+// correct way to create its next version, not this generic one.
+export async function createNewAgreementVersionAction(agreementId: string): Promise<ActionResult & { agreementId?: string }> {
+  const admin = await requireCrmAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: agreement } = await supabase.from("crm_client_agreements").select("*").eq("id", agreementId).maybeSingle();
+  if (!agreement) return { error: "Agreement not found." };
+  if (agreement.status === "draft") return { error: "This agreement is still a draft - edit it directly instead of creating a new version." };
+  if (agreement.status === "archived") return { error: "An archived agreement cannot be edited." };
+  if (agreement.status === "superseded") return { error: "This agreement has already been superseded by a newer version - edit that version instead." };
+  if (agreement.campaign_type === "free_pilot" && agreement.pilot_status !== "not_started") {
+    return { error: "This pilot is already underway - use Convert to Paid Monthly Campaign, Extend Pilot, or Close Pilot on the agreement page instead." };
+  }
+
+  const { data: newAgreement, error: insertError } = await supabase
+    .from("crm_client_agreements")
+    .insert({
+      client_id: agreement.client_id,
+      opportunity_id: agreement.opportunity_id,
+      template_id: agreement.template_id,
+      campaign_type: agreement.campaign_type,
+      supersedes_id: agreementId,
+      version: agreement.version + 1,
+      legal_business_name: agreement.legal_business_name,
+      contact_person: agreement.contact_person,
+      business_email: agreement.business_email,
+      phone: agreement.phone,
+      service_type: agreement.service_type,
+      target_type: agreement.target_type,
+      monthly_target: agreement.monthly_target,
+      monthly_fee: agreement.monthly_fee,
+      setup_fee: agreement.setup_fee,
+      currency: agreement.currency,
+      target_industries: agreement.target_industries,
+      target_locations: agreement.target_locations,
+      campaign_start_date: agreement.campaign_start_date,
+      billing_frequency: agreement.billing_frequency,
+      payment_due_terms: agreement.payment_due_terms,
+      initial_term: agreement.initial_term,
+      renewal_terms: agreement.renewal_terms,
+      cancellation_terms: agreement.cancellation_terms,
+      additional_notes: agreement.additional_notes,
+      pilot_type: agreement.pilot_type,
+      pilot_duration: agreement.pilot_duration,
+      pilot_end_date: agreement.pilot_end_date,
+      expected_call_volume: agreement.expected_call_volume,
+      qualification_criteria: agreement.qualification_criteria,
+      results_review_date: agreement.results_review_date,
+      created_by: admin.id,
+      updated_by: admin.id,
+    })
+    .select("id")
+    .single();
+  if (insertError || !newAgreement) return { error: "Failed to create the new agreement version." };
+
+  const { error: updateError } = await supabase
+    .from("crm_client_agreements")
+    .update({ status: "superseded", updated_by: admin.id })
+    .eq("id", agreementId);
+  if (updateError) return { error: "The new version was created, but the previous agreement could not be marked superseded." };
+
+  await logOnboardingActivity(supabase, {
+    clientId: agreement.client_id,
+    opportunityId: agreement.opportunity_id,
+    admin,
+    activityType: "agreement_superseded",
+    notes: `New agreement version created by ${performedByName(admin)} - the previous version (${agreement.agreement_number}) is preserved as superseded.`,
+  });
+
+  revalidatePath("/admin/crm/agreements");
+  revalidatePath("/admin/crm/onboarding");
+  revalidatePath(`/admin/crm/agreements/${agreementId}`);
+  return { agreementId: newAgreement.id as string };
+}
+
+// ---------------------------------------------------------------------
 // Free Pilot Program lifecycle: Pilot Agreed -> Pilot Agreement Signed ->
 // Intake Form Sent -> Intake Received -> Admin Activates Pilot -> Pilot
 // Active -> Results Review -> Convert to Paid Monthly Campaign / Extend
