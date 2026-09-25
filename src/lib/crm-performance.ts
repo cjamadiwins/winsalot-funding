@@ -32,6 +32,14 @@ export const CRM_WEEKLY_CONSULTATIONS_TARGET = 4;
 export const CRM_WEEKLY_LEADS_ADDED_TARGET = 12;
 export const CRM_WEEKLY_EMAILS_DELIVERED_TARGET = 12;
 
+// Call-performance standard, referenced by the Dialpad Performance
+// dashboard (src/components/dialpad/DialpadPerformanceDashboard.tsx,
+// growth workspace only) against each agent's existing Dialpad-imported
+// weekly call total - not part of the three-category scorecard above,
+// which has no call-volume category of its own.
+export const CRM_DAILY_CALL_TARGET = 80;
+export const CRM_WEEKLY_CALL_TARGET = 400; // 80/day x 5-day workweek
+
 // Every one of the three scorecard categories carries the same 1/3 weight
 // (3 x 1/3 = 100%), so the overall score is just their capped-percentage
 // average - see computeCrmPeriodPerformance's overallPercentage below.
