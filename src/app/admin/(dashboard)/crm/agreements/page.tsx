@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { CAMPAIGN_TYPE_LABELS, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
+import { type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import NewAgreementForm from "./NewAgreementForm";
+import AgreementsTableClient from "./AgreementsTableClient";
 
 export default async function AdminCrmAgreementsPage() {
   await requireCrmAdmin();
@@ -37,48 +37,8 @@ export default async function AdminCrmAgreementsPage() {
         />
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Agreement #</th>
-              <th className="px-4 py-3">Business Name</th>
-              <th className="px-4 py-3">Campaign Type</th>
-              <th className="px-4 py-3">Service Type</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Version</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {agreementRows.map((agreement) => (
-              <tr key={agreement.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 text-slate-600">{agreement.agreement_number}</td>
-                <td className="px-4 py-3 font-medium text-slate-900">
-                  <Link href={`/admin/crm/agreements/${agreement.id}`} className="hover:text-sky-700 hover:underline">
-                    {agreement.legal_business_name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{CAMPAIGN_TYPE_LABELS[agreement.campaign_type]}</td>
-                <td className="px-4 py-3 text-slate-600">{agreement.service_type}</td>
-                <td className="px-4 py-3 text-slate-600 capitalize">{agreement.status}</td>
-                <td className="px-4 py-3 text-slate-600">{agreement.version}</td>
-                <td className="px-4 py-3 text-right">
-                  <Link href={`/admin/crm/agreements/${agreement.id}`} className="text-xs font-semibold text-sky-600 hover:text-sky-700">
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {agreementRows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
-                  No agreements yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="mt-8">
+        <AgreementsTableClient agreements={agreementRows} />
       </div>
     </div>
   );
