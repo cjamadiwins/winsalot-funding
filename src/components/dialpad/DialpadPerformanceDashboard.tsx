@@ -6,6 +6,7 @@ import { BarChart3, CalendarDays, PhoneCall, Upload } from "lucide-react";
 import { formatDialpadDuration, type DialpadWorkspace } from "@/lib/dialpad-report";
 import type { DialpadDashboardData, DialpadUserStatRow } from "@/lib/dialpad-report-data";
 import { formatDateShort } from "@/lib/payroll";
+import { CRM_DAILY_CALL_TARGET, CRM_WEEKLY_CALL_TARGET } from "@/lib/crm-performance";
 
 type ImportState = { error?: string; success?: string };
 type ImportAction = (state: ImportState, formData: FormData) => Promise<ImportState>;
@@ -40,6 +41,12 @@ export default function DialpadPerformanceDashboard({
   audience?: "admin" | "agent";
 }) {
   const isAgent = audience === "agent";
+  // Call-performance standard, Growth CRM only (the Lead Gen CRM tracks its
+  // own call/email KPI targets on its Performance pages instead - see
+  // leadgen-agent-kpi.ts). Purely a reference comparison against this
+  // report's existing weekly Dialpad totals; no new call tracking is added
+  // here.
+  const showCallGoal = workspace === "growth";
   const router = useRouter();
   const [state, formAction, pending] = useActionState(importAction ?? NOOP_IMPORT_ACTION, EMPTY_STATE);
   const dates = useMemo(() => previousWeek(), []);
@@ -84,6 +91,11 @@ export default function DialpadPerformanceDashboard({
           <p className="mt-1 text-sm text-slate-500">
             {isAgent ? "Your own weekly call performance." : "Weekly call performance for all active agents and administrators."}
           </p>
+          {showCallGoal && (
+            <p className="mt-1 text-xs font-semibold text-sky-700">
+              Standard: {CRM_DAILY_CALL_TARGET} calls/agent/day · {CRM_WEEKLY_CALL_TARGET} calls/agent per 5-day workweek.
+            </p>
+          )}
         </div>
         {data.selectedReport && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-right shadow-sm">
@@ -163,13 +175,20 @@ export default function DialpadPerformanceDashboard({
         </section>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <section className={`grid gap-3 sm:grid-cols-2 ${showCallGoal ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
             <Stat label="Total Calls" value={totals.calls.toLocaleString()} tone="blue" />
             <Stat label="Inbound Calls" value={totals.inbound.toLocaleString()} tone="indigo" />
             <Stat label="Outbound Calls" value={totals.placed.toLocaleString()} tone="indigo" />
             <Stat label="Answered Calls" value={totals.answered.toLocaleString()} tone="green" />
             <Stat label="Avg Talk Time" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />
             <Stat label="Total Talk Time" value={formatDialpadDuration(totals.duration)} tone="slate" />
+            {showCallGoal && (
+              <Stat
+                label={isAgent ? "Weekly Call Goal" : "Team Weekly Call Goal"}
+                value={`${totals.calls.toLocaleString()}/${(data.summaries.length * CRM_WEEKLY_CALL_TARGET).toLocaleString()}`}
+                tone={totals.calls >= data.summaries.length * CRM_WEEKLY_CALL_TARGET ? "green" : "red"}
+              />
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

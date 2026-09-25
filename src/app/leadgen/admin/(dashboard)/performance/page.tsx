@@ -1,11 +1,26 @@
 import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { computeLeadgenAgentPerformance, leadgenDateKey, leadgenMondayOf, type LeadgenPerformanceAppointment } from "@/lib/leadgen-performance";
+import {
+  computeLeadgenAgentPerformance,
+  leadgenDateKey,
+  leadgenMondayOf,
+  LEADGEN_WEEKLY_APPOINTMENT_TARGET,
+  type LeadgenPerformanceAppointment,
+} from "@/lib/leadgen-performance";
 import { syncLeadgenWeeklyPerformanceHistory } from "@/lib/leadgen-performance-history-sync";
 import type { LeadgenWeeklyHistoryRow } from "@/lib/leadgen-performance-history";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
+import {
+  computeLeadgenAgentActivityKpis,
+  computeLeadgenTeamActivityKpis,
+  type LeadgenKpiCallLogRow,
+  type LeadgenKpiEmailRow,
+  type LeadgenKpiFollowUpRow,
+} from "@/lib/leadgen-agent-kpi";
 import AgentPerformanceCard from "@/components/leadgen/AgentPerformanceCard";
+import AgentActivityKpiSection from "@/components/leadgen/AgentActivityKpiSection";
+import TeamActivityKpiSection from "@/components/leadgen/TeamActivityKpiSection";
 import MonthlyPerformanceSection from "@/components/leadgen/MonthlyPerformanceSection";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -20,7 +35,7 @@ export default async function LeadgenAdminPerformancePage() {
   await requireLeadgenAdmin();
   const admin = getSupabaseAdmin();
 
-  const [{ data: agents }, { data: appointments }] = await Promise.all([
+  const [{ data: agents }, { data: appointments }, { data: callLogs }, { data: emails }, { data: followUps }, { data: leads }] = await Promise.all([
     admin
       .from("leadgen_users")
       .select("id, full_name, email")
@@ -32,10 +47,40 @@ export default async function LeadgenAdminPerformancePage() {
       .from("leadgen_appointments")
       .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id")
       .order("appointment_date", { ascending: false }),
+    // Calls / Emails / Follow-Ups KPI source of truth - see
+    // leadgen-agent-kpi.ts's header comment for why each of these reuses an
+    // existing table rather than a new manual counter.
+    admin.from("leadgen_call_logs").select("agent_id, created_at"),
+    admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
+    admin.from("leadgen_followups").select("agent_id, status, completed_at").eq("status", "completed"),
+    admin.from("leadgen_leads").select("id, status, assigned_agent_id").eq("status", "Interested"),
   ]);
 
   const allAgents = (agents ?? []) as Pick<LeadgenUserRow, "id" | "full_name" | "email">[];
   const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
+  const allCallLogs = (callLogs ?? []) as LeadgenKpiCallLogRow[];
+  const allEmails = (emails ?? []) as LeadgenKpiEmailRow[];
+  const allCompletedFollowUps = (followUps ?? []) as LeadgenKpiFollowUpRow[];
+  // Interested Leads is credited to whichever agent a lead is currently
+  // assigned to (leadgen_leads.assigned_agent_id) - the same field the
+  // Leads page and RLS both already use as this CRM's one notion of lead
+  // ownership.
+  const interestedLeads = (leads ?? []) as { id: string; status: string; assigned_agent_id: string | null }[];
+  const interestedLeadsByAgent = new Map<string, number>();
+  for (const lead of interestedLeads) {
+    if (!lead.assigned_agent_id) continue;
+    interestedLeadsByAgent.set(lead.assigned_agent_id, (interestedLeadsByAgent.get(lead.assigned_agent_id) ?? 0) + 1);
+  }
+  const totalInterestedLeads = interestedLeads.length;
+
+  const activityKpisByAgent = new Map(
+    allAgents.map((agentRow) => [agentRow.id, computeLeadgenAgentActivityKpis(allCallLogs, allEmails, allCompletedFollowUps, agentRow.id)])
+  );
+  const teamActivityKpis = computeLeadgenTeamActivityKpis(Array.from(activityKpisByAgent.values()));
+  const totalAppointmentsBookedThisWeek = allAgents.reduce(
+    (total, agentRow) => total + computeLeadgenAgentPerformance(allAppointments, agentRow.id).bookedThisWeek,
+    0
+  );
 
   const now = new Date();
   await syncLeadgenWeeklyPerformanceHistory(admin, allAgents, allAppointments, now);
@@ -68,18 +113,39 @@ export default async function LeadgenAdminPerformancePage() {
         </Link>
       </div>
 
+      {allAgents.length > 0 && (
+        <div className="mt-6">
+          <TeamActivityKpiSection
+            team={teamActivityKpis}
+            totalInterestedLeads={totalInterestedLeads}
+            totalAppointmentsBookedThisWeek={totalAppointmentsBookedThisWeek}
+          />
+        </div>
+      )}
+
       <div className="mt-6 space-y-6">
         {allAgents.length === 0 ? (
           <p className="text-[13.5px] text-slate-500">No active agents yet.</p>
         ) : (
-          allAgents.map((agent) => (
-            <AgentPerformanceCard
-              key={agent.id}
-              agentName={agent.full_name || agent.email}
-              performance={computeLeadgenAgentPerformance(allAppointments, agent.id)}
-              leadHrefBase="/leadgen/admin/leads"
-            />
-          ))
+          allAgents.map((agent) => {
+            const agentName = agent.full_name || agent.email;
+            const agentActivityKpis = activityKpisByAgent.get(agent.id);
+            const agentPerformance = computeLeadgenAgentPerformance(allAppointments, agent.id);
+            return (
+              <div key={agent.id} className="space-y-3">
+                {agentActivityKpis && (
+                  <AgentActivityKpiSection
+                    agentName={agentName}
+                    kpis={agentActivityKpis}
+                    interestedLeads={interestedLeadsByAgent.get(agent.id) ?? 0}
+                    appointmentsBookedThisWeek={agentPerformance.bookedThisWeek}
+                    appointmentsWeeklyTarget={LEADGEN_WEEKLY_APPOINTMENT_TARGET}
+                  />
+                )}
+                <AgentPerformanceCard agentName={agentName} performance={agentPerformance} leadHrefBase="/leadgen/admin/leads" />
+              </div>
+            );
+          })
         )}
       </div>
 
