@@ -1,7 +1,9 @@
 "use client";
 
+import { Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   activateCampaignAction,
   archiveAgreementAction,
@@ -15,7 +17,6 @@ import {
 import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus, ConversionStatus } from "@/lib/crm-agreement-types";
 import ManageOnboardingRecordModal from "./ManageOnboardingRecordModal";
 import ManageMenu, { type ManageMenuItem } from "@/components/crm-ui/ManageMenu";
-import StatusBadge from "@/components/crm-ui/StatusBadge";
 
 // Everything the Manage modal's Edit form needs - kept as its own type so
 // the modal (and OnboardingRow below) can't drift out of sync with what
@@ -76,6 +77,21 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
   const [error, setError] = useState<string | null>(null);
   const [editingAgreementId, setEditingAgreementId] = useState<string | null>(null);
   const editingRow = rows.find((r) => r.agreementId === editingAgreementId) ?? null;
+  // "Next Action" (and any Additional Notes) is deliberately not one of
+  // the always-visible columns - it lives behind this per-row toggle
+  // instead, the same "secondary details behind a details row" pattern
+  // EmailTrackingTable already uses, so the main table stays narrow
+  // enough to need no horizontal scrollbar at a normal desktop width.
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(agreementId: string) {
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(agreementId)) next.delete(agreementId);
+      else next.add(agreementId);
+      return next;
+    });
+  }
 
   function runAction(fn: () => Promise<{ error?: string }>) {
     setError(null);
@@ -114,22 +130,35 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
       {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        <table className="w-full min-w-[1200px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <table className="w-full table-fixed border-collapse text-left text-[12.5px]">
+          <colgroup>
+            <col className="w-[12%]" />
+            <col className="w-[9%]" />
+            <col className="w-[10%]" />
+            <col className="w-[8%]" />
+            <col className="w-[5%]" />
+            <col className="w-[9%]" />
+            <col className="w-[11%]" />
+            <col className="w-[6%]" />
+            <col className="w-[6%]" />
+            <col className="w-[10%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+          </colgroup>
+          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-3 py-3">Client</th>
-              <th className="px-3 py-3">Contact</th>
-              <th className="px-3 py-3">Campaign Type</th>
-              <th className="px-3 py-3">Service Type</th>
-              <th className="px-3 py-3">Target</th>
-              <th className="px-3 py-3">Monthly Fee</th>
-              <th className="px-3 py-3">Stage</th>
-              <th className="px-3 py-3">Client Status</th>
-              <th className="px-3 py-3">Intake</th>
-              <th className="px-3 py-3">Invoice / Payment</th>
-              <th className="px-3 py-3">Campaign</th>
-              <th className="px-3 py-3">Next Action</th>
-              <th className="px-3 py-3" />
+              <th className="px-2 py-2">Client</th>
+              <th className="px-2 py-2">Contact</th>
+              <th className="px-2 py-2">Campaign Type</th>
+              <th className="px-2 py-2">Service Type</th>
+              <th className="px-2 py-2">Target</th>
+              <th className="px-2 py-2">Monthly Fee</th>
+              <th className="px-2 py-2">Stage</th>
+              <th className="px-2 py-2">Client Status</th>
+              <th className="px-2 py-2">Intake</th>
+              <th className="px-2 py-2">Invoice / Payment</th>
+              <th className="px-2 py-2">Campaign Status</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
@@ -253,42 +282,86 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                 },
               ];
 
+              const isExpanded = expandedRowIds.has(row.agreementId);
+              const hasDetails = Boolean(row.nextAction) || Boolean(row.manage.additionalNotes);
+
               return (
-                <tr key={row.agreementId} className="border-b border-slate-100 last:border-0">
-                  <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-900">{row.clientName}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.contactPerson}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.campaignTypeLabel}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.serviceTypeLabel}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.monthlyTarget}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">
-                    {row.isPilot
-                      ? row.pilotType === "paid"
-                        ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)`
-                        : "$0 (Free Pilot)"
-                      : row.isPBF
-                        ? `$${row.monthlyFee.toLocaleString()} (Due on Conversion)`
-                        : `$${row.monthlyFee.toLocaleString()}`}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    <StatusBadge label={row.stage} className="bg-indigo-100 text-indigo-800" />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.manualStatus ?? "-"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.intakeStatus}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.invoiceStatusLabel}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{row.campaignStatus}</td>
-                  <td className="max-w-[220px] truncate px-3 py-2.5 text-slate-600" title={row.nextAction}>
-                    {row.nextAction}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <ManageMenu items={menuItems} />
-                  </td>
-                </tr>
+                <Fragment key={row.agreementId}>
+                  <tr className="border-b border-slate-100 align-top last:border-0">
+                    <td className="break-words px-2 py-2 font-medium text-slate-900">{row.clientName}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.contactPerson}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.campaignTypeLabel}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.serviceTypeLabel}</td>
+                    <td className="px-2 py-2 text-slate-600">{row.monthlyTarget}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">
+                      {row.isPilot
+                        ? row.pilotType === "paid"
+                          ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)`
+                          : "$0 (Free Pilot)"
+                        : row.isPBF
+                          ? `$${row.monthlyFee.toLocaleString()} (Due on Conversion)`
+                          : `$${row.monthlyFee.toLocaleString()}`}
+                    </td>
+                    <td className="px-2 py-2">
+                      {/* A plain wrapping chip rather than the shared
+                          StatusBadge - a pilot/PBF stage label (e.g.
+                          "Agreement Signed - Awaiting Conversion") is too
+                          long for this column's width, and StatusBadge is
+                          shared across other CRM pages this task must not
+                          touch, so it always forces whitespace-nowrap. */}
+                      <span className="inline-block rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-semibold leading-snug text-indigo-800">
+                        {row.stage}
+                      </span>
+                    </td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.manualStatus ?? "-"}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.intakeStatus}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.invoiceStatusLabel}</td>
+                    <td className="break-words px-2 py-2 text-slate-600">{row.campaignStatus}</td>
+                    <td className="px-2 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {hasDetails && (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(row.agreementId)}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Hide details" : "View details"}
+                            title={isExpanded ? "Hide details" : "View details"}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-sky-300 hover:text-sky-700"
+                          >
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
+                        )}
+                        <ManageMenu items={menuItems} />
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && hasDetails && (
+                    <tr className="border-b border-slate-100 bg-slate-50/70">
+                      <td colSpan={12} className="px-3 py-3">
+                        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                          {row.nextAction && (
+                            <div className="min-w-0">
+                              <dt className="text-[11px] font-semibold uppercase text-slate-400">Next Action</dt>
+                              <dd className="mt-0.5 break-words text-[12.5px] text-slate-700">{row.nextAction}</dd>
+                            </div>
+                          )}
+                          {row.manage.additionalNotes && (
+                            <div className="min-w-0">
+                              <dt className="text-[11px] font-semibold uppercase text-slate-400">Additional Notes</dt>
+                              <dd className="mt-0.5 break-words text-[12.5px] text-slate-700">{row.manage.additionalNotes}</dd>
+                            </div>
+                          )}
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
                   No clients in onboarding yet. Start from an opportunity or create an agreement from Client Agreements.
                 </td>
               </tr>
