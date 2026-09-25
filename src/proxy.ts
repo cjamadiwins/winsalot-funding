@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/" && LEAD_GEN_HOSTS.has(host)) {
-    return NextResponse.rewrite(new URL("/lead-generation", request.url));
+    return NextResponse.redirect(new URL("/leadgen", request.url));
   }
 
   if (isLeadGenHost(host) && (pathname.startsWith("/admin") || pathname.startsWith("/agent") || pathname.startsWith("/subcontractor"))) {
@@ -55,7 +55,7 @@ export async function proxy(request: NextRequest) {
     // The callback must be reachable before a session exists; setup/reset
     // pages then perform their own role checks server-side. No Supabase URL
     // or Growth CRM route is exposed to the browser during this flow.
-    return handleSessionGate(request, host, "/client", "/client/dashboard", [
+    return handleSessionGate(request, host, "/client", "/leadgen", [
       "/client/auth/callback",
       "/client/setup",
       "/client/reset-password",

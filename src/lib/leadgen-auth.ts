@@ -2,6 +2,7 @@ import "server-only";
 import { redirect, notFound } from "next/navigation";
 import { createSupabaseServerClient } from "./supabase-server";
 import type { LeadgenClientRow, LeadgenUserRow } from "./leadgen-types";
+import { leadgenHomeForRole, normalizeLeadgenRole } from "./leadgen-role";
 
 const FORCE_DEACTIVATED_LEADGEN_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -38,6 +39,11 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
     redirect("/leadgen/login?error=Your account is not set up for the Lead Generation CRM yet.");
   }
 
+  const role = normalizeLeadgenRole(leadgenUser.role);
+  if (!role) {
+    redirect("/leadgen/login?error=Your account role needs administrator review.");
+  }
+
   if (!leadgenUser.active) {
     await supabase.auth.signOut();
     // A disabled *client* login gets the Client Portal's own wording and
@@ -45,7 +51,7 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
     // message and destination the brief specifies for "Disable Portal
     // Access" ("The client should see a professional message..."). Admin/
     // agent deactivation is unchanged.
-    if (leadgenUser.role === "client") {
+    if (role === "client") {
       redirect(
         `/client?error=${encodeURIComponent(
           "Your Winsalot Client Portal access is currently inactive. Please contact Winsalot Corp. if you believe this is an error."
@@ -55,7 +61,7 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
     redirect(`/leadgen/login?error=${encodeURIComponent("Your account has been deactivated. Please contact the administrator.")}`);
   }
 
-  return leadgenUser as LeadgenUserRow;
+  return { ...leadgenUser, role } as LeadgenUserRow;
 }
 
 export async function requireLeadgenAdmin(): Promise<LeadgenUserRow> {
@@ -112,6 +118,7 @@ export async function requireLeadgenClient(slug: string): Promise<{ user: Leadge
 export async function requireLeadgenPortalClient(): Promise<{ user: LeadgenUserRow; client: LeadgenClientRow }> {
   const user = await requireLeadgenUser();
   if (user.role !== "client" || !user.client_id) {
+    if (user.role === "admin" || user.role === "agent") redirect(leadgenHomeForRole(user.role));
     redirect("/client?error=This account is not a client account.");
   }
 
