@@ -42,6 +42,7 @@ import { loadGrowthTeamSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 import AdminCampaignScriptCard from "@/components/crm-ui/AdminCampaignScriptCard";
 import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
+import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -52,14 +53,14 @@ import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
 // cleanup pass) - crm_opportunities is the one pipeline table going
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  const admin = await requireCrmAdmin();
+  const adminUser = await requireCrmAdmin();
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   // Weekly workflow: keeps the compact Dialpad Performance section below
   // current even when nobody has visited the dedicated /admin/crm/dialpad
   // page yet - see ensureLatestDialpadReportImported().
-  await ensureLatestDialpadReportImported({ supabase, workspace: "growth", importedById: admin.id, importedByName: admin.full_name || admin.email });
+  await ensureLatestDialpadReportImported({ supabase, workspace: "growth", importedById: adminUser.id, importedByName: adminUser.full_name || adminUser.email });
 
   // RLS (crm_opportunities_admin_all / crm_users_admin_select_all /
   // crm_followups_admin_all / winsalot_appointments_admin_all) permits a
@@ -234,6 +235,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <AdminCampaignScriptCard />
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/admin/crm/performance" />
+      <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />
 

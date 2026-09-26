@@ -48,6 +48,7 @@ import { loadGrowthAgentSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 import AgentCampaignScriptCard from "@/components/crm-ui/AgentCampaignScriptCard";
 import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
+import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -284,6 +285,7 @@ export default async function AgentDashboardPage() {
       />
 
       <SalesCoachAgentCard data={salesCoachData} />
+      <ApprovedVoicemailScriptCard agentName={crmUser.full_name} email={crmUser.email} role={crmUser.role} />
 
       <PhoneReputationComplianceCard />
 

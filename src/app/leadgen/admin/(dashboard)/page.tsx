@@ -56,6 +56,7 @@ import {
 } from "./do-not-contact/actions";
 import { loadLeadgenTeamSalesCoachData } from "@/lib/leadgen-sales-coach";
 import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
+import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -314,6 +315,7 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/leadgen/admin/performance" />
+      <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />
 

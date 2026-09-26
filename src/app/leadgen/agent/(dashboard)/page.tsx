@@ -54,6 +54,7 @@ import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigg
 import { addAgentDncSuppressionAction } from "./do-not-contact-actions";
 import { loadLeadgenAgentSalesCoachData } from "@/lib/leadgen-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
+import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -294,6 +295,7 @@ export default async function LeadgenAgentDashboardPage() {
       />
 
       <SalesCoachAgentCard data={salesCoachData} />
+      <ApprovedVoicemailScriptCard agentName={agent.full_name || agent.email} email={agent.email} role={agent.role} />
 
       <PhoneReputationComplianceCard />
 
