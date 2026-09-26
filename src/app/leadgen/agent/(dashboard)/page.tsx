@@ -1,3 +1,4 @@
+import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
 import { Users, Clock, AlertTriangle, UserCheck } from "lucide-react";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
@@ -293,6 +294,8 @@ export default async function LeadgenAgentDashboardPage() {
       />
 
       <SalesCoachAgentCard data={salesCoachData} />
+
+      <PhoneReputationComplianceCard />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenLeadRecordsModal
