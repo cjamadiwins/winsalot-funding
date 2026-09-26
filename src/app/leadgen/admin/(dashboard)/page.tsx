@@ -1,3 +1,4 @@
+import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
 import AdminDashboardGreeting from "@/components/crm-ui/AdminDashboardGreeting";
 import { Users, UserCheck, CalendarCheck, Clock, AlertTriangle, UserPlus, CalendarPlus, BarChart3, Flame, Gauge, Snowflake, CalendarClock, Trophy } from "lucide-react";
@@ -313,6 +314,8 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/leadgen/admin/performance" />
+
+      <PhoneReputationComplianceCard />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <LeadgenLeadRecordsModal

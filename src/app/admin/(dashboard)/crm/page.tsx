@@ -1,3 +1,4 @@
+import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
 import AdminDashboardGreeting from "@/components/crm-ui/AdminDashboardGreeting";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -233,6 +234,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <AdminCampaignScriptCard />
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/admin/crm/performance" />
+
+      <PhoneReputationComplianceCard />
 
       {deleted === "opportunity" && (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">

@@ -1,3 +1,4 @@
+import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
 import { UserPlus, CalendarPlus, BarChart3, CalendarCheck, Target, Mail } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -283,6 +284,8 @@ export default async function AgentDashboardPage() {
       />
 
       <SalesCoachAgentCard data={salesCoachData} />
+
+      <PhoneReputationComplianceCard />
 
       <PerformanceScoreCard
         className="mt-6"
