@@ -18,6 +18,7 @@ import {
 } from "@/lib/crm-clients-types";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_STYLES, effectiveInvoiceStatus } from "@/lib/crm-invoices-types";
 import { RETENTION_CAMPAIGN_LABELS, RETENTION_STATUS_LABELS, RETENTION_STATUS_STYLES } from "@/lib/crm-retention-types";
+import { getPrimaryPaymentMethod } from "@/lib/payment-methods";
 
 type ActionResult = { error?: string; clientId?: string };
 type AgentOption = { id: string; full_name: string; email: string };
@@ -61,6 +62,7 @@ export default function ClientProfileClient({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const primaryPaymentMethod = getPrimaryPaymentMethod();
 
   function runAction(action: () => Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
@@ -246,6 +248,21 @@ export default function ClientProfileClient({
             <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Billing Address</div>
             <div className="mt-1 text-sm text-[var(--color-ink-strong)]">{client.billing_address || "-"}</div>
           </div>
+          {/* The currently-accepted payment method for new invoices -
+              distinct from the Payments table's per-payment "Method"
+              column below, which records how a specific past payment was
+              actually made. Purely informational (no client field to be
+              missing on an older record), same static config every
+              client reads. */}
+          {primaryPaymentMethod && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Accepted Payment Method</div>
+              <div className="mt-1 text-sm text-[var(--color-ink-strong)]">
+                {primaryPaymentMethod.label}
+                {primaryPaymentMethod.paymentEmail && ` — ${primaryPaymentMethod.paymentEmail}`}
+              </div>
+            </div>
+          )}
           {client.internal_notes && (
             <div className="sm:col-span-3">
               <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Internal Admin Notes</div>

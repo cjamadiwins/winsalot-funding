@@ -57,6 +57,7 @@ import {
   type RenderedAgreementSection,
 } from "@/lib/crm-agreement-types";
 import type { CrmInvoiceRow } from "@/lib/crm-invoices-types";
+import { getPrimaryPaymentMethod } from "@/lib/payment-methods";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -127,6 +128,7 @@ export default function AgreementDetailClient({
   const isPilot = agreement.campaign_type === "free_pilot";
   const isPaidPilot = isPilot && agreement.pilot_type === "paid";
   const isPBF = isPerformanceBasedFirst(agreement);
+  const primaryPaymentMethod = getPrimaryPaymentMethod();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [copyLinkMessage, setCopyLinkMessage] = useState<string | null>(null);
@@ -472,6 +474,24 @@ export default function AgreementDetailClient({
             <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-[12.5px] font-semibold text-sky-800">
               {pilotProgramLabel(agreement)} — Total Pilot Cost: ${pilotTotalCost(agreement).toLocaleString()} {agreement.currency}
             </p>
+          )}
+
+          {/* A Free Pilot never requires payment, so the configured
+              payment method is never shown for one - every other
+              agreement type eventually requires payment. Purely
+              informational: never overwrites payment_due_terms or any
+              other pricing/schedule field above. */}
+          {!(isPilot && !isPaidPilot) && primaryPaymentMethod && (
+            <dl className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <dt className="text-[12.5px] font-semibold text-slate-500">Payment Method</dt>
+              <dd className="mt-0.5 text-sm text-slate-900">{primaryPaymentMethod.label}</dd>
+              {primaryPaymentMethod.paymentEmail && (
+                <>
+                  <dt className="mt-1.5 text-[12.5px] font-semibold text-slate-500">Payment Email</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{primaryPaymentMethod.paymentEmail}</dd>
+                </>
+              )}
+            </dl>
           )}
 
           {isPaidPilot && (

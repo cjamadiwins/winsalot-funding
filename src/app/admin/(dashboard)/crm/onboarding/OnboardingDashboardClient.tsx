@@ -15,6 +15,7 @@ import {
   recordConversionNotificationAction,
 } from "../agreements/actions";
 import type { AgreementServiceType, AgreementCurrency, CampaignType, ClientManualStatus, PilotType, PaymentStatus, ConversionStatus } from "@/lib/crm-agreement-types";
+import { getPrimaryPaymentMethod } from "@/lib/payment-methods";
 import ManageOnboardingRecordModal from "./ManageOnboardingRecordModal";
 import ManageMenu, { type ManageMenuItem } from "@/components/crm-ui/ManageMenu";
 
@@ -283,7 +284,10 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
               ];
 
               const isExpanded = expandedRowIds.has(row.agreementId);
-              const hasDetails = Boolean(row.nextAction) || Boolean(row.manage.additionalNotes);
+              // A Free Pilot is always $0 and never requires payment, so
+              // the configured payment method is never shown for one.
+              const paymentMethod = !row.isPilot || row.pilotType === "paid" ? getPrimaryPaymentMethod() : null;
+              const hasDetails = Boolean(row.nextAction) || Boolean(row.manage.additionalNotes) || Boolean(paymentMethod);
 
               return (
                 <Fragment key={row.agreementId}>
@@ -349,6 +353,15 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                             <div className="min-w-0">
                               <dt className="text-[11px] font-semibold uppercase text-slate-400">Additional Notes</dt>
                               <dd className="mt-0.5 break-words text-[12.5px] text-slate-700">{row.manage.additionalNotes}</dd>
+                            </div>
+                          )}
+                          {paymentMethod && (
+                            <div className="min-w-0">
+                              <dt className="text-[11px] font-semibold uppercase text-slate-400">Payment Method</dt>
+                              <dd className="mt-0.5 break-words text-[12.5px] text-slate-700">
+                                {paymentMethod.label}
+                                {paymentMethod.paymentEmail && ` — ${paymentMethod.paymentEmail}`}
+                              </dd>
                             </div>
                           )}
                         </dl>

@@ -17,6 +17,7 @@ import {
 import { sendCrmInvoiceEmail, type CrmInvoiceEmailType } from "@/lib/send-crm-invoice-email";
 import type { CrmUserRow } from "@/lib/crm-types";
 import { canPermanentlyDeleteTestPayment, isClientCurrency, type CrmPaymentRow } from "@/lib/crm-clients-types";
+import { defaultPaymentInstructionsText } from "@/lib/payment-methods";
 
 type ActionResult = { error?: string; invoiceId?: string };
 
@@ -141,7 +142,11 @@ export async function createInvoiceAction(formData: FormData): Promise<ActionRes
       tax_rate: taxRate,
       discount_amount: discountAmount,
       is_free_invoice: isFreeInvoice,
-      payment_instructions: parseOptionalText(formData.get("payment_instructions")),
+      // Falls back to the currently-configured payment method's client
+      // instructions (Interac e-Transfer) only when the admin left this
+      // field blank - a special staged/performance-based arrangement can
+      // still type its own text here, which always wins.
+      payment_instructions: parseOptionalText(formData.get("payment_instructions")) ?? defaultPaymentInstructionsText(),
       admin_notes: parseOptionalText(formData.get("admin_notes")),
       client_facing_notes: parseOptionalText(formData.get("client_facing_notes")),
     })
