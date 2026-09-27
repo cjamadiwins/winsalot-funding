@@ -44,6 +44,8 @@ import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 import AdminCampaignScriptCard from "@/components/crm-ui/AdminCampaignScriptCard";
 import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
+import OperationsMonitoringCard from "@/components/crm-ui/OperationsMonitoringCard";
+import { fetchOperationsMonitoringSummary } from "@/lib/crm-monitoring-data";
 
 // The Winsalot Growth CRM's one admin dashboard - every sales opportunity
 // (Lead Generation, Business Financing, or both), their stage pipeline,
@@ -78,6 +80,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     opportunityFinderData,
     dncRows,
     { data: openShifts },
+    operationsMonitoringSummary,
   ] = await Promise.all([
     supabase.from("crm_opportunities").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_users").select("*").order("full_name"),
@@ -119,6 +122,11 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     // stays a narrow, cheap read rather than the full row set
     // /admin/crm/attendance itself loads.
     supabase.from("agent_attendance").select("agent_id").is("clock_out", null),
+    // Operations Monitoring dashboard card (below) - service-role since
+    // crm_lead_emails/crm_invoice_emails have no RLS policies at all
+    // (service-role only, migrations 0022/0091), same pattern the Sales
+    // Coach Team Overview above already uses for its own admin-wide reads.
+    fetchOperationsMonitoringSummary(getSupabaseAdmin()),
   ]);
 
   const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
@@ -236,6 +244,13 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <AdminCampaignScriptCard />
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/admin/crm/performance" />
+      <OperationsMonitoringCard
+        actionRequiredCount={operationsMonitoringSummary.totalActionRequired}
+        warningCount={operationsMonitoringSummary.totalWarnings}
+        healthyCount={operationsMonitoringSummary.totalHealthy}
+        categories={operationsMonitoringSummary.categories.map((c) => ({ key: c.key, label: c.label, headline: c.headline, status: c.status }))}
+        href="/admin/crm/monitoring"
+      />
       <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />

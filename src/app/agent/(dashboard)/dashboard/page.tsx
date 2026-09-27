@@ -49,6 +49,7 @@ import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 import AgentCampaignScriptCard from "@/components/crm-ui/AgentCampaignScriptCard";
 import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
+import { fetchAgentOperationsAlerts, computeMyCallKpiPace } from "@/lib/crm-monitoring-data";
 
 export default async function AgentDashboardPage() {
   const crmUser = await requireCrmUser();
@@ -170,6 +171,16 @@ export default async function AgentDashboardPage() {
   await ensureLatestDialpadReportImported({ supabase, workspace: "growth", importedById: crmUser.id, importedByName: crmUser.full_name || crmUser.email });
   const dialpadData = await loadDialpadAgentDashboardData(supabase);
 
+  // Operations Monitoring "My Alerts" (below) - reads through the same
+  // session-scoped `supabase` client as every other query on this page, so
+  // RLS (crm_opportunities_agent_select_own, winsalot_appointments_agent_select_own)
+  // does the actual narrowing to this agent's own records - never a
+  // service-role read, and never another agent's data.
+  const myOperationsAlerts = await fetchAgentOperationsAlerts(supabase, crmUser.id);
+  const myCallKpi = dialpadData.summary
+    ? computeMyCallKpiPace(dialpadData.summary.total_calls, dialpadData.report!.period_start, dialpadData.report!.period_end)
+    : null;
+
   // Winsalot Sales Coach & Operations Manager (below) - reuses the
   // opportunities/consultations/performance already loaded above, plus its
   // own small call-log and appointment-reminder reads. Personalized to this
@@ -286,6 +297,38 @@ export default async function AgentDashboardPage() {
 
       <SalesCoachAgentCard data={salesCoachData} />
       <ApprovedVoicemailScriptCard agentName={crmUser.full_name} email={crmUser.email} role={crmUser.role} />
+
+      {(myOperationsAlerts.staleLeadCount > 0 || myOperationsAlerts.appointmentRiskCount > 0 || myCallKpi?.pace === "Behind Pace") && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-base font-bold text-slate-900">My Alerts</h2>
+          <ul className="mt-2 space-y-1 text-[13.5px] text-slate-700">
+            {myOperationsAlerts.staleLeadCount > 0 && (
+              <li>
+                <Link href="/agent/my-opportunities" className="font-semibold text-amber-700 hover:text-amber-800">
+                  {myOperationsAlerts.staleLeadCount} of your leads need attention
+                </Link>{" "}
+                - no meaningful activity in 2+ business days.
+              </li>
+            )}
+            {myOperationsAlerts.appointmentRiskCount > 0 && (
+              <li>
+                <Link href="/agent/appointments" className="font-semibold text-amber-700 hover:text-amber-800">
+                  {myOperationsAlerts.appointmentRiskCount} of your appointments need attention
+                </Link>{" "}
+                - a reminder issue or a missing follow-up.
+              </li>
+            )}
+            {myCallKpi?.pace === "Behind Pace" && (
+              <li>
+                <span className="font-semibold text-amber-700">
+                  {myCallKpi.callsInPeriod} / {myCallKpi.weeklyTarget} calls this period - Behind Pace
+                </span>
+                . See Dialpad Performance below for details.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <PhoneReputationComplianceCard />
 

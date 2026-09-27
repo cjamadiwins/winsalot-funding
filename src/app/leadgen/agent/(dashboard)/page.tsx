@@ -55,6 +55,7 @@ import { addAgentDncSuppressionAction } from "./do-not-contact-actions";
 import { loadLeadgenAgentSalesCoachData } from "@/lib/leadgen-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
+import { fetchAgentOperationsAlerts, computeMyCallKpiPace } from "@/lib/leadgen-monitoring-data";
 
 export default async function LeadgenAgentDashboardPage() {
   const agent = await requireLeadgenAgent();
@@ -267,6 +268,18 @@ export default async function LeadgenAgentDashboardPage() {
     scheduledStartTime: agent.scheduled_start_time,
   });
 
+  // Operations Monitoring "My Alerts" (below) - session-scoped `supabase`
+  // client, so RLS (leadgen_leads_agent_select_own,
+  // leadgen_call_logs agent_id = auth.uid()) does the actual narrowing to
+  // this agent's own records only.
+  const myOperationsAlerts = await fetchAgentOperationsAlerts(supabase, agent.id);
+  const [{ data: myCallLogs }, { data: myEmails }, { data: myFollowUps }] = await Promise.all([
+    supabase.from("leadgen_call_logs").select("agent_id, created_at").eq("agent_id", agent.id),
+    supabase.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").eq("sent_by", agent.id),
+    supabase.from("leadgen_followups").select("agent_id, status, completed_at").eq("agent_id", agent.id),
+  ]);
+  const myCallKpi = computeMyCallKpiPace(myCallLogs ?? [], myEmails ?? [], myFollowUps ?? [], agent.id);
+
   const leadDetailActions: LeadDetailActions = {
     updateLead: updateLeadAction,
     recordCallOutcome: recordCallOutcomeAction,
@@ -296,6 +309,38 @@ export default async function LeadgenAgentDashboardPage() {
 
       <SalesCoachAgentCard data={salesCoachData} />
       <ApprovedVoicemailScriptCard agentName={agent.full_name || agent.email} email={agent.email} role={agent.role} />
+
+      {(myOperationsAlerts.staleLeadCount > 0 || myOperationsAlerts.appointmentRiskCount > 0 || myCallKpi.pace === "Behind Pace") && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-base font-bold text-slate-900">My Alerts</h2>
+          <ul className="mt-2 space-y-1 text-[13.5px] text-slate-700">
+            {myOperationsAlerts.staleLeadCount > 0 && (
+              <li>
+                <Link href="/leadgen/agent/my-opportunities" className="font-semibold text-amber-700 hover:text-amber-800">
+                  {myOperationsAlerts.staleLeadCount} of your leads need attention
+                </Link>{" "}
+                - no meaningful activity in 2+ business days.
+              </li>
+            )}
+            {myOperationsAlerts.appointmentRiskCount > 0 && (
+              <li>
+                <Link href="/leadgen/agent/appointments" className="font-semibold text-amber-700 hover:text-amber-800">
+                  {myOperationsAlerts.appointmentRiskCount} of your appointments need attention
+                </Link>{" "}
+                - a reminder issue or missing contact information.
+              </li>
+            )}
+            {myCallKpi.pace === "Behind Pace" && (
+              <li>
+                <span className="font-semibold text-amber-700">
+                  {myCallKpi.callsToday} / {myCallKpi.dailyTarget} calls today - Behind Pace
+                </span>
+                .
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <PhoneReputationComplianceCard />
 

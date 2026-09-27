@@ -32,12 +32,14 @@ import {
   Briefcase,
   Heart,
   Landmark,
+  ShieldAlert,
 } from "lucide-react";
 import { signOutAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "CRM", href: "/admin/crm", icon: <LayoutDashboard /> },
+  { label: "Operations Monitoring", href: "/admin/crm/monitoring", icon: <ShieldAlert /> },
   { label: "Consultation Guide", href: "/admin/consultation-guide", icon: <ClipboardCheck /> },
   { label: "Opportunity Finder", href: "/admin/crm/opportunity-finder", icon: <Target /> },
   { label: "Call List Segments", href: "/admin/crm/call-list-segments", icon: <Table2 /> },
@@ -74,7 +76,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // notification actions handles that gate; here we just render an empty
   // bell rather than blocking the whole dashboard on it.
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }, { count: unreadOnboardingCount }, { count: unreadRetentionCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadAgreementCount }, { count: unreadIntakeCount }, { count: unreadOnboardingCount }, { count: unreadRetentionCount }, { count: unreadMonitoringCount }] = await Promise.all([
     supabase.from("crm_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("crm_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadCrmChatUnreadCount(supabase, user.id),
@@ -94,6 +96,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // overdue, re-engagement completed, email failed, campaign paused,
     // and manual-review notifications all link here.
     supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/retention%"),
+    // Operations Monitoring badge - unread escalation notifications the
+    // cron sweep wrote (crm-monitoring-notifications.ts), same "unread
+    // rows under this feature's own link_path prefix" convention as every
+    // other badge above.
+    supabase.from("crm_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/admin/crm/monitoring%"),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -106,6 +113,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     if (item.href === "/admin/crm/intake") return { ...item, badgeCount: unreadIntakeCount ?? 0 };
     if (item.href === "/admin/crm/onboarding") return { ...item, badgeCount: unreadOnboardingCount ?? 0 };
     if (item.href === "/admin/crm/retention") return { ...item, badgeCount: unreadRetentionCount ?? 0 };
+    if (item.href === "/admin/crm/monitoring") return { ...item, badgeCount: unreadMonitoringCount ?? 0 };
     return item;
   });
 
