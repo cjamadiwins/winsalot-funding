@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm-invoices-types";
 import type { InvoiceDashboardSummary } from "@/lib/crm-invoices-data";
 import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency, canPermanentlyDeleteTestPayment, type CrmPaymentRow } from "@/lib/crm-clients-types";
+import { defaultPaymentInstructionsText } from "@/lib/payment-methods";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 import ManageMenu from "@/components/crm-ui/ManageMenu";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
@@ -338,7 +339,7 @@ export default function AdminInvoicesClient({
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Payment Instructions</span>
-              <textarea name="payment_instructions" rows={2} className={inputClass} />
+              <textarea name="payment_instructions" rows={2} placeholder={defaultPaymentInstructionsText() ?? ""} className={inputClass} />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-slate-600">Client-Facing Notes</span>

@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm-agreement-types";
 import { recordAgreementOpenedAction } from "./actions";
 import AgreementSignClient from "./AgreementSignClient";
+import { getEnabledPaymentMethods } from "@/lib/payment-methods";
 
 export const metadata: Metadata = {
   title: "Winsalot Corp. Service Agreement",
@@ -61,6 +62,11 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
   const isPilot = agreement.campaign_type === "free_pilot";
   const isPaid = isPilot && agreement.pilot_type === "paid";
   const isPBF = isPerformanceBasedFirst(agreement as Pick<CrmClientAgreementRow, "campaign_type">);
+  // A Free Pilot is always $0 - never show payment instructions for one.
+  // Every other agreement (standard monthly, Paid Pilot, Performance-
+  // Based First) eventually requires payment, so it's shown for those.
+  const showPaymentMethod = !isPilot || isPaid;
+  const paymentMethods = showPaymentMethod ? getEnabledPaymentMethods() : [];
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -152,6 +158,20 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
                 {agreement.initial_term && <p>Initial term: {agreement.initial_term}</p>}
                 {agreement.renewal_terms && <p>Renewal: {agreement.renewal_terms}</p>}
                 {agreement.cancellation_terms && <p>Cancellation: {agreement.cancellation_terms}</p>}
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.length > 0 && (
+            <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-4">
+              <h3 className="text-[15px] font-bold text-slate-900">Payment Method</h3>
+              <div className="mt-2 space-y-3">
+                {paymentMethods.map((method) => (
+                  <div key={method.id}>
+                    <p className="text-sm font-semibold text-slate-900">{method.label}</p>
+                    <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">{method.clientInstructions}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
