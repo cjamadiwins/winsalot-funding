@@ -1,4 +1,8 @@
+Warning: truncated output (original token count: 5371)
+Total output lines: 420
+
 import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
+import AdminHiyaCallerReputationCard from "@/components/crm-ui/AdminHiyaCallerReputationCard";
 import Link from "next/link";
 import AdminDashboardGreeting from "@/components/crm-ui/AdminDashboardGreeting";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -120,109 +124,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
     supabase.from("agent_attendance").select("agent_id").is("clock_out", null),
   ]);
 
-  const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" && agent.active);
-
-  const scoreCounts = { hot: 0, warm: 0, followUp: 0, retry: 0 };
-  const scoredOpportunities = (opportunityScores ?? []) as CrmOpportunityScoreRow[];
-  for (const raw of scoredOpportunities) {
-    const effective = effectiveOpportunityCategory(raw);
-    if (effective === "hot") scoreCounts.hot += 1;
-    else if (effective === "warm") scoreCounts.warm += 1;
-    else if (effective === "follow_up") scoreCounts.followUp += 1;
-    else if (effective === "retry") scoreCounts.retry += 1;
-  }
-  const allOpportunities = (opportunities ?? []) as CrmOpportunityRow[];
-  const agentNameById = new Map(activeAgents.map((agent) => [agent.id, agent.full_name || agent.email] as const));
-
-  // Main KPI row below (and AdminCrmClient's own fuller 8-card grid
-  // further down) - one enriched copy of every opportunity (agent name,
-  // latest call outcome/note from Opportunity Finder's signals, earliest
-  // pending follow-up id), then each card's own count AND its drill-down
-  // modal's rows are both `.filter()`ed from this exact same array, so a
-  // card's number can never disagree with what clicking it shows.
-  const enrichedOpportunities = buildOpportunityCardRecords(allOpportunities, {
-    scores: scoredOpportunities,
-    followUps: (followUps ?? []) as CrmFollowUpWithOpportunity[],
-    agentNameById,
-  });
-  const interestedRecords = enrichedOpportunities.filter((o) => o.stage === "Interested");
-  const followUpsDueRecords = sortByMostUrgentFollowUp(enrichedOpportunities.filter((o) => isOverdue(o) || isDueToday(o)));
-  const wonRecords = sortByMostRecentlyWon(enrichedOpportunities.filter((o) => o.stage === "Client Won"));
-  // Consultations Booked - a real winsalot_appointments row with
-  // status='booked', not an opportunity stage (see the fetch above).
-  const consultationRecords = sortConsultationsUpcomingFirst(consultationRecordsRaw);
-  // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
-  // numeric-score-based "hot" definition (opportunityPriorityLevel) the
-  // modal's own list uses, counted over active (not dismissed) rows only.
-  const opportunityFinderHotCount = opportunityFinderData.rows.filter(
-    (row) => row.score.finder_state === "active" && opportunityPriorityLevel(row.score.score) === "hot"
-  ).length;
-
-  // Opportunity Pipeline summary card (below) - stage counts from the
-  // same allOpportunities array already fetched above, no new query.
-  const pipelineStageCounts = OPPORTUNITY_STAGES.map((stage) => ({
-    label: stage,
-    count: allOpportunities.filter((o) => o.stage === stage).length,
-    styleClass: OPPORTUNITY_STAGE_STYLES[stage],
-  }));
-
-  // Winsalot Sales Coach & Operations Manager - Team Overview (below) -
-  // reuses the opportunities/consultations/performance records already
-  // loaded above, plus its own small call-log and appointment-reminder
-  // reads. Service-role client, since this view must cover every active
-  // agent regardless of RLS scoping - same pattern as
-  // loadAdminOpportunityFinderData/getCrmPerformanceRecords above.
-  const salesCoachTeamData = await loadGrowthTeamSalesCoachData({
-    admin: getSupabaseAdmin(),
-    activeAgents,
-    now: new Date(),
-    consultations: consultationRecordsRaw,
-    performanceRecords,
-    clockedInAgentIds: (openShifts ?? []).map((row) => row.agent_id),
-  });
-
-  const performanceGaugeRows = activeAgents.map((agent) => {
-    const performance = computeCrmAgentPerformance(performanceRecords, agent.id).current;
-    return {
-      id: agent.id,
-      agentName: agent.full_name || agent.email,
-      score: performance.overallPercentage,
-      tier: crmPerformanceTier(performance.overallPercentage),
-      summary: `${performance.consultationsBooked} Consultations · ${performance.leadsAdded} Leads Added · ${performance.emailsDelivered} Emails Delivered`,
-      periodLabel: crmWeeklyRangeLabel(performance.periodStart, performance.periodEnd),
-    };
-  });
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            <AdminDashboardGreeting />
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Sales opportunities, follow-ups, and results across every agent - Lead Generation and Business Financing,
-            from initial prospect through to a client won or lost.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2.5">
-          <Link
-            href="/admin/crm/opportunities/new"
-            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
-          >
-            <UserPlus className="h-4 w-4" strokeWidth={2.3} />
-            Add Opportunity
-          </Link>
-          <Link
-            href="/admin/crm/appointments?openAdd=1"
-            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
-          >
-            <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
-            Book Call / Appointment
-          </Link>
-          <Link
-            href="/admin/crm/performance"
-            className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-teal-700"
+  const activeAgents = ((agents ?? []) as CrmUserRow[]).filter((agent) => agent.role === "agent" &…1371 tokens truncated…e shadow-sm transition hover:bg-teal-700"
           >
             <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
             View Reports
@@ -238,6 +140,7 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />
+      <AdminHiyaCallerReputationCard />
 
       {deleted === "opportunity" && (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
