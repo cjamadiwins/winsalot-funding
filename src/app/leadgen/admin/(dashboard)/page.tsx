@@ -58,6 +58,8 @@ import {
 import { loadLeadgenTeamSalesCoachData } from "@/lib/leadgen-sales-coach";
 import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
+import OperationsMonitoringCard from "@/components/crm-ui/OperationsMonitoringCard";
+import { fetchOperationsMonitoringSummary } from "@/lib/leadgen-monitoring-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -80,6 +82,7 @@ export default async function LeadgenAdminDashboardPage() {
     opportunityFinderData,
     dncRows,
     { data: openShifts },
+    operationsMonitoringSummary,
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -132,6 +135,8 @@ export default async function LeadgenAdminDashboardPage() {
       // Sales Coach Team Overview status banner (below) - only who's
       // currently clocked in matters here, not full shift history.
       admin.from("leadgen_agent_attendance").select("agent_id").is("clock_out", null),
+      // Operations Monitoring dashboard card (below).
+      fetchOperationsMonitoringSummary(admin),
     ]);
 
   const allLeads = leads ?? [];
@@ -316,6 +321,13 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/leadgen/admin/performance" />
+      <OperationsMonitoringCard
+        actionRequiredCount={operationsMonitoringSummary.totalActionRequired}
+        warningCount={operationsMonitoringSummary.totalWarnings}
+        healthyCount={operationsMonitoringSummary.totalHealthy}
+        categories={operationsMonitoringSummary.categories.map((c) => ({ key: c.key, label: c.label, headline: c.headline, status: c.status }))}
+        href="/leadgen/admin/monitoring"
+      />
       <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />

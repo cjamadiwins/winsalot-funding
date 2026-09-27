@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/agent-weekly-reports",
       "schedule": "0 22 * * 5"
+    },
+    {
+      "path": "/api/cron/crm-operations-monitoring",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/leadgen-operations-monitoring",
+      "schedule": "0 16 * * *"
     }
   ]
 }

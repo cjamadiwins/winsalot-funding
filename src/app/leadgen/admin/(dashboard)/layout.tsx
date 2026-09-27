@@ -23,12 +23,14 @@ import {
   PhoneCall,
   Target,
   Table2,
+  ShieldAlert,
 } from "lucide-react";
 import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/admin", icon: <LayoutDashboard /> },
+  { label: "Operations Monitoring", href: "/leadgen/admin/monitoring", icon: <ShieldAlert /> },
   { label: "Clients", href: "/leadgen/admin/clients", icon: <Building2 /> },
   { label: "Leads", href: "/leadgen/admin/leads", icon: <Users /> },
   { label: "Opportunity Finder", href: "/leadgen/admin/opportunity-finder", icon: <Target /> },
@@ -51,10 +53,13 @@ const NAV_ITEMS: CrmNavItem[] = [
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadMonitoringCount }] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("leadgen_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadLeadgenChatUnreadCount(supabase, user.id),
+    // Operations Monitoring badge - unread escalation notifications the
+    // cron sweep wrote (leadgen-monitoring-notifications.ts).
+    supabase.from("leadgen_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/leadgen/admin/monitoring%"),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -63,6 +68,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
   const navItems: CrmNavItem[] = NAV_ITEMS.map((item) => {
     if (item.href === "/leadgen/admin/leave-requests") return { ...item, badgeCount: pendingLeaveCount ?? 0 };
     if (item.href === "/leadgen/admin/chat") return { ...item, badgeCount: chatUnreadCount };
+    if (item.href === "/leadgen/admin/monitoring") return { ...item, badgeCount: unreadMonitoringCount ?? 0 };
     return item;
   });
 
