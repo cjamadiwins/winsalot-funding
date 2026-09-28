@@ -49,6 +49,8 @@ import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPrevie
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
+import AssignedCampaignsCard, { type AssignedCampaignCardData } from "@/components/leadgen/AssignedCampaignsCard";
+import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
@@ -86,6 +88,7 @@ export default async function LeadgenAgentDashboardPage() {
     dncRows,
     { data: myCampaignRestrictions },
     { data: activeClientsWithScripts },
+    { data: myCallListSegments },
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -113,7 +116,18 @@ export default async function LeadgenAgentDashboardPage() {
     // already read every client's name (see leads/new/page.tsx), only
     // their own leads/appointments are actually RLS-scoped.
     supabase.from("leadgen_clients").select("id, name, active"),
-    supabase.from("leadgen_campaigns").select("id, name, client_id").eq("status", "active").order("name"),
+    // "Your Current Campaigns" card (below) - every field that card shows
+    // per campaign, so no second query is needed once this page already
+    // knows which campaigns this agent is assigned to. Not filtered to
+    // status = "active" here (unlike before) so a paused-pending-launch
+    // campaign the agent is assigned to (e.g. awaiting its start date)
+    // still shows up for review; agentCampaignOptions below re-applies its
+    // own active-only check so the legacy Current Business selector's
+    // behavior is unchanged.
+    supabase
+      .from("leadgen_campaigns")
+      .select("id, name, client_id, status, start_date, end_date, description, territory, appointment_goal, qualification_criteria")
+      .order("name"),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
     // Service-role, narrowly filtered to this signed-in agent's own
@@ -151,6 +165,12 @@ export default async function LeadgenAgentDashboardPage() {
       .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
       .eq("active", true)
       .order("name"),
+    // "Assigned Call List" line on the Current Campaigns card (below) -
+    // RLS on call_list_segments already scopes a plain select to exactly
+    // the segments this agent is assigned to (same pattern as the Call
+    // List Segments list page), so no explicit agent/campaign filter is
+    // needed here.
+    supabase.from("call_list_segments").select("id, name, crm, leadgen_campaign_id"),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -262,7 +282,10 @@ export default async function LeadgenAgentDashboardPage() {
   // Brent's Essentials' client_id. Each option's label is the campaign's
   // related client name, never the longer campaign name.
   const agentCampaignOptions = (campaigns ?? [])
-    .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS && activeClientIds.has(campaign.client_id))
+    .filter(
+      (campaign) =>
+        campaign.status === "active" && campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS && activeClientIds.has(campaign.client_id)
+    )
     .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
 
   // Client Call Script dashboard card - "only show clients/campaigns the
@@ -276,6 +299,87 @@ export default async function LeadgenAgentDashboardPage() {
     ? new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id))
     : null;
   const callScriptClients = (activeClientsWithScripts ?? []).filter((c) => !permittedClientIds || permittedClientIds.has(c.id));
+
+  // "Your Current Campaigns" card (below) - same restriction rule as
+  // callScriptClients just above (restrictedCampaignIds when this agent has
+  // any leadgen_campaign_agents rows, otherwise every active campaign whose
+  // client is also active) so this agent can never see a campaign they
+  // aren't authorized to work, and Mantra Collab/Brent's Essentials (client
+  // active = false) never appear even for a fully unrestricted agent.
+  const clientScriptFieldsById = new Map((activeClientsWithScripts ?? []).map((c) => [c.id, c] as const));
+
+  // "Appointment Target" on the Current Campaigns card - the actual agreed
+  // figure lives in the Growth CRM's crm_client_agreements
+  // (appointment_target_min/max), not leadgen_campaigns.appointment_goal
+  // (unset for every client using this card so far). Same cross-CRM
+  // reasoning as getActiveDncSuppressions() above; looked up by company
+  // name since that's the only key shared between the two CRMs' client
+  // tables. Falls back to null (rendered as "not yet set") rather than
+  // ever fabricating a number.
+  const assignedClientNames = new Set(
+    (campaigns ?? [])
+      .filter((campaign) => (restrictedCampaignIds ? restrictedCampaignIds.has(campaign.id) : activeClientIds.has(campaign.client_id)))
+      .map((campaign) => clientNameById.get(campaign.client_id))
+      .filter((name): name is string => !!name)
+  );
+  const appointmentTargetByClientName = new Map<string, string>();
+  if (assignedClientNames.size > 0) {
+    const { data: growthClients } = await admin.from("crm_clients").select("id, company_name").in("company_name", [...assignedClientNames]);
+    const growthClientIds = (growthClients ?? []).map((c) => c.id);
+    const growthClientNameById = new Map((growthClients ?? []).map((c) => [c.id, c.company_name] as const));
+    if (growthClientIds.length > 0) {
+      const { data: agreements } = await admin
+        .from("crm_client_agreements")
+        .select("client_id, appointment_target_min, appointment_target_max")
+        .in("client_id", growthClientIds)
+        .not("appointment_target_min", "is", null)
+        .order("created_at", { ascending: false });
+      for (const agreement of agreements ?? []) {
+        const name = growthClientNameById.get(agreement.client_id);
+        if (!name || appointmentTargetByClientName.has(name)) continue; // keep only the most recent agreement per client
+        appointmentTargetByClientName.set(
+          name,
+          agreement.appointment_target_min === agreement.appointment_target_max
+            ? `${agreement.appointment_target_min}`
+            : `${agreement.appointment_target_min}–${agreement.appointment_target_max}`
+        );
+      }
+    }
+  }
+
+  const mySegmentsByCampaignId = new Map<string, { id: string; name: string }[]>();
+  for (const segment of myCallListSegments ?? []) {
+    if (segment.crm !== "lead_generation" || !segment.leadgen_campaign_id) continue;
+    const existing = mySegmentsByCampaignId.get(segment.leadgen_campaign_id) ?? [];
+    existing.push({ id: segment.id, name: segment.name });
+    mySegmentsByCampaignId.set(segment.leadgen_campaign_id, existing);
+  }
+  const assignedCampaignCards: AssignedCampaignCardData[] = (campaigns ?? [])
+    .filter((campaign) => (restrictedCampaignIds ? restrictedCampaignIds.has(campaign.id) : activeClientIds.has(campaign.client_id)))
+    .map((campaign) => {
+      const clientScriptFields = clientScriptFieldsById.get(campaign.client_id);
+      const campaignClientName = clientNameById.get(campaign.client_id) ?? campaign.name;
+      const callScript = buildLeadgenCallScript({
+        agentName: agentDisplayName,
+        client: clientScriptFields ?? { name: campaignClientName, call_script_value_proposition: null, call_script_services: null, call_script_closing: null, call_script_notes: null, call_script_override: null },
+      });
+      return {
+        campaignId: campaign.id,
+        clientName: campaignClientName,
+        status: campaign.status,
+        launchDate: campaign.start_date,
+        endDate: campaign.end_date,
+        servicesDescription: campaign.description,
+        targetGeography: campaign.territory,
+        appointmentTarget: campaign.appointment_goal != null ? String(campaign.appointment_goal) : appointmentTargetByClientName.get(campaignClientName) ?? null,
+        qualifiedLeadDefinition: campaign.qualification_criteria ?? [],
+        clientInstructions: clientScriptFields?.call_script_notes ?? null,
+        callScript,
+        trainingHref: "/leadgen/agent/training",
+        segments: mySegmentsByCampaignId.get(campaign.id) ?? [],
+        segmentHrefBase: "/leadgen/agent/call-list-segments",
+      };
+    });
 
   // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
   // numeric-score-based "hot" definition (opportunityPriorityLevel) the
@@ -333,6 +437,8 @@ export default async function LeadgenAgentDashboardPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {agentDisplayName}</h1>
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
+
+      <AssignedCampaignsCard campaigns={assignedCampaignCards} />
 
       <AgentCampaignSelector
         campaigns={agentCampaignOptions}
