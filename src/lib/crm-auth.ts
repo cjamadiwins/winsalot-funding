@@ -1,6 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "./supabase-server";
+import { createSupabaseServerClient, getCachedAuthUser } from "./supabase-server";
 import type { CrmUserRow } from "./crm-types";
 
 // Defense in depth, same rationale as requireAdminUser in admin-auth.ts:
@@ -14,13 +14,13 @@ import type { CrmUserRow } from "./crm-types";
 // sees this user as an active CRM member - if the row is missing or
 // inactive, the select simply returns nothing.
 export async function requireCrmUser(): Promise<CrmUserRow> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await getCachedAuthUser();
 
   if (authError || !authData.user) {
     redirect("/agent/login");
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("*")
@@ -58,10 +58,10 @@ export async function requireCrmUser(): Promise<CrmUserRow> {
 }
 
 export async function requireCrmOnboardingUser(): Promise<CrmUserRow> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await getCachedAuthUser();
   if (authError || !authData.user) redirect("/agent/login");
 
+  const supabase = await createSupabaseServerClient();
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("*")
@@ -94,13 +94,13 @@ export async function requireCrmOnboardingUser(): Promise<CrmUserRow> {
 // row, inactive, or wrong CRM) is also signed out so it can't linger as
 // a valid-looking cookie.
 export async function requireCrmAdmin(): Promise<CrmUserRow> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await getCachedAuthUser();
 
   if (authError || !authData.user) {
     redirect("/admin/login");
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("*")
@@ -129,13 +129,13 @@ export async function requireCrmAdmin(): Promise<CrmUserRow> {
 // valid-looking cookie - identical treatment to every sibling gate in
 // this file.
 export async function requireCrmSubcontractor(): Promise<CrmUserRow> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await getCachedAuthUser();
 
   if (authError || !authData.user) {
     redirect("/subcontractor/login");
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("*")

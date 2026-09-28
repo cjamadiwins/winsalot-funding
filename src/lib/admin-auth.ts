@@ -1,6 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "./supabase-server";
+import { createSupabaseServerClient, getCachedAuthUser } from "./supabase-server";
 
 // Defense in depth: proxy.ts already blocks unauthenticated requests to
 // /admin/*, but Next.js Server Functions can be called directly and are
@@ -33,8 +33,7 @@ import { createSupabaseServerClient } from "./supabase-server";
 // /agent area - only a missing/inactive/wrong-CRM session is fully
 // signed out here, so it can't linger as a valid-looking cookie.
 export async function requireAdminUser() {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await getCachedAuthUser();
 
   if (error || !data.user) {
     redirect("/admin/login");
@@ -48,6 +47,7 @@ export async function requireAdminUser() {
     redirect("/admin/set-password");
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data: crmUser } = await supabase
     .from("crm_users")
     .select("role, active")

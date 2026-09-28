@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "./supabase-server";
+import { createSupabaseServerClient, getCachedAuthUser } from "./supabase-server";
 import {
   DEFAULT_LOCATION_1,
   DEFAULT_LOCATION_2,
@@ -52,12 +52,12 @@ function rowToPreferences(row: PreferencesRow | null): TimeZonePreferences {
 // migration only get a row once they save or reset). Never throws - the
 // panel should always have something reasonable to render.
 export async function getUserTimeZonePreferences(): Promise<TimeZonePreferences> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData } = await getCachedAuthUser();
   if (!authData.user) {
     return { location1: DEFAULT_LOCATION_1, location2: DEFAULT_LOCATION_2 };
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("user_time_zone_preferences")
     .select(
