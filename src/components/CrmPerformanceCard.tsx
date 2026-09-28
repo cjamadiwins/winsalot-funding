@@ -10,6 +10,8 @@ import {
 } from "@/lib/crm-performance";
 import { GROWTH_CRM_GAUGE_SEGMENTS, PERFORMANCE_BAND_STYLES } from "@/lib/performance-gauge";
 import PerformanceScoreCard, { PerformanceTile } from "@/components/crm-ui/PerformanceScoreCard";
+import CrmDeliveredEmailRecordsModal from "@/components/crm-ui/CrmDeliveredEmailRecordsModal";
+import type { CrmDeliveredEmailCardRecord } from "@/lib/crm-performance";
 
 // One color per tier, shared by every percentage badge and progress bar
 // for a given metric so they never disagree with the gauge's own bands
@@ -22,9 +24,26 @@ const TIER_STYLES = PERFORMANCE_BAND_STYLES;
 // the admin's "every agent" view (/admin/crm/performance) and an agent's
 // own "just me" view (/agent/performance), so the two can never drift out
 // of sync with each other.
-export default function CrmPerformanceCard({ agentName, performance }: { agentName: string; performance: CrmAgentPerformance }) {
+export default function CrmPerformanceCard({
+  agentName,
+  performance,
+  deliveredEmailRecords,
+  opportunityHrefBase,
+  emailsHref,
+}: {
+  agentName: string;
+  performance: CrmAgentPerformance;
+  // The exact records behind `current.emailsDelivered` (see
+  // computeCrmPeriodDeliveredEmailRecords) - makes the "Emails Delivered"
+  // tile clickable. Optional so this component still renders (tile stays
+  // plain) for any caller that hasn't been updated to pass it.
+  deliveredEmailRecords?: CrmDeliveredEmailCardRecord[];
+  opportunityHrefBase?: string;
+  emailsHref?: string;
+}) {
   const { current, history } = performance;
   const overallTier = crmPerformanceTier(current.overallPercentage);
+  const deliveredEmailsClickable = deliveredEmailRecords && opportunityHrefBase && emailsHref;
 
   return (
     <PerformanceScoreCard
@@ -50,12 +69,25 @@ export default function CrmPerformanceCard({ agentName, performance }: { agentNa
             icon={<Target className="h-5 w-5" strokeWidth={2.3} />}
             tone="emerald"
           />
-          <PerformanceTile
-            label="Emails Delivered"
-            value={`${current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
-            icon={<Mail className="h-5 w-5" strokeWidth={2.3} />}
-            tone="sky"
-          />
+          {deliveredEmailsClickable ? (
+            <CrmDeliveredEmailRecordsModal
+              label="Emails Delivered"
+              tone="cyan"
+              icon={<Mail />}
+              records={deliveredEmailRecords}
+              opportunityHrefBase={opportunityHrefBase}
+              emailsHref={emailsHref}
+              emptyMessage="No delivered emails this week yet."
+              valueLabel={`${current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
+            />
+          ) : (
+            <PerformanceTile
+              label="Emails Delivered"
+              value={`${current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
+              icon={<Mail className="h-5 w-5" strokeWidth={2.3} />}
+              tone="sky"
+            />
+          )}
         </>
       }
     >

@@ -24,7 +24,11 @@ export default function CrmCardModal({
   children,
 }: {
   label: string;
-  value: number;
+  // Almost always the trigger's own records.length (a plain count), but a
+  // handful of callers (e.g. "Appointments Booked (Week) — 3/4") need to
+  // show a "n/target" string while the modal's row list is still driven by
+  // that same records.length - see leadgen/AgentActivityKpiSection.tsx.
+  value: number | string;
   tone: KpiTone;
   icon: ReactNode;
   // Optional "vs last 7 days" trend row (see KpiCard) - preserves a

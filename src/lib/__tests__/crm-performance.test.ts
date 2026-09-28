@@ -65,9 +65,9 @@ describe("Growth CRM weekly performance accuracy", () => {
     const record = opportunity({
       assignedAgentId: "agent-2",
       deliveredEmails: [
-        { emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-08T16:00:00.000Z" },
-        { emailId: "email-2", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z" },
-        { emailId: "email-3", agentId: "agent-2", deliveredAt: "2026-09-11T16:00:00.000Z" },
+        { emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-08T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" },
+        { emailId: "email-2", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" },
+        { emailId: "email-3", agentId: "agent-2", deliveredAt: "2026-09-11T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" },
       ],
     });
 
@@ -121,7 +121,7 @@ describe("Growth CRM weekly performance accuracy", () => {
   it("weights every one of the three categories equally, matching the average of their capped percentages", () => {
     const record = opportunity({
       consultationBookings: [{ appointmentId: "appointment-1", assignedAgentId: "agent-1", bookedAt: "2026-09-10T15:00:00.000Z" }],
-      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z" }],
+      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" }],
     });
     const result = computeCrmPeriodPerformance([record], "agent-1", WEEK_START, WEEK_END);
 
@@ -148,7 +148,7 @@ describe("Growth CRM weekly performance accuracy", () => {
     const record = opportunity({
       createdAt: "2026-09-12T14:00:00.000Z", // Saturday
       consultationBookings: [{ appointmentId: "appointment-1", assignedAgentId: "agent-1", bookedAt: "2026-09-13T15:00:00.000Z" }], // Sunday
-      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-12T16:00:00.000Z" }], // Saturday
+      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-12T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" }], // Saturday
     });
     const result = computeCrmPeriodPerformance([record], "agent-1", WEEK_START, WEEK_END);
 
@@ -201,7 +201,7 @@ describe("Growth CRM weekly performance accuracy", () => {
   it("confirms a delivered email by itself increases only Emails Delivered", () => {
     const record = opportunity({
       createdAt: "2026-01-01T00:00:00.000Z",
-      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z" }],
+      deliveredEmails: [{ emailId: "email-1", agentId: "agent-1", deliveredAt: "2026-09-10T16:00:00.000Z", toEmail: "prospect@example.com", subject: "Follow up" }],
     });
     const result = computeCrmPeriodPerformance([record], "agent-1", WEEK_START, WEEK_END);
 

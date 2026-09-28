@@ -23,7 +23,9 @@ import {
   CRM_WEEKLY_CONSULTATIONS_TARGET,
   CRM_WEEKLY_LEADS_ADDED_TARGET,
   CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
+  computeCrmPeriodDeliveredEmailRecords,
 } from "@/lib/crm-performance";
+import CrmDeliveredEmailRecordsModal from "@/components/crm-ui/CrmDeliveredEmailRecordsModal";
 import { computeCrmWeeklyIncentive, crmMondayOf } from "@/lib/crm-incentives";
 import { deriveWeeklyIncentiveDisplayStatus, isMonthlyIncentiveCapReached, monthStartOfWeek } from "@/lib/agent-incentive-shared";
 import { fetchAgentMonthToDateApproved, fetchLedgerRow, fetchWinsalotIncentiveSettings } from "@/lib/agent-incentive-ledger";
@@ -158,6 +160,12 @@ export default async function AgentDashboardPage() {
   const performanceRecords = await getCrmPerformanceRecords(crmUser.id);
   const performance = computeCrmAgentPerformance(performanceRecords, crmUser.id);
   const performanceTier = crmPerformanceTier(performance.current.overallPercentage);
+  const deliveredEmailRecords = computeCrmPeriodDeliveredEmailRecords(
+    performanceRecords,
+    crmUser.id,
+    performance.current.periodStart,
+    performance.current.periodEnd
+  );
 
   // Prospect-to-Client Rate (Results by Agent) - scoped to just this
   // agent's own opportunities (getCrmOpportunityConversionRecords(crmUser.id)
@@ -355,11 +363,15 @@ export default async function AgentDashboardPage() {
               icon={<Target className="h-5 w-5" strokeWidth={2.3} />}
               tone="emerald"
             />
-            <PerformanceTile
+            <CrmDeliveredEmailRecordsModal
               label="Emails Delivered"
-              value={`${performance.current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
-              icon={<Mail className="h-5 w-5" strokeWidth={2.3} />}
-              tone="sky"
+              tone="cyan"
+              icon={<Mail />}
+              records={deliveredEmailRecords}
+              opportunityHrefBase="/agent/opportunities"
+              emailsHref="/agent/emails"
+              emptyMessage="No delivered emails this week yet."
+              valueLabel={`${performance.current.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`}
             />
           </>
         }
