@@ -261,8 +261,10 @@ export default function AgreementDetailClient({
                 ))}
               </select>
             </Field>
-            <Field label={isPilot ? "Pilot Target (Qualified Leads/Appointments)" : "Agreed Monthly Target"}>
-              <input type="number" min={1} value={draft.monthlyTarget} onChange={(e) => set("monthlyTarget", Number(e.target.value))} className={inputClass} />
+            <Field label={isPBF && agreement.appointment_target_min !== null && agreement.appointment_target_max !== null ? "Appointment Target" : isPilot ? "Pilot Target (Qualified Leads/Appointments)" : "Agreed Monthly Target"}>
+              {isPBF && agreement.appointment_target_min !== null && agreement.appointment_target_max !== null
+                ? <span className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">{agreement.appointment_target_min}–{agreement.appointment_target_max} appointments (campaign goal; sales are not guaranteed)</span>
+                : <input type="number" min={1} value={draft.monthlyTarget} onChange={(e) => set("monthlyTarget", Number(e.target.value))} className={inputClass} />}
             </Field>
             <Field label="Target Industries (comma-separated)">
               <input

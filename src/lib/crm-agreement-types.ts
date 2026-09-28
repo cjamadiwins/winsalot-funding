@@ -160,6 +160,10 @@ export type CrmClientAgreementRow = {
   service_type: AgreementServiceType;
   target_type: AgreementTargetType;
   monthly_target: number;
+  // Optional campaign appointment goal, independent of the legacy integer
+  // agreement target and of any conversion-linked payment milestones.
+  appointment_target_min: number | null;
+  appointment_target_max: number | null;
   monthly_fee: number;
   setup_fee: number | null;
   currency: AgreementCurrency;
@@ -429,7 +433,10 @@ function serviceLabel(serviceType: AgreementServiceType): string {
 // The exact required guarantee/disclosure sentence (brief section 3),
 // with "monthly target" language unless the admin has deliberately
 // selected "Guaranteed" for target_type.
-export function buildAgreementTargetStatement(agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target">): string {
+export function buildAgreementTargetStatement(agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target"> & Partial<Pick<CrmClientAgreementRow, "campaign_type" | "appointment_target_min" | "appointment_target_max">>): string {
+  if (agreement.campaign_type === "performance_based_first" && agreement.appointment_target_min && agreement.appointment_target_max) {
+    return `Winsalot Corp. will aim to generate ${agreement.appointment_target_min}–${agreement.appointment_target_max} consultation appointments for this campaign. This is an appointment goal, not a guarantee of sales or conversions. Results may vary based on market conditions, prospect availability, targeting criteria and the Client's responsiveness.`;
+  }
   const noun = serviceNounPlural(agreement.service_type);
   const verb = agreement.target_type === "guaranteed" ? "guarantee" : "target";
   return `Winsalot Corp. will ${verb} ${agreement.monthly_target} qualified ${noun} per month. Results may vary based on market conditions, prospect availability, targeting criteria and the client's responsiveness. Winsalot Corp. does not guarantee that a lead or appointment will result in a sale.`;
@@ -606,7 +613,7 @@ export function buildPerformanceBasedFirstFeesStatement(
 // stale free-pilot claim - see those functions' own comments.
 export function renderAgreementTemplate(
   template: Pick<CrmAgreementTemplateRow, "content">,
-  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target" | "campaign_type" | "pilot_type" | "monthly_fee" | "setup_fee" | "currency">
+  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target" | "campaign_type" | "pilot_type" | "monthly_fee" | "setup_fee" | "currency"> & Partial<Pick<CrmClientAgreementRow, "appointment_target_min" | "appointment_target_max">>
 ): RenderedAgreementSection[] {
   const replacements: Record<string, string> = {
     service_noun_singular: serviceNounSingular(agreement.service_type),
@@ -619,7 +626,11 @@ export function renderAgreementTemplate(
 
   return template.content.map((section) => {
     if (section.key === "monthly_target") {
-      return { ...section, body: buildAgreementTargetStatement(agreement) };
+      return {
+        ...section,
+        title: isPBF && agreement.appointment_target_min && agreement.appointment_target_max ? "Appointment Target" : section.title,
+        body: buildAgreementTargetStatement(agreement),
+      };
     }
     if (isPilot && section.key === "fees") {
       return { ...section, title: "Pilot Fees", body: buildPilotFeesStatement(agreement) };

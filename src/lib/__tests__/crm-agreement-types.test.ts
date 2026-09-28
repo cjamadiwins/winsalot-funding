@@ -40,6 +40,19 @@ const paidPilotBase = { ...standardBase, campaign_type: "free_pilot" as const, p
 const performanceBasedFirstBase = { ...standardBase, campaign_type: "performance_based_first" as const, monthly_fee: 750, setup_fee: 0 };
 
 describe("buildAgreementTargetStatement", () => {
+  it("renders a performance campaign appointment range without promising conversions or changing fees", () => {
+    const rendered = renderAgreementTemplate({ content: [
+      { key: "monthly_target", title: "Monthly Target", body: "Legacy 1" },
+      { key: "fees", title: "Campaign Fee", body: "Legacy fee" },
+    ] }, {
+      ...performanceBasedFirstBase, service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 1,
+      appointment_target_min: 8, appointment_target_max: 12,
+    });
+    expect(rendered[0].body).toContain("8–12 consultation appointments");
+    expect(rendered[0].body).toContain("not a guarantee of sales or conversions");
+    expect(rendered[0].body).not.toContain("target 1 qualified lead");
+    expect(rendered[1].body).toBe(buildPerformanceBasedFirstFeesStatement(performanceBasedFirstBase));
+  });
   it("uses 'target' and 'leads' by default", () => {
     expect(
       buildAgreementTargetStatement({ service_type: "qualified_leads", target_type: "monthly_target", monthly_target: 25 })
