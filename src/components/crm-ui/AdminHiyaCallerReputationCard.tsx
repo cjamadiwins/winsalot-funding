@@ -25,12 +25,12 @@ export default function AdminHiyaCallerReputationCard() {
             href={HIYA_CONNECT_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+            className="inline-flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[length:var(--crm-shared-body,13px)] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
           >
             Open Hiya Connect
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
-          <p className="text-[11px] leading-4 text-slate-500">
+          <p className="text-[length:var(--crm-shared-note,11px)] leading-4 text-slate-500">
             Review periodically and whenever a Dialpad number is added, replaced, or changed.
           </p>
         </div>

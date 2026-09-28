@@ -51,7 +51,7 @@ function cardClassFor(level: SalesCoachStatusLevel): string {
 function StatusPill({ level }: { level: SalesCoachStatusLevel }) {
   const style = STATUS_STYLES[level];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold text-white ${style.pillBg}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[length:var(--crm-shared-body,12px)] font-bold text-white ${style.pillBg}`}>
       {level === "green" ? "Green" : level === "amber" ? "Amber" : "Red"} — {SALES_COACH_STATUS_LABEL[level]}
     </span>
   );
@@ -59,7 +59,7 @@ function StatusPill({ level }: { level: SalesCoachStatusLevel }) {
 
 function ActionList({ actions }: { actions: SalesCoachAction[] }) {
   if (actions.length === 0) {
-    return <p className="mt-3 text-[13px] text-slate-500">Nothing needs your attention right now.</p>;
+    return <p className="mt-3 text-[length:var(--crm-shared-body,13px)] text-slate-500">Nothing needs your attention right now.</p>;
   }
   return (
     <ul className="mt-3 space-y-1.5">
@@ -67,7 +67,7 @@ function ActionList({ actions }: { actions: SalesCoachAction[] }) {
         <li key={`${action.label}-${action.href}`}>
           <Link
             href={action.href}
-            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[length:var(--crm-shared-body,13px)] font-medium text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
           >
             <span className="min-w-0 truncate">{action.label}</span>
             <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={2.3} />
@@ -99,13 +99,13 @@ function CardHeader({
         </span>
         <div>
           <h2 className="text-[15px] font-bold text-slate-900">{title}</h2>
-          <p className="text-[11.5px] text-slate-500">{subtitle}</p>
+          <p className="text-[length:var(--crm-shared-note,11.5px)] text-slate-500">{subtitle}</p>
         </div>
       </div>
       <button
         type="button"
         onClick={onViewDetails}
-        className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-violet-700"
+        className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-[length:var(--crm-shared-body,12px)] font-semibold text-white shadow-sm transition hover:bg-violet-700"
       >
         View Details
       </button>
@@ -117,7 +117,7 @@ function WeeklyProgressBar({ booked, target, label }: { booked: number; target: 
   const percentage = target > 0 ? Math.min(100, Math.round((booked / target) * 100)) : 0;
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-between text-[11.5px] font-semibold text-slate-600">
+      <div className="flex items-center justify-between text-[length:var(--crm-shared-note,11.5px)] font-semibold text-slate-600">
         <span>{label}</span>
         <span>
           {booked} / {target}
@@ -154,12 +154,12 @@ export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
 
       <div className="mt-3">
         <StatusPill level={level} />
-        <p className="mt-2 text-[13.5px] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
+        <p className="mt-2 text-[length:var(--crm-shared-body,13.5px)] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
       </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Coach Recommendation</p>
-        <p className="mt-1 text-[13px] text-violet-900">{recommendation}</p>
+        <p className="text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-violet-700">Coach Recommendation</p>
+        <p className="mt-1 text-[length:var(--crm-shared-body,13px)] text-violet-900">{recommendation}</p>
       </div>
 
       {callLogReminder && (
@@ -173,21 +173,21 @@ export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
           }`}
         >
           <p
-            className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${
+            className={`flex items-center gap-1.5 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide ${
               callLogReminder.level === "active" ? "text-emerald-700" : callLogReminder.level === "strong" ? "text-amber-800" : "text-sky-700"
             }`}
           >
             <PhoneCall className="h-3.5 w-3.5" strokeWidth={2.3} />
             {callLogReminder.title}
           </p>
-          <p className="mt-1 text-[13px] text-slate-700">{callLogReminder.message}</p>
-          {callLogNote && <p className="mt-1 text-[12.5px] text-slate-500">{callLogNote}</p>}
+          <p className="mt-1 text-[length:var(--crm-shared-body,13px)] text-slate-700">{callLogReminder.message}</p>
+          {callLogNote && <p className="mt-1 text-[length:var(--crm-shared-body,12.5px)] text-slate-500">{callLogNote}</p>}
         </div>
       )}
 
       <WeeklyProgressBar booked={data.weeklyPerformance.bookedThisWeek} target={data.weeklyPerformance.target} label={`Weekly appointment progress · ${data.weeklyPerformance.weekLabel}`} />
 
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
+      <p className="mt-4 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
       <ActionList actions={actions} />
 
       {detailsOpen && (
@@ -201,7 +201,7 @@ export function SalesCoachAgentCard({ data }: { data: SalesCoachAgentData }) {
 
 function DetailRow({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-100 py-2 text-[13px] last:border-b-0">
+    <div className="flex items-center justify-between border-b border-slate-100 py-2 text-[length:var(--crm-shared-body,13px)] last:border-b-0">
       <span className="text-slate-600">{label}</span>
       <span className="font-semibold text-slate-900">{value}</span>
     </div>
@@ -210,7 +210,7 @@ function DetailRow({ label, value }: { label: string; value: number | string }) 
 
 function AgentDetails({ data }: { data: SalesCoachAgentData }) {
   return (
-    <div className="text-[13.5px]">
+    <div className="text-[length:var(--crm-shared-body,13.5px)]">
       <p className="text-slate-700">{buildAgentHeadline(data)}</p>
 
       <div className="mt-3 rounded-xl border border-slate-200 p-3.5">
@@ -228,11 +228,11 @@ function AgentDetails({ data }: { data: SalesCoachAgentData }) {
 
       {data.reminderIssues.length > 0 && (
         <div className="mt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Appointment Reminder Issues</p>
+          <p className="text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-amber-700">Appointment Reminder Issues</p>
           <ul className="mt-2 space-y-1.5">
             {data.reminderIssues.map((item) => (
               <li key={item.id}>
-                <Link href={item.href} className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 hover:bg-amber-100">
+                <Link href={item.href} className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[length:var(--crm-shared-body,12.5px)] text-amber-900 hover:bg-amber-100">
                   {item.businessName} — {item.reminderIssue}
                 </Link>
               </li>
@@ -241,7 +241,7 @@ function AgentDetails({ data }: { data: SalesCoachAgentData }) {
         </div>
       )}
 
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
+      <p className="mt-4 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
       <ActionList actions={buildAgentRecommendedActions(data)} />
     </div>
   );
@@ -269,17 +269,17 @@ export function SalesCoachAdminCard({ data, performanceHref }: { data: SalesCoac
 
       <div className="mt-3">
         <StatusPill level={level} />
-        <p className="mt-2 text-[13.5px] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
+        <p className="mt-2 text-[length:var(--crm-shared-body,13.5px)] font-medium leading-relaxed text-slate-800">{statusMessage}</p>
       </div>
 
       <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Operations Priority</p>
-        <p className="mt-1 text-[13px] text-violet-900">{priority}</p>
+        <p className="text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-violet-700">Operations Priority</p>
+        <p className="mt-1 text-[length:var(--crm-shared-body,13px)] text-violet-900">{priority}</p>
       </div>
 
       <WeeklyProgressBar booked={data.teamWeeklyBooked} target={data.teamWeeklyTarget} label="Team weekly appointment progress" />
 
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
+      <p className="mt-4 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
       <ActionList actions={actions} />
 
       {detailsOpen && (
@@ -293,7 +293,7 @@ export function SalesCoachAdminCard({ data, performanceHref }: { data: SalesCoac
 
 function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; performanceHref: string }) {
   return (
-    <div className="text-[13.5px]">
+    <div className="text-[length:var(--crm-shared-body,13.5px)]">
       <p className="text-slate-700">{buildTeamHeadline(data)}</p>
 
       <div className="mt-3 rounded-xl border border-slate-200 p-3.5">
@@ -307,7 +307,7 @@ function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; per
         <DetailRow label="Team Weekly Booked / Target" value={`${data.teamWeeklyBooked} / ${data.teamWeeklyTarget}`} />
       </div>
 
-      <p className="mt-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <p className="mt-4 flex items-center gap-1.5 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-slate-500">
         <Users2 className="h-3.5 w-3.5" strokeWidth={2.3} />
         Performance By Agent
       </p>
@@ -320,13 +320,13 @@ function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; per
               </Link>
               <span className="flex items-center gap-2">
                 {agent.presence.isPastExpectedClockIn && !agent.presence.isClockedIn && (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">Not Clocked In</span>
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[length:var(--crm-shared-note,11px)] font-semibold text-rose-700">Not Clocked In</span>
                 )}
-                <span className="text-[12px] text-slate-500">{describeAgentCallLogStatus(agent.callLog)}</span>
+                <span className="text-[length:var(--crm-shared-body,12px)] text-slate-500">{describeAgentCallLogStatus(agent.callLog)}</span>
               </span>
             </div>
-            <p className="mt-1 text-[12.5px] text-slate-600">{teamAgentMainPriority(agent)}</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500">
+            <p className="mt-1 text-[length:var(--crm-shared-body,12.5px)] text-slate-600">{teamAgentMainPriority(agent)}</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[length:var(--crm-shared-body,12px)] text-slate-500">
               <span>Hot: {agent.hotCount}</span>
               <span>Warm: {agent.warmCount}</span>
               <span>Overdue: {agent.followUpsOverdueCount}</span>
@@ -339,16 +339,16 @@ function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; per
             </div>
           </div>
         ))}
-        {data.agents.length === 0 && <p className="text-[13px] text-slate-500">No active agents.</p>}
+        {data.agents.length === 0 && <p className="text-[length:var(--crm-shared-body,13px)] text-slate-500">No active agents.</p>}
       </div>
 
       {data.teamReminderIssues.length > 0 && (
         <div className="mt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Appointment Reminder Issues</p>
+          <p className="text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-amber-700">Appointment Reminder Issues</p>
           <ul className="mt-2 space-y-1.5">
             {data.teamReminderIssues.map((item) => (
               <li key={item.id}>
-                <Link href={item.href} className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 hover:bg-amber-100">
+                <Link href={item.href} className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[length:var(--crm-shared-body,12.5px)] text-amber-900 hover:bg-amber-100">
                   {item.businessName} — {item.reminderIssue}
                 </Link>
               </li>
@@ -357,7 +357,7 @@ function AdminDetails({ data, performanceHref }: { data: SalesCoachTeamData; per
         </div>
       )}
 
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
+      <p className="mt-4 text-[length:var(--crm-shared-note,11px)] font-semibold uppercase tracking-wide text-slate-500">Recommended Actions</p>
       <ActionList actions={buildTeamRecommendedActions(data, { performanceHref })} />
     </div>
   );
