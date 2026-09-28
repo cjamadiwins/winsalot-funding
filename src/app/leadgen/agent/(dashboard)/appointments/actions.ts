@@ -45,6 +45,8 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const appointmentNotes = textOrNull(formData, "appointment_notes");
 
   const supabase = await createSupabaseServerClient();
+  const { data: activeClient } = await supabase.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
+  if (!activeClient) return { error: "This client is inactive." };
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({
