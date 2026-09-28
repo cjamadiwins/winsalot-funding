@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { CallListSegmentRow } from "@/lib/call-list-types";
 
 export default async function LeadgenAgentCallListSegmentsPage() {
@@ -17,7 +18,19 @@ export default async function LeadgenAgentCallListSegmentsPage() {
     .from("call_list_segments")
     .select("*")
     .order("created_at", { ascending: false });
-  const rows = (segments ?? []) as CallListSegmentRow[];
+  const allRows = (segments ?? []) as CallListSegmentRow[];
+  const admin = getSupabaseAdmin();
+  const campaignIds = [...new Set(allRows.map((s) => s.leadgen_campaign_id).filter((id): id is string => !!id))];
+  const { data: campaigns } = campaignIds.length
+    ? await admin.from("leadgen_campaigns").select("id, client_id, status").in("id", campaignIds)
+    : { data: [] as { id: string; client_id: string; status: string }[] };
+  const clientIds = [...new Set((campaigns ?? []).map((c) => c.client_id))];
+  const { data: activeClients } = clientIds.length
+    ? await admin.from("leadgen_clients").select("id").in("id", clientIds).eq("active", true)
+    : { data: [] as { id: string }[] };
+  const activeIds = new Set((activeClients ?? []).map((c) => c.id));
+  const activeCampaignIds = new Set((campaigns ?? []).filter((c) => c.status === "active" && activeIds.has(c.client_id)).map((c) => c.id));
+  const rows = allRows.filter((segment) => segment.leadgen_campaign_id && activeCampaignIds.has(segment.leadgen_campaign_id));
 
   const segmentIds = rows.map((s) => s.id);
   const { data: leadCounts } = segmentIds.length

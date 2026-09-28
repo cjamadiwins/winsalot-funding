@@ -27,7 +27,7 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
   // agent see it) before trusting it - the FK alone would just reject an
   // invalid id, but a client belonging to a row this agent has no
   // business referencing deserves a clear error, not a generic DB failure.
-  const { data: client } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).maybeSingle();
+  const { data: client } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).eq("active", true).maybeSingle();
   if (!client) return { error: "Select a valid Business / Client." };
 
   const { error } = await supabase.from("leadgen_call_logs").insert({
