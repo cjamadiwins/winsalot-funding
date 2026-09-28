@@ -32,6 +32,8 @@ export type ManageFields = {
   serviceType: AgreementServiceType;
   campaignType: CampaignType;
   monthlyTarget: number;
+  appointmentTargetMin: number | null;
+  appointmentTargetMax: number | null;
   monthlyFee: number;
   setupFee: number | null;
   currency: AgreementCurrency;
@@ -49,6 +51,8 @@ export type OnboardingRow = {
   campaignTypeLabel: string;
   serviceTypeLabel: string;
   monthlyTarget: number;
+  appointmentTargetMin: number | null;
+  appointmentTargetMax: number | null;
   monthlyFee: number;
   currency: AgreementCurrency;
   // Set only when isPBF - the exact breakdown/total text for the payment
@@ -161,7 +165,7 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
               <th className="px-2 py-2">Contact</th>
               <th className="px-2 py-2">Campaign Type</th>
               <th className="px-2 py-2">Service Type</th>
-              <th className="px-2 py-2">Target</th>
+              <th className="px-2 py-2">Appointment Target</th>
               <th className="px-2 py-2">Monthly Fee</th>
               <th className="px-2 py-2">Stage</th>
               <th className="px-2 py-2">Client Status</th>
@@ -305,7 +309,11 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                     <td className="break-words px-2 py-2 text-slate-600">{row.contactPerson}</td>
                     <td className="break-words px-2 py-2 text-slate-600">{row.campaignTypeLabel}</td>
                     <td className="break-words px-2 py-2 text-slate-600">{row.serviceTypeLabel}</td>
-                    <td className="px-2 py-2 text-slate-600">{row.monthlyTarget}</td>
+                    <td className="px-2 py-2 text-slate-600">
+                      {row.appointmentTargetMin !== null && row.appointmentTargetMax !== null
+                        ? `${row.appointmentTargetMin}–${row.appointmentTargetMax} appointments (goal)`
+                        : row.monthlyTarget}
+                    </td>
                     <td className="break-words px-2 py-2 text-slate-600">
                       {row.isPilot ? (
                         row.pilotType === "paid" ? (

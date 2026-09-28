@@ -161,8 +161,10 @@ export default function ManageOnboardingRecordModal({
                 </select>
               )}
             </Field>
-            <Field label={isPilot ? "Pilot Goal (Leads/Appointments)" : "Monthly Target"}>
-              {manage.isLocked ? <ReadOnly value={form.monthlyTarget} /> : <input type="number" min={1} value={form.monthlyTarget} onChange={(e) => set("monthlyTarget", e.target.value)} className={inputClass} />}
+            <Field label={isPBF && manage.appointmentTargetMin !== null && manage.appointmentTargetMax !== null ? "Appointment Target" : isPilot ? "Pilot Goal (Leads/Appointments)" : "Monthly Target"}>
+              {isPBF && manage.appointmentTargetMin !== null && manage.appointmentTargetMax !== null
+                ? <ReadOnly value={`${manage.appointmentTargetMin}–${manage.appointmentTargetMax} appointments (goal, not guaranteed sales)`} />
+                : manage.isLocked ? <ReadOnly value={form.monthlyTarget} /> : <input type="number" min={1} value={form.monthlyTarget} onChange={(e) => set("monthlyTarget", e.target.value)} className={inputClass} />}
             </Field>
             <Field label="Pilot Start Date / Campaign Start Date">
               {manage.isLocked ? (

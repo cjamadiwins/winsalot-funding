@@ -91,6 +91,8 @@ export default async function AdminCrmOnboardingPage() {
       campaignTypeLabel: CAMPAIGN_TYPE_LABELS[agreement.campaign_type],
       serviceTypeLabel: AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type],
       monthlyTarget: agreement.monthly_target,
+      appointmentTargetMin: agreement.appointment_target_min,
+      appointmentTargetMax: agreement.appointment_target_max,
       monthlyFee: agreement.monthly_fee,
       currency: agreement.currency,
       // Undefined for a non-PBF agreement (the payment column doesn't
@@ -138,6 +140,8 @@ export default async function AdminCrmOnboardingPage() {
         serviceType: agreement.service_type,
         campaignType: agreement.campaign_type,
         monthlyTarget: agreement.monthly_target,
+        appointmentTargetMin: agreement.appointment_target_min,
+        appointmentTargetMax: agreement.appointment_target_max,
         monthlyFee: agreement.monthly_fee,
         setupFee: agreement.setup_fee,
         currency: agreement.currency,
