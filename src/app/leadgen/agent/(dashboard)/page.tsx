@@ -49,6 +49,7 @@ import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPrevie
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
+import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
@@ -86,6 +87,7 @@ export default async function LeadgenAgentDashboardPage() {
     dncRows,
     { data: myCampaignRestrictions },
     { data: activeClientsWithScripts },
+    websiteTraining,
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -151,6 +153,7 @@ export default async function LeadgenAgentDashboardPage() {
       .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
       .eq("active", true)
       .order("name"),
+    loadWebsiteTraining(false, agent.id),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -565,12 +568,12 @@ export default async function LeadgenAgentDashboardPage() {
           Open the correct client call script before dialing to stay consistent for every business.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-          <Link href="/leadgen/agent/training#mantra-collab" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-            Open Mantra Collab Training
-          </Link>
-          <Link href="/leadgen/agent/training#brents-essentials" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-            Open Brent&apos;s Essentials Training
-          </Link>
+          {websiteTraining.map(({ client }) => (
+            <Link key={client.id} href={`/leadgen/agent/training#website-client-${client.id}`} className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+              Open {client.name} Training
+            </Link>
+          ))}
+          {websiteTraining.length === 0 && <span className="text-[13.5px] text-slate-500">No active campaign training is currently available.</span>}
         </div>
       </section>
     </div>

@@ -3,8 +3,6 @@ import ClientCallScriptPanel from "./ClientCallScriptPanel";
 import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import type { LeadgenClientRow, LeadgenCampaignRow } from "@/lib/leadgen-types";
 
-export const WEBSITE_CLIENT_NAMES = ["Hidebrandt Web Services", "Teknokraft Canada Inc.", "Web6 Solutions"] as const;
-
 type TrainingClient = Pick<LeadgenClientRow, "id" | "name" | "active" | "call_script_value_proposition" | "call_script_services" | "call_script_closing" | "call_script_notes" | "call_script_override">;
 type TrainingCampaign = Pick<LeadgenCampaignRow, "id" | "client_id" | "status" | "territory" | "description" | "service_type" | "qualification_criteria">;
 
