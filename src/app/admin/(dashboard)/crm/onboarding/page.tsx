@@ -9,6 +9,7 @@ import {
   nextRequiredPerformanceBasedFirstAction,
   isAgreementLocked,
   isPerformanceBasedFirst,
+  buildPerformanceBasedFirstPaymentSummary,
   AGREEMENT_SERVICE_TYPE_LABELS,
   INVOICE_TRACKER_STATUS_LABELS,
   CAMPAIGN_TYPE_LABELS,
@@ -91,6 +92,13 @@ export default async function AdminCrmOnboardingPage() {
       serviceTypeLabel: AGREEMENT_SERVICE_TYPE_LABELS[agreement.service_type],
       monthlyTarget: agreement.monthly_target,
       monthlyFee: agreement.monthly_fee,
+      currency: agreement.currency,
+      // Undefined for a non-PBF agreement (the payment column doesn't
+      // read this in that branch) - computed once here, off the
+      // agreement's own stored currency/fee/deposit fields, rather than
+      // ever hardcoded per client, so it can never drift from what's
+      // actually stored (see buildPerformanceBasedFirstPaymentSummary).
+      pbfPaymentSummary: isPBF ? buildPerformanceBasedFirstPaymentSummary(agreement) : null,
       stage,
       nextAction: isPilot
         ? nextRequiredPilotAction(stage as Parameters<typeof nextRequiredPilotAction>[0])
