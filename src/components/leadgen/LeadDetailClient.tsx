@@ -572,7 +572,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationModal && !isCustomCampaignClient && (
+      {showInvitationModal && (
         <ConsultationInvitationModal
           lead={lead}
           agentName={currentUserName}
@@ -590,7 +590,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationFollowUpModal && !isCustomCampaignClient && (
+      {showInvitationFollowUpModal && (
         <ConsultationEmailModal
           lead={lead}
           agentName={currentUserName}
