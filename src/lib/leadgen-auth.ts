@@ -1,6 +1,7 @@
 import "server-only";
+import { cache } from "react";
 import { redirect, notFound } from "next/navigation";
-import { createSupabaseServerClient } from "./supabase-server";
+import { createSupabaseServerClient, getCachedAuthUser } from "./supabase-server";
 import type { LeadgenClientRow, LeadgenUserRow } from "./leadgen-types";
 import { leadgenHomeForRole, normalizeLeadgenRole } from "./leadgen-role";
 
@@ -16,13 +17,22 @@ const FORCE_DEACTIVATED_LEADGEN_EMAIL = "test-agent@winsalotcorp.com";
 // JWT), same as crm-auth.ts, so this doubles as a live check that RLS
 // still sees this user as an active leadgen_users member.
 
-export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+// Wrapped in cache() (not just its own getUser() call below) so that
+// every one of requireLeadgenAdmin/requireLeadgenAgent/requireLeadgenClient/
+// requireLeadgenPortalClient - each of which calls this - reuses one
+// resolved result per request instead of re-running the full getUser() +
+// leadgen_users lookup every time. Combined with a layout calling one of
+// those AND the page itself calling another (defense in depth, same
+// pattern as the Growth CRM's require* gates), this used to mean several
+// redundant network round trips to Supabase on every single navigation.
+export const requireLeadgenUser = cache(async (): Promise<LeadgenUserRow> => {
+  const { data: authData, error: authError } = await getCachedAuthUser();
 
   if (authError || !authData.user) {
     redirect("/leadgen/login");
   }
+
+  const supabase = await createSupabaseServerClient();
 
   if ((authData.user.email ?? "").trim().toLowerCase() === FORCE_DEACTIVATED_LEADGEN_EMAIL) {
     await supabase.auth.signOut();
@@ -62,7 +72,7 @@ export async function requireLeadgenUser(): Promise<LeadgenUserRow> {
   }
 
   return { ...leadgenUser, role } as LeadgenUserRow;
-}
+});
 
 export async function requireLeadgenAdmin(): Promise<LeadgenUserRow> {
   const user = await requireLeadgenUser();

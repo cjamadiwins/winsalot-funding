@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { authCookieName } from "./hosts";
@@ -59,3 +60,23 @@ export async function createSupabaseServerClient() {
     },
   });
 }
+
+// Request-scoped memoization for the single most expensive step every
+// admin/agent auth gate performs. auth.getUser() always validates the
+// session against Supabase's Auth server over the network (never just a
+// local JWT decode), and nearly every route in this app calls a
+// require*() gate in BOTH its shared layout and its own page.tsx
+// (defense in depth - see requireAdminUser/requireCrmAdmin's own
+// comments), plus getUserTimeZonePreferences() does its own separate
+// getUser() call in every layout on top of that. That used to mean 3+
+// separate network round trips for the exact same session on every
+// single navigation - a significant, measurable contributor to slow/
+// unresponsive sidebar clicks. cache() (from "react") ensures every
+// call to this within one request/render reuses the same in-flight or
+// resolved result instead of re-issuing it - it changes nothing about
+// who is authenticated or what they can access, only how many times the
+// identical check runs.
+export const getCachedAuthUser = cache(async () => {
+  const supabase = await createSupabaseServerClient();
+  return supabase.auth.getUser();
+});
