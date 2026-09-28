@@ -36,7 +36,7 @@ export default function PhoneReputationComplianceCard() {
             Help protect Winsalot Corp caller reputation and maintain compliant outbound calling.
           </p>
 
-          <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-[12px] leading-5 text-slate-700 sm:grid-cols-2">
+          <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-[length:var(--crm-shared-body,12px)] leading-5 text-slate-700 sm:grid-cols-2">
             {rules.map((rule) => (
               <li key={rule} className="flex items-start gap-2">
                 <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
@@ -48,13 +48,13 @@ export default function PhoneReputationComplianceCard() {
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 sm:grid-cols-4">
             {statuses.map(([label, value]) => (
               <div key={label} className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                <p className="mt-0.5 text-[11.5px] font-semibold text-slate-800">{value}</p>
+                <p className="text-[length:var(--crm-shared-note,10px)] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-0.5 text-[length:var(--crm-shared-note,11.5px)] font-semibold text-slate-800">{value}</p>
               </div>
             ))}
           </div>
 
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-4 text-amber-900">
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[length:var(--crm-shared-note,11.5px)] leading-4 text-amber-900">
             <span className="font-bold">Admin Reminder:</span> Review caller-ID complaints, Do Not Call activity, unusual calling patterns, and agent call volume regularly.
           </p>
         </div>

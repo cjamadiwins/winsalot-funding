@@ -42,13 +42,13 @@ export default function OperationsMonitoringCard({
         </div>
         <Link
           href={href}
-          className="rounded-full border border-slate-300 px-3.5 py-1.5 text-[12.5px] font-semibold text-slate-700 transition hover:bg-slate-50"
+          className="rounded-full border border-slate-300 px-3.5 py-1.5 text-[length:var(--crm-shared-body,12.5px)] font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           View Monitoring
         </Link>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[length:var(--crm-shared-body,13px)]">
         <span className="font-semibold text-rose-700">{actionRequiredCount} Action Required</span>
         <span className="font-semibold text-amber-700">{warningCount} Warning{warningCount === 1 ? "" : "s"}</span>
         <span className="font-semibold text-emerald-700">{healthyCount} Healthy</span>
@@ -56,7 +56,7 @@ export default function OperationsMonitoringCard({
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
         {categories.map((c) => (
-          <div key={c.key} className="flex items-center gap-1.5 text-[12.5px] text-slate-600">
+          <div key={c.key} className="flex items-center gap-1.5 text-[length:var(--crm-shared-body,12.5px)] text-slate-600">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[c.status]}`} aria-hidden="true" />
             <dt className="shrink-0 font-medium text-slate-500">{c.label}:</dt>
             <dd className="truncate text-slate-800">{c.headline}</dd>

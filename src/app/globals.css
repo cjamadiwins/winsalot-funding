@@ -157,8 +157,8 @@
   --color-accent: var(--crm-accent);
   --color-step-num: var(--crm-accent);
 
-  /* Readability bump (one step), Lead Gen CRM only. Tailwind v4's
-     text-xs/text-sm utilities compile to `font-size: var(--text-xs)` /
+  /* Readability bump (one more small step), Lead Gen CRM only. Tailwind
+     v4's text-xs/text-sm utilities compile to `font-size: var(--text-xs)` /
      `var(--text-sm)` (see node_modules/tailwindcss's generated output) -
      real, cascading CSS custom properties, not compile-time constants -
      so overriding them here raises every existing text-xs/text-sm class
@@ -172,9 +172,30 @@
      display, which use fixed px values, not this token) are
      deliberately untouched, so headings stay proportional and the
      clocks aren't enlarged. `.crm-theme--cleaning` (Growth CRM) below
-     keeps Tailwind's real defaults. */
-  --text-xs: 0.875rem; /* was 0.75rem (12px) -> 14px */
-  --text-sm: 0.9375rem; /* was 0.875rem (14px) -> 15px */
+     keeps Tailwind's real defaults.
+
+     History: 0.75rem/0.875rem (12px/14px) -> 0.875rem/0.9375rem
+     (14px/15px) in #412-#413 -> this change, one more modest step. */
+  --text-xs: 0.9375rem; /* was 0.875rem (14px) -> 15px */
+  --text-sm: 1rem; /* was 0.9375rem (15px) -> 16px */
+
+  /* PhoneReputationComplianceCard, AdminHiyaCallerReputationCard,
+     SalesCoachCard and OperationsMonitoringCard (src/components/crm-ui)
+     are shared with the Growth CRM and hardcode arbitrary sub-14px pixel
+     sizes (text-[10px]..text-[13.5px]) instead of the text-xs/text-sm
+     scale above, so the override above never reached them. Each of
+     those literal classes was changed in place to
+     `text-[length:var(--crm-shared-note,<original px>)]` (labels/meta,
+     originally 10-11.5px) or `text-[length:var(--crm-shared-body,<original
+     px>)]` (body copy, originally 12-13.5px) - the bracketed value is
+     each element's own original size, used as the fallback, so with
+     neither variable set (every context but this one, including the
+     Growth CRM) they render pixel-identical to before. Setting both
+     variables only here raises just the Lead Gen occurrences of these
+     shared cards by roughly the same one small step as text-xs/text-sm
+     above. */
+  --crm-shared-note: 12px;
+  --crm-shared-body: 14px;
 }
 
 /* ---------------------------------------------------------------------
