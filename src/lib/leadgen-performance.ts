@@ -197,11 +197,36 @@ export function computeLeadgenAgentPerformance(
 // the Monthly Performance history (leadgen-performance-history.ts) can
 // count an arbitrary Monday-Friday week the same way the live weekly
 // report does, without duplicating or drifting from this filter.
-export function leadgenCreditedAppointments(
-  appointments: LeadgenPerformanceAppointment[],
-  agentId: string
-): LeadgenPerformanceAppointment[] {
+// Generic over any row shape that's at least a LeadgenPerformanceAppointment
+// (rather than fixed to that exact type) so a caller that selected extra
+// columns - e.g. the Performance page's "Appointments Booked (Week)"
+// drill-down, which also needs phone/email/timezone/meeting_type for its
+// AppointmentCardRecord enrichment - keeps those columns on the filtered
+// result instead of having them typed away.
+export function leadgenCreditedAppointments<T extends LeadgenPerformanceAppointment>(appointments: T[], agentId: string): T[] {
   return appointments.filter((appt) => appt.booking_agent_id === agentId && isLeadgenAppointmentCountable(appt.status));
+}
+
+// Same filter as computeLeadgenWeekBookedCount below, but returning the
+// actual rows instead of just a count - the Performance page's
+// "Appointments Booked (Week)" drill-down card needs the exact records
+// behind that number (booking_agent_id credit + countable status + booked-
+// on date in week), which is a different, narrower-by-agent/wider-by-status
+// definition than the main dashboard's own "Appointments Booked" card
+// (status === "Booked" exactly, no date-created bound - see
+// leadgen-dashboard-records.ts). Kept as its own function (rather than
+// having computeLeadgenWeekBookedCount call `.length` on this) so neither
+// one has to allocate an array it doesn't need.
+export function leadgenCreditedAppointmentsInWeek<T extends LeadgenPerformanceAppointment>(
+  appointments: T[],
+  agentId: string,
+  weekStart: string,
+  weekEnd: string
+): T[] {
+  return leadgenCreditedAppointments(appointments, agentId).filter((appt) => {
+    const key = leadgenDateKey(appt.created_at);
+    return key >= weekStart && key <= weekEnd;
+  });
 }
 
 // Count of an agent's valid (credited, countable) appointments whose
@@ -213,8 +238,5 @@ export function computeLeadgenWeekBookedCount(
   weekStart: string,
   weekEnd: string
 ): number {
-  return leadgenCreditedAppointments(appointments, agentId).filter((appt) => {
-    const key = leadgenDateKey(appt.created_at);
-    return key >= weekStart && key <= weekEnd;
-  }).length;
+  return leadgenCreditedAppointmentsInWeek(appointments, agentId, weekStart, weekEnd).length;
 }

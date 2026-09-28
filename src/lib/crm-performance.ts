@@ -78,6 +78,8 @@ export type CrmPerformanceDeliveredEmail = {
   emailId: string;
   agentId: string | null;
   deliveredAt: string;
+  toEmail: string;
+  subject: string;
 };
 
 export type CrmWeeklyPeriodPerformance = {
@@ -221,6 +223,51 @@ export function computeCrmPeriodPerformance(
     emailsDeliveredPercentage,
     overallPercentage: Math.round((consultationsPercentage + leadsAddedPercentage + emailsDeliveredPercentage) / 3),
   };
+}
+
+export type CrmDeliveredEmailCardRecord = {
+  emailId: string;
+  toEmail: string;
+  subject: string;
+  deliveredAt: string;
+  businessName: string;
+  opportunityId: string;
+};
+
+// The exact records behind computeCrmPeriodPerformance's own
+// `emailsDelivered` count - same records loop, same agentId/inRange
+// filter, just collecting the matching entries (with their parent
+// opportunity's businessName) instead of only incrementing a counter. Kept
+// as its own function rather than having computeCrmPeriodPerformance
+// return this array too, so the common "just give me the percentage" path
+// never has to build a list it won't use.
+export function computeCrmPeriodDeliveredEmailRecords(
+  records: CrmPerformanceOpportunityRecord[],
+  agentId: string,
+  periodStart: string,
+  periodEnd: string
+): CrmDeliveredEmailCardRecord[] {
+  const inRange = (iso: string) => {
+    const key = crmDateKey(iso);
+    return key >= periodStart && key <= periodEnd;
+  };
+
+  const result: CrmDeliveredEmailCardRecord[] = [];
+  for (const record of records) {
+    for (const email of record.deliveredEmails) {
+      if (email.agentId === agentId && inRange(email.deliveredAt)) {
+        result.push({
+          emailId: email.emailId,
+          toEmail: email.toEmail,
+          subject: email.subject,
+          deliveredAt: email.deliveredAt,
+          businessName: record.businessName,
+          opportunityId: record.opportunityId,
+        });
+      }
+    }
+  }
+  return result.sort((a, b) => new Date(b.deliveredAt).getTime() - new Date(a.deliveredAt).getTime());
 }
 
 // Computes one agent's current weekly snapshot plus history from a shared

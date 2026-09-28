@@ -34,7 +34,7 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
     .not("opportunity_id", "is", null);
   const deliveredEmailQuery = admin
     .from("crm_lead_emails")
-    .select("id, opportunity_id, agent_id, delivered_at")
+    .select("id, opportunity_id, agent_id, delivered_at, to_email, subject")
     .in("email_type", ["follow_up", "consultation_invite"])
     .not("opportunity_id", "is", null)
     .not("delivered_at", "is", null);
@@ -78,6 +78,8 @@ export async function getCrmPerformanceRecords(agentId?: string): Promise<CrmPer
       emailId: email.id as string,
       agentId: (email.agent_id as string | null) ?? null,
       deliveredAt: email.delivered_at as string,
+      toEmail: email.to_email as string,
+      subject: email.subject as string,
     });
     deliveredEmailsByOpportunity.set(email.opportunity_id, entries);
   }

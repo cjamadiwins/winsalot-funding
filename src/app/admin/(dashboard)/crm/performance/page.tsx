@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { crmWeekStartOf, computeCrmAgentPerformance, crmDateKey } from "@/lib/crm-performance";
+import { crmWeekStartOf, computeCrmAgentPerformance, computeCrmPeriodDeliveredEmailRecords, crmDateKey } from "@/lib/crm-performance";
 import { syncCrmWeeklyPerformanceHistory } from "@/lib/crm-performance-history-sync";
 import type { CrmWeeklyHistoryRow } from "@/lib/crm-performance-history";
 import type { CrmUserRow } from "@/lib/crm-types";
@@ -63,9 +63,24 @@ export default async function AdminCrmPerformancePage() {
         {allAgents.length === 0 ? (
           <p className="text-[13.5px] text-slate-500">No active agents yet.</p>
         ) : (
-          allAgents.map((agent) => (
-            <CrmPerformanceCard key={agent.id} agentName={agent.full_name || agent.email} performance={computeCrmAgentPerformance(records, agent.id)} />
-          ))
+          allAgents.map((agent) => {
+            const performance = computeCrmAgentPerformance(records, agent.id);
+            return (
+              <CrmPerformanceCard
+                key={agent.id}
+                agentName={agent.full_name || agent.email}
+                performance={performance}
+                deliveredEmailRecords={computeCrmPeriodDeliveredEmailRecords(
+                  records,
+                  agent.id,
+                  performance.current.periodStart,
+                  performance.current.periodEnd
+                )}
+                opportunityHrefBase="/admin/crm/opportunities"
+                emailsHref="/admin/crm/emails"
+              />
+            );
+          })
         )}
       </div>
 

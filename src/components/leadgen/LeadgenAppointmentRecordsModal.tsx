@@ -22,6 +22,10 @@ export default function LeadgenAppointmentRecordsModal({
   leadHrefBase,
   appointmentsHref,
   emptyMessage = "No appointments currently booked.",
+  // Overrides the big number shown on the card (e.g. "3/4" against a
+  // weekly target) while the modal's row list still always comes from
+  // `records` - defaults to the plain count every existing caller expects.
+  valueLabel,
 }: {
   label: string;
   tone: KpiTone;
@@ -31,11 +35,12 @@ export default function LeadgenAppointmentRecordsModal({
   leadHrefBase: string;
   appointmentsHref: string;
   emptyMessage?: string;
+  valueLabel?: string;
 }) {
   return (
     <CrmCardModal
       label={label}
-      value={records.length}
+      value={valueLabel ?? records.length}
       tone={tone}
       icon={icon}
       trend={trend}

@@ -1,6 +1,6 @@
 import { requireCrmUser } from "@/lib/crm-auth";
 import { getCrmPerformanceRecords } from "@/lib/crm-performance-data";
-import { computeCrmAgentPerformance } from "@/lib/crm-performance";
+import { computeCrmAgentPerformance, computeCrmPeriodDeliveredEmailRecords } from "@/lib/crm-performance";
 import CrmPerformanceCard from "@/components/CrmPerformanceCard";
 
 // Agent's own view of the Winsalot Growth CRM's Agent Performance Report - just
@@ -22,7 +22,18 @@ export default async function AgentPerformancePage() {
       </p>
 
       <div className="mt-6">
-        <CrmPerformanceCard agentName={crmUser.full_name || crmUser.email} performance={performance} />
+        <CrmPerformanceCard
+          agentName={crmUser.full_name || crmUser.email}
+          performance={performance}
+          deliveredEmailRecords={computeCrmPeriodDeliveredEmailRecords(
+            records,
+            crmUser.id,
+            performance.current.periodStart,
+            performance.current.periodEnd
+          )}
+          opportunityHrefBase="/agent/opportunities"
+          emailsHref="/agent/emails"
+        />
       </div>
     </div>
   );
