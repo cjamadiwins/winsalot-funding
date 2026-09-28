@@ -43,6 +43,8 @@ import {
   pilotProgramLabel,
   pilotTotalCost,
   isPerformanceBasedFirst,
+  isStagedPerformanceBasedFirst,
+  buildPerformanceBasedFirstPaymentSummary,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type AgreementServiceType,
   type AgreementTargetType,
@@ -138,7 +140,7 @@ export default function AgreementDetailClient({
   const [showRecordInvoice, setShowRecordInvoice] = useState(openRecordInvoice);
   const [invoiceForm, setInvoiceForm] = useState({
     invoiceNumber: "",
-    invoiceAmount: String(agreement.monthly_fee + (agreement.setup_fee ?? 0)),
+    invoiceAmount: String((agreement.monthly_fee ?? 0) + (agreement.setup_fee ?? 0)),
     dateSent: "",
     paymentDueDate: "",
   });
@@ -313,7 +315,7 @@ export default function AgreementDetailClient({
                 {draft.pilotType === "paid" && (
                   <>
                     <Field label="Pilot Fee">
-                      <input type="number" min={0} step="0.01" value={draft.monthlyFee} onChange={(e) => set("monthlyFee", Number(e.target.value))} className={inputClass} />
+                      <input type="number" min={0} step="0.01" value={draft.monthlyFee ?? ""} onChange={(e) => set("monthlyFee", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
                     </Field>
                     <Field label="Setup Fee (if applicable)">
                       <input
@@ -342,12 +344,12 @@ export default function AgreementDetailClient({
               </>
             ) : isPBF ? (
               <Field label="Campaign Fee">
-                <input type="number" min={0} step="0.01" value={draft.monthlyFee} onChange={(e) => set("monthlyFee", Number(e.target.value))} className={inputClass} />
+                <input type="number" min={0} step="0.01" value={draft.monthlyFee ?? ""} onChange={(e) => set("monthlyFee", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
               </Field>
             ) : (
               <>
                 <Field label="Monthly Fee">
-                  <input type="number" min={0} step="0.01" value={draft.monthlyFee} onChange={(e) => set("monthlyFee", Number(e.target.value))} className={inputClass} />
+                  <input type="number" min={0} step="0.01" value={draft.monthlyFee ?? ""} onChange={(e) => set("monthlyFee", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
                 </Field>
                 <Field label="Setup Fee (if applicable)">
                   <input
@@ -393,10 +395,19 @@ export default function AgreementDetailClient({
               Paid Pilot — Total Pilot Cost: ${(Number(draft.monthlyFee) + Number(draft.setupFee ?? 0)).toLocaleString()} {draft.currency}
             </p>
           )}
-          {isPBF && (
+          {isPBF && isStagedPerformanceBasedFirst(agreement) && (
             <p className="rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
-              Performance-Based First Campaign — Campaign Fee: ${Number(draft.monthlyFee).toLocaleString()} {draft.currency} · Upfront Payment: $0 · due when a
-              Winsalot-generated prospect converts into a paying customer.
+              {(() => {
+                const summary = buildPerformanceBasedFirstPaymentSummary(agreement);
+                return `Performance-Based Campaign — ${summary.breakdown} · ${summary.totalLabel}`;
+              })()}
+            </p>
+          )}
+          {isPBF && !isStagedPerformanceBasedFirst(agreement) && (
+            <p className="rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
+              Performance-Based First Campaign —{" "}
+              {draft.monthlyFee != null ? `Campaign Fee: $${Number(draft.monthlyFee).toLocaleString()} ${draft.currency}` : "Campaign Fee: Not yet set"} · Upfront
+              Payment: $0 · due when a Winsalot-generated prospect converts into a paying customer.
             </p>
           )}
           <Field label="Additional Notes">
@@ -434,7 +445,7 @@ export default function AgreementDetailClient({
             {isPilot ? (
               <>
                 <Info label="Pilot Type" value={PILOT_TYPE_LABELS[agreement.pilot_type]} />
-                <Info label="Pilot Fee" value={isPaidPilot ? `$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "$0"} />
+                <Info label="Pilot Fee" value={isPaidPilot ? `$${(agreement.monthly_fee ?? 0).toLocaleString()} ${agreement.currency}` : "$0"} />
                 <Info label="Setup Fee" value={agreement.setup_fee ? `$${agreement.setup_fee.toLocaleString()} ${agreement.currency}` : "$0"} />
                 {isPaidPilot && <Info label="Total Pilot Cost" value={`$${pilotTotalCost(agreement).toLocaleString()} ${agreement.currency}`} />}
                 {isPaidPilot && <Info label="Payment Due Date" value={agreement.payment_due_date ?? "-"} />}
@@ -447,8 +458,22 @@ export default function AgreementDetailClient({
               </>
             ) : isPBF ? (
               <>
-                <Info label="Campaign Fee" value={`$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}`} />
-                <Info label="Upfront Payment" value="$0" />
+                {isStagedPerformanceBasedFirst(agreement) ? (
+                  (() => {
+                    const summary = buildPerformanceBasedFirstPaymentSummary(agreement);
+                    return (
+                      <>
+                        <Info label="Performance-Based Campaign" value={summary.breakdown} />
+                        <Info label="Total Potential Campaign Value" value={summary.totalLabel.replace("Total Potential Campaign Value: ", "")} />
+                      </>
+                    );
+                  })()
+                ) : (
+                  <>
+                    <Info label="Campaign Fee" value={agreement.monthly_fee != null ? `$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "Not yet set"} />
+                    <Info label="Upfront Payment" value="$0" />
+                  </>
+                )}
                 <Info label="Start Date" value={agreement.campaign_start_date ?? "-"} />
                 <Info label="Conversion Status" value={CONVERSION_STATUS_LABELS[agreement.conversion_status]} />
                 {agreement.conversion_status === "converted" && <Info label="Converted" value={agreement.converted_at ?? "-"} />}
@@ -456,7 +481,7 @@ export default function AgreementDetailClient({
               </>
             ) : (
               <>
-                <Info label="Monthly Fee" value={`$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}`} />
+                <Info label="Monthly Fee" value={`$${(agreement.monthly_fee ?? 0).toLocaleString()} ${agreement.currency}`} />
                 <Info label="Setup Fee" value={agreement.setup_fee ? `$${agreement.setup_fee.toLocaleString()} ${agreement.currency}` : "None"} />
                 <Info label="Campaign Start Date" value={agreement.campaign_start_date ?? "-"} />
                 <Info label="Billing Frequency" value={agreement.billing_frequency} />
@@ -568,9 +593,19 @@ export default function AgreementDetailClient({
             </div>
           )}
 
-          {isPBF && (
+          {isPBF && isStagedPerformanceBasedFirst(agreement) && (
             <p className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
-              {PERFORMANCE_BASED_FIRST_DOC_LABEL} — Campaign Fee: ${agreement.monthly_fee.toLocaleString()} {agreement.currency} · Upfront Payment: $0
+              {(() => {
+                const summary = buildPerformanceBasedFirstPaymentSummary(agreement);
+                return `Performance-Based Campaign — ${summary.breakdown} · ${summary.totalLabel}`;
+              })()}
+            </p>
+          )}
+          {isPBF && !isStagedPerformanceBasedFirst(agreement) && (
+            <p className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
+              {PERFORMANCE_BASED_FIRST_DOC_LABEL} —{" "}
+              {agreement.monthly_fee != null ? `Campaign Fee: $${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "Campaign Fee: Not yet set"} · Upfront
+              Payment: $0
             </p>
           )}
 
