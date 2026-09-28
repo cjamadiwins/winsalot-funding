@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "./supabase-server";
 import type { TrainingClient, TrainingCampaign } from "@/components/leadgen/WebsiteCampaignTraining";
 
 const clientFields = "id, name, active, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override";
-const campaignFields = "id, client_id, status, territory, description, service_type, qualification_criteria";
+const campaignFields = "id, client_id, status, start_date, territory, description, service_type, qualification_criteria";
 const WEBSITE_SERVICE = /website|web design|web development|seo|e-commerce/i;
 
 export async function loadWebsiteTraining(admin: boolean, agentId?: string) {
@@ -15,16 +15,16 @@ export async function loadWebsiteTraining(admin: boolean, agentId?: string) {
   if (!activeClients.length) return [];
 
   const [{ data: campaigns, error: campaignsError }, restrictionsResult] = await Promise.all([
-    db.from("leadgen_campaigns").select(campaignFields).in("client_id", activeClients.map((client) => client.id)).in("status", admin ? ["active", "paused"] : ["active"]),
+    db.from("leadgen_campaigns").select(campaignFields).in("client_id", activeClients.map((client) => client.id)).in("status", ["active", "paused"]),
     !admin && agentId
       ? db.from("leadgen_campaign_agents").select("campaign_id").eq("agent_id", agentId)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (campaignsError) throw campaignsError;
   if (restrictionsResult.error) throw restrictionsResult.error;
-  // Matches the existing leadgen_agent_campaign_allowed rule: no rows
-  // means unrestricted; otherwise only explicitly assigned campaigns.
-  const restrictedIds = restrictionsResult.data?.length ? new Set(restrictionsResult.data.map((row) => row.campaign_id)) : null;
+  // Preparation materials are deliberately narrower than the legacy
+  // unrestricted work policy: an agent needs an explicit campaign row.
+  const restrictedIds = admin ? null : new Set((restrictionsResult.data ?? []).map((row) => row.campaign_id));
   const permitted = ((campaigns ?? []) as TrainingCampaign[]).filter((campaign) => !restrictedIds || restrictedIds.has(campaign.id));
   return activeClients.flatMap((client) => {
     const relevant = permitted.filter((candidate) => candidate.client_id === client.id);

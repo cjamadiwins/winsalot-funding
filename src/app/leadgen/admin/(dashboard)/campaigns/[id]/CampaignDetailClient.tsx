@@ -16,6 +16,7 @@ import {
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { assignCampaignAgentsAction, updateCampaignAction } from "../../actions";
 import type { LeadgenConversionFunnel } from "@/lib/leadgen-conversions";
+import type { getWebsiteLaunchReadiness } from "@/lib/leadgen-launch-readiness";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -28,6 +29,7 @@ export default function CampaignDetailClient({
   assignedAgents,
   bookingLink,
   conversionFunnel,
+  launchReadiness,
 }: {
   campaign: LeadgenCampaignRow;
   client: LeadgenClientRow;
@@ -49,6 +51,7 @@ export default function CampaignDetailClient({
   // card above (lead-to-appointment), based on actual confirmed paying
   // customers rather than merely appointments.
   conversionFunnel: LeadgenConversionFunnel;
+  launchReadiness: Awaited<ReturnType<typeof getWebsiteLaunchReadiness>> | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -96,6 +99,14 @@ export default function CampaignDetailClient({
 
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
+      {launchReadiness && <section className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+        <h2 className="font-bold text-slate-900">Campaign launch readiness</h2>
+        <p className="mt-1">Launch Date: {campaign.start_date || "September 29, 2026"} · {campaign.status === "active" ? "Campaign Active" : "Campaign Scheduled / Preparation"}</p>
+        <p className="mt-1">{launchReadiness.agreementLabel} · {launchReadiness.depositLabel}</p>
+        {launchReadiness.blockers.length > 0 && <p className="mt-2 font-semibold text-amber-800">Admin review required: {launchReadiness.blockers.join("; ")}.</p>}
+        <p className="mt-2">Activation is Admin-controlled. Pausing the campaign remains available at any time. Sending an agreement does not count as acceptance.</p>
+      </section>}
+
       {editing ? (
         <form
           action={(formData) => {
@@ -120,6 +131,10 @@ export default function CampaignDetailClient({
               <option value="completed">Completed</option>
             </select>
           </label>
+          {launchReadiness?.blockers.length ? <label className="flex items-start gap-2 text-[13px] text-amber-900 sm:col-span-2">
+            <input type="checkbox" name="launch_override" value="yes" className="mt-1" />
+            I reviewed the agreement and payment blockers and explicitly authorize activation despite them (available on or after September 29 only).
+          </label> : null}
           <label className="flex flex-col gap-1.5 sm:col-span-2">
             <span className="text-[13px] font-semibold text-slate-600">Description</span>
             <textarea name="description" defaultValue={campaign.description ?? ""} className={`${inputClass} min-h-[60px] resize-y`} />

@@ -18,6 +18,7 @@ import {
   type LeadgenRole,
 } from "@/lib/leadgen-types";
 import { PAYROLL_CURRENCIES, type PayrollCurrency } from "@/lib/payroll";
+import { getWebsiteLaunchReadiness, torontoDateKey, WEBSITE_LAUNCH_CLIENTS, WEBSITE_LAUNCH_DATE } from "@/lib/leadgen-launch-readiness";
 
 type ActionResult = {
   error?: string;
@@ -585,6 +586,23 @@ export async function updateCampaignAction(campaignId: string, formData: FormDat
   if (!["active", "paused", "completed"].includes(status)) return { error: "Invalid status." };
   const appointmentGoal = intOrNull(formData, "appointment_goal");
   if (appointmentGoal === undefined) return { error: "Appointment Goal must be a whole number." };
+
+  const adminDb = getSupabaseAdmin();
+  const { data: currentCampaign } = await adminDb.from("leadgen_campaigns").select("status, client_id").eq("id", campaignId).maybeSingle();
+  if (!currentCampaign) return { error: "Campaign not found." };
+  if (status === "active" && currentCampaign.status !== "active") {
+    const { data: launchClient } = await adminDb.from("leadgen_clients").select("name, active").eq("id", currentCampaign.client_id).maybeSingle();
+    if (!launchClient?.active) return { error: "Cannot activate a campaign for an inactive client." };
+    if (WEBSITE_LAUNCH_CLIENTS.includes(launchClient.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])) {
+      const requestedStart = String(formData.get("start_date") ?? "").trim();
+      const earliestStart = requestedStart > WEBSITE_LAUNCH_DATE ? requestedStart : WEBSITE_LAUNCH_DATE;
+      if (torontoDateKey() < earliestStart) return { error: `Outbound production cannot begin before ${earliestStart}.` };
+      const readiness = await getWebsiteLaunchReadiness(currentCampaign.client_id);
+      if (readiness.blockers.length && formData.get("launch_override") !== "yes") {
+        return { error: `Review launch requirements before activation: ${readiness.blockers.join("; ")}. Use the explicit Admin override if approved.` };
+      }
+    }
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase

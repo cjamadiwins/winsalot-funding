@@ -50,6 +50,7 @@ import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
+import { WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
@@ -278,7 +279,20 @@ export default async function LeadgenAgentDashboardPage() {
   const permittedClientIds = restrictedCampaignIds
     ? new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id))
     : null;
-  const callScriptClients = (activeClientsWithScripts ?? []).filter((c) => !permittedClientIds || permittedClientIds.has(c.id));
+  const preparationClientIds = new Set(websiteTraining.map(({ client }) => client.id));
+  const callScriptClients = (activeClientsWithScripts ?? []).filter((c) =>
+    WEBSITE_LAUNCH_CLIENTS.includes(c.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])
+      ? preparationClientIds.has(c.id)
+      : !permittedClientIds || permittedClientIds.has(c.id)
+  );
+
+  // The preparation summary reads only segments explicitly assigned to
+  // this agent. No campaign status or call-list write policy is changed.
+  const { data: assignedSegmentRows } = await supabase.from("call_list_segment_agents").select("segment_id").eq("agent_id", agent.id);
+  const assignedSegmentIds = (assignedSegmentRows ?? []).map((row) => row.segment_id);
+  const { data: preparationSegments } = assignedSegmentIds.length
+    ? await supabase.from("call_list_segments").select("id, name, status, leadgen_campaign_id").in("id", assignedSegmentIds)
+    : { data: [] as { id: string; name: string; status: string; leadgen_campaign_id: string | null }[] };
 
   // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
   // numeric-score-based "hot" definition (opportunityPriorityLevel) the
@@ -563,17 +577,28 @@ export default async function LeadgenAgentDashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
-        <p className="mt-2 text-[13.5px] text-slate-600">
-          Open the correct client call script before dialing to stay consistent for every business.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-          {websiteTraining.map(({ client }) => (
-            <Link key={client.id} href={`/leadgen/agent/training#website-client-${client.id}`} className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-              Open {client.name} Training
-            </Link>
-          ))}
-          {websiteTraining.length === 0 && <span className="text-[13.5px] text-slate-500">No active campaign training is currently available.</span>}
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Current Campaigns</h2>
+        <p className="mt-2 text-[13.5px] text-slate-600">Review your campaign training, scripts and assigned leads before launch. Outbound calling begins September 29, 2026 after Admin activates the campaign.</p>
+        {websiteTraining.length === 0 && <p className="mt-3 text-[13.5px] text-slate-500">No website-services campaign is currently assigned to you.</p>}
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          {websiteTraining.map(({ client, campaign }) => {
+            const segments = (preparationSegments ?? []).filter((segment) => segment.leadgen_campaign_id === campaign.id);
+            return <div key={campaign.id} className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 text-[13px] text-slate-700">
+              <Link href={`/leadgen/agent/training#website-client-${client.id}`} className="font-bold text-sky-700 hover:underline">{client.name}</Link>
+              <p className="mt-1 font-semibold">{campaign.status === "active" ? "Active" : "Scheduled — Preparation"} · Launch Date: {campaign.start_date || "September 29, 2026"}</p>
+              <p className="mt-2"><strong>Geography:</strong> {campaign.territory || "See campaign training"}</p>
+              <p><strong>Services:</strong> {client.call_script_services || campaign.service_type || campaign.description || "See campaign training"}</p>
+              <p><strong>Appointment Target:</strong> 8–12 appointments (goal, not guaranteed sales)</p>
+              <p><strong>Qualified lead:</strong> {campaign.qualification_criteria?.length ? campaign.qualification_criteria.join("; ") : "Relevant business and appropriate contact, genuine interest in services, willing to meet the client"}</p>
+              <p><strong>Notes:</strong> {client.call_script_notes || campaign.description || "Review client training before calling"}</p>
+              <p><strong>Call list:</strong> {segments.length ? segments.map((segment) => `${segment.name} (${segment.status})`).join(", ") : "No assigned segment yet"}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-sky-700">
+                <Link href={`/leadgen/agent/training#website-client-${client.id}`} className="hover:underline">Open training</Link>
+                <Link href={`/leadgen/agent/training#website-script-${client.id}`} className="hover:underline">Open customized script</Link>
+                {segments.some((segment) => segment.status !== "draft") && <Link href="/leadgen/agent/call-list-segments" className="hover:underline">Open assigned call lists</Link>}
+              </div>
+            </div>;
+          })}
         </div>
       </section>
     </div>

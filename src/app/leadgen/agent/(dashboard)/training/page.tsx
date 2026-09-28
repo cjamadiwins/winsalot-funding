@@ -29,7 +29,7 @@ export default async function LeadgenAgentTrainingPage() {
       <ColdCallingTrainingSection crm="leadgen" role="agent" initialCompletion={coldCallingCompletion} />
       <ConnectProposeCloseCourse crm="leadgen" />
       <CallLogTrainingContent />
-      {websiteCampaigns.length > 0 ? <WebsiteServicesCampaignTraining /> : <p className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 text-sm text-slate-600">No active website-services campaign is currently assigned or available for calling.</p>}
+      {websiteCampaigns.length > 0 ? <WebsiteServicesCampaignTraining /> : <p className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 text-sm text-slate-600">No website-services campaign is currently assigned to you.</p>}
       {websiteCampaigns.map(({ client, campaign }) => <WebsiteClientTrainingCard key={client.id} client={client} campaign={campaign} agentName={user.full_name || user.email} admin={false} />)}
     </div>
   );
