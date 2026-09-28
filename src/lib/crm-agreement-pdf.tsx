@@ -9,6 +9,8 @@ import {
   pilotProgramLabel,
   pilotTotalCost,
   isPerformanceBasedFirst,
+  isStagedPerformanceBasedFirst,
+  buildPerformanceBasedFirstPaymentSummary,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
@@ -140,20 +142,34 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
           </>
         ) : isPBF ? (
           <>
-            <View style={styles.sectionRow}>
-              <View>
-                <Text style={styles.label}>Campaign Fee</Text>
-                <Text style={styles.value}>{formatCurrency(agreement.monthly_fee, agreement.currency)}</Text>
+            {isStagedPerformanceBasedFirst(agreement) ? (
+              <View style={styles.sectionRow}>
+                <View>
+                  <Text style={styles.label}>Performance-Based Campaign</Text>
+                  <Text style={styles.value}>{buildPerformanceBasedFirstPaymentSummary(agreement).breakdown}</Text>
+                  <Text style={styles.value}>{buildPerformanceBasedFirstPaymentSummary(agreement).totalLabel}</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Conversion Status</Text>
+                  <Text style={styles.value}>{CONVERSION_STATUS_LABELS[agreement.conversion_status]}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.label}>Upfront Payment</Text>
-                <Text style={styles.value}>$0.00</Text>
+            ) : (
+              <View style={styles.sectionRow}>
+                <View>
+                  <Text style={styles.label}>Campaign Fee</Text>
+                  <Text style={styles.value}>{agreement.monthly_fee != null ? formatCurrency(agreement.monthly_fee, agreement.currency) : "Not yet set"}</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Upfront Payment</Text>
+                  <Text style={styles.value}>$0.00</Text>
+                </View>
+                <View>
+                  <Text style={styles.label}>Conversion Status</Text>
+                  <Text style={styles.value}>{CONVERSION_STATUS_LABELS[agreement.conversion_status]}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.label}>Conversion Status</Text>
-                <Text style={styles.value}>{CONVERSION_STATUS_LABELS[agreement.conversion_status]}</Text>
-              </View>
-            </View>
+            )}
             {agreement.conversion_status === "converted" && (
               <View style={styles.sectionRow}>
                 <View>

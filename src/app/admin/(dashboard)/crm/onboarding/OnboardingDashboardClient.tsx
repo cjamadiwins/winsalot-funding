@@ -34,7 +34,9 @@ export type ManageFields = {
   monthlyTarget: number;
   appointmentTargetMin: number | null;
   appointmentTargetMax: number | null;
-  monthlyFee: number;
+  // Nullable only for a Performance-Based First Campaign - see
+  // AgreementDraftInput's own comment on this same field (actions.ts).
+  monthlyFee: number | null;
   setupFee: number | null;
   currency: AgreementCurrency;
   campaignStartDate: string | null;

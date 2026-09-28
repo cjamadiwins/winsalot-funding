@@ -16,6 +16,8 @@ import {
   PAYMENT_STATUSES,
   isAgreementLocked,
   isPerformanceBasedFirst,
+  isStagedPerformanceBasedFirst,
+  stagedPerformanceBasedFirstAmounts,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
@@ -283,7 +285,11 @@ export type AgreementDraftInput = {
   serviceType: AgreementServiceType;
   targetType: AgreementTargetType;
   monthlyTarget: number;
-  monthlyFee: number;
+  // Nullable only for a Performance-Based First Campaign - see
+  // crm-agreement-types.ts's CrmClientAgreementRow.monthly_fee comment.
+  // updateAgreementDraftAction still requires a real, non-negative value
+  // for a Standard Monthly agreement or a Paid Pilot, unchanged.
+  monthlyFee: number | null;
   setupFee: number | null;
   currency: AgreementCurrency;
   targetIndustries: string[];
@@ -341,12 +347,18 @@ export async function updateAgreementDraftAction(agreementId: string, input: Agr
     if (input.targetLocations.length === 0) return { error: "At least one target location is required." };
     if (isPaidPilot) {
       if (!AGREEMENT_CURRENCIES.includes(input.currency)) return { error: "Invalid currency." };
-      if (input.monthlyFee < 0) return { error: "Pilot fee cannot be negative." };
+      if (input.monthlyFee === null || input.monthlyFee < 0) return { error: "Pilot fee cannot be negative." };
       if (input.setupFee !== null && input.setupFee < 0) return { error: "Setup fee cannot be negative." };
     }
+  } else if (isPBF) {
+    // Blank/null is allowed here - a staged agreement's real terms live in
+    // staged_deposit_amount (see stagedPerformanceBasedFirstAmounts), and
+    // even a non-staged one may still be mid-edit. sendAgreementAction is
+    // what actually requires a real value before this agreement can go out.
+    if (input.monthlyFee !== null && input.monthlyFee < 0) return { error: "Campaign fee cannot be negative." };
   } else {
     if (!AGREEMENT_BILLING_FREQUENCIES.includes(input.billingFrequency)) return { error: "Invalid billing frequency." };
-    if (input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
+    if (input.monthlyFee === null || input.monthlyFee < 0) return { error: "Monthly fee cannot be negative." };
   }
 
   // A Free Pilot always shows Pilot Fee: $0 / Setup Fee: $0, forced
@@ -415,7 +427,13 @@ export async function sendAgreementAction(agreementId: string, reviewedConfirmat
   const { data: agreement } = await supabase.from("crm_client_agreements").select("*").eq("id", agreementId).maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be sent." };
-  if (!agreement.monthly_fee && agreement.monthly_fee !== 0) return { error: "Monthly fee is required before sending." };
+  // A staged Performance-Based First Campaign's real terms live in
+  // staged_deposit_amount, not monthly_fee - it's allowed to stay blank
+  // (see the Campaign Fee form-fix). Every other agreement still requires
+  // a real, non-negative Campaign/Monthly/Pilot Fee before it can be sent.
+  if (!isStagedPerformanceBasedFirst(agreement) && !agreement.monthly_fee && agreement.monthly_fee !== 0) {
+    return { error: "Monthly fee is required before sending." };
+  }
   if (agreement.campaign_type === "standard_monthly") {
     if (!agreement.payment_due_terms) return { error: "Payment due terms are required before sending." };
     if (!agreement.cancellation_terms) return { error: "Cancellation terms are required before sending." };
@@ -1288,7 +1306,7 @@ export async function recordConversionNotificationAction(agreementId: string): P
 
   const { data: agreement } = await supabase
     .from("crm_client_agreements")
-    .select("id, campaign_type, status, conversion_status, client_id, opportunity_id, monthly_fee, currency")
+    .select("id, campaign_type, status, conversion_status, client_id, opportunity_id, monthly_fee, staged_deposit_amount, currency")
     .eq("id", agreementId)
     .maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
@@ -1302,12 +1320,19 @@ export async function recordConversionNotificationAction(agreementId: string): P
     .eq("id", agreementId);
   if (error) return { error: "Failed to record the conversion." };
 
+  // A staged agreement's first conversion only makes its per-conversion
+  // share due (e.g. CA$250 of a CA$750 total), never the full monthly_fee
+  // - see stagedPerformanceBasedFirstAmounts().
+  const amountNowDue = isStagedPerformanceBasedFirst(agreement)
+    ? stagedPerformanceBasedFirstAmounts(agreement).perConversion
+    : Number(agreement.monthly_fee ?? 0);
+
   await logOnboardingActivity(supabase, {
     clientId: agreement.client_id,
     opportunityId: agreement.opportunity_id,
     admin,
     activityType: "performance_conversion_recorded",
-    notes: `Client-notified conversion recorded by ${performedByName(admin)} - the $${Number(agreement.monthly_fee).toLocaleString()} ${agreement.currency} Campaign Fee is now due.`,
+    notes: `Client-notified conversion recorded by ${performedByName(admin)} - the $${amountNowDue.toLocaleString()} ${agreement.currency} ${isStagedPerformanceBasedFirst(agreement) ? "first conversion payment" : "Campaign Fee"} is now due.`,
   });
 
   revalidatePath(`/admin/crm/agreements/${agreementId}`);
@@ -1326,7 +1351,7 @@ export async function generatePerformanceBasedFirstInvoiceAction(agreementId: st
 
   const { data: agreement } = await supabase
     .from("crm_client_agreements")
-    .select("id, campaign_type, conversion_status, status, client_id, opportunity_id, monthly_fee, currency, contact_person, payment_due_date, invoice_id")
+    .select("id, campaign_type, conversion_status, status, client_id, opportunity_id, monthly_fee, staged_deposit_amount, currency, contact_person, payment_due_date, invoice_id")
     .eq("id", agreementId)
     .maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
@@ -1335,7 +1360,17 @@ export async function generatePerformanceBasedFirstInvoiceAction(agreementId: st
   if (agreement.conversion_status !== "converted") return { error: "Record the Client's conversion notice before generating an invoice." };
   if (agreement.invoice_id) return { error: "An invoice already exists for this agreement - open it from the Invoices page instead." };
 
-  const lineItems: LineItemInput[] = [{ description: "Campaign Fee", quantity: 1, unit_price: Number(agreement.monthly_fee) }];
+  // A staged agreement's first conversion only invoices its per-conversion
+  // share (e.g. CA$250 of a CA$750 total), never the full monthly_fee -
+  // see stagedPerformanceBasedFirstAmounts().
+  const isStaged = isStagedPerformanceBasedFirst(agreement);
+  const lineItems: LineItemInput[] = [
+    {
+      description: isStaged ? "First Conversion Payment" : "Campaign Fee",
+      quantity: 1,
+      unit_price: isStaged ? stagedPerformanceBasedFirstAmounts(agreement).perConversion : Number(agreement.monthly_fee ?? 0),
+    },
+  ];
 
   const formData = new FormData();
   formData.set("client_id", agreement.client_id);
@@ -1443,7 +1478,9 @@ export type ManageOnboardingRecordInput = {
   serviceType: AgreementServiceType;
   campaignType: CampaignType;
   monthlyTarget: number;
-  monthlyFee: number;
+  // Nullable only for a Performance-Based First Campaign - see
+  // AgreementDraftInput's own comment on this same field.
+  monthlyFee: number | null;
   setupFee: number | null;
   currency: AgreementCurrency;
   campaignStartDate: string | null;

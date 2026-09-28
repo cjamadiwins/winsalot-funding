@@ -1,5 +1,5 @@
 import type { KpiTone } from "@/components/crm-ui/KpiCard";
-import { isPerformanceBasedFirst, isStagedPerformanceBasedFirst, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
+import { isPerformanceBasedFirst, isStagedPerformanceBasedFirst, stagedPerformanceBasedFirstAmounts, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 
 // Lead Generation CRM: Conversion Tracking - types, labels, and the
 // generic (never client-name-hardcoded) performance-payment-trigger
@@ -298,13 +298,12 @@ export function resolveNextPerformancePaymentStage(
       setDateColumn: "converted_at",
       conversionNumber: 1,
       stageLabel: "First Conversion Payment (Full Campaign Fee)",
-      amount: Number(agreement.monthly_fee),
+      amount: Number(agreement.monthly_fee ?? 0),
       currency: agreement.currency,
     };
   }
 
-  const deposit = Number(agreement.staged_deposit_amount);
-  const perConversion = (Number(agreement.monthly_fee) - deposit) / 2;
+  const { perConversion } = stagedPerformanceBasedFirstAmounts(agreement);
 
   if (agreement.conversion_status !== "converted") {
     return {

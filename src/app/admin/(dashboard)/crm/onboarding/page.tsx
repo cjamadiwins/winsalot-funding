@@ -93,7 +93,11 @@ export default async function AdminCrmOnboardingPage() {
       monthlyTarget: agreement.monthly_target,
       appointmentTargetMin: agreement.appointment_target_min,
       appointmentTargetMax: agreement.appointment_target_max,
-      monthlyFee: agreement.monthly_fee,
+      // Only ever null for a staged PBF agreement, whose row never reads
+      // this raw value (it renders pbfPaymentSummary below instead) - the
+      // ?? 0 here is just to satisfy OnboardingRow.monthlyFee's number
+      // type for the Paid Pilot/standard-agreement rows that do read it.
+      monthlyFee: agreement.monthly_fee ?? 0,
       currency: agreement.currency,
       // Undefined for a non-PBF agreement (the payment column doesn't
       // read this in that branch) - computed once here, off the

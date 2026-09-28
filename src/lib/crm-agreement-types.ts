@@ -164,7 +164,13 @@ export type CrmClientAgreementRow = {
   // agreement target and of any conversion-linked payment milestones.
   appointment_target_min: number | null;
   appointment_target_max: number | null;
-  monthly_fee: number;
+  // Nullable so a staged/split-payment Performance-Based First agreement
+  // (see staged_deposit_amount below) can leave this genuinely blank
+  // instead of a fake $0 - its real terms are fully described by the
+  // staged_* fields, not this one. Every other campaign_type still
+  // requires a real value; that's enforced in the server actions, not by
+  // this column's own nullability.
+  monthly_fee: number | null;
   setup_fee: number | null;
   currency: AgreementCurrency;
 
@@ -536,7 +542,9 @@ export function isPerformanceBasedFirst(agreement: Pick<CrmClientAgreementRow, "
 // by whether a deposit amount was actually configured on this agreement -
 // never by client name - so a future Performance-Based First agreement
 // automatically renders correctly whichever shape it turns out to be.
-export function isStagedPerformanceBasedFirst(agreement: Pick<CrmClientAgreementRow, "campaign_type" | "staged_deposit_amount">): boolean {
+export function isStagedPerformanceBasedFirst(
+  agreement: Pick<CrmClientAgreementRow, "campaign_type"> & Partial<Pick<CrmClientAgreementRow, "staged_deposit_amount">>
+): boolean {
   return isPerformanceBasedFirst(agreement) && agreement.staged_deposit_amount != null;
 }
 
@@ -545,45 +553,74 @@ function formatCurrencyAmount(amount: number, currency: AgreementCurrency): stri
   return `${prefix}${amount.toLocaleString()}`;
 }
 
+// The single source of truth for a staged agreement's deposit/per-
+// conversion/total amounts (e.g. Hidebrandt Web Services, Teknokraft
+// Canada Inc.: CA$250 deposit + CA$250 1st conversion + CA$250 2nd
+// conversion = CA$750 total). Deliberately never requires monthly_fee:
+// that field is optional/blank for a staged agreement (see the Campaign
+// Fee form-fix - a redundant numeric "Campaign Fee" was the actual cause
+// of values like $0 or $749.98 drifting from the real staged terms).
+// monthly_fee is still honored when an admin has explicitly set it (so an
+// intentionally uneven split remains possible), falling back to an even
+// three-way split of the deposit - the only shape any staged agreement
+// uses today - when it's blank.
+export function stagedPerformanceBasedFirstAmounts(
+  agreement: Pick<CrmClientAgreementRow, "monthly_fee"> & Partial<Pick<CrmClientAgreementRow, "staged_deposit_amount">>
+): { deposit: number; perConversion: number; total: number } {
+  const deposit = Number(agreement.staged_deposit_amount);
+  const perConversion = agreement.monthly_fee != null ? (Number(agreement.monthly_fee) - deposit) / 2 : deposit;
+  return { deposit, perConversion, total: deposit + perConversion * 2 };
+}
+
 // The Client Onboarding dashboard's compact "at a glance" payment summary
 // for a Performance-Based First agreement - the single place this is
 // computed, so the table can never show a stale/incorrect figure the way
 // a hardcoded "$750 (Due on Conversion)" string did for every such
-// agreement regardless of its actual stored terms. Reads only
-// monthly_fee/currency/staged_deposit_amount - the remaining balance
-// after the deposit is assumed split evenly across the two conversion
-// milestones (the only shape any staged agreement uses today); a future
-// agreement with uneven milestones would need its own stored per-milestone
-// amounts rather than this even split.
+// agreement regardless of its actual stored terms.
 export function buildPerformanceBasedFirstPaymentSummary(
-  agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency" | "staged_deposit_amount">
+  agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency"> & Partial<Pick<CrmClientAgreementRow, "staged_deposit_amount">>
 ): { breakdown: string; totalLabel: string } {
-  const total = Number(agreement.monthly_fee);
-  const totalLabel = `Total Agreed Value: ${formatCurrencyAmount(total, agreement.currency)}`;
   if (agreement.staged_deposit_amount != null) {
-    const deposit = Number(agreement.staged_deposit_amount);
-    const perConversion = (total - deposit) / 2;
+    const { deposit, perConversion, total } = stagedPerformanceBasedFirstAmounts(agreement);
+    const totalLabel = `Total Potential Campaign Value: ${formatCurrencyAmount(total, agreement.currency)}`;
     const depositText = `${formatCurrencyAmount(deposit, agreement.currency)} Deposit`;
     const conversionText = `${formatCurrencyAmount(perConversion, agreement.currency)} 1st Conversion`;
     const secondConversionText = `${formatCurrencyAmount(perConversion, agreement.currency)} 2nd Conversion`;
     return { breakdown: `${depositText} + ${conversionText} + ${secondConversionText}`, totalLabel };
   }
+  if (agreement.monthly_fee == null) {
+    return { breakdown: "Campaign Fee not yet set", totalLabel: "Total Agreed Value: -" };
+  }
+  const total = Number(agreement.monthly_fee);
+  const totalLabel = `Total Agreed Value: ${formatCurrencyAmount(total, agreement.currency)}`;
   return { breakdown: `${formatCurrencyAmount(total, agreement.currency)} Due on 1st Paying Conversion`, totalLabel };
 }
 
 export const PERFORMANCE_BASED_FIRST_DOC_LABEL = "Performance-Based First Campaign Agreement";
 
-// Dynamic "Campaign Fee" section body - the seeded template's own stored
-// body is just a human-readable placeholder (see the migration's header
-// comment); this is the one place the actual required wording is
+// Dynamic "Campaign Fee" section body for a single-lump-sum Performance-
+// Based First agreement (e.g. Web6 Solutions') - the seeded template's own
+// stored body is just a human-readable placeholder (see the migration's
+// header comment); this is the one place the actual required wording is
 // generated, exactly like buildPilotFeesStatement() does for a pilot, so
 // the admin preview, PDF, and public sign page can never show three
-// different figures for the same agreement. The Campaign Fee itself
-// (agreement.monthly_fee) is admin-set per client - this never hardcodes
-// $750, even though that's the brief's own default for a first campaign.
+// different figures for the same agreement. Never called for a staged
+// agreement - see buildStagedPerformanceBasedFirstFeesStatement below and
+// isStagedPerformanceBasedFirst(), the single place that distinguishes
+// them. Null-safe (never renders "$0") even though a non-staged agreement
+// is expected to always have a real Campaign Fee before it's sent.
 export function buildPerformanceBasedFirstFeesStatement(
   agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency">
 ): string {
+  if (agreement.monthly_fee == null) {
+    return [
+      "This is a Performance-Based First Campaign.",
+      "",
+      "Campaign Fee: Not yet set.",
+      "",
+      "The Campaign Fee will be set by Winsalot Corp before this agreement is sent, and will become payable when an appointment generated by Winsalot Corp results in a completed paid sale for the Client.",
+    ].join("\n");
+  }
   const fee = Number(agreement.monthly_fee);
   return [
     "This is a Performance-Based First Campaign.",
@@ -596,6 +633,34 @@ export function buildPerformanceBasedFirstFeesStatement(
     "The Client agrees to notify Winsalot Corp when a Winsalot-generated prospect becomes a paying customer.",
     "",
     "After the first successful conversion and payment of the Campaign Fee, any future campaigns will operate under Winsalot Corp's standard payment structure, with the applicable monthly campaign fee paid upfront before the campaign begins.",
+  ].join("\n");
+}
+
+// Dynamic "Campaign Fee" section body for a staged/split-payment
+// Performance-Based First agreement (e.g. Hidebrandt Web Services,
+// Teknokraft Canada Inc.) - the required client-facing wording (deposit +
+// two conversion payments + total), used everywhere this agreement's fees
+// section would otherwise render: the admin draft-edit note, the admin
+// preview, the rendered template (Agreement Document view, PDF, and
+// public sign page). Never uses monthly_fee as the total on its own - see
+// stagedPerformanceBasedFirstAmounts() - so a blank/null Campaign Fee can
+// never affect this text or show a fake "$0" anywhere.
+export function buildStagedPerformanceBasedFirstFeesStatement(
+  agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency"> & Partial<Pick<CrmClientAgreementRow, "staged_deposit_amount">>
+): string {
+  const { deposit, perConversion, total } = stagedPerformanceBasedFirstAmounts(agreement);
+  const fmt = (n: number) => formatCurrencyAmount(n, agreement.currency);
+  return [
+    "This is a Performance-Based Campaign.",
+    "",
+    `Initial deposit: ${fmt(deposit)}`,
+    `First client conversion payment: ${fmt(perConversion)}`,
+    `Second client conversion payment: ${fmt(perConversion)}`,
+    `Total potential campaign value: ${fmt(total)}`,
+    "",
+    "The Client agrees to notify Winsalot Corp when a Winsalot-generated prospect becomes a paying customer, for both the first and second conversion.",
+    "",
+    "After the second successful conversion and payment, any future campaigns will operate under Winsalot Corp's standard payment structure, with the applicable monthly campaign fee paid upfront before the campaign begins.",
   ].join("\n");
 }
 
@@ -613,7 +678,8 @@ export function buildPerformanceBasedFirstFeesStatement(
 // stale free-pilot claim - see those functions' own comments.
 export function renderAgreementTemplate(
   template: Pick<CrmAgreementTemplateRow, "content">,
-  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target" | "campaign_type" | "pilot_type" | "monthly_fee" | "setup_fee" | "currency"> & Partial<Pick<CrmClientAgreementRow, "appointment_target_min" | "appointment_target_max">>
+  agreement: Pick<CrmClientAgreementRow, "service_type" | "target_type" | "monthly_target" | "campaign_type" | "pilot_type" | "monthly_fee" | "setup_fee" | "currency"> &
+    Partial<Pick<CrmClientAgreementRow, "appointment_target_min" | "appointment_target_max" | "staged_deposit_amount">>
 ): RenderedAgreementSection[] {
   const replacements: Record<string, string> = {
     service_noun_singular: serviceNounSingular(agreement.service_type),
@@ -639,7 +705,9 @@ export function renderAgreementTemplate(
       return { ...section, body: buildPilotServicesStatement(agreement) };
     }
     if (isPBF && section.key === "fees") {
-      return { ...section, title: "Campaign Fee", body: buildPerformanceBasedFirstFeesStatement(agreement) };
+      return isStagedPerformanceBasedFirst(agreement)
+        ? { ...section, title: "Performance-Based Campaign", body: buildStagedPerformanceBasedFirstFeesStatement(agreement) }
+        : { ...section, title: "Campaign Fee", body: buildPerformanceBasedFirstFeesStatement(agreement) };
     }
     const body = section.body.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => replacements[token] ?? `{{${token}}}`);
     return { ...section, title: section.title.replace(/\{\{(\w+)\}\}/g, (_m, t: string) => replacements[t] ?? `{{${t}}}`), body };

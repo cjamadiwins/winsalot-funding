@@ -8,6 +8,8 @@ import {
   pilotProgramLabel,
   pilotTotalCost,
   isPerformanceBasedFirst,
+  isStagedPerformanceBasedFirst,
+  buildPerformanceBasedFirstPaymentSummary,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
@@ -116,21 +118,39 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
               </div>
             </>
           ) : isPBF ? (
-            <>
-              <div>
-                <dt className="font-semibold text-slate-500">Campaign Fee</dt>
-                <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()} {agreement.currency}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-slate-500">Upfront Payment</dt>
-                <dd className="text-slate-900">$0</dd>
-              </div>
-            </>
+            isStagedPerformanceBasedFirst(agreement as Pick<CrmClientAgreementRow, "campaign_type" | "monthly_fee" | "currency" | "staged_deposit_amount">) ? (
+              (() => {
+                const summary = buildPerformanceBasedFirstPaymentSummary(agreement as Pick<CrmClientAgreementRow, "monthly_fee" | "currency" | "staged_deposit_amount">);
+                return (
+                  <div>
+                    <dt className="font-semibold text-slate-500">Performance-Based Campaign</dt>
+                    <dd className="text-slate-900">
+                      {summary.breakdown}
+                      <br />
+                      {summary.totalLabel}
+                    </dd>
+                  </div>
+                );
+              })()
+            ) : (
+              <>
+                <div>
+                  <dt className="font-semibold text-slate-500">Campaign Fee</dt>
+                  <dd className="text-slate-900">
+                    {agreement.monthly_fee != null ? `$${Number(agreement.monthly_fee).toLocaleString()} ${agreement.currency}` : "Not yet set"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">Upfront Payment</dt>
+                  <dd className="text-slate-900">$0</dd>
+                </div>
+              </>
+            )
           ) : (
             <>
               <div>
                 <dt className="font-semibold text-slate-500">Monthly Fee</dt>
-                <dd className="text-slate-900">${Number(agreement.monthly_fee).toLocaleString()} {agreement.currency}</dd>
+                <dd className="text-slate-900">${Number(agreement.monthly_fee ?? 0).toLocaleString()} {agreement.currency}</dd>
               </div>
               {agreement.setup_fee ? (
                 <div>

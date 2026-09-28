@@ -46,7 +46,10 @@ export default function ManageOnboardingRecordModal({
     serviceType: manage.serviceType,
     campaignType: manage.campaignType,
     monthlyTarget: String(manage.monthlyTarget),
-    monthlyFee: String(manage.monthlyFee),
+    // Blank (never the literal string "null") when the stored Campaign Fee
+    // is null - only possible for a staged Performance-Based First
+    // Campaign, whose real terms live elsewhere (see crm-agreement-types.ts).
+    monthlyFee: manage.monthlyFee != null ? String(manage.monthlyFee) : "",
     setupFee: manage.setupFee !== null ? String(manage.setupFee) : "",
     currency: manage.currency,
     campaignStartDate: manage.campaignStartDate ?? "",
@@ -71,7 +74,7 @@ export default function ManageOnboardingRecordModal({
         serviceType: form.serviceType as AgreementServiceType,
         campaignType: form.campaignType as CampaignType,
         monthlyTarget: Number(form.monthlyTarget),
-        monthlyFee: Number(form.monthlyFee),
+        monthlyFee: form.monthlyFee === "" ? null : Number(form.monthlyFee),
         setupFee: form.setupFee ? Number(form.setupFee) : null,
         currency: form.currency as AgreementCurrency,
         campaignStartDate: form.campaignStartDate || null,
@@ -200,7 +203,11 @@ export default function ManageOnboardingRecordModal({
             {(!isPilot || form.pilotType === "paid") && (
               <>
                 <Field label={isPilot ? "Pilot Fee" : isPBF ? "Campaign Fee" : "Monthly Price"}>
-                  {manage.isLocked ? <ReadOnly value={`$${form.monthlyFee}`} /> : <input type="number" min={0} step="0.01" value={form.monthlyFee} onChange={(e) => set("monthlyFee", e.target.value)} className={inputClass} />}
+                  {manage.isLocked ? (
+                    <ReadOnly value={form.monthlyFee === "" ? "Not set" : `$${form.monthlyFee}`} />
+                  ) : (
+                    <input type="number" min={0} step="0.01" value={form.monthlyFee} onChange={(e) => set("monthlyFee", e.target.value)} className={inputClass} />
+                  )}
                 </Field>
                 <Field label="Currency">
                   {manage.isLocked ? (
