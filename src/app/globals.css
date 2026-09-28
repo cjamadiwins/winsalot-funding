@@ -156,6 +156,25 @@
   --crm-accent-hover: #1d4ed8;
   --color-accent: var(--crm-accent);
   --color-step-num: var(--crm-accent);
+
+  /* Readability bump (one step), Lead Gen CRM only. Tailwind v4's
+     text-xs/text-sm utilities compile to `font-size: var(--text-xs)` /
+     `var(--text-sm)` (see node_modules/tailwindcss's generated output) -
+     real, cascading CSS custom properties, not compile-time constants -
+     so overriding them here raises every existing text-xs/text-sm class
+     already used throughout the Lead Gen CRM (body copy, table cells,
+     small labels, including the small labels inside the shared
+     ClientLocalTimePanel Toronto/Vancouver clock widget) without editing
+     a single page file. The line-height custom properties are left
+     alone - they're unitless multipliers (e.g. `calc(1 / 0.75)`), so
+     they scale proportionally with the new font-size automatically.
+     text-base and larger (headings, the clock's own large digit
+     display, which use fixed px values, not this token) are
+     deliberately untouched, so headings stay proportional and the
+     clocks aren't enlarged. `.crm-theme--cleaning` (Growth CRM) below
+     keeps Tailwind's real defaults. */
+  --text-xs: 0.875rem; /* was 0.75rem (12px) -> 14px */
+  --text-sm: 0.9375rem; /* was 0.875rem (14px) -> 15px */
 }
 
 /* ---------------------------------------------------------------------
