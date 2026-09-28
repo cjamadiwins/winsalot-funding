@@ -88,7 +88,7 @@ const WEB6_SOLUTIONS_EMAIL_BODY =
   "If you would like to discuss your website needs, you can schedule a short consultation below.\n\n" +
   "{{booking_section}}\n\n" +
   "Best regards,\n\n" +
-  "Winsalot Corp\n" +
+  "Winsalot Corp.\n" +
   "On behalf of Web6 Solutions";
 
 const TEKNOKRAFT_EMAIL_SUBJECT = "Website & Digital Solutions for {{business_name}}";
@@ -103,7 +103,7 @@ const TEKNOKRAFT_EMAIL_BODY =
   "To discuss your business and website needs, schedule a consultation below.\n\n" +
   "{{booking_section}}\n\n" +
   "Best regards,\n\n" +
-  "Winsalot Corp\n" +
+  "Winsalot Corp.\n" +
   "On behalf of Teknokraft Canada Inc.";
 
 const HIDEBRANDT_EMAIL_SUBJECT = "Website Services for {{business_name}}";
@@ -118,7 +118,7 @@ const HIDEBRANDT_EMAIL_BODY =
   "If you would like to discuss your website requirements, schedule a consultation below.\n\n" +
   "{{booking_section}}\n\n" +
   "Best regards,\n\n" +
-  "Winsalot Corp\n" +
+  "Winsalot Corp.\n" +
   "On behalf of Hidebrandt Web Services";
 
 export type LeadDetailActions = {
