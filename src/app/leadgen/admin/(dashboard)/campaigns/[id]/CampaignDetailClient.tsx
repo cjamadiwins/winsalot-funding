@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Users, Star, CalendarCheck, CheckCircle2, Percent, Target } from "lucide-react";
 import {
@@ -13,10 +13,18 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES } from "@/lib/call-list-types";
+import type { CallListSegmentPerformance, CampaignSegmentPerformanceRow } from "@/lib/call-list-segments";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { assignCampaignAgentsAction, updateCampaignAction } from "../../actions";
 import type { LeadgenConversionFunnel } from "@/lib/leadgen-conversions";
 import type { getWebsiteLaunchReadiness } from "@/lib/leadgen-launch-readiness";
+
+const UNCATEGORIZED_INDUSTRY = "Uncategorized";
+
+function emptyPerformance(): CallListSegmentPerformance {
+  return { totalLeads: 0, leadsRemaining: 0, interested: 0, appointmentsBooked: 0, promoted: 0 };
+}
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
@@ -30,6 +38,7 @@ export default function CampaignDetailClient({
   bookingLink,
   conversionFunnel,
   launchReadiness,
+  segmentPerformance,
 }: {
   campaign: LeadgenCampaignRow;
   client: LeadgenClientRow;
@@ -52,6 +61,12 @@ export default function CampaignDetailClient({
   // customers rather than merely appointments.
   conversionFunnel: LeadgenConversionFunnel;
   launchReadiness: Awaited<ReturnType<typeof getWebsiteLaunchReadiness>> | null;
+  // Every call-list segment currently attached to this campaign (any
+  // number of industries/territories - e.g. Hidebrandt's Painting
+  // Companies + Auto Repair Shops), each with its own dial-list stats -
+  // "reporting at both levels: combined campaign totals [the KPI cards
+  // above] and performance by individual industry/segment [this]".
+  segmentPerformance: CampaignSegmentPerformanceRow[];
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -67,6 +82,27 @@ export default function CampaignDetailClient({
   const qualifiedAppointments = appointments.filter((a) => a.incentive_status === "Qualified").length;
   const qualifiedLabel =
     campaign.appointment_goal != null ? `${qualifiedAppointments} of ${campaign.appointment_goal} qualified` : String(qualifiedAppointments);
+
+  // Rolls the per-segment stats up by industry (e.g. every "Auto Repair
+  // Shops" segment, regardless of territory or dial-outcome bucket, adds
+  // into one "Auto Repair Shops" row) so Admin sees both granularities in
+  // one place - the combined roll-up here, the individual segments in
+  // the table below it.
+  const industryTotals = useMemo(() => {
+    const byIndustry = new Map<string, { segmentCount: number; stats: CallListSegmentPerformance }>();
+    for (const { segment, stats } of segmentPerformance) {
+      const industry = segment.industry?.trim() || UNCATEGORIZED_INDUSTRY;
+      const entry = byIndustry.get(industry) ?? { segmentCount: 0, stats: emptyPerformance() };
+      entry.segmentCount += 1;
+      entry.stats.totalLeads += stats.totalLeads;
+      entry.stats.leadsRemaining += stats.leadsRemaining;
+      entry.stats.interested += stats.interested;
+      entry.stats.appointmentsBooked += stats.appointmentsBooked;
+      entry.stats.promoted += stats.promoted;
+      byIndustry.set(industry, entry);
+    }
+    return [...byIndustry.entries()].map(([industry, entry]) => ({ industry, ...entry }));
+  }, [segmentPerformance]);
 
   async function handleCopyLink() {
     if (!bookingLink) return;
@@ -214,6 +250,82 @@ export default function CampaignDetailClient({
           />
         </div>
       </section>
+
+      {segmentPerformance.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Performance by Industry / Segment</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Every call-list segment currently attached to this campaign. Add more industries or territories anytime from Call List Segments -
+            they appear here automatically, no code change required.
+          </p>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
+                  <th className="py-2 pr-3">Industry</th>
+                  <th className="py-2 pr-3">Segments</th>
+                  <th className="py-2 pr-3">Total Leads</th>
+                  <th className="py-2 pr-3">Interested</th>
+                  <th className="py-2 pr-3">Appointments</th>
+                  <th className="py-2 pr-3">Promoted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {industryTotals.map((row) => (
+                  <tr key={row.industry} className="border-b border-slate-100">
+                    <td className="py-2 pr-3 font-semibold text-slate-900">{row.industry}</td>
+                    <td className="py-2 pr-3 text-slate-600">{row.segmentCount}</td>
+                    <td className="py-2 pr-3">{row.stats.totalLeads}</td>
+                    <td className="py-2 pr-3">{row.stats.interested}</td>
+                    <td className="py-2 pr-3">{row.stats.appointmentsBooked}</td>
+                    <td className="py-2 pr-3">{row.stats.promoted}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
+                  <th className="py-2 pr-3">Segment</th>
+                  <th className="py-2 pr-3">Territory</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Total</th>
+                  <th className="py-2 pr-3">Remaining</th>
+                  <th className="py-2 pr-3">Interested</th>
+                  <th className="py-2 pr-3">Appointments</th>
+                  <th className="py-2 pr-3">Promoted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {segmentPerformance.map(({ segment, stats }) => (
+                  <tr key={segment.id} className="border-b border-slate-100">
+                    <td className="py-2 pr-3">
+                      <Link href={`/leadgen/admin/call-list-segments/${segment.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
+                        {segment.name}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-3 text-slate-600">{segment.territory ?? "—"}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CALL_LIST_SEGMENT_STATUS_STYLES[segment.status]}`}>
+                        {CALL_LIST_SEGMENT_STATUS_LABELS[segment.status]}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">{stats.totalLeads}</td>
+                    <td className="py-2 pr-3">{stats.leadsRemaining}</td>
+                    <td className="py-2 pr-3">{stats.interested}</td>
+                    <td className="py-2 pr-3">{stats.appointmentsBooked}</td>
+                    <td className="py-2 pr-3">{stats.promoted}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned Agents</h2>

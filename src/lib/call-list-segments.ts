@@ -1,11 +1,63 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
-import type { CallListCrm, CallListSegmentRow, CallListSegmentStatus } from "./call-list-types";
+import type { CallListCrm, CallListLeadRow, CallListSegmentRow, CallListSegmentStatus } from "./call-list-types";
 
 export async function listSegments(crm: CallListCrm): Promise<CallListSegmentRow[]> {
   const admin = getSupabaseAdmin();
   const { data } = await admin.from("call_list_segments").select("*").eq("crm", crm).order("created_at", { ascending: false });
   return (data ?? []) as CallListSegmentRow[];
+}
+
+export type CallListSegmentPerformance = {
+  totalLeads: number;
+  leadsRemaining: number;
+  interested: number;
+  appointmentsBooked: number;
+  promoted: number;
+};
+
+export type CampaignSegmentPerformanceRow = { segment: CallListSegmentRow; stats: CallListSegmentPerformance };
+
+// Reporting (Growth/Lead Gen campaign detail page): "Performance by
+// individual industry/segment" alongside the campaign's own combined
+// totals, without duplicating the fuller per-segment stats already
+// computed in the segment detail page loader. A campaign can have any
+// number of industry/territory segments (never hardcoded to a fixed
+// list - see call_list_segments.industry, a free-text column) - this
+// walks all of them in two queries total, not one per segment.
+export async function getCampaignSegmentPerformance(campaignId: string): Promise<CampaignSegmentPerformanceRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data: segments } = await admin
+    .from("call_list_segments")
+    .select("*")
+    .eq("leadgen_campaign_id", campaignId)
+    .order("industry", { ascending: true })
+    .order("name", { ascending: true });
+  const segmentRows = (segments ?? []) as CallListSegmentRow[];
+  if (segmentRows.length === 0) return [];
+
+  const segmentIds = segmentRows.map((s) => s.id);
+  const { data: leads } = await admin
+    .from("call_list_leads")
+    .select("segment_id, last_outcome, promoted_leadgen_lead_id")
+    .in("segment_id", segmentIds)
+    .is("removed_at", null);
+
+  const statsBySegment = new Map<string, CallListSegmentPerformance>();
+  for (const lead of (leads ?? []) as Pick<CallListLeadRow, "segment_id" | "last_outcome" | "promoted_leadgen_lead_id">[]) {
+    const stats = statsBySegment.get(lead.segment_id) ?? { totalLeads: 0, leadsRemaining: 0, interested: 0, appointmentsBooked: 0, promoted: 0 };
+    stats.totalLeads += 1;
+    if (!lead.last_outcome) stats.leadsRemaining += 1;
+    if (lead.last_outcome === "Interested") stats.interested += 1;
+    if (lead.last_outcome === "Appointment Booked") stats.appointmentsBooked += 1;
+    if (lead.promoted_leadgen_lead_id) stats.promoted += 1;
+    statsBySegment.set(lead.segment_id, stats);
+  }
+
+  return segmentRows.map((segment) => ({
+    segment,
+    stats: statsBySegment.get(segment.id) ?? { totalLeads: 0, leadsRemaining: 0, interested: 0, appointmentsBooked: 0, promoted: 0 },
+  }));
 }
 
 export async function getSegment(id: string): Promise<CallListSegmentRow | null> {
