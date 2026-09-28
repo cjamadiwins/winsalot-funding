@@ -213,6 +213,21 @@ export type CrmClientAgreementRow = {
   conversion_status: ConversionStatus;
   converted_at: string | null;
 
+  // Staged / Split-Payment Performance-Based First Campaign only
+  // (migration 20260927230000_crm_staged_split_payment_agreement.sql) -
+  // e.g. Teknokraft Canada Inc., Hidebrandt Web Services. Null for every
+  // other agreement, including a single-lump-sum Performance-Based First
+  // agreement like Web6 Solutions' - see isStagedPerformanceBasedFirst()
+  // below, the single source of truth for which agreements this applies
+  // to. conversion_status/converted_at above still track the FIRST
+  // conversion for a staged agreement; these two track the SECOND.
+  staged_deposit_amount: number | null;
+  staged_deposit_due_date: string | null;
+  staged_deposit_status: "not_paid" | "paid";
+  staged_deposit_paid_at: string | null;
+  staged_second_conversion_status: ConversionStatus;
+  staged_second_converted_at: string | null;
+
   admin_reviewed_confirmation: boolean;
 
   signer_full_name: string | null;
@@ -504,6 +519,49 @@ export function buildPilotServicesStatement(agreement: Pick<CrmClientAgreementRo
 // isPaidPilot() above).
 export function isPerformanceBasedFirst(agreement: Pick<CrmClientAgreementRow, "campaign_type">): boolean {
   return agreement.campaign_type === "performance_based_first";
+}
+
+// Staged / Split-Payment Performance-Based First Campaign (e.g. Teknokraft
+// Canada Inc., Hidebrandt Web Services) - a Performance-Based First
+// agreement whose fee is collected in three individually-confirmable
+// stages (deposit, first conversion, second conversion) rather than one
+// lump sum on the first conversion (e.g. Web6 Solutions). Driven entirely
+// by whether a deposit amount was actually configured on this agreement -
+// never by client name - so a future Performance-Based First agreement
+// automatically renders correctly whichever shape it turns out to be.
+export function isStagedPerformanceBasedFirst(agreement: Pick<CrmClientAgreementRow, "campaign_type" | "staged_deposit_amount">): boolean {
+  return isPerformanceBasedFirst(agreement) && agreement.staged_deposit_amount != null;
+}
+
+function formatCurrencyAmount(amount: number, currency: AgreementCurrency): string {
+  const prefix = currency === "CAD" ? "CA$" : "$";
+  return `${prefix}${amount.toLocaleString()}`;
+}
+
+// The Client Onboarding dashboard's compact "at a glance" payment summary
+// for a Performance-Based First agreement - the single place this is
+// computed, so the table can never show a stale/incorrect figure the way
+// a hardcoded "$750 (Due on Conversion)" string did for every such
+// agreement regardless of its actual stored terms. Reads only
+// monthly_fee/currency/staged_deposit_amount - the remaining balance
+// after the deposit is assumed split evenly across the two conversion
+// milestones (the only shape any staged agreement uses today); a future
+// agreement with uneven milestones would need its own stored per-milestone
+// amounts rather than this even split.
+export function buildPerformanceBasedFirstPaymentSummary(
+  agreement: Pick<CrmClientAgreementRow, "monthly_fee" | "currency" | "staged_deposit_amount">
+): { breakdown: string; totalLabel: string } {
+  const total = Number(agreement.monthly_fee);
+  const totalLabel = `Total Agreed Value: ${formatCurrencyAmount(total, agreement.currency)}`;
+  if (agreement.staged_deposit_amount != null) {
+    const deposit = Number(agreement.staged_deposit_amount);
+    const perConversion = (total - deposit) / 2;
+    const depositText = `${formatCurrencyAmount(deposit, agreement.currency)} Deposit`;
+    const conversionText = `${formatCurrencyAmount(perConversion, agreement.currency)} 1st Conversion`;
+    const secondConversionText = `${formatCurrencyAmount(perConversion, agreement.currency)} 2nd Conversion`;
+    return { breakdown: `${depositText} + ${conversionText} + ${secondConversionText}`, totalLabel };
+  }
+  return { breakdown: `${formatCurrencyAmount(total, agreement.currency)} Due on 1st Paying Conversion`, totalLabel };
 }
 
 export const PERFORMANCE_BASED_FIRST_DOC_LABEL = "Performance-Based First Campaign Agreement";

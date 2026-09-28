@@ -50,6 +50,15 @@ export type OnboardingRow = {
   serviceTypeLabel: string;
   monthlyTarget: number;
   monthlyFee: number;
+  currency: AgreementCurrency;
+  // Set only when isPBF - the exact breakdown/total text for the payment
+  // column, computed once server-side off this agreement's own stored
+  // currency/fee/deposit fields (buildPerformanceBasedFirstPaymentSummary
+  // in lib/crm-agreement-types.ts) so a staged agreement (e.g. Teknokraft
+  // Canada Inc., Hidebrandt Web Services) and a single-lump-sum one (e.g.
+  // Web6 Solutions) can never show the same "$X (Due on Conversion)" text
+  // regardless of which shape this particular agreement actually is.
+  pbfPaymentSummary: { breakdown: string; totalLabel: string } | null;
   // Either an OnboardingStage or a PilotStage label, depending on isPilot -
   // widened to string since one dashboard table renders both pipelines.
   stage: string;
@@ -298,13 +307,20 @@ export default function OnboardingDashboardClient({ rows }: { rows: OnboardingRo
                     <td className="break-words px-2 py-2 text-slate-600">{row.serviceTypeLabel}</td>
                     <td className="px-2 py-2 text-slate-600">{row.monthlyTarget}</td>
                     <td className="break-words px-2 py-2 text-slate-600">
-                      {row.isPilot
-                        ? row.pilotType === "paid"
-                          ? `$${row.monthlyFee.toLocaleString()} (Paid Pilot)`
-                          : "$0 (Free Pilot)"
-                        : row.isPBF
-                          ? `$${row.monthlyFee.toLocaleString()} (Due on Conversion)`
-                          : `$${row.monthlyFee.toLocaleString()}`}
+                      {row.isPilot ? (
+                        row.pilotType === "paid" ? (
+                          `$${row.monthlyFee.toLocaleString()} (Paid Pilot)`
+                        ) : (
+                          "$0 (Free Pilot)"
+                        )
+                      ) : row.isPBF && row.pbfPaymentSummary ? (
+                        <div>
+                          <div>{row.pbfPaymentSummary.breakdown}</div>
+                          <div className="text-[11px] text-slate-400">{row.pbfPaymentSummary.totalLabel}</div>
+                        </div>
+                      ) : (
+                        `$${row.monthlyFee.toLocaleString()}`
+                      )}
                     </td>
                     <td className="px-2 py-2">
                       {/* A plain wrapping chip rather than the shared
