@@ -392,7 +392,12 @@ export default function AgreementDetailClient({
               </>
             ) : isPBF ? (
               <Field label="Campaign Fee">
-                <input type="number" min={0} step="0.01" value={draft.monthlyFee ?? ""} onChange={(e) => set("monthlyFee", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
+                <span className="relative block">
+                  <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm text-slate-900">
+                    {draft.currency === "CAD" ? "CA$" : "$"}
+                  </span>
+                  <input type="number" min={0} step="0.01" value={draft.monthlyFee ?? ""} onChange={(e) => set("monthlyFee", e.target.value === "" ? null : Number(e.target.value))} className={`${inputClass} pl-12`} />
+                </span>
               </Field>
             ) : (
               <>
