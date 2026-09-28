@@ -388,7 +388,7 @@ export default function AdminCrmClient({
                   }`}
                 >
                   <td className="max-w-[220px] px-3 py-2 font-medium text-slate-900">
-                    <Link href={`/admin/crm/opportunities/${opportunity.id}`} className="line-clamp-2 break-words hover:text-sky-600">
+                    <Link href={`/admin/crm/opportunities/${opportunity.id}`} prefetch={false} className="line-clamp-2 break-words hover:text-sky-600">
                       {opportunity.business_name}
                     </Link>
                   </td>
@@ -434,6 +434,7 @@ export default function AdminCrmClient({
                   <td className="px-3 py-2 text-right">
                     <Link
                       href={`/admin/crm/opportunities/${opportunity.id}`}
+                      prefetch={false}
                       className="inline-flex whitespace-nowrap rounded-md border border-sky-600 px-2.5 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-600 hover:text-white"
                     >
                       Manage Prospect
