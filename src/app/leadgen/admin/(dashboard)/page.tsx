@@ -66,6 +66,7 @@ import { fetchOperationsMonitoringSummary } from "@/lib/leadgen-monitoring-data"
 import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-react";
 import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
+import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -92,6 +93,7 @@ export default async function LeadgenAdminDashboardPage() {
     { data: conversions },
     { count: paymentsTriggeredCount },
     { data: callScriptClients },
+    websiteTraining,
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -160,6 +162,7 @@ export default async function LeadgenAdminDashboardPage() {
         .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
         .eq("active", true)
         .order("name"),
+      loadWebsiteTraining(true),
     ]);
 
   const allLeads = leads ?? [];
@@ -593,12 +596,11 @@ export default async function LeadgenAdminDashboardPage() {
           Open the correct client call script before dialing to stay consistent on every campaign.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-          <Link href="/leadgen/admin/training#mantra-collab" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-            Open Mantra Collab Training
-          </Link>
-          <Link href="/leadgen/admin/training#brents-essentials" className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
-            Open Brent&apos;s Essentials Training
-          </Link>
+          {websiteTraining.map(({ client }) => (
+            <Link key={client.id} href={`/leadgen/admin/training#website-client-${client.id}`} className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+              Open {client.name} Training
+            </Link>
+          ))}
         </div>
       </section>
     </div>
