@@ -18,7 +18,7 @@ import { assignCampaignAgentsAction, updateCampaignAction } from "../../actions"
 import type { LeadgenConversionFunnel } from "@/lib/leadgen-conversions";
 import type { getWebsiteLaunchReadiness } from "@/lib/leadgen-launch-readiness";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default function CampaignDetailClient({
   campaign,
@@ -82,7 +82,7 @@ export default function CampaignDetailClient({
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{campaign.name}</h1>
             {campaign.pilot_label && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">{campaign.pilot_label}</span>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-semibold text-amber-800">{campaign.pilot_label}</span>
             )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
@@ -92,7 +92,7 @@ export default function CampaignDetailClient({
             · {leads.length} leads
           </p>
         </div>
-        <button type="button" onClick={() => setEditing((v) => !v)} className="text-[13px] font-semibold text-sky-600">
+        <button type="button" onClick={() => setEditing((v) => !v)} className="text-sm font-semibold text-sky-600">
           {editing ? "Cancel" : "Edit Campaign"}
         </button>
       </div>
@@ -120,46 +120,46 @@ export default function CampaignDetailClient({
           className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Campaign Name</span>
+            <span className="text-sm font-semibold text-slate-600">Campaign Name</span>
             <input name="name" required defaultValue={campaign.name} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Status</span>
+            <span className="text-sm font-semibold text-slate-600">Status</span>
             <select name="status" defaultValue={campaign.status} className={inputClass}>
               <option value="active">Active</option>
               <option value="paused">Paused</option>
               <option value="completed">Completed</option>
             </select>
           </label>
-          {launchReadiness?.blockers.length ? <label className="flex items-start gap-2 text-[13px] text-amber-900 sm:col-span-2">
+          {launchReadiness?.blockers.length ? <label className="flex items-start gap-2 text-sm text-amber-900 sm:col-span-2">
             <input type="checkbox" name="launch_override" value="yes" className="mt-1" />
             I reviewed the agreement and payment blockers and explicitly authorize activation despite them (available on or after September 29 only).
           </label> : null}
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Description</span>
+            <span className="text-sm font-semibold text-slate-600">Description</span>
             <textarea name="description" defaultValue={campaign.description ?? ""} className={`${inputClass} min-h-[60px] resize-y`} />
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Campaign Booking Link (overrides client default)</span>
+            <span className="text-sm font-semibold text-slate-600">Campaign Booking Link (overrides client default)</span>
             <input name="booking_link" type="url" defaultValue={campaign.booking_link ?? ""} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Pilot Label (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Pilot Label (optional)</span>
             <input name="pilot_label" placeholder="e.g. 3-Appointment Pilot" defaultValue={campaign.pilot_label ?? ""} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Appointment Goal (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Appointment Goal (optional)</span>
             <input name="appointment_goal" type="number" min={0} step={1} defaultValue={campaign.appointment_goal ?? ""} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Start Date</span>
+            <span className="text-sm font-semibold text-slate-600">Start Date</span>
             <input name="start_date" type="date" defaultValue={campaign.start_date ?? ""} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">End Date</span>
+            <span className="text-sm font-semibold text-slate-600">End Date</span>
             <input name="end_date" type="date" defaultValue={campaign.end_date ?? ""} className={inputClass} />
           </label>
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
             Save
           </button>
         </form>
@@ -179,26 +179,26 @@ export default function CampaignDetailClient({
       )}
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Public Booking Link</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Public Booking Link</h2>
         {bookingLink ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
-            <code className="rounded-lg bg-slate-100 px-3 py-2 text-[12.5px] text-slate-700">{bookingLink}</code>
+            <code className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{bookingLink}</code>
             <button
               type="button"
               onClick={handleCopyLink}
-              className="rounded-full border border-slate-300 px-4 py-1.5 text-[12.5px] font-semibold text-slate-700 transition hover:border-slate-400"
+              className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
             >
               {linkCopied ? "Copied!" : "Copy Link"}
             </button>
           </div>
         ) : (
-          <p className="mt-2.5 text-[13px] text-slate-500">No booking link configured for {client.name} yet - add one in Client Settings.</p>
+          <p className="mt-2.5 text-sm text-slate-500">No booking link configured for {client.name} yet - add one in Client Settings.</p>
         )}
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-indigo-700">Post-Appointment Conversion Funnel</h2>
-        <p className="mt-1 text-[12.5px] text-slate-500">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Post-Appointment Conversion Funnel</h2>
+        <p className="mt-1 text-sm text-slate-500">
           Conversion Rate here is based on actual Admin-confirmed paying customers, not merely appointments booked.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -216,13 +216,13 @@ export default function CampaignDetailClient({
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Assigned Agents</h2>
-        <p className="mt-1 text-[12.5px] text-slate-500">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned Agents</h2>
+        <p className="mt-1 text-sm text-slate-500">
           An agent checked here can only see leads, follow-ups, emails, and appointments for a campaign they&apos;re assigned to. An agent left
           unchecked everywhere keeps seeing everything, exactly as before.
         </p>
         {agents.length === 0 ? (
-          <p className="mt-3 text-[13.5px] text-slate-500">No active agents yet.</p>
+          <p className="mt-3 text-sm text-slate-500">No active agents yet.</p>
         ) : (
           <form
             action={(formData) => {
@@ -238,7 +238,7 @@ export default function CampaignDetailClient({
           >
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {agents.map((agent) => (
-                <label key={agent.id} className="flex items-center gap-2 text-[13.5px] text-slate-700">
+                <label key={agent.id} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     name="agent_ids"
@@ -250,12 +250,12 @@ export default function CampaignDetailClient({
                 </label>
               ))}
             </div>
-            {agentsError && <p className="mt-2.5 text-[13px] font-medium text-rose-600">{agentsError}</p>}
-            {agentsSaved && <p className="mt-2.5 text-[13px] font-medium text-emerald-700">Assigned agents saved.</p>}
+            {agentsError && <p className="mt-2.5 text-sm font-medium text-rose-600">{agentsError}</p>}
+            {agentsSaved && <p className="mt-2.5 text-sm font-medium text-emerald-700">Assigned agents saved.</p>}
             <button
               type="submit"
               disabled={isPending}
-              className="mt-3 rounded-full bg-sky-600 px-5 py-2.5 text-[13.5px] font-semibold text-white hover:bg-sky-700"
+              className="mt-3 rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700"
             >
               Save Assigned Agents
             </button>
@@ -264,14 +264,14 @@ export default function CampaignDetailClient({
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Leads in this Campaign</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Leads in this Campaign</h2>
         {leads.length === 0 ? (
-          <p className="mt-3 text-[13.5px] text-slate-500">No leads assigned to this campaign yet.</p>
+          <p className="mt-3 text-sm text-slate-500">No leads assigned to this campaign yet.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-[13px]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                   <th className="py-2 pr-3">Business</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Next Follow-up</th>
@@ -286,7 +286,7 @@ export default function CampaignDetailClient({
                       </Link>
                     </td>
                     <td className="py-2 pr-3">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
                         {lead.status}
                       </span>
                     </td>

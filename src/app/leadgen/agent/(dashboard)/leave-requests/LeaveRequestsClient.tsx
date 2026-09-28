@@ -17,7 +17,7 @@ import { submitLeadgenLeaveRequestAction } from "./actions";
 
 // Mirrors src/app/agent/(dashboard)/leave-requests/LeaveRequestsClient.tsx
 // exactly - see that file for design rationale.
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default function LeadgenLeaveRequestsClient({
   requests,
@@ -80,7 +80,7 @@ export default function LeadgenLeaveRequestsClient({
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-[12.5px] font-medium text-slate-600">Leave Type</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Leave Type</label>
             <select
               name="leave_type"
               required
@@ -94,7 +94,7 @@ export default function LeadgenLeaveRequestsClient({
           </div>
           <div />
           <div>
-            <label className="mb-1 block text-[12.5px] font-medium text-slate-600">Start Date</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Start Date</label>
             <input
               type="date"
               name="start_date"
@@ -105,11 +105,11 @@ export default function LeadgenLeaveRequestsClient({
             />
           </div>
           <div>
-            <label className="mb-1 block text-[12.5px] font-medium text-slate-600">End Date</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">End Date</label>
             <input type="date" name="end_date" required min={startDate || undefined} className={inputClass} />
           </div>
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-[12.5px] font-medium text-slate-600">Reason</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Reason</label>
             <textarea name="reason" required rows={3} className={inputClass} placeholder="Briefly explain the reason for this leave" />
           </div>
         </div>
@@ -133,7 +133,7 @@ export default function LeadgenLeaveRequestsClient({
         <button
           type="submit"
           disabled={isPending}
-          className="mt-5 rounded-full bg-sky-600 px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-5 rounded-full bg-sky-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPending ? "Submitting..." : "Submit Request"}
         </button>
@@ -174,13 +174,13 @@ export default function LeadgenLeaveRequestsClient({
                   <td className="max-w-xs px-4 py-3">
                     <span className="line-clamp-2">{r.reason}</span>
                     {r.is_short_notice && (
-                      <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
+                      <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
                         Short Notice
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
                       {formatLeaveDecisionLabel(r.status, r.pay_status)}
                     </span>
                     {r.decision_note && (

@@ -88,7 +88,7 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
 
   return (
     <div>
-      <Link href="/leadgen/agent/call-list-segments" className="text-[13px] font-medium text-[var(--color-accent)]">
+      <Link href="/leadgen/agent/call-list-segments" className="text-sm font-medium text-[var(--color-accent)]">
         ← Back to My Call Lists
       </Link>
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>

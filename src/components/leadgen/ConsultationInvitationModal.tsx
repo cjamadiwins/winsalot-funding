@@ -97,7 +97,7 @@ export default function ConsultationInvitationModal({
           </button>
         </div>
 
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px] text-slate-500">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-500">
           <div>
             Prospect: <span className="font-medium text-slate-700">{lead.business_name}</span>
           </div>
@@ -108,39 +108,39 @@ export default function ConsultationInvitationModal({
 
         <div className="mt-4 space-y-3">
           {lead.email ? (
-            <p className="text-[13px] text-slate-600">
+            <p className="text-sm text-slate-600">
               Sending to <span className="font-semibold text-slate-900">{toEmail}</span>
             </p>
           ) : (
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Recipient Email</span>
+              <span className="text-sm font-semibold text-slate-600">Recipient Email</span>
               <input
                 type="email"
                 required
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900"
               />
-              <span className="text-[12px] text-amber-700">No email on file for this lead - enter one to continue.</span>
-              {toEmail && !emailValid && <span className="text-[12px] text-rose-600">Enter a valid email address.</span>}
+              <span className="text-sm text-amber-700">No email on file for this lead - enter one to continue.</span>
+              {toEmail && !emailValid && <span className="text-sm text-rose-600">Enter a valid email address.</span>}
             </label>
           )}
 
-          <div className="rounded-lg border border-slate-200 p-3.5 text-[13px]">
+          <div className="rounded-lg border border-slate-200 p-3.5 text-sm">
             <p>
               <span className="font-semibold text-slate-600">Subject:</span> {subject}
             </p>
             <p className="mt-2 whitespace-pre-wrap text-slate-700">{body}</p>
           </div>
 
-          {error && <p className="text-[13px] font-medium text-rose-600">{error}</p>}
+          {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
 
           <div className="flex flex-wrap gap-3 pt-1">
             <button
               type="button"
               disabled={submitting || !emailValid}
               onClick={handleSend}
-              className="rounded-full bg-emerald-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Sending…" : "Send Invitation"}
             </button>
@@ -148,7 +148,7 @@ export default function ConsultationInvitationModal({
               type="button"
               disabled={submitting}
               onClick={onClose}
-              className="text-[13.5px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+              className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
             >
               Cancel
             </button>

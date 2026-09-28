@@ -84,7 +84,7 @@ export default async function LeadgenAgentLeadsPage({
         </div>
         <Link
           href={client ? `/leadgen/agent/leads/new?client=${client}` : "/leadgen/agent/leads/new"}
-          className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
+          className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
         >
           + Add Lead
         </Link>

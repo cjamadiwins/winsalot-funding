@@ -76,9 +76,9 @@ export default function AgentActivityKpiSection({
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-      {agentName && <h3 className="text-[15px] font-bold text-slate-900">{agentName}</h3>}
+      {agentName && <h3 className="text-base font-bold text-slate-900">{agentName}</h3>}
 
-      <h4 className={`text-[11px] font-semibold uppercase tracking-wide text-sky-700 ${agentName ? "mt-3" : ""}`}>Activity</h4>
+      <h4 className={`text-sm font-semibold uppercase tracking-wide text-sky-700 ${agentName ? "mt-3" : ""}`}>Activity</h4>
       <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenCallLogRecordsModal
           label="Calls Today"
@@ -154,7 +154,7 @@ export default function AgentActivityKpiSection({
         />
       </div>
 
-      <h4 className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Results</h4>
+      <h4 className="mt-5 text-sm font-semibold uppercase tracking-wide text-emerald-700">Results</h4>
       <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenLeadRecordsModal
           label="Interested Leads"
@@ -210,7 +210,7 @@ function MiniStat({ label, value, icon }: { label: string; value: string; icon?:
     <div className="flex flex-col justify-center rounded-2xl border border-slate-200 bg-white p-4">
       {icon && <span className="mb-1 text-slate-400">{icon}</span>}
       <div className="text-[20px] font-extrabold leading-none tracking-tight text-slate-900">{value}</div>
-      <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
     </div>
   );
 }

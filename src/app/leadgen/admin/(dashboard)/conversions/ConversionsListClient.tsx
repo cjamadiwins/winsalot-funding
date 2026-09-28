@@ -44,8 +44,8 @@ const FILTERS = [
 ] as const;
 type FilterKey = (typeof FILTERS)[number]["key"];
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900";
-const fieldLabelClass = "block text-[11px] font-semibold uppercase text-slate-500";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900";
+const fieldLabelClass = "block text-sm font-semibold uppercase text-slate-500";
 
 // The confirm form only ever offers the post-appointment stages - never
 // 'appointment_booked'/'appointment_attended', since a client is
@@ -121,8 +121,8 @@ export default function ConversionsListClient({
 
   return (
     <div>
-      {error && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13.5px] text-rose-700">{error}</div>}
-      {message && !error && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-700">{message}</div>}
+      {error && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+      {message && !error && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
@@ -133,7 +133,7 @@ export default function ConversionsListClient({
               setFilter(f.key);
               setExpandedId(null);
             }}
-            className={`rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition ${
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
               filter === f.key
                 ? "border-[var(--crm-accent,#3e7ef7)] bg-[var(--crm-accent,#3e7ef7)] text-white"
                 : "border-slate-300 text-slate-600 hover:bg-slate-50"
@@ -141,7 +141,7 @@ export default function ConversionsListClient({
           >
             {f.label}
             {f.key === "pending" && pendingCount > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{pendingCount}</span>
+              <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white">{pendingCount}</span>
             )}
           </button>
         ))}
@@ -149,11 +149,11 @@ export default function ConversionsListClient({
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {visibleRows.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">No conversion records match this filter.</p>
+          <p className="p-6 text-center text-sm text-slate-500">No conversion records match this filter.</p>
         ) : (
-          <table className="w-full min-w-[1000px] text-left text-[13px]">
+          <table className="w-full min-w-[1000px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="p-3">Prospect / Business</th>
                 <th className="p-3">Client / Campaign</th>
                 <th className="p-3">Agent</th>
@@ -173,11 +173,11 @@ export default function ConversionsListClient({
                     <tr className="border-b border-slate-100 align-top">
                       <td className="p-3">
                         <div className="font-semibold text-slate-900">{row.businessName}</div>
-                        {row.contactName && <div className="text-[12px] text-slate-500">{row.contactName}</div>}
+                        {row.contactName && <div className="text-sm text-slate-500">{row.contactName}</div>}
                       </td>
                       <td className="p-3 text-slate-600">
                         <div>{row.clientName}</div>
-                        {row.campaignName && <div className="text-[12px] text-slate-500">{row.campaignName}</div>}
+                        {row.campaignName && <div className="text-sm text-slate-500">{row.campaignName}</div>}
                       </td>
                       <td className="p-3 text-slate-600">{row.agentName ?? "—"}</td>
                       <td className="p-3 text-slate-600">
@@ -185,25 +185,25 @@ export default function ConversionsListClient({
                           {row.appointmentDate ?? "—"} {row.appointmentTime ?? ""}
                         </div>
                         {row.appointmentStatus && (
-                          <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[row.appointmentStatus]}`}>
+                          <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[row.appointmentStatus]}`}>
                             {row.appointmentStatus}
                           </span>
                         )}
                       </td>
                       <td className="p-3">
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_CONVERSION_STATUS_STYLES[c.conversion_status]}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_CONVERSION_STATUS_STYLES[c.conversion_status]}`}>
                           {LEADGEN_CONVERSION_STATUS_LABELS[c.conversion_status]}
                         </span>
-                        {c.admin_sale_amount != null && <div className="mt-1 text-[12px] text-slate-500">Sale: ${c.admin_sale_amount.toLocaleString()}</div>}
+                        {c.admin_sale_amount != null && <div className="mt-1 text-sm text-slate-500">Sale: ${c.admin_sale_amount.toLocaleString()}</div>}
                       </td>
                       <td className="p-3">
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_ADMIN_VERIFICATION_STATUS_STYLES[c.admin_verification_status]}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_ADMIN_VERIFICATION_STATUS_STYLES[c.admin_verification_status]}`}>
                           {LEADGEN_ADMIN_VERIFICATION_STATUS_LABELS[c.admin_verification_status]}
                         </span>
                       </td>
                       <td className="p-3 text-slate-500">
                         <div>{new Date(c.updated_at).toLocaleDateString()}</div>
-                        {row.updatedByName && <div className="text-[11.5px]">by {row.updatedByName}</div>}
+                        {row.updatedByName && <div className="text-xs">by {row.updatedByName}</div>}
                       </td>
                       <td className="p-3 text-right">
                         <button
@@ -213,7 +213,7 @@ export default function ConversionsListClient({
                             setError(null);
                             setMessage(null);
                           }}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50"
+                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           {expanded ? "Close" : "Manage"}
                         </button>
@@ -224,30 +224,30 @@ export default function ConversionsListClient({
                         <td colSpan={8} className="p-4">
                           {c.admin_verification_status === "pending_admin_verification" && (
                             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                              <h4 className="text-[12.5px] font-bold uppercase tracking-wide text-amber-800">Client-Reported Conversion - Pending Review</h4>
-                              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] text-slate-700 sm:grid-cols-4">
+                              <h4 className="text-sm font-bold uppercase tracking-wide text-amber-800">Client-Reported Conversion - Pending Review</h4>
+                              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700 sm:grid-cols-4">
                                 <div>
-                                  <dt className="text-[11px] uppercase text-slate-500">Result</dt>
+                                  <dt className="text-sm uppercase text-slate-500">Result</dt>
                                   <dd>{c.client_reported_result ? LEADGEN_CLIENT_REPORTED_RESULT_LABELS[c.client_reported_result] : "—"}</dd>
                                 </div>
                                 <div>
-                                  <dt className="text-[11px] uppercase text-slate-500">Conversion Date</dt>
+                                  <dt className="text-sm uppercase text-slate-500">Conversion Date</dt>
                                   <dd>{c.client_reported_conversion_date ?? "—"}</dd>
                                 </div>
                                 <div>
-                                  <dt className="text-[11px] uppercase text-slate-500">Sale Amount</dt>
+                                  <dt className="text-sm uppercase text-slate-500">Sale Amount</dt>
                                   <dd>{c.client_reported_sale_amount != null ? `$${c.client_reported_sale_amount.toLocaleString()}` : "—"}</dd>
                                 </div>
                                 <div>
-                                  <dt className="text-[11px] uppercase text-slate-500">Confirmation Checked</dt>
+                                  <dt className="text-sm uppercase text-slate-500">Confirmation Checked</dt>
                                   <dd>{c.client_confirmation_checked ? "Yes" : "No"}</dd>
                                 </div>
                               </dl>
-                              {c.client_reported_notes && <p className="mt-2 whitespace-pre-wrap text-[13px] text-slate-700">&ldquo;{c.client_reported_notes}&rdquo;</p>}
+                              {c.client_reported_notes && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">&ldquo;{c.client_reported_notes}&rdquo;</p>}
 
                               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                 <form onSubmit={(e) => handleConfirmSubmit(c.id, e)} className="rounded-lg border border-emerald-200 bg-white p-3">
-                                  <p className="text-[12.5px] font-semibold text-emerald-800">Confirm Conversion</p>
+                                  <p className="text-sm font-semibold text-emerald-800">Confirm Conversion</p>
                                   <label className={`mt-2 ${fieldLabelClass}`}>Confirmed Status</label>
                                   <select
                                     name="conversion_status"
@@ -266,7 +266,7 @@ export default function ConversionsListClient({
                                   <input type="number" step="0.01" min="0" name="admin_sale_amount" defaultValue={c.client_reported_sale_amount ?? ""} className={inputClass} />
                                   <label className={`mt-2 ${fieldLabelClass}`}>Admin Notes</label>
                                   <textarea name="admin_notes" rows={2} defaultValue={c.admin_notes ?? ""} className={inputClass} />
-                                  <label className="mt-2 flex items-center gap-2 text-[12px] text-slate-600">
+                                  <label className="mt-2 flex items-center gap-2 text-sm text-slate-600">
                                     <input
                                       type="checkbox"
                                       checked={duplicateOverrideId === c.id}
@@ -277,14 +277,14 @@ export default function ConversionsListClient({
                                   <button
                                     type="submit"
                                     disabled={isPending}
-                                    className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2 text-[13px] font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                    className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
                                   >
                                     Confirm Conversion
                                   </button>
                                 </form>
 
                                 <form onSubmit={(e) => handleReject(c.id, e)} className="rounded-lg border border-rose-200 bg-white p-3">
-                                  <p className="text-[12.5px] font-semibold text-rose-800">Reject / Needs Clarification</p>
+                                  <p className="text-sm font-semibold text-rose-800">Reject / Needs Clarification</p>
                                   <label className={`mt-2 ${fieldLabelClass}`}>Reason (required)</label>
                                   <textarea
                                     name="rejection_reason"
@@ -296,7 +296,7 @@ export default function ConversionsListClient({
                                   <button
                                     type="submit"
                                     disabled={isPending}
-                                    className="mt-3 w-full rounded-lg bg-rose-600 px-3 py-2 text-[13px] font-bold text-white hover:bg-rose-700 disabled:opacity-60"
+                                    className="mt-3 w-full rounded-lg bg-rose-600 px-3 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-60"
                                   >
                                     Reject Report
                                   </button>
@@ -306,7 +306,7 @@ export default function ConversionsListClient({
                           )}
 
                           <form onSubmit={(e) => handleUpdateSubmit(c.id, e)} className="rounded-lg border border-slate-200 bg-white p-3">
-                            <p className="text-[12.5px] font-semibold text-slate-700">Update Conversion Record</p>
+                            <p className="text-sm font-semibold text-slate-700">Update Conversion Record</p>
                             <div className="mt-2 grid gap-3 sm:grid-cols-4">
                               <div>
                                 <label className={fieldLabelClass}>Conversion Status</label>
@@ -327,7 +327,7 @@ export default function ConversionsListClient({
                                 <input type="number" step="0.01" min="0" name="admin_sale_amount" defaultValue={c.admin_sale_amount ?? ""} className={inputClass} />
                               </div>
                               <div>
-                                <label className="flex items-center gap-2 pt-6 text-[12px] text-slate-600">
+                                <label className="flex items-center gap-2 pt-6 text-sm text-slate-600">
                                   <input
                                     type="checkbox"
                                     checked={duplicateOverrideId === c.id}
@@ -342,7 +342,7 @@ export default function ConversionsListClient({
                             <button
                               type="submit"
                               disabled={isPending}
-                              className="mt-3 rounded-lg bg-[var(--crm-accent,#3e7ef7)] px-4 py-2 text-[13px] font-bold text-white hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:opacity-60"
+                              className="mt-3 rounded-lg bg-[var(--crm-accent,#3e7ef7)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:opacity-60"
                             >
                               Save
                             </button>

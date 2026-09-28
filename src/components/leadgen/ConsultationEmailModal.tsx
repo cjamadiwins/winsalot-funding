@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { isValidEmail, type LeadgenLeadRow } from "@/lib/leadgen-types";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export type SendConsultationEmailResult = { error?: string; emailId?: string };
 type FollowUpTemplateOption = { id: string; name: string; subject: string; body: string };
@@ -113,7 +113,7 @@ export default function ConsultationEmailModal({
           </button>
         </div>
 
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px] text-slate-500">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-500">
           <div>
             Prospect: <span className="font-medium text-slate-700">{lead.business_name}</span>
           </div>
@@ -131,7 +131,7 @@ export default function ConsultationEmailModal({
           <div className="mt-4 space-y-3">
             {templateOptions && templateOptions.length > 0 && (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">{templateSelectLabel ?? "Saved Template"}</span>
+                <span className="text-sm font-semibold text-slate-600">{templateSelectLabel ?? "Saved Template"}</span>
                 <select value={selectedTemplateId} onChange={(e) => handleTemplateChange(e.target.value)} className={inputClass}>
                   {templateOptions.map((template) => (
                     <option key={template.id} value={template.id}>
@@ -143,7 +143,7 @@ export default function ConsultationEmailModal({
             )}
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Recipient Email</span>
+              <span className="text-sm font-semibold text-slate-600">Recipient Email</span>
               <input
                 type="email"
                 required
@@ -151,68 +151,68 @@ export default function ConsultationEmailModal({
                 onChange={(e) => setToEmail(e.target.value)}
                 className={inputClass}
               />
-              {!lead.email && <span className="text-[12px] text-amber-700">No email on file for this lead - enter one to continue.</span>}
-              {toEmail && !emailValid && <span className="text-[12px] text-rose-600">Enter a valid email address.</span>}
+              {!lead.email && <span className="text-sm text-amber-700">No email on file for this lead - enter one to continue.</span>}
+              {toEmail && !emailValid && <span className="text-sm text-rose-600">Enter a valid email address.</span>}
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Subject</span>
+              <span className="text-sm font-semibold text-slate-600">Subject</span>
               <input value={subject} onChange={(e) => setSubject(e.target.value)} required className={inputClass} />
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Message</span>
+              <span className="text-sm font-semibold text-slate-600">Message</span>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 required
-                className={`${inputClass} min-h-[280px] resize-y font-mono text-[13px]`}
+                className={`${inputClass} min-h-[280px] resize-y font-mono text-sm`}
               />
             </label>
 
-            {error && <p className="text-[13px] font-medium text-rose-600">{error}</p>}
+            {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3 pt-1">
               <button
                 type="button"
                 disabled={!toEmail || !emailValid || !subject.trim() || !body.trim()}
                 onClick={() => setStep("confirm")}
-                className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Review &amp; Send
               </button>
-              <button type="button" onClick={onClose} className="text-[13.5px] font-semibold text-slate-500 hover:text-slate-700">
+              <button type="button" onClick={onClose} className="text-sm font-semibold text-slate-500 hover:text-slate-700">
                 Cancel
               </button>
             </div>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3.5 text-[13px] text-sky-900">
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3.5 text-sm text-sky-900">
               <p className="font-semibold">Confirm before sending</p>
               <p className="mt-1">
                 This will send an email to <span className="font-semibold">{toEmail}</span> right now. This cannot be undone.
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3.5 text-[13px]">
+            <div className="rounded-lg border border-slate-200 p-3.5 text-sm">
               <p>
                 <span className="font-semibold text-slate-600">Subject:</span> {subject}
               </p>
               <p className="mt-2 whitespace-pre-wrap text-slate-700">{body}</p>
             </div>
 
-            {error && <p className="text-[13px] font-medium text-rose-600">{error}</p>}
+            {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3 pt-1">
               <button
                 type="button"
                 disabled={submitting}
                 onClick={handleConfirmSend}
-                className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Sending…" : "Confirm & Send"}
               </button>
-              <button type="button" disabled={submitting} onClick={() => setStep("edit")} className="text-[13.5px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
+              <button type="button" disabled={submitting} onClick={() => setStep("edit")} className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
                 Back to Edit
               </button>
             </div>

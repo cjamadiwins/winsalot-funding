@@ -5,7 +5,7 @@ import { isHiddenLeadgenCampaignName } from "@/lib/leadgen-types";
 import { createAgentLeadAction } from "./actions";
 import ClientCampaignFields from "./ClientCampaignFields";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default async function LeadgenAgentNewLeadPage({
   searchParams,
@@ -81,7 +81,7 @@ export default async function LeadgenAgentNewLeadPage({
 
         <button
           type="submit"
-          className="mt-6 rounded-full bg-sky-600 px-6 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700"
+          className="mt-6 rounded-full bg-sky-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-sky-700"
         >
           Save Lead
         </button>
@@ -93,7 +93,7 @@ export default async function LeadgenAgentNewLeadPage({
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[13px] font-semibold text-slate-600">
+      <span className="text-sm font-semibold text-slate-600">
         {label}
         {required ? <span className="text-red-600"> *</span> : null}
       </span>

@@ -66,8 +66,8 @@ export default async function LeadgenAgentCallListSegmentsPage() {
               className="rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-4 hover:border-[var(--color-accent)]"
             >
               <div className="font-semibold text-[var(--color-ink-strong)]">{segment.name}</div>
-              <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">{segment.campaign_name || "—"}</div>
-              <div className="mt-3 flex items-center justify-between text-[12.5px]">
+              <div className="mt-1 text-sm text-[var(--color-text-muted)]">{segment.campaign_name || "—"}</div>
+              <div className="mt-3 flex items-center justify-between text-sm">
                 <span className="text-[var(--color-text-muted)]">{remainingBySegment.get(segment.id) ?? 0} remaining</span>
                 <span className="text-[var(--color-text-muted)]">{totalBySegment.get(segment.id) ?? 0} total</span>
               </div>

@@ -7,7 +7,7 @@ import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import { isLeadgenBrentsEssentials, isMantraCollabClient, slugifyClientName } from "@/lib/leadgen-types";
 import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClientAction, setLeadgenClientActiveAction } from "../actions";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default function ClientsListClient({ clients }: { clients: LeadgenClientRow[] }) {
   const visibleClients = clients.filter((client) => client.active !== showInactive);
@@ -117,21 +117,21 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
             type="button"
             onClick={handleCleanup}
             disabled={isPending}
-            className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Remove Test Clients
           </button>
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
+            className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
           >
             {showForm ? "Cancel" : "+ Add Client"}
           </button>
         </div>
       </div>
 
-      {info && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800">{info}</p>}
+      {info && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</p>}
 
       {showForm && (
         <form
@@ -139,7 +139,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
           className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Client Name</span>
+            <span className="text-sm font-semibold text-slate-600">Client Name</span>
             <input
               name="name"
               required
@@ -152,7 +152,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">URL Slug</span>
+            <span className="text-sm font-semibold text-slate-600">URL Slug</span>
             <input
               name="slug"
               required
@@ -163,35 +163,35 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
               }}
               className={inputClass}
             />
-            <span className="text-[11.5px] text-slate-400">leads.winsalotcorp.com/client/{slug || "…"}</span>
+            <span className="text-xs text-slate-400">leads.winsalotcorp.com/client/{slug || "…"}</span>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Contact Name</span>
+            <span className="text-sm font-semibold text-slate-600">Contact Name</span>
             <input name="contact_name" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Contact Email</span>
+            <span className="text-sm font-semibold text-slate-600">Contact Email</span>
             <input name="contact_email" type="email" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Contact Phone</span>
+            <span className="text-sm font-semibold text-slate-600">Contact Phone</span>
             <input name="contact_phone" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Default Booking Link (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Default Booking Link (optional)</span>
             <input name="booking_link" type="url" placeholder="https://..." className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Internal Notes</span>
+            <span className="text-sm font-semibold text-slate-600">Internal Notes</span>
             <textarea name="notes" className={`${inputClass} min-h-[60px] resize-y`} />
           </label>
 
-          {error && <p className="text-[13px] font-medium text-rose-600 sm:col-span-2">{error}</p>}
+          {error && <p className="text-sm font-medium text-rose-600 sm:col-span-2">{error}</p>}
 
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 sm:col-span-2 sm:w-fit"
+            className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 sm:col-span-2 sm:w-fit"
           >
             {isPending ? "Creating…" : "Create Client"}
           </button>
@@ -203,14 +203,14 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
         <button type="button" onClick={() => setShowInactive(true)} aria-pressed={showInactive} className={`rounded-full px-4 py-2 text-sm font-semibold ${showInactive ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-700"}`}>Inactive Clients</button>
       </div>
       {visibleClients.length === 0 ? (
-        <p className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-center text-[13.5px] text-slate-500">
+        <p className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
           {showInactive ? "No inactive clients." : "No active clients yet. Add your first client to get started."}
         </p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-          <table className="w-full min-w-[680px] text-left text-[13.5px]">
+          <table className="w-full min-w-[680px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="p-3">Client</th>
                 <th className="p-3">Slug</th>
                 <th className="p-3">Contact</th>
@@ -230,7 +230,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                   <td className="p-3 text-slate-600">{client.contact_name || client.contact_email || "—"}</td>
                   <td className="p-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      className={`rounded-full px-2.5 py-1 text-sm font-semibold ${
                         client.active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
                       }`}
                     >
@@ -240,12 +240,12 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                   <td className="p-3">
                     {isLeadgenBrentsEssentials(client) || isMantraCollabClient(client) ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[12px] font-medium text-slate-400">Locked</span>
+                        <span className="text-sm font-medium text-slate-400">Locked</span>
                         <button
                           type="button"
                           disabled={isPending}
                           onClick={() => handleToggleActive(client)}
-                          className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`rounded-full border px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
                             client.active
                               ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                               : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -259,7 +259,7 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
                         type="button"
                         disabled={isPending}
                         onClick={() => handleDeleteClient(client)}
-                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Delete
                       </button>

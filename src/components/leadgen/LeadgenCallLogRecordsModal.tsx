@@ -55,22 +55,22 @@ export default function LeadgenCallLogRecordsModal({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-slate-900">{record.business_name}</span>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                      className={`rounded-full px-2.5 py-1 text-sm font-bold ${
                         isCallLogOutcome(record.outcome) ? CALL_LOG_OUTCOME_STYLES[record.outcome] : "bg-slate-100 text-slate-700"
                       }`}
                     >
                       {record.outcome}
                     </span>
                   </div>
-                  <p className="mt-1 text-[12.5px] text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     {record.phone} · Agent: {record.agentName}
                     {record.clientName ? ` · Client: ${record.clientName}` : ""}
                   </p>
-                  <p className="mt-1 text-[12.5px] text-slate-500">{formatCallLogDate(record.created_at)}</p>
+                  <p className="mt-1 text-sm text-slate-500">{formatCallLogDate(record.created_at)}</p>
                 </div>
               </div>
               {record.notes && (
-                <p className="mt-2 text-[12.5px] text-slate-600">
+                <p className="mt-2 text-sm text-slate-600">
                   <span className="font-semibold text-slate-700">Notes:</span> {record.notes}
                 </p>
               )}
@@ -79,7 +79,7 @@ export default function LeadgenCallLogRecordsModal({
         </div>
       )}
       <div className="mt-3 border-t border-slate-100 pt-3">
-        <Link href={callLogHref} className="text-[12.5px] font-semibold text-sky-700 hover:underline">
+        <Link href={callLogHref} className="text-sm font-semibold text-sky-700 hover:underline">
           View full Call Log →
         </Link>
       </div>

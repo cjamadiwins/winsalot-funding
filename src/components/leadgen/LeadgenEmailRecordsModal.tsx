@@ -63,21 +63,21 @@ export default function LeadgenEmailRecordsModal({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-slate-900">{record.to_name ? `${record.to_name} <${record.to_email}>` : record.to_email}</span>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${LEADGEN_EMAIL_STATUS_STYLES[record.status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${LEADGEN_EMAIL_STATUS_STYLES[record.status]}`}>
                         {LEADGEN_EMAIL_STATUS_LABELS[record.status]}
                       </span>
                     </div>
-                    <p className="mt-1 text-[12.5px] text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {record.businessName ? `${record.businessName} · ` : ""}Agent: {record.agentName}
                       {record.clientName ? ` · Client: ${record.clientName}` : ""}
                     </p>
-                    <p className="mt-1 text-[12.5px] text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {record.subject} · {formatDate(record.sent_at ?? record.created_at)}
                     </p>
                   </div>
                 </div>
                 {failureReason && (
-                  <p className="mt-2 text-[12.5px] text-rose-700">
+                  <p className="mt-2 text-sm text-rose-700">
                     <span className="font-semibold">Reason:</span> {failureReason}
                   </p>
                 )}
@@ -87,7 +87,7 @@ export default function LeadgenEmailRecordsModal({
         </div>
       )}
       <div className="mt-3 border-t border-slate-100 pt-3">
-        <Link href={emailsHref} className="text-[12.5px] font-semibold text-sky-700 hover:underline">
+        <Link href={emailsHref} className="text-sm font-semibold text-sky-700 hover:underline">
           View full Email Tracking →
         </Link>
       </div>

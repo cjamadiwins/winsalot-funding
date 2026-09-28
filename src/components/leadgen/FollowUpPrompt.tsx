@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 // "Would you like to schedule a follow-up?" (brief, shown immediately
 // after a successful consultation email send). Quick relative-date
@@ -34,7 +34,7 @@ export default function FollowUpPrompt({
 
   return (
     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-[14px] font-semibold text-slate-800">Would you like to schedule a follow-up?</p>
+      <p className="text-sm font-semibold text-slate-800">Would you like to schedule a follow-up?</p>
       {!showCustom ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <QuickButton label="Tomorrow" onClick={() => onSchedule(atTime(1))} />
@@ -42,7 +42,7 @@ export default function FollowUpPrompt({
           <QuickButton label="3 days" onClick={() => onSchedule(atTime(3))} />
           <QuickButton label="Next week" onClick={() => onSchedule(nextWeek())} />
           <QuickButton label="Custom date/time" onClick={() => setShowCustom(true)} />
-          <button type="button" onClick={onSkip} className="rounded-full px-4 py-2 text-[13px] font-semibold text-slate-500 hover:text-slate-700">
+          <button type="button" onClick={onSkip} className="rounded-full px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">
             No follow-up
           </button>
         </div>
@@ -58,11 +58,11 @@ export default function FollowUpPrompt({
             type="button"
             disabled={!customValue}
             onClick={() => onSchedule(new Date(customValue).toISOString())}
-            className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+            className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
           >
             Schedule
           </button>
-          <button type="button" onClick={() => setShowCustom(false)} className="text-[13px] font-semibold text-slate-500">
+          <button type="button" onClick={() => setShowCustom(false)} className="text-sm font-semibold text-slate-500">
             Back
           </button>
         </div>
@@ -73,7 +73,7 @@ export default function FollowUpPrompt({
 
 function QuickButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700">
+    <button type="button" onClick={onClick} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700">
       {label}
     </button>
   );

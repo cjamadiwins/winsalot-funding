@@ -6,7 +6,7 @@ import ClientCallScriptPanel from "./ClientCallScriptPanel";
 
 export type CallScriptClientOption = { id: string } & LeadgenCallScriptClientFields;
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900";
 
 // The compact "Client Call Script" dashboard card (brief: "accessible from
 // the main Lead CRM dashboard in a compact section where the user can
@@ -38,16 +38,16 @@ export default function ClientCallScriptSelector({
 
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-      <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Client Call Script</h2>
-      <p className="mt-1 text-[13px] text-slate-500">Select the client you&apos;re calling for to see their approved script.</p>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Client Call Script</h2>
+      <p className="mt-1 text-sm text-slate-500">Select the client you&apos;re calling for to see their approved script.</p>
 
       {clients.length === 0 ? (
-        <p className="mt-3 text-[13.5px] text-slate-500">{emptyMessage}</p>
+        <p className="mt-3 text-sm text-slate-500">{emptyMessage}</p>
       ) : (
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-semibold text-slate-600">Client / Business</span>
+              <span className="text-sm font-semibold text-slate-600">Client / Business</span>
               <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className={inputClass}>
                 <option value="">Select a client…</option>
                 {clients.map((c) => (
@@ -58,7 +58,7 @@ export default function ClientCallScriptSelector({
               </select>
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-semibold text-slate-600">Prospect / Business Name (optional)</span>
+              <span className="text-sm font-semibold text-slate-600">Prospect / Business Name (optional)</span>
               <input
                 value={prospectName}
                 onChange={(e) => setProspectName(e.target.value)}
@@ -69,7 +69,7 @@ export default function ClientCallScriptSelector({
           </div>
 
           <div className="mt-4">
-            {script ? <ClientCallScriptPanel script={script} compact /> : <p className="text-[13.5px] text-slate-500">Select a client to view their call script.</p>}
+            {script ? <ClientCallScriptPanel script={script} compact /> : <p className="text-sm text-slate-500">Select a client to view their call script.</p>}
           </div>
         </>
       )}

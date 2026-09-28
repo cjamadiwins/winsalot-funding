@@ -59,7 +59,7 @@ export default async function LeadgenAgentMonthlyPerformancePage() {
             started. Previous months stay available after the month changes.
           </p>
         </div>
-        <Link href="/leadgen/agent/performance" className="text-[13px] font-medium text-sky-600 hover:text-sky-700">
+        <Link href="/leadgen/agent/performance" className="text-sm font-medium text-sky-600 hover:text-sky-700">
           ← View Weekly Performance
         </Link>
       </div>

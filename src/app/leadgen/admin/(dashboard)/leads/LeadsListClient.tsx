@@ -24,12 +24,12 @@ import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge from "@/components/crm-ui/DncBadge";
 import { assignLeadAction, bulkAssignLeadsAction, createLeadAction, uploadLeadsCsvAction } from "./actions";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 // Compact filter-bar controls only (Add Lead/CSV upload forms keep the
 // roomier inputClass above) - same tighter sizing as the Growth CRM's
 // prospect table filter bar, so the filter row doesn't eat up vertical
 // space on desktop.
-const filterInputClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px] text-slate-900";
+const filterInputClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900";
 
 type FollowUpFilter = "all" | "due_today" | "due" | "overdue";
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
@@ -243,21 +243,21 @@ export default function LeadsListClient({
     <div>
       {viewingClientName && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
-          <Link href="/leadgen/admin" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+          <p className="text-sm font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/admin" className="text-sm font-semibold text-sky-700 hover:text-sky-900">
             ← Back to All Clients
           </Link>
         </div>
       )}
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <button type="button" onClick={() => setShowAddForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+        <button type="button" onClick={() => setShowAddForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
           {showAddForm ? "Cancel" : "+ Add Lead"}
         </button>
         <button
           type="button"
           onClick={() => setShowUpload((v) => !v)}
-          className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
+          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400"
         >
           {showUpload ? "Cancel" : "Upload Leads by CSV"}
         </button>
@@ -275,11 +275,11 @@ export default function LeadsListClient({
           className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Business Name</span>
+            <span className="text-sm font-semibold text-slate-600">Business Name</span>
             <input name="business_name" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Client</span>
+            <span className="text-sm font-semibold text-slate-600">Client</span>
             <select
               name="client_id"
               required
@@ -298,7 +298,7 @@ export default function LeadsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
             <select name="campaign_id" className={inputClass} defaultValue="" key={addFormClientId}>
               <option value="">No campaign</option>
               {campaignsForAddForm.map((c) => (
@@ -309,46 +309,46 @@ export default function LeadsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Industry</span>
+            <span className="text-sm font-semibold text-slate-600">Industry</span>
             <input name="industry" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Contact Name</span>
+            <span className="text-sm font-semibold text-slate-600">Contact Name</span>
             <input name="contact_name" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Owner / Decision-Maker</span>
+            <span className="text-sm font-semibold text-slate-600">Owner / Decision-Maker</span>
             <input name="decision_maker_name" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Phone</span>
+            <span className="text-sm font-semibold text-slate-600">Phone</span>
             <input name="phone" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Email</span>
+            <span className="text-sm font-semibold text-slate-600">Email</span>
             <input name="email" type="email" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Website</span>
+            <span className="text-sm font-semibold text-slate-600">Website</span>
             <input name="website" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">City</span>
+            <span className="text-sm font-semibold text-slate-600">City</span>
             <input name="city" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Province</span>
+            <span className="text-sm font-semibold text-slate-600">Province</span>
             <input name="province" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Lead Source</span>
+            <span className="text-sm font-semibold text-slate-600">Lead Source</span>
             <input name="lead_source" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Notes</span>
+            <span className="text-sm font-semibold text-slate-600">Notes</span>
             <textarea name="notes" className={`${inputClass} min-h-[60px] resize-y`} />
           </label>
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
             Add Lead
           </button>
         </form>
@@ -441,7 +441,7 @@ export default function LeadsListClient({
 
       {selected.size > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5">
-          <span className="text-[13px] font-semibold text-sky-800">{selected.size} selected</span>
+          <span className="text-sm font-semibold text-sky-800">{selected.size} selected</span>
           <select value={bulkAgent} onChange={(e) => setBulkAgent(e.target.value)} className={`${inputClass} w-auto`}>
             <option value="">Choose an agent…</option>
             <option value="__unassign__">Unassign</option>
@@ -463,7 +463,7 @@ export default function LeadsListClient({
                 }
               )
             }
-            className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+            className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
           >
             Assign Selected
           </button>
@@ -472,13 +472,13 @@ export default function LeadsListClient({
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {filtered.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">No leads match your filters.</p>
+          <p className="p-6 text-center text-sm text-slate-500">No leads match your filters.</p>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-[13px]">
+              <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                  <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                     <th className="w-9 min-w-9 px-3 py-2">
                       <input
                         type="checkbox"
@@ -521,7 +521,7 @@ export default function LeadsListClient({
                           </Link>
                           {dncByLeadId?.[lead.id] && <DncBadge suppression={dncByLeadId[lead.id]} />}
                         </div>
-                        <div className="truncate text-[11px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
+                        <div className="truncate text-sm text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-600">{clientById.get(lead.client_id)?.name ?? "—"}</td>
                       <td className="px-3 py-2 text-slate-600">{lead.campaign_id ? campaignById.get(lead.campaign_id)?.name ?? "—" : "—"}</td>
@@ -530,7 +530,7 @@ export default function LeadsListClient({
                           value={lead.assigned_agent_id ?? ""}
                           disabled={isPending}
                           onChange={(e) => runAction(() => assignLeadAction(lead.id, e.target.value || null))}
-                          className="rounded-md border border-slate-300 px-1.5 py-1 text-[12px]"
+                          className="rounded-md border border-slate-300 px-1.5 py-1 text-sm"
                         >
                           <option value="">Unassigned</option>
                           {agents.map((a) => (
@@ -540,18 +540,18 @@ export default function LeadsListClient({
                           ))}
                         </select>
                         {lead.assigned_agent_id && !agentById.get(lead.assigned_agent_id) && (
-                          <span className="ml-1 text-[10.5px] text-slate-400">(former agent)</span>
+                          <span className="ml-1 text-xs text-slate-400">(former agent)</span>
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
                           {lead.status}
                         </span>
                       </td>
                       <td className="px-3 py-2">
                         {emailStatusByLeadId?.[lead.id] ? (
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
                           >
                             {LEADGEN_EMAIL_STATUS_LABELS[emailStatusByLeadId[lead.id]]}
                           </span>
@@ -562,7 +562,7 @@ export default function LeadsListClient({
                       <td className="px-3 py-2">
                         {appointmentStatusByLeadId?.[lead.id] ? (
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
                           >
                             {appointmentStatusByLeadId[lead.id]}
                           </span>
@@ -577,7 +577,7 @@ export default function LeadsListClient({
                             while scanning the table. */}
                         <Link
                           href={`/leadgen/admin/leads/${lead.id}`}
-                          className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 hover:bg-sky-100"
+                          className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
                         >
                           Manage
                         </Link>
@@ -588,7 +588,7 @@ export default function LeadsListClient({
               </table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-sm text-slate-500">
               <span>
                 {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} lead
                 {filtered.length === 1 ? "" : "s"}
@@ -602,7 +602,7 @@ export default function LeadsListClient({
                       setPageSize(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                   >
                     {PAGE_SIZE_OPTIONS.map((size) => (
                       <option key={size} value={size}>
@@ -677,12 +677,12 @@ function CsvUploadForm({
       }}
       className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5"
     >
-      <p className="text-[13px] text-slate-500">
+      <p className="text-sm text-slate-500">
         CSV columns (case-insensitive, any order): Business Name (required), Industry, Contact Name, Owner/Decision Maker,
         Phone, Email, Website, City, Province, Lead Source, Notes.
       </p>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Client</span>
+        <span className="text-sm font-semibold text-slate-600">Client</span>
         <select
           name="client_id"
           required
@@ -701,7 +701,7 @@ function CsvUploadForm({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
+        <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
         <select name="campaign_id" className={inputClass} defaultValue="">
           <option value="">No campaign</option>
           {campaignsForClient.map((c) => (
@@ -712,14 +712,14 @@ function CsvUploadForm({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Default Lead Source (used when a row has none)</span>
+        <span className="text-sm font-semibold text-slate-600">Default Lead Source (used when a row has none)</span>
         <input name="lead_source" className={inputClass} />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">CSV File</span>
-        <input type="file" name="file" accept=".csv,text/csv" required className="text-[13px]" />
+        <span className="text-sm font-semibold text-slate-600">CSV File</span>
+        <input type="file" name="file" accept=".csv,text/csv" required className="text-sm" />
       </label>
-      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
         {isPending ? "Uploading…" : "Upload Leads"}
       </button>
     </form>

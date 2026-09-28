@@ -109,8 +109,8 @@ export default function AgentAppointmentsListClient({
     <div>
       {viewingClientName && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
-          <Link href="/leadgen/agent" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+          <p className="text-sm font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/agent" className="text-sm font-semibold text-sky-700 hover:text-sky-900">
             ← Back to All Clients
           </Link>
         </div>
@@ -121,7 +121,7 @@ export default function AgentAppointmentsListClient({
           <select
             value={clientFilter}
             onChange={(e) => setClientFilter(e.target.value)}
-            className="w-auto rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900"
+            className="w-auto rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900"
           >
             <option value="all">All clients</option>
             {clientList.map((c) => (
@@ -135,7 +135,7 @@ export default function AgentAppointmentsListClient({
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {visibleAppointments.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">
+          <p className="p-6 text-center text-sm text-slate-500">
             {appointments.length === 0 ? "No appointments yet." : "No appointments match this client."}
           </p>
         ) : (
@@ -157,29 +157,29 @@ export default function AgentAppointmentsListClient({
                             appt.business_name
                           )}
                         </span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
                         <span
                           title={appt.incentive_status_reason ?? undefined}
-                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                             appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                           }`}
                         >
                           {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                         </span>
                       </div>
-                      <p className="mt-1 text-[13px] text-slate-600">
+                      <p className="mt-1 text-sm text-slate-600">
                         {showClientFilter && <>Client: {clientNameById.get(appt.client_id) ?? "—"} · </>}
                         {leadContact?.contact_name ?? appt.contact_name ?? "No contact name"} · {leadContact?.email ?? appt.email ?? "No email"} ·{" "}
                         {appt.phone || "No phone"}
                       </p>
-                      <p className="mt-0.5 text-[13px] text-slate-600">
+                      <p className="mt-0.5 text-sm text-slate-600">
                         {appt.appointment_date} {appt.appointment_time} ({appt.timezone}) · {appt.meeting_type} · Agent:{" "}
                         {(appt.assigned_specialist_id && agentNameById?.[appt.assigned_specialist_id]) || "Unassigned"}
                       </p>
                       {businessReminderStatusByAppointmentId[appt.id] && (
                         <p className="mt-1">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                               LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                             }`}
                             title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
@@ -191,7 +191,7 @@ export default function AgentAppointmentsListClient({
                     </div>
 
                     {appt.lead_id && (
-                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+                      <Link href={`/leadgen/agent/leads/${appt.lead_id}`} className="text-sm font-semibold text-sky-600 hover:text-sky-700">
                         View Lead
                       </Link>
                     )}
@@ -228,7 +228,7 @@ export default function AgentAppointmentsListClient({
             })}
           </ul>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-sm text-slate-500">
           <span>
             {pageStart + 1}–{Math.min(pageStart + pageSize, visibleAppointments.length)} of {visibleAppointments.length} appointment
             {visibleAppointments.length === 1 ? "" : "s"}
@@ -242,7 +242,7 @@ export default function AgentAppointmentsListClient({
                   setPageSize(Number(e.target.value));
                   setPage(1);
                 }}
-                className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <option key={size} value={size}>

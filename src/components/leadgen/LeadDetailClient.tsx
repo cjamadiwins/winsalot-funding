@@ -46,7 +46,7 @@ import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
 import AppointmentEmailActions from "./AppointmentEmailActions";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 // Canonical Mantra Collab outreach copy. Keep this in application code so
 // preview, resend, and actual send cannot fall back to an older database
@@ -435,12 +435,12 @@ export default function LeadDetailClient({
     <div>
       <RefreshOnFocus />
       {onBack ? (
-        <button type="button" onClick={onBack} className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+        <button type="button" onClick={onBack} className="mb-3 inline-block text-sm font-semibold text-sky-600 hover:text-sky-700">
           ← Back to Opportunities
         </button>
       ) : (
         cameFromOpportunityFinder && (
-          <Link href="/leadgen/admin/opportunity-finder" className="mb-3 inline-block text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          <Link href="/leadgen/admin/opportunity-finder" className="mb-3 inline-block text-sm font-semibold text-sky-600 hover:text-sky-700">
             ← Back to Opportunity Finder
           </Link>
         )
@@ -455,7 +455,7 @@ export default function LeadDetailClient({
             {client.name}
             {campaign ? ` · ${campaign.name}` : ""} · {[lead.city, lead.province].filter(Boolean).join(", ")}
             {callListSegmentName && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+              <span className="ml-2 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-semibold text-indigo-700">
                 Call List: {callListSegmentName}
               </span>
             )}
@@ -464,14 +464,14 @@ export default function LeadDetailClient({
             <div className="mt-2 flex items-center gap-2">
               <span className="text-lg font-extrabold text-slate-900">{score.score}</span>
               <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(score)]}`}
+                className={`rounded-full px-2.5 py-1 text-sm font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(score)]}`}
               >
                 {OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(score)]}
               </span>
             </div>
           )}
         </div>
-        <span className={`rounded-full px-3.5 py-2 text-[13px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>{lead.status}</span>
+        <span className={`rounded-full px-3.5 py-2 text-sm font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>{lead.status}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-sm">
@@ -494,11 +494,11 @@ export default function LeadDetailClient({
           <span className="text-slate-700">{assignedAgentName ?? "Unassigned"}</span>
         )}
         {onBack ? (
-          <button type="button" onClick={onBack} className="ml-auto text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          <button type="button" onClick={onBack} className="ml-auto text-sm font-semibold text-sky-600 hover:text-sky-700">
             ← Back to Leads
           </button>
         ) : (
-          <Link href={listPath} className="ml-auto text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+          <Link href={listPath} className="ml-auto text-sm font-semibold text-sky-600 hover:text-sky-700">
             ← Back to Leads
           </Link>
         )}
@@ -532,7 +532,7 @@ export default function LeadDetailClient({
                     ? setShowHidebrandtModal(true)
                     : setShowConsultationModal(true)
           }
-          className={`rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white transition ${
+          className={`rounded-full px-5 py-2.5 text-sm font-semibold text-white transition ${
             isCustomCampaignClient ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"
           }`}
         >
@@ -546,7 +546,7 @@ export default function LeadDetailClient({
             type="button"
             disabled={isPending || isDeletingLead}
             onClick={handleDeleteLead}
-            className="rounded-full border border-rose-300 bg-rose-50 px-5 py-2.5 text-[13px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full border border-rose-300 bg-rose-50 px-5 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isDeletingLead ? "Deleting…" : "Delete"}
           </button>
@@ -705,7 +705,7 @@ export default function LeadDetailClient({
         >
           <input type="datetime-local" name="scheduled_at" required className={`${inputClass} max-w-[220px]`} />
           <input name="note" placeholder="Note (optional)" className={`${inputClass} max-w-[240px]`} />
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
             Schedule
           </button>
         </form>
@@ -726,7 +726,7 @@ export default function LeadDetailClient({
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Lead Information</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lead Information</h2>
           {editing ? (
             <form
               action={(formData) => runAction(() => actions.updateLead(lead.id, formData), () => setEditing(false))}
@@ -742,7 +742,7 @@ export default function LeadDetailClient({
               <LabeledInput name="street_address" label="Street Address" defaultValue={lead.street_address ?? ""} />
               <LabeledInput name="city" label="City" defaultValue={lead.city ?? ""} />
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Province</span>
+                <span className="text-sm font-semibold text-slate-600">Province</span>
                 <select name="province" defaultValue={lead.province ?? ""} className={inputClass}>
                   <option value="">—</option>
                   {LEADGEN_PROVINCES.map((p) => (
@@ -756,20 +756,20 @@ export default function LeadDetailClient({
               <LabeledInput name="country" label="Country" defaultValue={lead.country ?? ""} />
               <LabeledInput name="lead_source" label="Lead Source" defaultValue={lead.lead_source ?? ""} />
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Notes</span>
+                <span className="text-sm font-semibold text-slate-600">Notes</span>
                 <textarea name="notes" defaultValue={lead.notes ?? ""} className={`${inputClass} min-h-[70px] resize-y`} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Client-Visible Notes</span>
-                <span className="text-[11.5px] text-slate-500">Shown to the client on their own Client Portal lead detail page - never internal agent/admin notes.</span>
+                <span className="text-sm font-semibold text-slate-600">Client-Visible Notes</span>
+                <span className="text-xs text-slate-500">Shown to the client on their own Client Portal lead detail page - never internal agent/admin notes.</span>
                 <textarea name="client_notes" defaultValue={lead.client_notes ?? ""} className={`${inputClass} min-h-[70px] resize-y`} />
               </label>
-              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
                 Save
               </button>
             </form>
           ) : (
-            <dl className="mt-4 space-y-2.5 text-[14px]">
+            <dl className="mt-4 space-y-2.5 text-sm">
               <Row label="Industry" value={lead.industry} />
               <Row label="Contact" value={lead.contact_name} />
               <Row label="Owner / Decision-Maker" value={lead.decision_maker_name} />
@@ -781,13 +781,13 @@ export default function LeadDetailClient({
                     {lead.email}
                     {isBounced(lead.email) && (
                       <div className="mt-1 flex items-center justify-end gap-2">
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">⚠ Bounced</span>
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-sm font-semibold text-rose-700">⚠ Bounced</span>
                         {isAdmin && actions.clearBouncedEmail && (
                           <button
                             type="button"
                             disabled={isPending}
                             onClick={() => runAction(() => actions.clearBouncedEmail!(lead.email!))}
-                            className="text-[11px] font-semibold text-sky-600 hover:text-sky-700"
+                            className="text-sm font-semibold text-sky-600 hover:text-sky-700"
                           >
                             Clear &amp; Approve
                           </button>
@@ -830,7 +830,7 @@ export default function LeadDetailClient({
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Record Call Outcome</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Record Call Outcome</h2>
           <form action={(formData) => runAction(() => actions.recordCallOutcome(lead.id, formData))} className="mt-4 space-y-3">
             <select name="call_outcome" required defaultValue="" className={inputClass}>
               <option value="" disabled>
@@ -844,27 +844,27 @@ export default function LeadDetailClient({
             </select>
             <textarea name="notes" placeholder="Internal call notes — never shown to clients" className={`${inputClass} min-h-[60px] resize-y`} />
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Next Follow-up (optional)</span>
+              <span className="text-sm font-semibold text-slate-600">Next Follow-up (optional)</span>
               <input type="datetime-local" name="next_follow_up_at" className={inputClass} />
             </label>
-            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-500 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-600">
+            <button type="submit" disabled={isPending} className="w-full rounded-full bg-slate-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-600">
               Save Call Outcome
             </button>
           </form>
 
-          <h3 className="mt-6 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Internal Activity Timeline</h3>
+          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">Internal Activity Timeline</h3>
           {activities.length === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No activity logged yet.</p>
+            <p className="mt-3 text-sm text-slate-500">No activity logged yet.</p>
           ) : (
             <ul className="mt-3 max-h-[420px] space-y-3 overflow-y-auto">
               {activities.map((activity) => (
-                <li key={activity.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
+                <li key={activity.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-900">
                       {LEADGEN_ACTIVITY_TYPE_LABELS[activity.activity_type]}
                       {activity.call_outcome && ` — ${activity.call_outcome}`}
                     </span>
-                    <span className="text-[12px] text-slate-500">{new Date(activity.occurred_at).toLocaleString()}</span>
+                    <span className="text-sm text-slate-500">{new Date(activity.occurred_at).toLocaleString()}</span>
                   </div>
                   {activity.notes && <p className="mt-1 whitespace-pre-wrap text-slate-700">{activity.notes}</p>}
                 </li>
@@ -876,16 +876,16 @@ export default function LeadDetailClient({
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Follow-ups</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Follow-ups</h2>
           {followUps.length === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No follow-ups scheduled.</p>
+            <p className="mt-3 text-sm text-slate-500">No follow-ups scheduled.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {followUps.map((followUp) => (
-                <li key={followUp.id} className={`rounded-lg border px-3.5 py-3 text-[13.5px] ${followUp.status === "completed" ? "border-slate-100 bg-slate-50" : "border-slate-200"}`}>
+                <li key={followUp.id} className={`rounded-lg border px-3.5 py-3 text-sm ${followUp.status === "completed" ? "border-slate-100 bg-slate-50" : "border-slate-200"}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-900">{new Date(followUp.scheduled_at).toLocaleString()}</span>
-                    {followUp.status === "completed" && <span className="text-[11px] font-semibold text-emerald-700">Completed</span>}
+                    {followUp.status === "completed" && <span className="text-sm font-semibold text-emerald-700">Completed</span>}
                   </div>
                   {followUp.note && <p className="mt-1 text-slate-700">{followUp.note}</p>}
                   {followUp.status === "pending" && (
@@ -893,7 +893,7 @@ export default function LeadDetailClient({
                       type="button"
                       disabled={isPending}
                       onClick={() => runAction(() => actions.completeFollowUp(followUp.id, lead.id))}
-                      className="mt-2 text-[12.5px] font-semibold text-emerald-700 hover:text-emerald-800"
+                      className="mt-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
                     >
                       Mark Completed
                     </button>
@@ -905,18 +905,18 @@ export default function LeadDetailClient({
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Appointments</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Appointments</h2>
           {appointments.length === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No appointments booked for this lead yet.</p>
+            <p className="mt-3 text-sm text-slate-500">No appointments booked for this lead yet.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {appointments.map((appt) => (
-                <li key={appt.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-[13.5px]">
+                <li key={appt.id} className="rounded-lg border border-slate-200 px-3.5 py-3 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-900">
                       {appt.appointment_date} {appt.appointment_time} ({appt.timezone})
                     </span>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
                   </div>
                   <p className="mt-1 text-slate-600">{appt.meeting_type}{appt.meeting_link ? ` · ${appt.meeting_link}` : ""}</p>
                   {(appt.status === "Booked" || appt.status === "Confirmed") && (
@@ -954,21 +954,21 @@ export default function LeadDetailClient({
       <div className="mt-6">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Communications / Email History</h2>
             <div className="flex flex-wrap gap-2.5">
               {!isMantra && (
                 <>
                   <button
                     type="button"
                     onClick={() => setShowInvitationModal(true)}
-                    className="rounded-full bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
+                    className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                   >
                     Send 15-Minute Consultation Invitation
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowInvitationFollowUpModal(true)}
-                    className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-400"
+                    className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                   >
                     Send Follow-Up Email
                   </button>
@@ -977,12 +977,12 @@ export default function LeadDetailClient({
             </div>
           </div>
           {emails.length === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No emails sent to this prospect yet.</p>
+            <p className="mt-3 text-sm text-slate-500">No emails sent to this prospect yet.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[600px] text-left text-[13px]">
+              <table className="w-full min-w-[600px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                  <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Recipient</th>
                     <th className="py-2 pr-3">Subject</th>
@@ -1000,15 +1000,15 @@ export default function LeadDetailClient({
                         <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
                         <td className="py-2 pr-3">
                           {email.to_email}
-                          {isBounced(email.to_email) && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠</span>}
+                          {isBounced(email.to_email) && <span className="ml-1.5 text-sm font-semibold text-rose-600">⚠</span>}
                         </td>
                         <td className="py-2 pr-3 max-w-[200px] truncate">{email.subject}</td>
                         <td className="py-2 pr-3 text-slate-500">{email.template_key ?? "—"}</td>
                         <td className="py-2 pr-3">
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
+                          <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
                             {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
                           </span>
-                          {reason && <div className="mt-1 max-w-[220px] text-[11px] text-slate-500">{reason}</div>}
+                          {reason && <div className="mt-1 max-w-[220px] text-sm text-slate-500">{reason}</div>}
                         </td>
                         <td className="py-2 pr-3 text-slate-500">{new Date(leadgenEmailStatusAt(email)).toLocaleString()}</td>
                         {isAdmin && actions.resendEmail && (
@@ -1018,7 +1018,7 @@ export default function LeadDetailClient({
                                 type="button"
                                 disabled={isPending}
                                 onClick={() => runAction(() => actions.resendEmail!(email.id))}
-                                className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+                                className="text-sm font-semibold text-sky-600 hover:text-sky-700"
                               >
                                 Resend
                               </button>
@@ -1068,19 +1068,19 @@ function BookAppointmentInlineForm({
       <input type="hidden" name="email" value={lead.email ?? ""} />
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>
+        <span className="text-sm font-semibold text-slate-600">Appointment Date</span>
         <input name="appointment_date" type="date" required className={inputClass} />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Appointment Time</span>
+        <span className="text-sm font-semibold text-slate-600">Appointment Time</span>
         <input name="appointment_time" type="time" required className={inputClass} />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Time Zone</span>
+        <span className="text-sm font-semibold text-slate-600">Time Zone</span>
         <input name="timezone" defaultValue="America/Toronto" className={inputClass} />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Meeting Type</span>
+        <span className="text-sm font-semibold text-slate-600">Meeting Type</span>
         <select name="meeting_type" defaultValue="Phone Call" className={inputClass}>
           {LEADGEN_MEETING_TYPES.map((t) => (
             <option key={t} value={t}>
@@ -1090,11 +1090,11 @@ function BookAppointmentInlineForm({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Meeting Link (optional)</span>
+        <span className="text-sm font-semibold text-slate-600">Meeting Link (optional)</span>
         <input name="meeting_link" type="url" className={inputClass} />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Assigned Specialist</span>
+        <span className="text-sm font-semibold text-slate-600">Assigned Specialist</span>
         {isAdmin && agents.length > 0 ? (
           <select name="assigned_specialist_id" defaultValue={currentUserId} className={inputClass}>
             {agents.map((a) => (
@@ -1108,10 +1108,10 @@ function BookAppointmentInlineForm({
         )}
       </label>
       <label className="flex flex-col gap-1.5 sm:col-span-2">
-        <span className="text-[13px] font-semibold text-slate-600">Internal Appointment Notes</span>
+        <span className="text-sm font-semibold text-slate-600">Internal Appointment Notes</span>
         <textarea name="appointment_notes" className={`${inputClass} min-h-[50px] resize-y`} />
       </label>
-      <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="hidden" name="notify_client" value="false" />
         <input
           type="checkbox"
@@ -1123,8 +1123,8 @@ function BookAppointmentInlineForm({
         />
         Email the client a notification now
       </label>
-      <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
-      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+      <p className="text-xs text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
+      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
         {isPending ? "Booking…" : "Book Appointment"}
       </button>
     </form>
@@ -1136,7 +1136,7 @@ function ActionButton({ children, onClick }: { children: React.ReactNode; onClic
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-400"
+      className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
     >
       {children}
     </button>
@@ -1168,7 +1168,7 @@ function LabeledInput({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[13px] font-semibold text-slate-600">{label}</span>
+      <span className="text-sm font-semibold text-slate-600">{label}</span>
       <input name={name} type={type} defaultValue={defaultValue} required={required} className={inputClass} />
     </label>
   );

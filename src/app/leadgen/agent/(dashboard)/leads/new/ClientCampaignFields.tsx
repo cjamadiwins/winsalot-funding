@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { LeadgenCampaignRow, LeadgenClientRow } from "@/lib/leadgen-types";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 // Client and Campaign fields need to live together in one client component
 // because the Campaign options depend on which Client is currently
@@ -26,7 +26,7 @@ export default function ClientCampaignFields({
   return (
     <>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">
+        <span className="text-sm font-semibold text-slate-600">
           Client<span className="text-red-600"> *</span>
         </span>
         <select
@@ -47,7 +47,7 @@ export default function ClientCampaignFields({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Campaign</span>
+        <span className="text-sm font-semibold text-slate-600">Campaign</span>
         <select name="campaign_id" className={inputClass} defaultValue="" key={clientId}>
           <option value="">No campaign</option>
           {campaignsForClient.map((campaign) => (

@@ -36,27 +36,27 @@ export default function TodaysAppointmentsCard({ appointments }: { appointments:
   return (
     <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-cyan-700">Today&apos;s Appointments</h2>
-        <Link href="/leadgen/admin/appointments" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Today&apos;s Appointments</h2>
+        <Link href="/leadgen/admin/appointments" className="text-sm font-semibold text-sky-600 hover:text-sky-700">
           View all
         </Link>
       </div>
 
       {appointments.length === 0 ? (
-        <p className="mt-3 text-[13.5px] text-slate-500">No appointments booked for today.</p>
+        <p className="mt-3 text-sm text-slate-500">No appointments booked for today.</p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {appointments.map((appt, i) => (
             <div key={appt.id} className={i < appointments.length - 1 ? "border-b border-slate-100 pb-3" : ""}>
               <Link href={`/leadgen/admin/appointments?highlight=${appt.id}`} className="block">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[12px] font-bold text-slate-900">{formatAppointmentTime(appt.appointment_time)}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                  <span className="text-sm font-bold text-slate-900">{formatAppointmentTime(appt.appointment_time)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
                     {appt.status}
                   </span>
                 </div>
               </Link>
-              <div className="mt-1 text-[13px] font-semibold text-slate-900">
+              <div className="mt-1 text-sm font-semibold text-slate-900">
                 {appt.lead_id ? (
                   <Link href={`/leadgen/admin/leads/${appt.lead_id}`} className="text-sky-600 hover:text-sky-700 hover:underline">
                     {appt.business_name}
@@ -65,7 +65,7 @@ export default function TodaysAppointmentsCard({ appointments }: { appointments:
                   appt.business_name
                 )}
               </div>
-              <Link href={`/leadgen/admin/appointments?highlight=${appt.id}`} className="block text-[11.5px] text-slate-500">
+              <Link href={`/leadgen/admin/appointments?highlight=${appt.id}`} className="block text-xs text-slate-500">
                 {appt.contact_name ?? "No contact on file"}
                 {appt.agentName ? ` · ${appt.agentName}` : ""}
               </Link>

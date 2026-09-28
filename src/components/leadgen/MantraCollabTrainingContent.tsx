@@ -14,7 +14,7 @@ export default function MantraCollabTrainingContent() {
       <h1 className="text-2xl font-bold text-slate-900">Mantra Collab Call Training</h1>
       <p className="mt-2 text-sm text-slate-600">Read-only training material for live calls. Keep this page open while calling Mantra Collab prospects.</p>
 
-      <div className="mt-6 space-y-6 text-[14px] leading-7 text-slate-700 sm:text-[15px]">
+      <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700 sm:text-base">
         <section>
           <h2 className="text-base font-bold text-slate-900">Objective</h2>
           <p className="mt-2">Book a short consultation appointment for Mantra Collab.</p>

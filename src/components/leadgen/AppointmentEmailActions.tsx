@@ -118,7 +118,7 @@ export default function AppointmentEmailActions({
               setMessage(null);
               setMode("resend");
             }}
-            className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+            className="text-sm font-semibold text-sky-600 hover:text-sky-700"
           >
             Resend Appointment Notification
           </button>
@@ -128,7 +128,7 @@ export default function AppointmentEmailActions({
               setMessage(null);
               setMode("reminder");
             }}
-            className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+            className="text-sm font-semibold text-sky-600 hover:text-sky-700"
           >
             Send Appointment Reminder
           </button>
@@ -136,14 +136,14 @@ export default function AppointmentEmailActions({
       )}
 
       {latestEmail && (
-        <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[latestEmail.status]}`}>
+        <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-sm font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[latestEmail.status]}`}>
           Last appointment email: {LEADGEN_EMAIL_STATUS_LABELS[latestEmail.status]} ({new Date(leadgenEmailStatusAt(latestEmail)).toLocaleString()})
         </span>
       )}
 
       {confirmationStatus && (
         <span
-          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600"
           title={confirmationError ?? undefined}
         >
           Email confirmation: {confirmationStatus}
@@ -152,7 +152,7 @@ export default function AppointmentEmailActions({
 
       {smsConfirmationStatus && (
         <span
-          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsConfirmationStatus] ?? SMS_STATUS_STYLE.default}`}
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-sm font-semibold ${SMS_STATUS_STYLE[smsConfirmationStatus] ?? SMS_STATUS_STYLE.default}`}
           title={smsConfirmationError ?? undefined}
         >
           SMS confirmation: {smsConfirmationStatus}
@@ -161,7 +161,7 @@ export default function AppointmentEmailActions({
 
       {automaticReminderStatus24h && (
         <span
-          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600"
           title={automaticReminderError24h ?? undefined}
         >
           Automatic 24h reminder: {automaticReminderStatus24h}
@@ -170,7 +170,7 @@ export default function AppointmentEmailActions({
 
       {automaticReminderStatus1h && (
         <span
-          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600"
           title={automaticReminderError1h ?? undefined}
         >
           Automatic 1h reminder: {automaticReminderStatus1h}
@@ -179,7 +179,7 @@ export default function AppointmentEmailActions({
 
       {smsReminderStatus24h && (
         <span
-          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsReminderStatus24h] ?? SMS_STATUS_STYLE.default}`}
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-sm font-semibold ${SMS_STATUS_STYLE[smsReminderStatus24h] ?? SMS_STATUS_STYLE.default}`}
           title={smsReminderError24h ?? undefined}
         >
           SMS 24h reminder: {smsReminderStatus24h}
@@ -188,14 +188,14 @@ export default function AppointmentEmailActions({
 
       {smsReminderStatus1h && (
         <span
-          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${SMS_STATUS_STYLE[smsReminderStatus1h] ?? SMS_STATUS_STYLE.default}`}
+          className={`inline-flex w-fit rounded-full px-2 py-0.5 text-sm font-semibold ${SMS_STATUS_STYLE[smsReminderStatus1h] ?? SMS_STATUS_STYLE.default}`}
           title={smsReminderError1h ?? undefined}
         >
           SMS 1h reminder: {smsReminderStatus1h}
         </span>
       )}
 
-      {message && <span className="text-[11.5px] font-medium text-emerald-700">{message}</span>}
+      {message && <span className="text-xs font-medium text-emerald-700">{message}</span>}
 
       {canSendManually && mode && (
         <AppointmentEmailConfirmModal

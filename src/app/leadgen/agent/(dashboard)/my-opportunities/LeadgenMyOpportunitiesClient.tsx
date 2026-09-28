@@ -167,7 +167,7 @@ export default function LeadgenMyOpportunitiesClient({
             type="button"
             onClick={() => setCategoryFilter(cat)}
             title={cat === "all" ? undefined : OPPORTUNITY_CATEGORY_DESCRIPTIONS[cat]}
-            className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold ${
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold ${
               categoryFilter === cat ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700 hover:border-slate-400"
             }`}
           >
@@ -177,7 +177,7 @@ export default function LeadgenMyOpportunitiesClient({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
           Show closed / not-opportunity leads too
         </label>
@@ -185,14 +185,14 @@ export default function LeadgenMyOpportunitiesClient({
           <button
             type="button"
             onClick={() => setView("list")}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
           >
             List View
           </button>
           <button
             type="button"
             onClick={() => setView("board")}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
           >
             Board View
           </button>
@@ -231,17 +231,17 @@ export default function LeadgenMyOpportunitiesClient({
                       {row.businessName}
                     </Link>
                   )}
-                  <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
+                  <div className="break-words text-sm text-slate-500">{row.contactName || "No contact name"}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xl font-extrabold text-slate-900">{row.score.score}</span>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
+                  <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
                     {OPPORTUNITY_CATEGORY_LABELS[effective]}
                   </span>
                 </div>
               </div>
 
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-[12.5px] text-slate-600">
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-slate-600">
                 <div>
                   <dt className="text-slate-400">Last call</dt>
                   <dd>{fmt(row.lastCallAt)}</dd>
@@ -256,21 +256,21 @@ export default function LeadgenMyOpportunitiesClient({
                 </div>
               </dl>
 
-              <ul className="mt-3 list-disc space-y-0.5 pl-4 text-[12.5px] text-slate-600">
+              <ul className="mt-3 list-disc space-y-0.5 pl-4 text-sm text-slate-600">
                 {row.score.reasons.slice(0, 3).map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
               </ul>
-              <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] font-semibold text-slate-800">{row.score.recommended_action}</div>
+              <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">{row.score.recommended_action}</div>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {row.phone && (
-                  <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                  <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                     Call
                   </a>
                 )}
                 {row.email && (
-                  <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                  <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                     Email
                   </a>
                 )}
@@ -278,16 +278,16 @@ export default function LeadgenMyOpportunitiesClient({
                   <button
                     type="button"
                     onClick={() => onViewDetail(row.score.lead_id)}
-                    className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                    className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 hover:border-indigo-400"
                   >
                     View Lead
                   </button>
                 ) : (
-                  <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400">
+                  <Link href={row.detailHref} className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 hover:border-indigo-400">
                     View Lead
                   </Link>
                 )}
-                <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                   Book Appointment
                 </Link>
                 <button
@@ -296,7 +296,7 @@ export default function LeadgenMyOpportunitiesClient({
                     setNotingId(notingId === row.score.id ? null : row.score.id);
                     setNoteDraft("");
                   }}
-                  className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                  className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400"
                 >
                   Add Note
                 </button>
@@ -306,7 +306,7 @@ export default function LeadgenMyOpportunitiesClient({
                     setSchedulingId(schedulingId === row.score.id ? null : row.score.id);
                     setCallbackDraft("");
                   }}
-                  className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                  className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400"
                 >
                   Set Callback
                 </button>
@@ -315,7 +315,7 @@ export default function LeadgenMyOpportunitiesClient({
                   disabled={isPending || !row.followUpId}
                   title={row.followUpId ? undefined : "No pending callback to complete"}
                   onClick={() => row.followUpId && runAction(() => onCompleteFollowUp(row.followUpId!, row.score.lead_id))}
-                  className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Mark Complete
                 </button>
@@ -327,7 +327,7 @@ export default function LeadgenMyOpportunitiesClient({
                     value={noteDraft}
                     onChange={(e) => setNoteDraft(e.target.value)}
                     placeholder="Quick note..."
-                    className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                    className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                   />
                   <button
                     type="button"
@@ -336,7 +336,7 @@ export default function LeadgenMyOpportunitiesClient({
                       const note = noteDraft.trim();
                       runAction(() => onAddNote(row.score.lead_id, note), () => setNotingId(null));
                     }}
-                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Save
                   </button>
@@ -348,7 +348,7 @@ export default function LeadgenMyOpportunitiesClient({
                     type="datetime-local"
                     value={callbackDraft}
                     onChange={(e) => setCallbackDraft(e.target.value)}
-                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                   />
                   <button
                     type="button"
@@ -358,7 +358,7 @@ export default function LeadgenMyOpportunitiesClient({
                       formData.set("scheduled_at", callbackDraft);
                       runAction(() => onScheduleCallback(row.score.lead_id, formData), () => setSchedulingId(null));
                     }}
-                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Save
                   </button>
@@ -369,7 +369,7 @@ export default function LeadgenMyOpportunitiesClient({
                 value={row.score.agent_status}
                 disabled={isPending}
                 onChange={(e) => updateStatus(row.score.id, e.target.value as (typeof OPPORTUNITY_AGENT_STATUSES)[number])}
-                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] text-slate-900"
+                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
               >
                 {OPPORTUNITY_AGENT_STATUSES.map((status) => (
                   <option key={status} value={status}>

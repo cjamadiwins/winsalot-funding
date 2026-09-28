@@ -46,14 +46,14 @@ export default function LeadToAppointmentRateCard({
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-cyan-700">Lead-to-Appointment Rate</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Lead-to-Appointment Rate</h2>
         <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
           {LEADGEN_RESULTS_DATE_FILTERS.map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => setFilter(option)}
-              className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
                 filter === option ? "bg-[var(--crm-accent,#3e7ef7)] text-white" : "text-slate-500 hover:text-slate-900"
               }`}
             >
@@ -76,21 +76,21 @@ export default function LeadToAppointmentRateCard({
 
       {expanded && (
         <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50/50 p-3.5">
-          <div className="flex items-center justify-between text-[12px] font-semibold text-cyan-800">
+          <div className="flex items-center justify-between text-sm font-semibold text-cyan-800">
             <span>Appointments booked — {LEADGEN_RESULTS_DATE_FILTER_LABEL[filter]}</span>
             <span className="tabular-nums">
               {conversion.appointmentsBooked} / {conversion.totalLeads}
             </span>
           </div>
           {bookedLeads.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-slate-500">No appointments booked in this period.</p>
+            <p className="mt-2 text-sm text-slate-500">No appointments booked in this period.</p>
           ) : (
             <ul className="mt-2 space-y-1">
               {bookedLeads.map((lead) => (
                 <li key={lead.id}>
                   <Link
                     href={`/leadgen/agent/leads/${lead.id}`}
-                    className="text-[12.5px] font-medium text-sky-700 hover:text-sky-900 hover:underline"
+                    className="text-sm font-medium text-sky-700 hover:text-sky-900 hover:underline"
                   >
                     {lead.business_name}
                   </Link>

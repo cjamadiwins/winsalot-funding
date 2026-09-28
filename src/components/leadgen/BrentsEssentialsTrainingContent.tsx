@@ -12,7 +12,7 @@ export default function BrentsEssentialsTrainingContent({ dashboardHref }: Props
         <h1 className="text-2xl font-bold text-slate-900">Brent&apos;s Essentials - Agent Call Script</h1>
         <p className="mt-2 text-sm text-slate-600">Read-only training material for live calls. Keep this page open while calling prospects.</p>
 
-        <div className="mt-6 space-y-6 text-[14px] leading-7 text-slate-700 sm:text-[15px]">
+        <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700 sm:text-base">
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <h2 className="text-base font-bold text-slate-900">Brent&apos;s AI Services — 15-Minute Consultation Script</h2>
             <p className="mt-3 font-semibold text-slate-900">Opening Script</p>
@@ -39,7 +39,7 @@ export default function BrentsEssentialsTrainingContent({ dashboardHref }: Props
       <div className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:p-6">
         <h1 className="text-2xl font-bold text-slate-900">CTA (Call to Action) — How to Move a Prospect to the Next Step</h1>
 
-        <div className="mt-6 space-y-6 text-[14px] leading-7 text-slate-700 sm:text-[15px]">
+        <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700 sm:text-base">
           <section>
             <h2 className="text-base font-bold text-slate-900">What is a CTA?</h2>
             <p className="mt-2">

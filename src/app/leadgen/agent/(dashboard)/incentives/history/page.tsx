@@ -20,7 +20,7 @@ export default async function LeadgenAgentIncentiveHistoryPage() {
 
   return (
     <div>
-      <Link href="/leadgen/agent" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+      <Link href="/leadgen/agent" className="text-sm font-semibold text-sky-600 hover:text-sky-700">
         ← Back to Dashboard
       </Link>
       <h1 className="mt-2 text-2xl font-bold text-slate-900">My Weekly Incentive History</h1>

@@ -39,7 +39,7 @@ import {
   updateLeadgenAppointmentReminderSettingsAction,
 } from "./actions";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 type LeadOption = Pick<LeadgenLeadRow, "id" | "business_name" | "client_id" | "campaign_id" | "contact_name" | "phone" | "email">;
 
@@ -309,21 +309,21 @@ export default function AppointmentsListClient({
     <div>
       {viewingClientName && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
-          <Link href="/leadgen/admin" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+          <p className="text-sm font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/admin" className="text-sm font-semibold text-sky-700 hover:text-sky-900">
             ← Back to All Clients
           </Link>
         </div>
       )}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => setShowForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+        <button type="button" onClick={() => setShowForm((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
           {showForm ? "Cancel" : "+ Book Appointment"}
         </button>
         <button
           type="button"
           onClick={() => setShowReminderSettings((v) => !v)}
-          className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
+          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400"
         >
           {showReminderSettings ? "Close" : "Appointment Reminder Settings"}
         </button>
@@ -342,7 +342,7 @@ export default function AppointmentsListClient({
       {showReminderSettings && (
         <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-base font-bold text-slate-900">Appointment Reminder Settings</h2>
-          <p className="mt-1 text-[12.5px] text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             Controls the automatic 24-hour reminder cron job. Off by default until you&apos;ve verified it against real
             appointments.
           </p>
@@ -350,7 +350,7 @@ export default function AppointmentsListClient({
             action={(formData) => runAction(() => updateLeadgenAppointmentReminderSettingsAction(formData), () => setShowReminderSettings(false))}
             className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"
           >
-            <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
               <input type="hidden" name="automatic_reminders_enabled" value={reminderSettings.automatic_reminders_enabled ? "true" : "false"} />
               <input
                 type="checkbox"
@@ -362,7 +362,7 @@ export default function AppointmentsListClient({
               />
               Automatic 24-hour reminders: {reminderSettings.automatic_reminders_enabled ? "On" : "Off"}
             </label>
-            <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
               <input
                 type="hidden"
                 name="automatic_sms_reminders_enabled"
@@ -379,19 +379,19 @@ export default function AppointmentsListClient({
               Automatic SMS reminders: {reminderSettings.automatic_sms_reminders_enabled ? "On" : "Off"} (independent of email above)
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-semibold text-slate-600">Reminder Timing (hours before appointment)</span>
+              <span className="text-sm font-semibold text-slate-600">Reminder Timing (hours before appointment)</span>
               <input name="reminder_hours_before" type="number" min={1} step={1} defaultValue={reminderSettings.reminder_hours_before} required className={inputClass} />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-semibold text-slate-600">Sender Name</span>
+              <span className="text-sm font-semibold text-slate-600">Sender Name</span>
               <input name="sender_name" type="text" defaultValue={reminderSettings.sender_name} required className={inputClass} />
             </label>
             <label className="flex flex-col gap-1.5 sm:col-span-2">
-              <span className="text-[12.5px] font-semibold text-slate-600">Reply-To Address (must already be an approved sending address)</span>
+              <span className="text-sm font-semibold text-slate-600">Reply-To Address (must already be an approved sending address)</span>
               <input name="reply_to_email" type="email" defaultValue={reminderSettings.reply_to_email} required className={inputClass} />
             </label>
             <div className="sm:col-span-2">
-              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
                 Save Reminder Settings
               </button>
             </div>
@@ -411,7 +411,7 @@ export default function AppointmentsListClient({
           className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">From an existing lead (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">From an existing lead (optional)</span>
             <select
               name="lead_id"
               value={selectedLeadId}
@@ -433,7 +433,7 @@ export default function AppointmentsListClient({
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Client</span>
+            <span className="text-sm font-semibold text-slate-600">Client</span>
             <select
               name="client_id"
               required
@@ -452,7 +452,7 @@ export default function AppointmentsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
             <select name="campaign_id" defaultValue={selectedLead?.campaign_id ?? ""} className={inputClass} key={`camp-${selectedLeadId}-${formClientId}`}>
               <option value="">No campaign</option>
               {campaignsForAddForm.map((c) => (
@@ -463,36 +463,36 @@ export default function AppointmentsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Business Name</span>
+            <span className="text-sm font-semibold text-slate-600">Business Name</span>
             <input name="business_name" required defaultValue={selectedLead?.business_name ?? ""} className={inputClass} key={`biz-${selectedLeadId}`} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Contact Name</span>
+            <span className="text-sm font-semibold text-slate-600">Contact Name</span>
             <input name="contact_name" defaultValue={selectedLead?.contact_name ?? ""} className={inputClass} key={`contact-${selectedLeadId}`} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Phone</span>
+            <span className="text-sm font-semibold text-slate-600">Phone</span>
             <input name="phone" defaultValue={selectedLead?.phone ?? ""} className={inputClass} key={`phone-${selectedLeadId}`} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Email</span>
+            <span className="text-sm font-semibold text-slate-600">Email</span>
             <input name="email" type="email" defaultValue={selectedLead?.email ?? ""} className={inputClass} key={`email-${selectedLeadId}`} />
           </label>
-          <p className="text-[12px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
+          <p className="text-sm text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Appointment Date</span>
+            <span className="text-sm font-semibold text-slate-600">Appointment Date</span>
             <input name="appointment_date" type="date" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Appointment Time</span>
+            <span className="text-sm font-semibold text-slate-600">Appointment Time</span>
             <input name="appointment_time" type="time" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Time Zone</span>
+            <span className="text-sm font-semibold text-slate-600">Time Zone</span>
             <input name="timezone" defaultValue="America/Toronto" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Meeting Type</span>
+            <span className="text-sm font-semibold text-slate-600">Meeting Type</span>
             <select name="meeting_type" defaultValue="Phone Call" className={inputClass}>
               {LEADGEN_MEETING_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -502,11 +502,11 @@ export default function AppointmentsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Meeting Link (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Meeting Link (optional)</span>
             <input name="meeting_link" type="url" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Assigned Specialist</span>
+            <span className="text-sm font-semibold text-slate-600">Assigned Specialist</span>
             <select name="assigned_specialist_id" className={inputClass} defaultValue="">
               <option value="">Unassigned</option>
               {agents.map((a) => (
@@ -517,14 +517,14 @@ export default function AppointmentsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Internal Appointment Notes</span>
+            <span className="text-sm font-semibold text-slate-600">Internal Appointment Notes</span>
             <textarea name="appointment_notes" className={`${inputClass} min-h-[60px] resize-y`} />
           </label>
           <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-[13px] font-semibold text-slate-600">Notes visible to the client (optional, included in the notification email)</span>
+            <span className="text-sm font-semibold text-slate-600">Notes visible to the client (optional, included in the notification email)</span>
             <textarea name="client_visible_notes" className={`${inputClass} min-h-[50px] resize-y`} />
           </label>
-          <label className="flex items-center gap-2 text-[13.5px] sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input type="hidden" name="notify_client" value="false" />
             <input
               type="checkbox"
@@ -536,7 +536,7 @@ export default function AppointmentsListClient({
             />
             Email the client a notification now
           </label>
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
             {isPending ? "Booking…" : "Book Appointment"}
           </button>
         </form>
@@ -544,7 +544,7 @@ export default function AppointmentsListClient({
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {visibleAppointments.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">
+          <p className="p-6 text-center text-sm text-slate-500">
             {appointments.length === 0 ? "No appointments booked yet." : "No appointments match this client."}
           </p>
         ) : (
@@ -571,31 +571,31 @@ export default function AppointmentsListClient({
                       </span>
                       <span
                         title={appt.status_reason ?? undefined}
-                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}
                       >
                         {appt.status}
                       </span>
                       <span
                         title={appt.incentive_status_reason ?? undefined}
-                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                           appt.incentive_status ? LEADGEN_APPOINTMENT_INCENTIVE_STATUS_STYLES[appt.incentive_status] : LEADGEN_APPOINTMENT_INCENTIVE_PENDING_STYLE
                         }`}
                       >
                         {appt.incentive_status ?? LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}
                       </span>
                     </div>
-                    <p className="mt-1 text-[13px] text-slate-600">
+                    <p className="mt-1 text-sm text-slate-600">
                       Client: {clientById.get(appt.client_id)?.name ?? "—"} · {appt.contact_name || "No contact name"} · {appt.email || "No email"} ·{" "}
                       {appt.phone || "No phone"}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-slate-600">
+                    <p className="mt-0.5 text-sm text-slate-600">
                       {appt.appointment_date} {appt.appointment_time} ({appt.timezone}) · {appt.meeting_type} · Agent:{" "}
                       {(appt.assigned_specialist_id && agentNameById?.[appt.assigned_specialist_id]) || "Unassigned"}
                     </p>
                     {businessReminderStatusByAppointmentId?.[appt.id] && (
                       <p className="mt-1">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                             LEADGEN_BUSINESS_APPOINTMENT_REMINDER_STATUS_STYLES[businessReminderStatusByAppointmentId[appt.id].status]
                           }`}
                           title={businessReminderStatusByAppointmentId[appt.id].errorDetail ?? undefined}
@@ -614,7 +614,7 @@ export default function AppointmentsListClient({
                         setPendingResend(null);
                         setEditingId(editingId === appt.id ? null : appt.id);
                       }}
-                      className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
+                      className="text-sm font-semibold text-sky-600 hover:text-sky-700"
                     >
                       {editingId === appt.id ? "Close" : "Manage"}
                     </button>
@@ -622,7 +622,7 @@ export default function AppointmentsListClient({
                       <button
                         type="button"
                         onClick={() => setCancelingId(cancelingId === appt.id ? null : appt.id)}
-                        className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
+                        className="text-sm font-semibold text-rose-600 hover:text-rose-700"
                       >
                         {cancelingId === appt.id ? "Close" : "Cancel/Replace"}
                       </button>
@@ -631,7 +631,7 @@ export default function AppointmentsListClient({
                       type="button"
                       disabled={isPending || deletingId === appt.id}
                       onClick={() => handleDeleteAppointment(appt)}
-                      className="text-[12.5px] font-semibold text-rose-700 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="text-sm font-semibold text-rose-700 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {deletingId === appt.id ? "Deleting…" : "Delete"}
                     </button>
@@ -640,13 +640,13 @@ export default function AppointmentsListClient({
 
                 {isLeadgenAppointmentCountable(appt.status) && (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Weekly Incentive:</span>
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">Weekly Incentive:</span>
                     {appt.incentive_status !== "Qualified" && (
                       <button
                         type="button"
                         disabled={isPending}
                         onClick={() => handleVerifyQualified(appt)}
-                        className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full bg-emerald-600 px-2.5 py-1 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Verify as Qualified
                       </button>
@@ -660,7 +660,7 @@ export default function AppointmentsListClient({
                           setRejectIncentiveReason("");
                           setRejectingIncentiveId(rejectingIncentiveId === appt.id ? null : appt.id);
                         }}
-                        className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full bg-rose-600 px-2.5 py-1 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Reject
                       </button>
@@ -675,21 +675,21 @@ export default function AppointmentsListClient({
                       value={rejectIncentiveReason}
                       onChange={(e) => setRejectIncentiveReason(e.target.value)}
                       placeholder="Rejection reason (required)"
-                      className="rounded border border-rose-300 px-2 py-1 text-[11.5px] text-slate-900"
+                      className="rounded border border-rose-300 px-2 py-1 text-xs text-slate-900"
                     />
                     <div className="flex gap-2">
                       <button
                         type="button"
                         disabled={isPending}
                         onClick={() => handleConfirmReject(appt)}
-                        className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full bg-rose-600 px-2.5 py-1 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isPending ? "Saving…" : "Confirm Reject"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setRejectingIncentiveId(null)}
-                        className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400"
+                        className="rounded-full border border-slate-300 px-2.5 py-1 text-sm font-semibold text-slate-700 hover:border-slate-400"
                       >
                         Cancel
                       </button>
@@ -735,20 +735,20 @@ export default function AppointmentsListClient({
                       }
                       className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                     >
-                      <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                      <p className="text-sm text-slate-600 sm:col-span-2">
                         Use this to correct an invalid appointment (e.g. rebooked because the original contact email
                         bounced) without deleting the record - it&apos;s excluded from every appointment total, but the
                         lead and activity history are kept.
                       </p>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">New Status</span>
+                        <span className="text-sm font-semibold text-slate-600">New Status</span>
                         <select name="status" defaultValue="Replaced" className={inputClass}>
                           <option value="Replaced">Replaced (a corrected appointment exists)</option>
                           <option value="Cancelled">Cancelled (no replacement)</option>
                         </select>
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Reason (optional)</span>
+                        <span className="text-sm font-semibold text-slate-600">Reason (optional)</span>
                         <input
                           name="reason"
                           type="text"
@@ -759,7 +759,7 @@ export default function AppointmentsListClient({
                       <button
                         type="submit"
                         disabled={isPending}
-                        className="rounded-full bg-rose-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-rose-700 sm:col-span-2 sm:w-fit"
+                        className="rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 sm:col-span-2 sm:w-fit"
                       >
                         Cancel/Replace Appointment
                       </button>
@@ -773,42 +773,42 @@ export default function AppointmentsListClient({
                       onSubmit={(e) => handleManageSubmit(appt, e)}
                       className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                     >
-                      <p className="text-[12.5px] text-slate-600 sm:col-span-2">
+                      <p className="text-sm text-slate-600 sm:col-span-2">
                         Edits save to this same appointment record - it&apos;s never re-created, so the appointment
                         count, agent attribution, and any already-reviewed incentive can&apos;t duplicate. Every
                         changed field is logged to this lead&apos;s activity timeline with its old and new value.
                       </p>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Business Name</span>
+                        <span className="text-sm font-semibold text-slate-600">Business Name</span>
                         <input name="business_name" required defaultValue={appt.business_name} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Contact Name</span>
+                        <span className="text-sm font-semibold text-slate-600">Contact Name</span>
                         <input name="contact_name" defaultValue={appt.contact_name ?? ""} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Phone</span>
+                        <span className="text-sm font-semibold text-slate-600">Phone</span>
                         <input name="phone" defaultValue={appt.phone ?? ""} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Email</span>
+                        <span className="text-sm font-semibold text-slate-600">Email</span>
                         <input name="email" type="email" defaultValue={appt.email ?? ""} className={inputClass} />
                       </label>
-                      <p className="text-[11.5px] text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
+                      <p className="text-xs text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Date</span>
+                        <span className="text-sm font-semibold text-slate-600">Appointment Date</span>
                         <input name="appointment_date" type="date" required defaultValue={appt.appointment_date} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Time</span>
+                        <span className="text-sm font-semibold text-slate-600">Appointment Time</span>
                         <input name="appointment_time" type="time" required defaultValue={appt.appointment_time} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Time Zone</span>
+                        <span className="text-sm font-semibold text-slate-600">Time Zone</span>
                         <input name="timezone" required defaultValue={appt.timezone} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Meeting Type</span>
+                        <span className="text-sm font-semibold text-slate-600">Meeting Type</span>
                         <select name="meeting_type" defaultValue={appt.meeting_type} className={inputClass}>
                           {LEADGEN_MEETING_TYPES.map((t) => (
                             <option key={t} value={t}>
@@ -818,11 +818,11 @@ export default function AppointmentsListClient({
                         </select>
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Meeting Link</span>
+                        <span className="text-sm font-semibold text-slate-600">Meeting Link</span>
                         <input name="meeting_link" type="url" defaultValue={appt.meeting_link ?? ""} className={inputClass} />
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Status</span>
+                        <span className="text-sm font-semibold text-slate-600">Status</span>
                         <select name="status" defaultValue={appt.status} className={inputClass}>
                           {LEADGEN_APPOINTMENT_STATUSES.map((s) => (
                             <option key={s} value={s}>
@@ -832,7 +832,7 @@ export default function AppointmentsListClient({
                         </select>
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Assigned Specialist</span>
+                        <span className="text-sm font-semibold text-slate-600">Assigned Specialist</span>
                         <select name="assigned_specialist_id" defaultValue={appt.assigned_specialist_id ?? ""} className={inputClass}>
                           <option value="">Unassigned</option>
                           {agents.map((a) => (
@@ -843,7 +843,7 @@ export default function AppointmentsListClient({
                         </select>
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Incentive Status</span>
+                        <span className="text-sm font-semibold text-slate-600">Incentive Status</span>
                         <select name="incentive_status" defaultValue={appt.incentive_status ?? ""} className={inputClass}>
                           <option value="">{LEADGEN_APPOINTMENT_INCENTIVE_PENDING_LABEL}</option>
                           {LEADGEN_APPOINTMENT_INCENTIVE_STATUSES.map((s) => (
@@ -854,7 +854,7 @@ export default function AppointmentsListClient({
                         </select>
                       </label>
                       <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-slate-600">
+                        <span className="text-sm font-semibold text-slate-600">
                           Incentive Reason (required unless Qualified/Not Reviewed)
                         </span>
                         <input
@@ -865,14 +865,14 @@ export default function AppointmentsListClient({
                         />
                       </label>
                       <label className="flex flex-col gap-1.5 sm:col-span-2">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Appointment Notes</span>
+                        <span className="text-sm font-semibold text-slate-600">Appointment Notes</span>
                         <textarea name="appointment_notes" defaultValue={appt.appointment_notes ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
                       </label>
                       <label className="flex flex-col gap-1.5 sm:col-span-2">
-                        <span className="text-[12.5px] font-semibold text-slate-600">Client Feedback</span>
+                        <span className="text-sm font-semibold text-slate-600">Client Feedback</span>
                         <textarea name="client_feedback" defaultValue={appt.client_feedback ?? ""} className={`${inputClass} min-h-[50px] resize-y`} />
                       </label>
-                      <label className="flex items-center gap-2 text-[13px]">
+                      <label className="flex items-center gap-2 text-sm">
                         <input type="hidden" name="confirmation_sent" value={appt.confirmation_sent ? "true" : "false"} />
                         <input
                           type="checkbox"
@@ -884,7 +884,7 @@ export default function AppointmentsListClient({
                         />
                         Confirmation sent
                       </label>
-                      <label className="flex items-center gap-2 text-[13px]">
+                      <label className="flex items-center gap-2 text-sm">
                         <input type="hidden" name="send_updated_confirmation" value="false" />
                         <input
                           type="checkbox"
@@ -897,11 +897,11 @@ export default function AppointmentsListClient({
                         confirm before it sends)
                       </label>
                       {manageResult?.id === appt.id && (
-                        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700 sm:col-span-2">
+                        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 sm:col-span-2">
                           {manageResult.text}
                         </p>
                       )}
-                      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+                      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
                         {isPending ? "Saving…" : "Save"}
                       </button>
                     </form>
@@ -932,7 +932,7 @@ export default function AppointmentsListClient({
             ))}
           </ul>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-sm text-slate-500">
             <span>
               {pageStart + 1}–{Math.min(pageStart + pageSize, visibleAppointments.length)} of {visibleAppointments.length} appointment
               {visibleAppointments.length === 1 ? "" : "s"}
@@ -946,7 +946,7 @@ export default function AppointmentsListClient({
                     setPageSize(Number(e.target.value));
                     setPage(1);
                   }}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                 >
                   {PAGE_SIZE_OPTIONS.map((size) => (
                     <option key={size} value={size}>

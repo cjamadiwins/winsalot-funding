@@ -59,7 +59,7 @@ export type LeadgenOpportunityFinderRow = {
   detailHref: string;
 };
 
-const inputClass = "rounded-lg border border-slate-300 px-3 py-2 text-[13px] text-slate-900";
+const inputClass = "rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900";
 
 function fmt(iso: string | null): string {
   if (!iso) return "—";
@@ -228,14 +228,14 @@ export default function LeadgenOpportunityFinderClient({
           <button
             type="button"
             onClick={() => setView("list")}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}
           >
             List View
           </button>
           <button
             type="button"
             onClick={() => setView("board")}
-            className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${view === "board" ? "bg-slate-900 text-white" : "text-slate-600"}`}
           >
             Board View
           </button>
@@ -246,7 +246,7 @@ export default function LeadgenOpportunityFinderClient({
             type="button"
             onClick={() => setCategoryFilter(cat)}
             title={cat === "all" ? undefined : OPPORTUNITY_CATEGORY_DESCRIPTIONS[cat]}
-            className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold ${
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold ${
               categoryFilter === cat ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700 hover:border-slate-400"
             }`}
           >
@@ -351,21 +351,21 @@ export default function LeadgenOpportunityFinderClient({
                           {row.businessName}
                         </Link>
                       )}
-                      <div className="break-words text-[13px] text-slate-500">{row.contactName || "No contact name"}</div>
-                      <div className="break-words text-[11px] text-slate-400">
+                      <div className="break-words text-sm text-slate-500">{row.contactName || "No contact name"}</div>
+                      <div className="break-words text-sm text-slate-400">
                         {row.status} · {row.clientName || "No client"} · {row.campaignName || "No campaign"}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <span className="text-xl font-extrabold text-slate-900">{row.score.score}</span>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${OPPORTUNITY_CATEGORY_STYLES[effective]}`}>
                         {OPPORTUNITY_CATEGORY_LABELS[effective]}
                       </span>
                     </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                       Agent
                       <select
                         value={row.assignedAgentId ?? ""}
@@ -381,7 +381,7 @@ export default function LeadgenOpportunityFinderClient({
                         ))}
                       </select>
                     </label>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                       Priority Override
                       <select
                         value={row.score.priority_override ?? ""}
@@ -403,7 +403,7 @@ export default function LeadgenOpportunityFinderClient({
                     </label>
                   </div>
 
-                  <dl className="mt-3 grid grid-cols-2 gap-2 text-[12.5px] text-slate-600">
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-slate-600">
                     <div>
                       <dt className="text-slate-400">Last call</dt>
                       <dd className="break-words">{fmt(row.lastCallAt)}</dd>
@@ -422,21 +422,21 @@ export default function LeadgenOpportunityFinderClient({
                     </div>
                   </dl>
 
-                  <ul className="mt-3 list-disc space-y-0.5 break-words pl-4 text-[12.5px] text-slate-600">
+                  <ul className="mt-3 list-disc space-y-0.5 break-words pl-4 text-sm text-slate-600">
                     {row.score.reasons.slice(0, 3).map((reason, i) => (
                       <li key={i}>{reason}</li>
                     ))}
                   </ul>
-                  <div className="mt-2 break-words rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] font-semibold text-slate-800">{row.score.recommended_action}</div>
+                  <div className="mt-2 break-words rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">{row.score.recommended_action}</div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {row.phone && (
-                      <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                      <a href={`tel:${row.phone}`} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                         Call
                       </a>
                     )}
                     {row.email && (
-                      <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                      <a href={`mailto:${row.email}`} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                         Email
                       </a>
                     )}
@@ -444,19 +444,19 @@ export default function LeadgenOpportunityFinderClient({
                       <button
                         type="button"
                         onClick={() => onViewDetail(row.score.lead_id)}
-                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 hover:border-indigo-400"
                       >
                         View Lead
                       </button>
                     ) : (
                       <Link
                         href={`${row.detailHref}?from=opportunity-finder`}
-                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700 hover:border-indigo-400"
+                        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 hover:border-indigo-400"
                       >
                         View Lead
                       </Link>
                     )}
-                    <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400">
+                    <Link href={row.detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
                       Book Appointment
                     </Link>
                     <button
@@ -465,7 +465,7 @@ export default function LeadgenOpportunityFinderClient({
                         setNotingId(notingId === row.score.id ? null : row.score.id);
                         setNoteDraft("");
                       }}
-                      className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                      className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400"
                     >
                       Add Note
                     </button>
@@ -475,7 +475,7 @@ export default function LeadgenOpportunityFinderClient({
                         setSchedulingId(schedulingId === row.score.id ? null : row.score.id);
                         setCallbackDraft("");
                       }}
-                      className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700 hover:border-slate-400"
+                      className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400"
                     >
                       Set Callback
                     </button>
@@ -484,7 +484,7 @@ export default function LeadgenOpportunityFinderClient({
                       disabled={isPending || !row.followUpId}
                       title={row.followUpId ? undefined : "No pending callback to complete"}
                       onClick={() => row.followUpId && runAction(() => onCompleteFollowUp(row.followUpId!, row.score.lead_id))}
-                      className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Mark Complete
                     </button>
@@ -493,7 +493,7 @@ export default function LeadgenOpportunityFinderClient({
                         type="button"
                         disabled={isPending}
                         onClick={() => runAction(() => reopenFinderOpportunityAction(row.score.id))}
-                        className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 hover:border-emerald-400"
+                        className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-400"
                       >
                         Reopen
                       </button>
@@ -501,7 +501,7 @@ export default function LeadgenOpportunityFinderClient({
                       <button
                         type="button"
                         onClick={() => setDismissingId(dismissingId === row.score.id ? null : row.score.id)}
-                        className="rounded-full border border-rose-300 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
+                        className="rounded-full border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 hover:border-rose-400"
                       >
                         Dismiss
                       </button>
@@ -514,7 +514,7 @@ export default function LeadgenOpportunityFinderClient({
                         value={noteDraft}
                         onChange={(e) => setNoteDraft(e.target.value)}
                         placeholder="Quick note..."
-                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
                       <button
                         type="button"
@@ -525,7 +525,7 @@ export default function LeadgenOpportunityFinderClient({
                           setNotingId(null);
                           setNoteDraft("");
                         }}
-                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Save
                       </button>
@@ -537,7 +537,7 @@ export default function LeadgenOpportunityFinderClient({
                         type="datetime-local"
                         value={callbackDraft}
                         onChange={(e) => setCallbackDraft(e.target.value)}
-                        className="rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
                       <button
                         type="button"
@@ -549,7 +549,7 @@ export default function LeadgenOpportunityFinderClient({
                           setSchedulingId(null);
                           setCallbackDraft("");
                         }}
-                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Save
                       </button>
@@ -561,7 +561,7 @@ export default function LeadgenOpportunityFinderClient({
                         value={dismissReason}
                         onChange={(e) => setDismissReason(e.target.value)}
                         placeholder="Reason for dismissing"
-                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[12px]"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
                       <button
                         type="button"
@@ -571,7 +571,7 @@ export default function LeadgenOpportunityFinderClient({
                           setDismissingId(null);
                           setDismissReason("");
                         }}
-                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11.5px] font-semibold text-rose-700 hover:border-rose-400"
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 hover:border-rose-400"
                       >
                         Confirm Dismiss
                       </button>

@@ -28,8 +28,8 @@ export default function TestEmailForm({ types }: { types: readonly { id: string;
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Email Type</span>
-        <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900">
+        <span className="text-sm font-semibold text-slate-600">Email Type</span>
+        <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900">
           {types.map((t) => (
             <option key={t.id} value={t.id}>
               {t.label}
@@ -38,25 +38,25 @@ export default function TestEmailForm({ types }: { types: readonly { id: string;
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-slate-600">Send To</span>
+        <span className="text-sm font-semibold text-slate-600">Send To</span>
         <input
           type="email"
           required
           value={toEmail}
           onChange={(e) => setToEmail(e.target.value)}
           placeholder="you@winsalotcorp.com"
-          className="w-64 rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900"
+          className="w-64 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900"
         />
       </label>
       <button
         type="submit"
         disabled={submitting || !toEmail}
-        className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {submitting ? "Sending…" : "Send Test Email"}
       </button>
       {message && (
-        <p className={`w-full text-[13px] font-medium ${message.kind === "success" ? "text-emerald-700" : "text-rose-600"}`}>{message.text}</p>
+        <p className={`w-full text-sm font-medium ${message.kind === "success" ? "text-emerald-700" : "text-rose-600"}`}>{message.text}</p>
       )}
     </form>
   );

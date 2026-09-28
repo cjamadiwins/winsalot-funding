@@ -91,11 +91,11 @@ export default function OpportunityFinderModalTrigger({
             <Sparkles className="h-5 w-5" />
           </span>
           <div>
-            <div className="text-[16px] font-bold text-slate-900">Opportunity Finder</div>
-            <div className="mt-0.5 text-[12.5px] text-slate-600">Every lead ranked 0-100, without leaving your dashboard.</div>
+            <div className="text-base font-bold text-slate-900">Opportunity Finder</div>
+            <div className="mt-0.5 text-sm text-slate-600">Every lead ranked 0-100, without leaving your dashboard.</div>
           </div>
         </div>
-        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-[12px] font-bold text-red-800">
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-sm font-bold text-red-800">
           <PhoneCall className="h-3.5 w-3.5" /> {hotCount} Hot
         </span>
       </button>
@@ -107,15 +107,15 @@ export default function OpportunityFinderModalTrigger({
         subtitle={selectedId ? undefined : "Every lead already in the CRM, scored 0-100 from real calls, emails, notes, follow-ups, and appointments on file."}
         headerLeft={
           selectedId ? (
-            <button type="button" onClick={backToList} className="text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            <button type="button" onClick={backToList} className="text-sm font-semibold text-sky-600 hover:text-sky-700">
               ← Back to Opportunities
             </button>
           ) : undefined
         }
         footer={
           <>
-            <span className="text-[12px] text-slate-500">{rows.length} scored opportunit{rows.length === 1 ? "y" : "ies"}</span>
-            <button type="button" onClick={close} className="rounded-lg bg-slate-900 px-4 py-2 text-[12.5px] font-semibold text-white">
+            <span className="text-sm text-slate-500">{rows.length} scored opportunit{rows.length === 1 ? "y" : "ies"}</span>
+            <button type="button" onClick={close} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
               Close
             </button>
           </>

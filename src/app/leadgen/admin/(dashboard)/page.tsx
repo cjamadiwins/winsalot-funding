@@ -344,21 +344,21 @@ export default async function LeadgenAdminDashboardPage() {
         <div className="flex flex-wrap gap-2.5">
           <Link
             href="/leadgen/admin/leads"
-            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
           >
             <UserPlus className="h-4 w-4" strokeWidth={2.3} />
             Add Lead
           </Link>
           <Link
             href="/leadgen/admin/appointments"
-            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-sm font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
           >
             <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
             Book Appointment
           </Link>
           <Link
             href="/leadgen/admin/performance"
-            className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-teal-700"
+            className="flex items-center gap-2 rounded-[11px] bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700"
           >
             <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
             View Reports
@@ -378,8 +378,8 @@ export default async function LeadgenAdminDashboardPage() {
       />
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-indigo-700">Conversion Tracking</h2>
-          <Link href="/leadgen/admin/conversions" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Conversion Tracking</h2>
+          <Link href="/leadgen/admin/conversions" className="text-sm font-semibold text-sky-600 hover:text-sky-700">
             View all conversions
           </Link>
         </div>
@@ -460,18 +460,18 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Agent Client Status</h2>
-        <p className="mt-1 text-[13px] text-slate-500">Each active agent&apos;s currently selected client.</p>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Agent Client Status</h2>
+        <p className="mt-1 text-sm text-slate-500">Each active agent&apos;s currently selected client.</p>
         {agents.length === 0 ? (
-          <p className="mt-3 text-[13.5px] text-slate-500">No active agents.</p>
+          <p className="mt-3 text-sm text-slate-500">No active agents.</p>
         ) : (
           <div className="mt-3 divide-y divide-slate-100">
             {agents.map((agent) => {
               const clientName = agent.current_campaign_id ? clientNameByCampaignId.get(agent.current_campaign_id) : null;
               return (
                 <div key={agent.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <span className="text-[13.5px] font-semibold text-slate-800">{agent.full_name}</span>
-                  <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${clientName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
+                  <span className="text-sm font-semibold text-slate-800">{agent.full_name}</span>
+                  <span className={`rounded-full px-3 py-1 text-sm font-semibold ${clientName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
                     {clientName ?? "Not selected"}
                   </span>
                 </div>
@@ -538,13 +538,13 @@ export default async function LeadgenAdminDashboardPage() {
       />
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>
         {byCampaignClient.size === 0 ? (
-          <p className="mt-3 text-[13.5px] text-slate-500">No clients yet.</p>
+          <p className="mt-3 text-sm text-slate-500">No clients yet.</p>
         ) : (
-          <table className="mt-3 w-full text-left text-[13px]">
+          <table className="mt-3 w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="py-2">Client</th>
                 <th className="py-2 text-right">Leads</th>
                 <th className="py-2 text-right">Appointments</th>
@@ -581,7 +581,7 @@ export default async function LeadgenAdminDashboardPage() {
 
       <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start">
         <section className="min-w-0 flex-[1.6] rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-green-700">Agent Performance</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-green-700">Agent Performance</h2>
           <ResultsByAgentChart agents={agents} leads={allLeads} serverNowIso={now.toISOString()} />
         </section>
 
@@ -591,13 +591,13 @@ export default async function LeadgenAdminDashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Training</h2>
-        <p className="mt-2 text-[13.5px] text-slate-600">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Training</h2>
+        <p className="mt-2 text-sm text-slate-600">
           Open the correct client call script before dialing to stay consistent on every campaign.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
           {websiteTraining.map(({ client }) => (
-            <Link key={client.id} href={`/leadgen/admin/training#website-client-${client.id}`} className="text-[13.5px] font-semibold text-sky-600 hover:text-sky-700">
+            <Link key={client.id} href={`/leadgen/admin/training#website-client-${client.id}`} className="text-sm font-semibold text-sky-600 hover:text-sky-700">
               Open {client.name} Training
             </Link>
           ))}

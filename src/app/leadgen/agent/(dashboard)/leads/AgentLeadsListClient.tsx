@@ -21,7 +21,7 @@ import DncBadge from "@/components/crm-ui/DncBadge";
 // Compact filter-bar controls, matching the admin Leads table's tighter
 // sizing (LeadsListClient) so the filter row doesn't eat up vertical
 // space on desktop.
-const filterInputClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px] text-slate-900";
+const filterInputClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900";
 
 type FollowUpFilter = "all" | "due_today" | "overdue";
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
@@ -138,8 +138,8 @@ export default function AgentLeadsListClient({
     <div>
       {viewingClientName && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-[13.5px] font-semibold text-sky-800">Viewing {viewingClientName}</p>
-          <Link href="/leadgen/agent" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+          <p className="text-sm font-semibold text-sky-800">Viewing {viewingClientName}</p>
+          <Link href="/leadgen/agent" className="text-sm font-semibold text-sky-700 hover:text-sky-900">
             ← Back to All Clients
           </Link>
         </div>
@@ -183,19 +183,19 @@ export default function AgentLeadsListClient({
       </div>
 
       {leads.length === 0 ? (
-        <p className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-center text-[13.5px] text-slate-500">
+        <p className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
           No leads assigned to you yet.
         </p>
       ) : (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
           {filtered.length === 0 ? (
-            <p className="p-6 text-center text-[13.5px] text-slate-500">No leads match your search/filter.</p>
+            <p className="p-6 text-center text-sm text-slate-500">No leads match your search/filter.</p>
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[13px]">
+                <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                    <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                       <th className="min-w-[180px] px-3 py-2">Business</th>
                       {showClientColumn && <th className="px-3 py-2">Client</th>}
                       <th className="px-3 py-2">Campaign</th>
@@ -218,7 +218,7 @@ export default function AgentLeadsListClient({
                             </Link>
                             {dncByLeadId?.[lead.id] && <DncBadge suppression={dncByLeadId[lead.id]} />}
                           </div>
-                          <div className="truncate text-[11px] text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
+                          <div className="truncate text-sm text-slate-500">{lead.contact_name || lead.phone || lead.email || ""}</div>
                         </td>
                         {showClientColumn && (
                           <td className="px-3 py-2 text-slate-600">{clientNameById.get(lead.client_id) ?? "—"}</td>
@@ -227,14 +227,14 @@ export default function AgentLeadsListClient({
                           {lead.campaign_id ? campaignNameById.get(lead.campaign_id) ?? "—" : "—"}
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
                             {lead.status}
                           </span>
                         </td>
                         <td className="px-3 py-2">
                           {emailStatusByLeadId?.[lead.id] ? (
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
+                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatusByLeadId[lead.id]]}`}
                             >
                               {LEADGEN_EMAIL_STATUS_LABELS[emailStatusByLeadId[lead.id]]}
                             </span>
@@ -245,7 +245,7 @@ export default function AgentLeadsListClient({
                         <td className="px-3 py-2">
                           {appointmentStatusByLeadId?.[lead.id] ? (
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
+                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appointmentStatusByLeadId[lead.id]]}`}
                             >
                               {appointmentStatusByLeadId[lead.id]}
                             </span>
@@ -256,7 +256,7 @@ export default function AgentLeadsListClient({
                         <td className="px-3 py-2">
                           <Link
                             href={`/leadgen/agent/leads/${lead.id}`}
-                            className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 hover:bg-sky-100"
+                            className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
                           >
                             Manage
                           </Link>
@@ -267,7 +267,7 @@ export default function AgentLeadsListClient({
                 </table>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-[12.5px] text-slate-500">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 text-sm text-slate-500">
                 <span>
                   {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} lead
                   {filtered.length === 1 ? "" : "s"}
@@ -281,7 +281,7 @@ export default function AgentLeadsListClient({
                         setPageSize(Number(e.target.value));
                         setPage(1);
                       }}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-[12.5px]"
+                      className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                     >
                       {PAGE_SIZE_OPTIONS.map((size) => (
                         <option key={size} value={size}>

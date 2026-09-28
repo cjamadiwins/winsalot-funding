@@ -48,13 +48,13 @@ export default function LeadgenFollowUpCompletedRecordsModal({
             <article key={record.id} className="min-w-0 break-words py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold text-slate-900">{record.businessName}</span>
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">Completed</span>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold text-emerald-800">Completed</span>
               </div>
-              <p className="mt-1 text-[12.5px] text-slate-500">
+              <p className="mt-1 text-sm text-slate-500">
                 Agent: {record.agentName} · {formatDate(record.completed_at)}
               </p>
               {record.note && (
-                <p className="mt-2 text-[12.5px] text-slate-600">
+                <p className="mt-2 text-sm text-slate-600">
                   <span className="font-semibold text-slate-700">Note:</span> {record.note}
                 </p>
               )}

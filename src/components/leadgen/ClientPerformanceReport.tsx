@@ -27,11 +27,11 @@ export default function ClientPerformanceReport({
       <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <form action={pagePath} method="get" className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-slate-600">
+            <label className="flex flex-col gap-1.5 text-sm font-semibold text-slate-600">
               From
               <input type="date" name="from" defaultValue={report.period.from} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </label>
-            <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-slate-600">
+            <label className="flex flex-col gap-1.5 text-sm font-semibold text-slate-600">
               To
               <input type="date" name="to" defaultValue={report.period.to} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </label>
@@ -52,7 +52,7 @@ export default function ClientPerformanceReport({
         {cards.map((card) => (
           <section key={card.label} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-4">
             <div className="text-sky-600">{card.icon}</div>
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
+            <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{card.value}</p>
           </section>
         ))}
@@ -80,7 +80,7 @@ export default function ClientPerformanceReport({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+              <thead className="bg-slate-50 text-sm uppercase text-slate-500">
                 <tr><th className="p-3">Date</th><th className="p-3">Business</th><th className="p-3">Contact</th><th className="p-3">Meeting Type</th><th className="p-3">Status</th></tr>
               </thead>
               <tbody>

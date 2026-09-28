@@ -10,7 +10,7 @@ import {
 
 type ActionResult = { error?: string; message?: string };
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 // Client Portal "Report Conversion" compact modal (brief "REPORT
 // CONVERSION FORM"). Deliberately asks for nothing beyond result / date /
@@ -80,16 +80,16 @@ export default function ReportConversionModal({
             ✕
           </button>
         </div>
-        <p className="mt-1 text-[13px] text-slate-500">{businessName}</p>
+        <p className="mt-1 text-sm text-slate-500">{businessName}</p>
 
         {successMessage ? (
           <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-            <p className="text-[14px] font-bold text-amber-800">Pending Admin Verification</p>
-            <p className="mt-1 text-[13px] text-amber-700">{successMessage}</p>
+            <p className="text-sm font-bold text-amber-800">Pending Admin Verification</p>
+            <p className="mt-1 text-sm text-amber-700">{successMessage}</p>
             <button
               type="button"
               onClick={onSubmitted}
-              className="mt-4 rounded-full bg-[var(--crm-accent,#3e7ef7)] px-5 py-2.5 text-[13.5px] font-semibold text-white hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+              className="mt-4 rounded-full bg-[var(--crm-accent,#3e7ef7)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--crm-accent-hover,#2e63d6)]"
             >
               Done
             </button>
@@ -97,7 +97,7 @@ export default function ReportConversionModal({
         ) : (
           <form onSubmit={handleSubmit} className="mt-4 space-y-3">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Conversion Result</span>
+              <span className="text-sm font-semibold text-slate-600">Conversion Result</span>
               <select
                 name="client_reported_result"
                 value={result}
@@ -115,23 +115,23 @@ export default function ReportConversionModal({
             {isPayingCustomer && (
               <>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-semibold text-slate-600">Conversion Date</span>
+                  <span className="text-sm font-semibold text-slate-600">Conversion Date</span>
                   <input type="date" name="client_reported_conversion_date" className={inputClass} />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-semibold text-slate-600">Sale Amount (optional)</span>
+                  <span className="text-sm font-semibold text-slate-600">Sale Amount (optional)</span>
                   <input type="number" step="0.01" min="0" name="client_reported_sale_amount" placeholder="Optional" className={inputClass} />
                 </label>
               </>
             )}
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Notes (optional)</span>
+              <span className="text-sm font-semibold text-slate-600">Notes (optional)</span>
               <textarea name="client_reported_notes" rows={3} className={`${inputClass} resize-y`} />
             </label>
 
             {isPayingCustomer && (
-              <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[13px] text-slate-700">
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                 <input
                   type="checkbox"
                   checked={confirmationChecked}
@@ -143,13 +143,13 @@ export default function ReportConversionModal({
               </label>
             )}
 
-            {error && <p className="text-[13px] font-medium text-rose-600">{error}</p>}
+            {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3 pt-1">
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-full bg-[var(--crm-accent,#3e7ef7)] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full bg-[var(--crm-accent,#3e7ef7)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--crm-accent-hover,#2e63d6)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? "Submitting…" : "Submit"}
               </button>
@@ -157,7 +157,7 @@ export default function ReportConversionModal({
                 type="button"
                 disabled={submitting}
                 onClick={onClose}
-                className="text-[13.5px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
               >
                 Cancel
               </button>

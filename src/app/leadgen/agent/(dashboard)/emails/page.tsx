@@ -60,12 +60,12 @@ export default async function LeadgenAgentEmailsPage() {
       {!leadsError && !emailsError && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           {!emails || emails.length === 0 ? (
-            <p className="text-[13.5px] text-slate-500">No tracked emails yet.</p>
+            <p className="text-sm text-slate-500">No tracked emails yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-[13px]">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+                  <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                     <th className="py-2 pr-3">Date/Time Sent</th>
                     <th className="py-2 pr-3">Lead/Customer</th>
                     <th className="py-2 pr-3">Email Address</th>
@@ -95,7 +95,7 @@ export default async function LeadgenAgentEmailsPage() {
                         <td className="py-2 pr-3 text-slate-500">{email.template_key ?? "—"}</td>
                         <td className="py-2 pr-3">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}
+                            className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}
                           >
                             {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
                           </span>

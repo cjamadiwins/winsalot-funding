@@ -15,7 +15,7 @@ export default async function LeadgenTestEmailPage() {
 
   return (
     <div>
-      <Link href="/leadgen/admin/emails" className="text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+      <Link href="/leadgen/admin/emails" className="text-sm font-semibold text-sky-600 hover:text-sky-700">
         ← Back to Email Tracking
       </Link>
       <h1 className="mt-2 text-2xl font-bold text-slate-900">Send Test Email</h1>

@@ -48,11 +48,11 @@ export default async function AgentConversionsPage() {
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
         {rows.length === 0 ? (
-          <p className="p-6 text-center text-[13.5px] text-slate-500">No conversion records yet for your leads.</p>
+          <p className="p-6 text-center text-sm text-slate-500">No conversion records yet for your leads.</p>
         ) : (
-          <table className="w-full min-w-[700px] text-left text-[13px]">
+          <table className="w-full min-w-[700px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="p-3">Prospect / Business</th>
                 <th className="p-3">Client / Campaign</th>
                 <th className="p-3">Appointment Date</th>
@@ -67,17 +67,17 @@ export default async function AgentConversionsPage() {
                   <tr key={c.id} className="border-b border-slate-100">
                     <td className="p-3">
                       <div className="font-semibold text-slate-900">{appointment?.business_name ?? "Unknown Prospect"}</div>
-                      {appointment?.contact_name && <div className="text-[12px] text-slate-500">{appointment.contact_name}</div>}
+                      {appointment?.contact_name && <div className="text-sm text-slate-500">{appointment.contact_name}</div>}
                     </td>
                     <td className="p-3 text-slate-600">
                       <div>{clientNameById.get(c.client_id) ?? "—"}</div>
-                      {c.campaign_id && <div className="text-[12px] text-slate-500">{campaignNameById.get(c.campaign_id) ?? "—"}</div>}
+                      {c.campaign_id && <div className="text-sm text-slate-500">{campaignNameById.get(c.campaign_id) ?? "—"}</div>}
                     </td>
                     <td className="p-3 text-slate-600">
                       {appointment?.appointment_date ?? "—"} {appointment?.appointment_time ?? ""}
                     </td>
                     <td className="p-3">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_CONVERSION_STATUS_STYLES[c.conversion_status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_CONVERSION_STATUS_STYLES[c.conversion_status]}`}>
                         {LEADGEN_CONVERSION_STATUS_LABELS[c.conversion_status]}
                       </span>
                     </td>

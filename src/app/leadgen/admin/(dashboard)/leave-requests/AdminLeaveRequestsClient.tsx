@@ -22,7 +22,7 @@ type ActionResult = { error?: string };
 
 type AgentOption = { id: string; full_name: string; email: string };
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900";
 
 export default function AdminLeadgenLeaveRequestsClient({
   agents,
@@ -132,7 +132,7 @@ export default function AdminLeadgenLeaveRequestsClient({
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-slate-600">Agent</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Agent</label>
           <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className={inputClass}>
             <option value="all">All agents</option>
             {agents.map((a) => (
@@ -143,7 +143,7 @@ export default function AdminLeadgenLeaveRequestsClient({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-slate-600">Type</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Type</label>
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as "all" | LeaveType)} className={inputClass}>
             <option value="all">All types</option>
             <option value="planned">Planned Leave</option>
@@ -151,7 +151,7 @@ export default function AdminLeadgenLeaveRequestsClient({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-slate-600">Status</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Status</label>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | LeaveStatus)} className={inputClass}>
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
@@ -161,11 +161,11 @@ export default function AdminLeadgenLeaveRequestsClient({
         </div>
         <div className="flex gap-2">
           <div className="flex-1">
-            <label className="mb-1 block text-[12px] font-medium text-slate-600">From</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">From</label>
             <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={inputClass} />
           </div>
           <div className="flex-1">
-            <label className="mb-1 block text-[12px] font-medium text-slate-600">To</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">To</label>
             <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputClass} />
           </div>
         </div>
@@ -212,7 +212,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                       <div className="mt-0.5 whitespace-nowrap text-xs text-[var(--color-text-muted)]">
                         {r.notice_days}d notice
                         {r.is_short_notice && (
-                          <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
+                          <span className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
                             Short Notice
                           </span>
                         )}
@@ -227,14 +227,14 @@ export default function AdminLeadgenLeaveRequestsClient({
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${LEAVE_STATUS_STYLES[r.status]}`}>
                         {LEAVE_STATUS_LABELS[r.status]}
                       </span>
                       {r.decision_note && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Note: {r.decision_note}</p>}
                     </td>
                     <td className="px-3 py-3">
                       {r.status === "approved" ? (
-                        <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${PAY_STATUS_STYLES[r.pay_status]}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PAY_STATUS_STYLES[r.pay_status]}`}>
                           {PAY_STATUS_LABELS[r.pay_status]}
                         </span>
                       ) : (
@@ -266,7 +266,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                               setDecisionKind("approve");
                               setError(null);
                             }}
-                            className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700"
+                            className="text-sm font-semibold text-emerald-600 hover:text-emerald-700"
                           >
                             Approve
                           </button>
@@ -277,7 +277,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                               setDecisionKind("decline");
                               setError(null);
                             }}
-                            className="text-[12px] font-semibold text-rose-600 hover:text-rose-700"
+                            className="text-sm font-semibold text-rose-600 hover:text-rose-700"
                           >
                             Decline
                           </button>
@@ -292,7 +292,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             fd.set("attendance_status", "paid_leave");
                             runAction(() => markAttendanceAction(r.id, fd));
                           }}
-                          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-50"
                         >
                           Mark Paid Leave
                         </button>
@@ -306,7 +306,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             fd.set("attendance_status", "unpaid_leave");
                             runAction(() => markAttendanceAction(r.id, fd));
                           }}
-                          className="text-[12px] font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
                         >
                           Mark Unpaid Leave
                         </button>
@@ -320,7 +320,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             fd.set("attendance_status", "unpaid_absence");
                             runAction(() => markAttendanceAction(r.id, fd));
                           }}
-                          className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
                         >
                           Mark Unapproved Absence
                         </button>
@@ -330,7 +330,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                           type="button"
                           disabled={isPending}
                           onClick={() => runAction(() => applyPaidLeaveAction(r.id))}
-                          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-50"
                         >
                           Apply to Payroll
                         </button>
@@ -340,7 +340,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                           type="button"
                           disabled={isPending}
                           onClick={() => runAction(() => confirmDeductionAction(r.id))}
-                          className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
                         >
                           {r.deduction_confirmed ? "Retry Apply" : "Confirm Deduction"}
                         </button>
@@ -355,7 +355,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             setEditingId(next);
                             if (next) setEditStatus(r.status);
                           }}
-                          className="text-[12px] font-semibold text-slate-600 hover:text-slate-800"
+                          className="text-sm font-semibold text-slate-600 hover:text-slate-800"
                         >
                           {editingId === r.id ? "Close" : "Edit"}
                         </button>
@@ -363,7 +363,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                           type="button"
                           disabled={isPending}
                           onClick={() => handleDelete(r)}
-                          className="text-[12px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+                          className="text-sm font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
                         >
                           Delete
                         </button>
@@ -382,7 +382,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                         >
                           {decisionKind === "approve" && (
                             <div>
-                              <label className="mb-1 block text-[12px] font-medium text-slate-600">Pay Status</label>
+                              <label className="mb-1 block text-sm font-medium text-slate-600">Pay Status</label>
                               <select name="pay_status" required defaultValue="" className={inputClass}>
                                 <option value="" disabled>
                                   Select…
@@ -393,7 +393,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             </div>
                           )}
                           <div className="min-w-[240px] flex-1">
-                            <label className="mb-1 block text-[12px] font-medium text-slate-600">
+                            <label className="mb-1 block text-sm font-medium text-slate-600">
                               Decision note (optional)
                             </label>
                             <input type="text" name="decision_note" className={inputClass} />
@@ -410,7 +410,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                           <button
                             type="button"
                             onClick={() => setDecidingId(null)}
-                            className="text-[12px] font-semibold text-slate-500 hover:text-slate-700"
+                            className="text-sm font-semibold text-slate-500 hover:text-slate-700"
                           >
                             Cancel
                           </button>
@@ -422,21 +422,21 @@ export default function AdminLeadgenLeaveRequestsClient({
                     <tr>
                       <td colSpan={8} className="bg-slate-50 px-4 py-4">
                         {r.status === "approved" && (
-                          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">
+                          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                             This request is currently Approved. Saving changes here may automatically reverse or update
                             its connected attendance and payroll records - you&apos;ll be asked to confirm.
                           </p>
                         )}
                         <form onSubmit={(e) => handleEditSubmit(r, e)} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <label className="flex flex-col gap-1">
-                            <span className="text-[12px] font-medium text-slate-600">Leave Type</span>
+                            <span className="text-sm font-medium text-slate-600">Leave Type</span>
                             <select name="leave_type" defaultValue={r.leave_type} className={inputClass}>
                               <option value="planned">Planned Leave</option>
                               <option value="emergency">Emergency Leave</option>
                             </select>
                           </label>
                           <label className="flex flex-col gap-1">
-                            <span className="text-[12px] font-medium text-slate-600">Leave Status</span>
+                            <span className="text-sm font-medium text-slate-600">Leave Status</span>
                             <select
                               name="status"
                               value={editStatus}
@@ -450,7 +450,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                           </label>
                           {editStatus === "approved" && (
                             <label className="flex flex-col gap-1">
-                              <span className="text-[12px] font-medium text-slate-600">Pay Status</span>
+                              <span className="text-sm font-medium text-slate-600">Pay Status</span>
                               <select
                                 name="pay_status"
                                 required
@@ -466,15 +466,15 @@ export default function AdminLeadgenLeaveRequestsClient({
                             </label>
                           )}
                           <label className="flex flex-col gap-1">
-                            <span className="text-[12px] font-medium text-slate-600">Start Date</span>
+                            <span className="text-sm font-medium text-slate-600">Start Date</span>
                             <input type="date" name="start_date" required defaultValue={r.start_date} className={inputClass} />
                           </label>
                           <label className="flex flex-col gap-1">
-                            <span className="text-[12px] font-medium text-slate-600">End Date</span>
+                            <span className="text-sm font-medium text-slate-600">End Date</span>
                             <input type="date" name="end_date" required defaultValue={r.end_date} className={inputClass} />
                           </label>
                           <label className="flex flex-col gap-1 sm:col-span-2">
-                            <span className="text-[12px] font-medium text-slate-600">Reason</span>
+                            <span className="text-sm font-medium text-slate-600">Reason</span>
                             <textarea name="reason" required rows={2} defaultValue={r.reason} className={inputClass} />
                           </label>
                           <div className="flex gap-3 sm:col-span-2">
@@ -488,7 +488,7 @@ export default function AdminLeadgenLeaveRequestsClient({
                             <button
                               type="button"
                               onClick={() => setEditingId(null)}
-                              className="text-[12px] font-semibold text-slate-500 hover:text-slate-700"
+                              className="text-sm font-semibold text-slate-500 hover:text-slate-700"
                             >
                               Cancel
                             </button>

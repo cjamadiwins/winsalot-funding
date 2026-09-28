@@ -6,7 +6,7 @@ import { LEADGEN_ROLES, type LeadgenClientRow, type LeadgenRole, type LeadgenUse
 import { PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
 import { deactivateLeadgenUserAction, inviteLeadgenUserAction, reactivateLeadgenUserAction, updateLeadgenUserAction } from "../actions";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 type Performance = { leads: number; calls: number; appointments: number; completed: number };
 type RemovalFailure = {
@@ -61,7 +61,7 @@ export default function AgentsClient({
     <div>
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All Users ({users.length})</h2>
-        <button type="button" onClick={() => setShowInvite((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700">
+        <button type="button" onClick={() => setShowInvite((v) => !v)} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
           {showInvite ? "Cancel" : "+ Invite User"}
         </button>
       </div>
@@ -71,7 +71,7 @@ export default function AgentsClient({
       {removeFailure && (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <p className="font-semibold text-amber-900">User action failed</p>
-          <dl className="mt-2 space-y-1.5 text-[13px]">
+          <dl className="mt-2 space-y-1.5 text-sm">
             <div>
               <dt className="inline font-semibold">Internal error ID:</dt> <dd className="inline">{removeFailure.errorId ?? "—"}</dd>
             </div>
@@ -100,15 +100,15 @@ export default function AgentsClient({
           className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Full Name</span>
+            <span className="text-sm font-semibold text-slate-600">Full Name</span>
             <input name="full_name" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Email</span>
+            <span className="text-sm font-semibold text-slate-600">Email</span>
             <input name="email" type="email" required className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Access Type</span>
+            <span className="text-sm font-semibold text-slate-600">Access Type</span>
             <select
               name="invite_mode"
               value={inviteMode}
@@ -120,7 +120,7 @@ export default function AgentsClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Role</span>
+            <span className="text-sm font-semibold text-slate-600">Role</span>
             <select name="role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as LeadgenRole)} className={inputClass}>
               {LEADGEN_ROLES.map((role) => (
                 <option key={role} value={role}>
@@ -131,7 +131,7 @@ export default function AgentsClient({
           </label>
           {inviteRole === "client" && (
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Client Workspace</span>
+              <span className="text-sm font-semibold text-slate-600">Client Workspace</span>
               <select name="client_id" required className={inputClass} defaultValue="">
                 <option value="" disabled>
                   Select a client…
@@ -144,21 +144,21 @@ export default function AgentsClient({
               </select>
             </label>
           )}
-          <p className="text-[12.5px] text-slate-500 sm:col-span-2">
+          <p className="text-sm text-slate-500 sm:col-span-2">
             {inviteMode === "new"
               ? "An invite email is sent immediately and the recipient sets their password via that link."
               : "Adds Lead Generation CRM access to an existing CRM login without changing the user password."}
           </p>
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
             {isPending ? "Saving…" : inviteMode === "new" ? "Send Invite" : "Add Lead Generation Access"}
           </button>
         </form>
       )}
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-[var(--crm-surface)]">
-        <table className="w-full min-w-[760px] text-left text-[13.5px]">
+        <table className="w-full min-w-[760px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+            <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
               <th className="p-3">Name</th>
               <th className="p-3">Email</th>
               <th className="p-3">Role</th>
@@ -180,7 +180,7 @@ export default function AgentsClient({
                         id={`edit-${user.id}`}
                         action={(formData) => runAction(() => updateLeadgenUserAction(user.id, formData), () => setEditingId(null))}
                       >
-                        <input name="full_name" defaultValue={user.full_name} className="w-full rounded border border-slate-300 px-2 py-1 text-[13px]" />
+                        <input name="full_name" defaultValue={user.full_name} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" />
                       </form>
                     ) : (
                       user.full_name
@@ -195,7 +195,7 @@ export default function AgentsClient({
                         form={`edit-${user.id}`}
                         name="payroll_currency"
                         defaultValue={user.payroll_currency}
-                        className="rounded border border-slate-300 px-2 py-1 text-[12.5px]"
+                        className="rounded border border-slate-300 px-2 py-1 text-sm"
                       >
                         {PAYROLL_CURRENCIES.map((currency) => (
                           <option key={currency} value={currency}>
@@ -214,12 +214,12 @@ export default function AgentsClient({
                   </td>
                   <td className="p-3">
                     {editingId === user.id ? (
-                      <label className="flex items-center gap-1.5 text-[12.5px]">
+                      <label className="flex items-center gap-1.5 text-sm">
                         <input type="checkbox" form={`edit-${user.id}`} name="active" defaultChecked={user.active} />
                         Active
                       </label>
                     ) : (
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${user.active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${user.active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
                         {user.active ? "Active" : "Inactive"}
                       </span>
                     )}
@@ -228,16 +228,16 @@ export default function AgentsClient({
                     <div className="flex gap-2.5">
                       {editingId === user.id ? (
                         <>
-                          <button type="submit" form={`edit-${user.id}`} disabled={isPending} className="text-[12px] font-semibold text-sky-600">
+                          <button type="submit" form={`edit-${user.id}`} disabled={isPending} className="text-sm font-semibold text-sky-600">
                             Save
                           </button>
-                          <button type="button" onClick={() => setEditingId(null)} className="text-[12px] font-semibold text-slate-500">
+                          <button type="button" onClick={() => setEditingId(null)} className="text-sm font-semibold text-slate-500">
                             Cancel
                           </button>
                         </>
                       ) : (
                         <>
-                          <button type="button" onClick={() => setEditingId(user.id)} className="text-[12px] font-semibold text-sky-600">
+                          <button type="button" onClick={() => setEditingId(user.id)} className="text-sm font-semibold text-sky-600">
                             Edit
                           </button>
                           <button
@@ -268,7 +268,7 @@ export default function AgentsClient({
                               setSuccess(user.active ? "User deactivated successfully." : "User reactivated successfully.");
                               router.refresh();
                             }}
-                            className={`text-[12px] font-semibold ${user.active ? "text-rose-600" : "text-emerald-700"}`}
+                            className={`text-sm font-semibold ${user.active ? "text-rose-600" : "text-emerald-700"}`}
                           >
                             {statusChangingId === user.id ? "Saving…" : user.active ? "Deactivate" : "Reactivate"}
                           </button>

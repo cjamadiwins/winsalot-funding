@@ -369,7 +369,7 @@ export default async function LeadgenAgentDashboardPage() {
       {(myOperationsAlerts.staleLeadCount > 0 || myOperationsAlerts.appointmentRiskCount > 0 || myCallKpi.pace === "Behind Pace") && (
         <div className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="text-base font-bold text-slate-900">My Alerts</h2>
-          <ul className="mt-2 space-y-1 text-[13.5px] text-slate-700">
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {myOperationsAlerts.staleLeadCount > 0 && (
               <li>
                 <Link href="/leadgen/agent/my-opportunities" className="font-semibold text-amber-700 hover:text-amber-800">
@@ -478,10 +478,10 @@ export default async function LeadgenAgentDashboardPage() {
 
       {myByClient.size > 1 && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-purple-700">My Results by Client</h2>
-          <table className="mt-3 w-full text-left text-[13px]">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-purple-700">My Results by Client</h2>
+          <table className="mt-3 w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="py-2">Client</th>
                 <th className="py-2 text-right">Leads</th>
                 <th className="py-2 text-right">Appointments</th>
@@ -577,13 +577,13 @@ export default async function LeadgenAgentDashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Current Campaigns</h2>
-        <p className="mt-2 text-[13.5px] text-slate-600">Review your campaign training, scripts and assigned leads before launch. Outbound calling begins September 29, 2026 after Admin activates the campaign.</p>
-        {websiteTraining.length === 0 && <p className="mt-3 text-[13.5px] text-slate-500">No website-services campaign is currently assigned to you.</p>}
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Campaigns</h2>
+        <p className="mt-2 text-sm text-slate-600">Review your campaign training, scripts and assigned leads before launch. Outbound calling begins September 29, 2026 after Admin activates the campaign.</p>
+        {websiteTraining.length === 0 && <p className="mt-3 text-sm text-slate-500">No website-services campaign is currently assigned to you.</p>}
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
           {websiteTraining.map(({ client, campaign }) => {
             const segments = (preparationSegments ?? []).filter((segment) => segment.leadgen_campaign_id === campaign.id);
-            return <div key={campaign.id} className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 text-[13px] text-slate-700">
+            return <div key={campaign.id} className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 text-sm text-slate-700">
               <Link href={`/leadgen/agent/training#website-client-${client.id}`} className="font-bold text-sky-700 hover:underline">{client.name}</Link>
               <p className="mt-1 font-semibold">{campaign.status === "active" ? "Active" : "Scheduled — Preparation"} · Launch Date: {campaign.start_date || "September 29, 2026"}</p>
               <p className="mt-2"><strong>Geography:</strong> {campaign.territory || "See campaign training"}</p>
@@ -611,25 +611,25 @@ function FollowUpGroup({ title, items, emphasis }: { title: string; items: Leadg
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-      <h2 className={`text-[11.5px] font-semibold uppercase tracking-wide ${titleStyle}`}>
+      <h2 className={`text-xs font-semibold uppercase tracking-wide ${titleStyle}`}>
         {title} ({items.length})
       </h2>
       {items.length === 0 ? (
-        <p className="mt-3 text-[13.5px] text-slate-500">Nothing here.</p>
+        <p className="mt-3 text-sm text-slate-500">Nothing here.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {items.map((followUp) => {
             const lead = followUp.leadgen_leads;
             return (
-              <li key={followUp.id} className={`rounded-lg border p-3.5 text-[13.5px] ${cardStyle}`}>
+              <li key={followUp.id} className={`rounded-lg border p-3.5 text-sm ${cardStyle}`}>
                 <div className="flex items-center justify-between">
                   <Link href={`/leadgen/agent/leads/${followUp.lead_id}`} className="font-semibold text-slate-900 hover:text-sky-600">
                     {lead?.business_name ?? "Lead"}
                   </Link>
-                  <span className="text-[12px] text-slate-500">{new Date(followUp.scheduled_at).toLocaleString()}</span>
+                  <span className="text-sm text-slate-500">{new Date(followUp.scheduled_at).toLocaleString()}</span>
                 </div>
                 {lead?.status && (
-                  <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
+                  <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_LEAD_STATUS_STYLES[lead.status]}`}>
                     {lead.status}
                   </span>
                 )}
@@ -641,7 +641,7 @@ function FollowUpGroup({ title, items, emphasis }: { title: string; items: Leadg
                   }}
                   className="mt-2"
                 >
-                  <button type="submit" className="text-[12.5px] font-semibold text-emerald-700 hover:text-emerald-800">
+                  <button type="submit" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
                     Mark Completed
                   </button>
                 </form>
