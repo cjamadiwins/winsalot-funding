@@ -45,7 +45,9 @@ import {
   isPerformanceBasedFirst,
   isStagedPerformanceBasedFirst,
   buildPerformanceBasedFirstPaymentSummary,
+  formatCurrencyAmount,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
+  AGREEMENT_STATUS_LABELS,
   type AgreementServiceType,
   type AgreementTargetType,
   type AgreementBillingFrequency,
@@ -60,6 +62,10 @@ import {
 } from "@/lib/crm-agreement-types";
 import type { CrmInvoiceRow } from "@/lib/crm-invoices-types";
 import { getPrimaryPaymentMethod } from "@/lib/payment-methods";
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -207,7 +213,7 @@ export default function AgreementDetailClient({
               {PERFORMANCE_BASED_FIRST_DOC_LABEL}
             </span>
           )}
-          <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold capitalize text-indigo-800">{agreement.status}</span>
+          <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">{AGREEMENT_STATUS_LABELS[agreement.status]}</span>
         </div>
       </div>
       <p className="text-sm text-slate-500">
@@ -231,6 +237,48 @@ export default function AgreementDetailClient({
           </button>
         </div>
       )}
+
+      {agreement.status === "draft" && (() => {
+        const emailToSend = editing ? draft.businessEmail : agreement.business_email;
+        const emailValid = isValidEmail(emailToSend ?? "");
+        return (
+          <div className="mt-6 rounded-2xl border-2 border-sky-300 bg-sky-50 p-5">
+            <h2 className="text-base font-bold text-sky-900">Send Agreement</h2>
+            <p className="mt-1 text-[12.5px] text-sky-800">
+              Will be sent to the client&apos;s business email: <span className="font-semibold">{emailToSend || "No business email on file"}</span>
+            </p>
+            {!emailValid && (
+              <p className="mt-1 text-[12.5px] font-semibold text-rose-700">
+                A valid client/business email is required before this agreement can be sent.
+              </p>
+            )}
+            <label className="mt-3 flex items-start gap-2 text-[13.5px] text-sky-900">
+              <input type="checkbox" checked={reviewedConfirmation} onChange={(e) => setReviewedConfirmation(e.target.checked)} className="mt-0.5" />
+              <span>I have reviewed the price, monthly target and agreement terms.</span>
+            </label>
+            <button
+              type="button"
+              disabled={isPending || !reviewedConfirmation || !emailValid}
+              onClick={() =>
+                runAction(async () => {
+                  // Editing may hold unsaved changes - save them first so
+                  // "the agreement has been saved" holds and the email/
+                  // terms actually sent match exactly what's on screen,
+                  // never a stale previously-saved copy.
+                  if (editing) {
+                    const saveResult = await updateAgreementDraftAction(agreement.id, draft);
+                    if (saveResult.error) return saveResult;
+                  }
+                  return sendAgreementAction(agreement.id, reviewedConfirmation);
+                })
+              }
+              className={`${buttonClasses} mt-3`}
+            >
+              {isPending ? "Sending…" : "Send Agreement"}
+            </button>
+          </div>
+        );
+      })()}
 
       {editing ? (
         <div className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
@@ -406,7 +454,7 @@ export default function AgreementDetailClient({
           {isPBF && !isStagedPerformanceBasedFirst(agreement) && (
             <p className="rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
               Performance-Based First Campaign —{" "}
-              {draft.monthlyFee != null ? `Campaign Fee: $${Number(draft.monthlyFee).toLocaleString()} ${draft.currency}` : "Campaign Fee: Not yet set"} · Upfront
+              {draft.monthlyFee != null ? `Campaign Fee: ${formatCurrencyAmount(Number(draft.monthlyFee), draft.currency)}` : "Campaign Fee: Not yet set"} · Upfront
               Payment: $0 · due when a Winsalot-generated prospect converts into a paying customer.
             </p>
           )}
@@ -470,7 +518,7 @@ export default function AgreementDetailClient({
                   })()
                 ) : (
                   <>
-                    <Info label="Campaign Fee" value={agreement.monthly_fee != null ? `$${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "Not yet set"} />
+                    <Info label="Campaign Fee" value={agreement.monthly_fee != null ? formatCurrencyAmount(agreement.monthly_fee, agreement.currency) : "Not yet set"} />
                     <Info label="Upfront Payment" value="$0" />
                   </>
                 )}
@@ -604,7 +652,7 @@ export default function AgreementDetailClient({
           {isPBF && !isStagedPerformanceBasedFirst(agreement) && (
             <p className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-[12.5px] font-semibold text-violet-800">
               {PERFORMANCE_BASED_FIRST_DOC_LABEL} —{" "}
-              {agreement.monthly_fee != null ? `Campaign Fee: $${agreement.monthly_fee.toLocaleString()} ${agreement.currency}` : "Campaign Fee: Not yet set"} · Upfront
+              {agreement.monthly_fee != null ? `Campaign Fee: ${formatCurrencyAmount(agreement.monthly_fee, agreement.currency)}` : "Campaign Fee: Not yet set"} · Upfront
               Payment: $0
             </p>
           )}
@@ -709,23 +757,6 @@ export default function AgreementDetailClient({
               </div>
             ))}
           </div>
-
-          {agreement.status === "draft" && (
-            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <label className="flex items-start gap-2 text-[13.5px] text-slate-700">
-                <input type="checkbox" checked={reviewedConfirmation} onChange={(e) => setReviewedConfirmation(e.target.checked)} className="mt-0.5" />
-                <span>I have reviewed the price, monthly target and agreement terms.</span>
-              </label>
-              <button
-                type="button"
-                disabled={isPending || !reviewedConfirmation}
-                onClick={() => runAction(() => sendAgreementAction(agreement.id, reviewedConfirmation))}
-                className={`${buttonClasses} mt-3`}
-              >
-                {isPending ? "Sending…" : "Send Agreement"}
-              </button>
-            </div>
-          )}
 
           {agreement.status === "sent" && (
             <div className="mt-6 flex flex-wrap items-center gap-3">

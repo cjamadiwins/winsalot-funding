@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteDraftAgreementAction, archiveAgreementAction, createNewAgreementVersionAction } from "./actions";
-import { CAMPAIGN_TYPE_LABELS, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
+import { CAMPAIGN_TYPE_LABELS, AGREEMENT_STATUS_LABELS, type CrmClientAgreementRow } from "@/lib/crm-agreement-types";
 import ConfirmDeleteModal from "@/components/crm-invoices/ConfirmDeleteModal";
 
 const actionLinkClass = "text-xs font-semibold text-sky-600 hover:text-sky-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:text-slate-300";
@@ -129,7 +129,7 @@ export default function AgreementsTableClient({ agreements }: { agreements: CrmC
                   </td>
                   <td className="px-4 py-3 text-slate-600">{CAMPAIGN_TYPE_LABELS[agreement.campaign_type]}</td>
                   <td className="px-4 py-3 text-slate-600">{agreement.service_type}</td>
-                  <td className="px-4 py-3 text-slate-600 capitalize">{agreement.status}</td>
+                  <td className="px-4 py-3 text-slate-600">{AGREEMENT_STATUS_LABELS[agreement.status]}</td>
                   <td className="px-4 py-3 text-slate-600">{agreement.version}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-3">
