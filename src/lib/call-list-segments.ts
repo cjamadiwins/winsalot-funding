@@ -25,6 +25,13 @@ export async function isAgentAssignedToActiveSegment(segmentId: string, agentId:
   const admin = getSupabaseAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.status === "draft") return false;
+  if (segment.crm === "lead_generation") {
+    if (!segment.leadgen_campaign_id) return false;
+    const { data: campaign } = await admin.from("leadgen_campaigns").select("client_id, status").eq("id", segment.leadgen_campaign_id).maybeSingle();
+    if (!campaign || campaign.status !== "active") return false;
+    const { data: client } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
+    if (!client) return false;
+  }
   const { data } = await admin
     .from("call_list_segment_agents")
     .select("agent_id")

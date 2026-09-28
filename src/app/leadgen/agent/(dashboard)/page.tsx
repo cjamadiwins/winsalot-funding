@@ -109,7 +109,7 @@ export default async function LeadgenAgentDashboardPage() {
     // Names for the "My Results by Client" breakdown below - agents can
     // already read every client's name (see leads/new/page.tsx), only
     // their own leads/appointments are actually RLS-scoped.
-    supabase.from("leadgen_clients").select("id, name"),
+    supabase.from("leadgen_clients").select("id, name, active"),
     supabase.from("leadgen_campaigns").select("id, name, client_id").eq("status", "active").order("name"),
     fetchWinsalotIncentiveSettings(supabase),
     fetchLedgerRow(supabase, "leadgen", agent.email, weekStart),
@@ -223,6 +223,7 @@ export default async function LeadgenAgentDashboardPage() {
   // Mantra-restricted agent's dashboard never surfaces Brent's Essentials
   // (or vice versa) just because leadgen_clients itself is readable.
   const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
+  const activeClientIds = new Set((clients ?? []).filter((c) => c.active).map((c) => c.id));
   const myByClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const lead of myLeads) {
     const name = clientNameById.get(lead.client_id);
@@ -247,7 +248,7 @@ export default async function LeadgenAgentDashboardPage() {
   // Brent's Essentials' client_id. Each option's label is the campaign's
   // related client name, never the longer campaign name.
   const agentCampaignOptions = (campaigns ?? [])
-    .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS)
+    .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS && activeClientIds.has(campaign.client_id))
     .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
 
   // Opportunity Finder dashboard modal's trigger "N Hot" badge - same

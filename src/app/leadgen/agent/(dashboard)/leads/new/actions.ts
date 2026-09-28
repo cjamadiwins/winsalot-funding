@@ -21,12 +21,19 @@ export async function createAgentLeadAction(formData: FormData) {
   }
 
   const admin = getSupabaseAdmin();
+  const { data: activeClient } = await admin.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
+  if (!activeClient) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("This client is inactive.")}`);
+  const campaignId = textOrNull(formData, "campaign_id");
+  if (campaignId) {
+    const { data: campaign } = await admin.from("leadgen_campaigns").select("id").eq("id", campaignId).eq("client_id", clientId).eq("status", "active").maybeSingle();
+    if (!campaign) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("This campaign is not available.")}`);
+  }
   const { data: lead, error } = await admin
     .from("leadgen_leads")
     .insert({
       business_name: businessName,
       client_id: clientId,
-      campaign_id: textOrNull(formData, "campaign_id"),
+      campaign_id: campaignId,
       industry: textOrNull(formData, "industry"),
       contact_name: textOrNull(formData, "contact_name"),
       decision_maker_name: textOrNull(formData, "decision_maker_name"),
