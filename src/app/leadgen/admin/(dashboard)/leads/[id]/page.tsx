@@ -14,6 +14,9 @@ import {
   sendConsultationFollowUpAction,
   sendConsultationInvitationAction,
   sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./actions";
 
@@ -27,6 +30,9 @@ const actions: LeadDetailActions = {
   sendConsultationInvitation: sendConsultationInvitationAction,
   sendConsultationFollowUp: sendConsultationFollowUpAction,
   sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntro: sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntro: sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
   resendEmail: resendLeadgenEmailAction,
   assignAgent: assignLeadAction,
   clearBouncedEmail: clearBouncedEmailAction,

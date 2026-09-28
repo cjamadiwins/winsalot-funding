@@ -35,6 +35,9 @@ import {
   sendConsultationFollowUpAction,
   sendConsultationInvitationAction,
   sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./leads/[id]/actions";
 import { assignLeadAction, deleteLeadgenLeadAction } from "./leads/actions";
@@ -237,6 +240,9 @@ export default async function LeadgenAdminDashboardPage() {
     sendConsultationInvitation: sendConsultationInvitationAction,
     sendConsultationFollowUp: sendConsultationFollowUpAction,
     sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
+    sendWeb6SolutionsIntro: sendWeb6SolutionsIntroEmailAction,
+    sendTeknokraftIntro: sendTeknokraftIntroEmailAction,
+    sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
     resendEmail: resendLeadgenEmailAction,
     assignAgent: assignLeadAction,
     clearBouncedEmail: clearBouncedEmailAction,

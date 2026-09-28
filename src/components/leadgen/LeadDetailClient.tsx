@@ -21,6 +21,9 @@ import {
   resolveLeadgenEmailBranding,
   LEADGEN_CONSULTATION_CTA_LABEL,
   isMantraCollabClient,
+  isWeb6SolutionsClient,
+  isTeknokraftClient,
+  isHidebrandtClient,
   type LeadgenAppointmentReminderStatusEntry,
   type LeadgenSmsReminderStatusEntry,
   type LeadgenAppointmentRow,
@@ -59,6 +62,65 @@ const MANTRA_COLLAB_EMAIL_BODY =
   "Winsalot Corp.\n" +
   "on behalf of Mantra Collab";
 
+// The three website-services clients' own campaign intro emails - same
+// hardcoded-copy pattern as MANTRA_COLLAB_EMAIL_SUBJECT/BODY above, kept
+// in application code (not a leadgen_email_templates row) so preview,
+// resend, and the actual send can never fall back to different wording.
+// {{services_section}} carries its own lead-in sentence ("You can learn
+// more about X here:") so the whole paragraph disappears together when
+// the client has no verified website - see campaignWebsiteSection below -
+// rather than leaving a dangling sentence with no link after it.
+function campaignWebsiteSection(websiteUrl: string | null, clientName: string): string {
+  if (!websiteUrl) return "";
+  return `You can learn more about ${clientName} here:\n\n[Visit ${clientName}]\n\n${websiteUrl}`;
+}
+const CAMPAIGN_BOOKING_CTA_LABEL = "Book a Consultation";
+
+const WEB6_SOLUTIONS_EMAIL_SUBJECT = "Website Solutions for {{business_name}}";
+const WEB6_SOLUTIONS_EMAIL_BODY =
+  "Hi {{first_name}},\n\n" +
+  "I'm following up regarding our recent outreach on behalf of Web6 Solutions.\n\n" +
+  "Web6 Solutions helps businesses with professional website services designed to support and improve their online presence.\n\n" +
+  "Their services include:\n\n" +
+  "• Website Design\n• Website Development\n• Website Maintenance\n• Website Hosting\n• E-commerce Solutions\n\n" +
+  "Whether a business needs a new website, wants to improve an existing site, or requires ongoing website support, Web6 Solutions can discuss options based on the business's needs.\n\n" +
+  "{{services_section}}\n\n" +
+  "If you would like to discuss your website needs, you can schedule a short consultation below.\n\n" +
+  "{{booking_section}}\n\n" +
+  "Best regards,\n\n" +
+  "Winsalot Corp\n" +
+  "On behalf of Web6 Solutions";
+
+const TEKNOKRAFT_EMAIL_SUBJECT = "Website & Digital Solutions for {{business_name}}";
+const TEKNOKRAFT_EMAIL_BODY =
+  "Hi {{first_name}},\n\n" +
+  "I'm following up regarding our recent outreach on behalf of Teknokraft Canada Inc.\n\n" +
+  "Teknokraft Canada Inc. provides website and digital solutions for businesses looking to build, improve, or strengthen their online presence.\n\n" +
+  "Services include:\n\n" +
+  "• Website Design\n• Website Development\n• Website Redesign\n• Search Engine Optimization (SEO)\n• E-commerce Solutions\n• Related Digital Services\n\n" +
+  "If your business is considering a new website, improvements to an existing website, or additional online visibility, Teknokraft can discuss solutions based on your requirements.\n\n" +
+  "{{services_section}}\n\n" +
+  "To discuss your business and website needs, schedule a consultation below.\n\n" +
+  "{{booking_section}}\n\n" +
+  "Best regards,\n\n" +
+  "Winsalot Corp\n" +
+  "On behalf of Teknokraft Canada Inc.";
+
+const HIDEBRANDT_EMAIL_SUBJECT = "Website Services for {{business_name}}";
+const HIDEBRANDT_EMAIL_BODY =
+  "Hi {{first_name}},\n\n" +
+  "I'm following up regarding our recent outreach on behalf of Hidebrandt Web Services.\n\n" +
+  "Hidebrandt Web Services works with businesses that need professional website support, whether they are building a new website or improving and maintaining an existing one.\n\n" +
+  "Services include:\n\n" +
+  "• Website Design\n• Website Development\n• Website Maintenance\n• Website Hosting\n• E-commerce Services\n\n" +
+  "If your business is considering a website project or needs ongoing website support, Hidebrandt Web Services can discuss your requirements and available options.\n\n" +
+  "{{services_section}}\n\n" +
+  "If you would like to discuss your website requirements, schedule a consultation below.\n\n" +
+  "{{booking_section}}\n\n" +
+  "Best regards,\n\n" +
+  "Winsalot Corp\n" +
+  "On behalf of Hidebrandt Web Services";
+
 export type LeadDetailActions = {
   updateLead: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
   recordCallOutcome: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
@@ -71,6 +133,12 @@ export type LeadDetailActions = {
   // Available to both admin and agent (Mantra agents need to send this
   // themselves) - only rendered when isMantraCollabClient(client) is true.
   sendMantraCollabIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  // Same "only rendered for that one client" pattern as sendMantraCollabIntro
+  // above, one per website-services client (see isWeb6SolutionsClient/
+  // isTeknokraftClient/isHidebrandtClient in lib/leadgen-types.ts).
+  sendWeb6SolutionsIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  sendTeknokraftIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
+  sendHidebrandtIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
@@ -197,6 +265,9 @@ export default function LeadDetailClient({
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [showInvitationFollowUpModal, setShowInvitationFollowUpModal] = useState(false);
   const [showMantraModal, setShowMantraModal] = useState(false);
+  const [showWeb6Modal, setShowWeb6Modal] = useState(false);
+  const [showTeknokraftModal, setShowTeknokraftModal] = useState(false);
+  const [showHidebrandtModal, setShowHidebrandtModal] = useState(false);
   const [postSendFollowUp, setPostSendFollowUp] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -314,16 +385,51 @@ export default function LeadDetailClient({
   const mantraSubject = renderLeadgenTemplate(MANTRA_COLLAB_EMAIL_SUBJECT, mantraVars);
   const mantraBody = renderLeadgenTemplate(MANTRA_COLLAB_EMAIL_BODY, mantraVars);
 
+  // Web6 Solutions / Teknokraft Canada Inc. / Hidebrandt Web Services own
+  // campaign intro emails - same marker-text convention as every other
+  // email in this file: {{booking_section}} renders to the CTA's
+  // "[label]\n\nurl" marker (or the safe reply-to-this-email fallback text
+  // when there's no booking link yet), and {{services_section}} renders
+  // to the whole "learn more" paragraph + website marker, or "" when the
+  // client has no verified website - never a raw {{token}} either way.
+  const isWeb6 = isWeb6SolutionsClient(client);
+  const isTeknokraft = isTeknokraftClient(client);
+  const isHidebrandt = isHidebrandtClient(client);
+  const campaignBookingSection = leadgenBookingInviteSection(branding.bookingUrl, CAMPAIGN_BOOKING_CTA_LABEL);
+  const campaignWebsiteSectionText = campaignWebsiteSection(branding.servicesUrl, branding.clientName);
+  const campaignVars = {
+    first_name: firstName,
+    business_name: lead.business_name,
+    booking_section: campaignBookingSection,
+    services_section: campaignWebsiteSectionText,
+  };
+  const web6Subject = renderLeadgenTemplate(WEB6_SOLUTIONS_EMAIL_SUBJECT, campaignVars);
+  const web6Body = renderLeadgenTemplate(WEB6_SOLUTIONS_EMAIL_BODY, campaignVars);
+  const teknokraftSubject = renderLeadgenTemplate(TEKNOKRAFT_EMAIL_SUBJECT, campaignVars);
+  const teknokraftBody = renderLeadgenTemplate(TEKNOKRAFT_EMAIL_BODY, campaignVars);
+  const hidebrandtSubject = renderLeadgenTemplate(HIDEBRANDT_EMAIL_SUBJECT, campaignVars);
+  const hidebrandtBody = renderLeadgenTemplate(HIDEBRANDT_EMAIL_BODY, campaignVars);
+
   // The one primary "campaign email" button, now shown at the top beside
   // Schedule Follow-up/Book Appointment/Edit Lead instead of buried at
   // the bottom - same template/action for a given lead every time
-  // (consultation_information for every non-Mantra client,
-  // mantra_collab_intro for Mantra), so its label naturally reads "Send
-  // Brent's Essentials Email" / "Send Mantra Collab Email" for today's
-  // two clients and generalizes correctly for any future one too.
-  const primaryEmailTemplateKey = isMantra ? "mantra_collab_intro" : "consultation_information";
+  // (consultation_information for every generic client, a dedicated
+  // template key for each client with its own hardcoded copy), so its
+  // label naturally reads "Send Brent's Essentials Email" / "Send Mantra
+  // Collab Email" / "Send Web6 Solutions Email" for today's clients and
+  // generalizes correctly for any future one too.
+  const primaryEmailTemplateKey = isMantra
+    ? "mantra_collab_intro"
+    : isWeb6
+      ? "web6_solutions_intro"
+      : isTeknokraft
+        ? "teknokraft_intro"
+        : isHidebrandt
+          ? "hidebrandt_intro"
+          : "consultation_information";
   const hasSentPrimaryEmail = emails.some((email) => email.template_key === primaryEmailTemplateKey);
   const primaryEmailButtonLabel = hasSentPrimaryEmail ? `Resend ${branding.clientName} Email` : `Send ${branding.clientName} Email`;
+  const isCustomCampaignClient = isMantra || isWeb6 || isTeknokraft || isHidebrandt;
 
   return (
     <div>
@@ -408,16 +514,26 @@ export default function LeadDetailClient({
       {!rawBookingUrl && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           No Consultation Booking Link is saved for {client.name} yet - add one in Client Settings before sending{" "}
-          {isMantra ? "the Mantra Collab email" : "the consultation email, the 15-minute consultation invitation, or a follow-up email"}.
+          {isCustomCampaignClient ? `the ${branding.clientName} email` : "the consultation email, the 15-minute consultation invitation, or a follow-up email"}.
         </p>
       )}
 
       <div className="mt-5 flex flex-wrap gap-2.5">
         <button
           type="button"
-          onClick={() => (isMantra ? setShowMantraModal(true) : setShowConsultationModal(true))}
+          onClick={() =>
+            isMantra
+              ? setShowMantraModal(true)
+              : isWeb6
+                ? setShowWeb6Modal(true)
+                : isTeknokraft
+                  ? setShowTeknokraftModal(true)
+                  : isHidebrandt
+                    ? setShowHidebrandtModal(true)
+                    : setShowConsultationModal(true)
+          }
           className={`rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white transition ${
-            isMantra ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"
+            isCustomCampaignClient ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"
           }`}
         >
           {primaryEmailButtonLabel}
@@ -437,7 +553,7 @@ export default function LeadDetailClient({
         )}
       </div>
 
-      {showConsultationModal && !isMantra && (
+      {showConsultationModal && !isCustomCampaignClient && (
         <ConsultationEmailModal
           lead={lead}
           agentName={currentUserName}
@@ -456,7 +572,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationModal && !isMantra && (
+      {showInvitationModal && !isCustomCampaignClient && (
         <ConsultationInvitationModal
           lead={lead}
           agentName={currentUserName}
@@ -474,7 +590,7 @@ export default function LeadDetailClient({
         />
       )}
 
-      {showInvitationFollowUpModal && !isMantra && (
+      {showInvitationFollowUpModal && !isCustomCampaignClient && (
         <ConsultationEmailModal
           lead={lead}
           agentName={currentUserName}
@@ -509,6 +625,63 @@ export default function LeadDetailClient({
           onSent={() => {
             setShowMantraModal(false);
             setSuccessMessage("Mantra Collab email sent.");
+          }}
+        />
+      )}
+
+      {showWeb6Modal && (
+        <ConsultationInvitationModal
+          lead={lead}
+          agentName={currentUserName}
+          title={primaryEmailButtonLabel}
+          subject={web6Subject}
+          body={web6Body}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={branding.servicesUrl}
+          onClose={() => setShowWeb6Modal(false)}
+          onSend={(formData) => actions.sendWeb6SolutionsIntro(lead.id, formData)}
+          onSent={() => {
+            setShowWeb6Modal(false);
+            setSuccessMessage("Web6 Solutions email sent.");
+            setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      {showTeknokraftModal && (
+        <ConsultationInvitationModal
+          lead={lead}
+          agentName={currentUserName}
+          title={primaryEmailButtonLabel}
+          subject={teknokraftSubject}
+          body={teknokraftBody}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={branding.servicesUrl}
+          onClose={() => setShowTeknokraftModal(false)}
+          onSend={(formData) => actions.sendTeknokraftIntro(lead.id, formData)}
+          onSent={() => {
+            setShowTeknokraftModal(false);
+            setSuccessMessage("Teknokraft Canada Inc. email sent.");
+            setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      {showHidebrandtModal && (
+        <ConsultationInvitationModal
+          lead={lead}
+          agentName={currentUserName}
+          title={primaryEmailButtonLabel}
+          subject={hidebrandtSubject}
+          body={hidebrandtBody}
+          bookingUrl={branding.bookingUrl}
+          servicesUrl={branding.servicesUrl}
+          onClose={() => setShowHidebrandtModal(false)}
+          onSend={(formData) => actions.sendHidebrandtIntro(lead.id, formData)}
+          onSent={() => {
+            setShowHidebrandtModal(false);
+            setSuccessMessage("Hidebrandt Web Services email sent.");
+            setPostSendFollowUp(true);
           }}
         />
       )}
