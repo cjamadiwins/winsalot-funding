@@ -16,11 +16,11 @@ export default async function NewLeadgenCallListSegmentPage() {
 
   const clientIds = [...new Set(campaignRows.map((c) => c.client_id))];
   const { data: clients } = clientIds.length
-    ? await admin.from("leadgen_clients").select("id, name").in("id", clientIds)
+    ? await admin.from("leadgen_clients").select("id, name").in("id", clientIds).eq("active", true)
     : { data: [] as { id: string; name: string }[] };
   const clientNameById = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
 
-  const typeOptions = campaignRows.map((campaign) => ({
+  const typeOptions = campaignRows.filter((campaign) => clientNameById.has(campaign.client_id)).map((campaign) => ({
     value: campaign.id,
     label: `${clientNameById.get(campaign.client_id) ?? "Unknown client"} — ${campaign.name}`,
   }));

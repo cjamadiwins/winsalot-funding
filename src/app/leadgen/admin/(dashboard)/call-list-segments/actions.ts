@@ -84,12 +84,14 @@ export async function uploadSegmentAction(formData: FormData): Promise<{ error: 
   const supabaseAdmin = getSupabaseAdmin();
   const { data: campaign } = await supabaseAdmin
     .from("leadgen_campaigns")
-    .select("id, status")
+    .select("id, status, client_id")
     .eq("id", leadgenCampaignId)
     .maybeSingle();
   if (!campaign || campaign.status !== "active") {
     return { error: "Select a valid, active campaign." };
   }
+  const { data: activeClient } = await supabaseAdmin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
+  if (!activeClient) return { error: "This campaign's client is inactive." };
 
   let segmentId: string;
   try {

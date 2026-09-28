@@ -46,7 +46,7 @@ export async function updateCurrentCampaignAction(
   if (campaignId) {
     const { data: campaign, error: campaignError } = await admin
       .from("leadgen_campaigns")
-      .select("id")
+      .select("id, client_id")
       .eq("id", campaignId)
       .eq("status", "active")
       .maybeSingle();
@@ -57,6 +57,8 @@ export async function updateCurrentCampaignAction(
     if (!campaign) {
       return { status: "error", message: "The selected business is no longer active." };
     }
+    const { data: activeClient } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
+    if (!activeClient) return { status: "error", message: "The selected business is no longer active." };
   }
 
   const { data: updated, error } = await admin
