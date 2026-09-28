@@ -65,6 +65,7 @@ import OperationsMonitoringCard from "@/components/crm-ui/OperationsMonitoringCa
 import { fetchOperationsMonitoringSummary } from "@/lib/leadgen-monitoring-data";
 import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-react";
 import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
+import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -90,6 +91,7 @@ export default async function LeadgenAdminDashboardPage() {
     operationsMonitoringSummary,
     { data: conversions },
     { count: paymentsTriggeredCount },
+    { data: callScriptClients },
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -149,6 +151,15 @@ export default async function LeadgenAdminDashboardPage() {
       // on this page.
       admin.from("leadgen_conversions").select("id, conversion_status, admin_verification_status, conversion_status_set_at, created_at"),
       admin.from("leadgen_conversion_payment_triggers").select("id", { count: "exact", head: true }),
+      // Client Call Script dashboard card (below) - every active client's
+      // own script fields, isolated from the plain "id, name" clients
+      // read above (which several other sections on this page rely on
+      // being unfiltered by active status).
+      admin
+        .from("leadgen_clients")
+        .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
+        .eq("active", true)
+        .order("name"),
     ]);
 
   const allLeads = leads ?? [];
@@ -351,6 +362,8 @@ export default async function LeadgenAdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      <ClientCallScriptSelector clients={callScriptClients ?? []} agentName={adminUser.full_name || adminUser.email} />
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/leadgen/admin/performance" />
       <OperationsMonitoringCard

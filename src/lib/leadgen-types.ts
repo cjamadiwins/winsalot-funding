@@ -130,6 +130,17 @@ export type LeadgenClientRow = {
   // contact_phone, which is this client's general contact number and not
   // necessarily the right number for automated appointment texts.
   sms_notification_number: string | null;
+  // Client Call Script (migration 20260928030000) - Admin-editable,
+  // agent-visible-only building blocks for this client's customized
+  // outbound call script. All null for a client that hasn't had a script
+  // configured yet - buildLeadgenCallScript() (lib/leadgen-call-script.ts)
+  // falls back to safe generic wording in that case rather than showing a
+  // blank/broken script. See that file for what each field feeds into.
+  call_script_value_proposition: string | null;
+  call_script_services: string | null;
+  call_script_closing: string | null;
+  call_script_notes: string | null;
+  call_script_override: string | null;
 };
 
 export const LEADGEN_CAMPAIGN_STATUSES = ["active", "paused", "completed"] as const;

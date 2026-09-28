@@ -10,6 +10,7 @@ import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEdito
 import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
 import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/crm-call-list/SegmentPerformanceClient";
+import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 import {
   addSegmentLeadAction,
   backfillSegmentLocationsAction,
@@ -33,8 +34,24 @@ async function resolveServiceLabel(admin: ReturnType<typeof getSupabaseAdmin>, l
   return `${client?.name ?? "Unknown client"} — ${campaign.name}`;
 }
 
+// Client Call Script (brief "Call List") - resolves the one client this
+// whole segment is deployed against (a segment is always tied to a single
+// leadgen_campaign_id), for the compact script panel shown alongside the
+// segment's performance stats below.
+async function resolveCallScriptClient(admin: ReturnType<typeof getSupabaseAdmin>, leadgenCampaignId: string | null): Promise<CallScriptClientOption | null> {
+  if (!leadgenCampaignId) return null;
+  const { data: campaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", leadgenCampaignId).maybeSingle();
+  if (!campaign) return null;
+  const { data: client } = await admin
+    .from("leadgen_clients")
+    .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
+    .eq("id", campaign.client_id)
+    .maybeSingle();
+  return (client as CallScriptClientOption | null) ?? null;
+}
+
 export default async function LeadgenCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireLeadgenAdmin();
+  const adminUser = await requireLeadgenAdmin();
   const { id } = await params;
 
   const segment = await getSegment(id);
@@ -85,7 +102,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     );
   }
 
-  const [leads, removedLeads, hiddenFields, agentIds, agentsResult, callLogsResult] = await Promise.all([
+  const [leads, removedLeads, hiddenFields, agentIds, agentsResult, callLogsResult, callScriptClient] = await Promise.all([
     listSegmentLeads(segment.id),
     listRemovedSegmentLeads(segment.id),
     getHiddenColumnFields("lead_generation"),
@@ -97,6 +114,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       .eq("call_list_segment_id", segment.id)
       .order("created_at", { ascending: false })
       .limit(200),
+    resolveCallScriptClient(admin, segment.leadgen_campaign_id),
   ]);
 
   const agents = ((agentsResult.data ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
@@ -148,6 +166,8 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
       previewLocationsFileAction={previewUploadFileAction}
       backfillLocationsAction={backfillSegmentLocationsAction.bind(null, segment.id)}
+      callScriptClient={callScriptClient}
+      adminName={adminUser.full_name || adminUser.email}
     />
   );
 }

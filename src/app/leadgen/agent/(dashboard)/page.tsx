@@ -48,6 +48,7 @@ import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
+import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
@@ -83,6 +84,8 @@ export default async function LeadgenAgentDashboardPage() {
     { data: recentEmails },
     myOpportunitiesRows,
     dncRows,
+    { data: myCampaignRestrictions },
+    { data: activeClientsWithScripts },
   ] = await Promise.all([
     supabase.from("leadgen_leads").select("*").order("created_at", { ascending: false }),
     supabase
@@ -137,6 +140,17 @@ export default async function LeadgenAgentDashboardPage() {
     // only, from either CRM, since a restriction added in the Growth CRM
     // must be visible here too.
     getActiveDncSuppressions(),
+    // Client Call Script dashboard card (below) - this agent's own
+    // leadgen_campaign_agents rows (RLS: leadgen_campaign_agents_agent_select_own),
+    // used to mirror leadgen_agent_campaign_allowed()'s exact restriction
+    // logic in JS below so a campaign-restricted agent never sees another
+    // client's script.
+    supabase.from("leadgen_campaign_agents").select("campaign_id").eq("agent_id", agent.id),
+    supabase
+      .from("leadgen_clients")
+      .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
+      .eq("active", true)
+      .order("name"),
   ]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
@@ -250,6 +264,18 @@ export default async function LeadgenAgentDashboardPage() {
     .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS)
     .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
 
+  // Client Call Script dashboard card - "only show clients/campaigns the
+  // agent is permitted to work on". Mirrors leadgen_agent_campaign_allowed()
+  // (migration 0077) exactly: zero leadgen_campaign_agents rows for this
+  // agent means fully unrestricted (every active client is permitted);
+  // any rows mean restricted to only the clients behind those specific
+  // campaign ids.
+  const restrictedCampaignIds = (myCampaignRestrictions ?? []).length > 0 ? new Set((myCampaignRestrictions ?? []).map((r) => r.campaign_id)) : null;
+  const permittedClientIds = restrictedCampaignIds
+    ? new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id))
+    : null;
+  const callScriptClients = (activeClientsWithScripts ?? []).filter((c) => !permittedClientIds || permittedClientIds.has(c.id));
+
   // Opportunity Finder dashboard modal's trigger "N Hot" badge - same
   // numeric-score-based "hot" definition (opportunityPriorityLevel) the
   // modal's own list uses, counted over active (not dismissed) rows only.
@@ -311,6 +337,12 @@ export default async function LeadgenAgentDashboardPage() {
         campaigns={agentCampaignOptions}
         currentCampaignId={agent.current_campaign_id}
         agentFullName={agentDisplayName}
+      />
+
+      <ClientCallScriptSelector
+        clients={callScriptClients}
+        agentName={agentDisplayName}
+        emptyMessage="No clients are currently assigned to you."
       />
 
       <SalesCoachAgentCard data={salesCoachData} />

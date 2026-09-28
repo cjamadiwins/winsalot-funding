@@ -13,6 +13,9 @@ import { KNOWN_COLUMNS, extraFieldColumnKey, isColumnHidden } from "@/lib/call-l
 import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES, type CallListLeadRow, type CallListSegmentRow } from "@/lib/call-list-types";
 import type { CallListTargetField } from "@/lib/call-list-column-mapping";
 import type { BackfillSummary } from "@/lib/call-list-backfill";
+import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
+import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
+import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 
 export type SegmentCallLogView = {
   id: string;
@@ -45,6 +48,8 @@ export default function SegmentPerformanceClient({
   updateColumnVisibilityAction,
   previewLocationsFileAction,
   backfillLocationsAction,
+  callScriptClient,
+  adminName,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
@@ -74,6 +79,11 @@ export default function SegmentPerformanceClient({
     formData: FormData
   ) => Promise<{ error: string } | { headers: string[]; suggestedMapping: Record<CallListTargetField, string | null>; sampleRowCount: number }>;
   backfillLocationsAction: (formData: FormData) => Promise<{ error?: string; summary?: BackfillSummary }>;
+  // Client Call Script (brief "Call List") - the one client this whole
+  // segment is deployed against, resolved server-side. Null when the
+  // segment has no linked client - the panel simply doesn't render.
+  callScriptClient?: CallScriptClientOption | null;
+  adminName?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -81,6 +91,7 @@ export default function SegmentPerformanceClient({
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [hiddenFields, setHiddenFields] = useState<string[]>(initialHiddenFields);
+  const [showCallScript, setShowCallScript] = useState(false);
 
   const extraFieldNames = useMemo(() => {
     const keys = new Set<string>();
@@ -167,6 +178,23 @@ export default function SegmentPerformanceClient({
           </div>
         ))}
       </div>
+
+      {callScriptClient && (
+        <div className="rounded-xl border border-slate-200 p-4">
+          <button
+            type="button"
+            onClick={() => setShowCallScript((v) => !v)}
+            className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700"
+          >
+            {showCallScript ? "Hide Call Script" : "View Call Script"}
+          </button>
+          {showCallScript && (
+            <div className="mt-3">
+              <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName: adminName ?? "", client: callScriptClient })} compact />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
         <div className="flex flex-wrap gap-2 text-[12.5px] text-slate-600">

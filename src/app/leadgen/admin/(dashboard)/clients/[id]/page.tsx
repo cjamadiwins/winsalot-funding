@@ -14,7 +14,7 @@ import {
 import ClientDetailClient from "./ClientDetailClient";
 
 export default async function LeadgenClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireLeadgenAdmin();
+  const adminUser = await requireLeadgenAdmin();
   const { id } = await params;
   const admin = getSupabaseAdmin();
 
@@ -65,6 +65,7 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
       followUpsDueToday={allLeads.filter((l) => isLeadgenNextFollowUpDueToday(l.next_follow_up_at)).length}
       overdueFollowUps={allLeads.filter((l) => isLeadgenNextFollowUpOverdue(l.next_follow_up_at)).length}
       bouncedEmails={(bouncedRows ?? []).map((r) => r.email)}
+      adminName={adminUser.full_name || adminUser.email}
     />
   );
 }

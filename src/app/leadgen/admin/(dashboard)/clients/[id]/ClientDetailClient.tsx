@@ -20,9 +20,11 @@ import {
   type LeadgenEmailTemplateRow,
 } from "@/lib/leadgen-types";
 import { clearBouncedEmailAction, updateClientAction, createCampaignAction, resendLeadgenEmailAction } from "../../actions";
-import { sendClientCommunicationAction } from "./actions";
+import { sendClientCommunicationAction, updateClientCallScriptAction } from "./actions";
 import RefreshOnFocus from "@/components/leadgen/RefreshOnFocus";
 import KpiCard from "@/components/crm-ui/KpiCard";
+import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
+import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -39,6 +41,7 @@ export default function ClientDetailClient({
   followUpsDueToday,
   overdueFollowUps,
   bouncedEmails,
+  adminName,
 }: {
   client: LeadgenClientRow;
   campaigns: LeadgenCampaignRow[];
@@ -52,6 +55,10 @@ export default function ClientDetailClient({
   followUpsDueToday: number;
   overdueFollowUps: number;
   bouncedEmails: string[];
+  // Signed-in admin's own display name - substituted for [Agent Name] on
+  // this preview, exactly like an agent's own name would be on theirs
+  // (brief: "[Agent Name] = logged-in Admin/Agent").
+  adminName: string;
 }) {
   const bouncedSet = new Set(bouncedEmails);
   const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
@@ -60,6 +67,7 @@ export default function ClientDetailClient({
   const [editingClient, setEditingClient] = useState(false);
   const [showCampaignForm, setShowCampaignForm] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
+  const [editingScript, setEditingScript] = useState(false);
 
   function runAction(fn: () => Promise<{ error?: string } | void>, onSuccess?: () => void) {
     setError(null);
@@ -356,6 +364,83 @@ export default function ClientDetailClient({
           )}
         </section>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Client Call Script</h2>
+          <button type="button" onClick={() => setEditingScript((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
+            {editingScript ? "Cancel" : "Edit Script"}
+          </button>
+        </div>
+
+        {editingScript ? (
+          <form
+            action={(formData) => runAction(() => updateClientCallScriptAction(client.id, formData), () => setEditingScript(false))}
+            className="mt-4 space-y-3"
+          >
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-600">Short Opening / Value Proposition</span>
+              <textarea
+                name="call_script_value_proposition"
+                placeholder="We help businesses improve or build their website and generate more customer inquiries through SEO."
+                defaultValue={client.call_script_value_proposition ?? ""}
+                className={`${inputClass} min-h-[60px] resize-y`}
+              />
+              <span className="text-[12px] text-slate-500">Replaces the generic sentence in the Opening. Leave blank to use the default wording.</span>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-600">Services Offered</span>
+              <textarea
+                name="call_script_services"
+                placeholder="e.g. website design or redesign, website maintenance, hosting, e-commerce and SEO"
+                defaultValue={client.call_script_services ?? ""}
+                className={`${inputClass} min-h-[60px] resize-y`}
+              />
+              <span className="text-[12px] text-slate-500">
+                Fills in &ldquo;[Client Business Name] can help with…&rdquo; in the If Interested section - only list what this specific client
+                actually offers.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-600">Optional Appointment Closing</span>
+              <textarea
+                name="call_script_closing"
+                placeholder="Optional closing line, e.g. a specific objection response or booking reminder."
+                defaultValue={client.call_script_closing ?? ""}
+                className={`${inputClass} min-h-[60px] resize-y`}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-600">Internal Agent Notes</span>
+              <textarea
+                name="call_script_notes"
+                placeholder="Notes for the agent only - never read aloud to the prospect."
+                defaultValue={client.call_script_notes ?? ""}
+                className={`${inputClass} min-h-[60px] resize-y`}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-600">Client Call Script (full override, optional)</span>
+              <textarea
+                name="call_script_override"
+                placeholder="Leave blank to use the standard Opening / If Interested template built from the fields above. If filled in, this replaces the entire script."
+                defaultValue={client.call_script_override ?? ""}
+                className={`${inputClass} min-h-[120px] resize-y`}
+              />
+              <span className="text-[12px] text-slate-500">
+                You can use [Agent Name], [Client Business Name], [Prospect Business Name], and [Client-Specific Services] anywhere in this text.
+              </span>
+            </label>
+            <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+              Save
+            </button>
+          </form>
+        ) : (
+          <div className="mt-4">
+            <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName: adminName, client })} />
+          </div>
+        )}
+      </section>
 
       <div className="mt-6">
         <CommunicationsSection
