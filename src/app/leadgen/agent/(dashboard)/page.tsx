@@ -29,6 +29,9 @@ import {
   sendConsultationFollowUpAction,
   sendConsultationInvitationAction,
   sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./leads/[id]/actions";
 import { Flame, Gauge, CalendarClock, Snowflake, CalendarCheck, Target, Hourglass } from "lucide-react";
@@ -290,6 +293,9 @@ export default async function LeadgenAgentDashboardPage() {
     sendConsultationInvitation: sendConsultationInvitationAction,
     sendConsultationFollowUp: sendConsultationFollowUpAction,
     sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
+    sendWeb6SolutionsIntro: sendWeb6SolutionsIntroEmailAction,
+    sendTeknokraftIntro: sendTeknokraftIntroEmailAction,
+    sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
     // No resendEmail / assignAgent / clearBouncedEmail /
     // resendAppointmentNotification / sendAppointmentReminder - all
     // admin-only, same as the standalone /leadgen/agent/leads/[id] page's

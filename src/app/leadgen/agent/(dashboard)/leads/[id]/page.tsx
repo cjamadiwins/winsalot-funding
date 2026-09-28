@@ -12,6 +12,9 @@ import {
   sendConsultationFollowUpAction,
   sendConsultationInvitationAction,
   sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./actions";
 
@@ -25,6 +28,9 @@ const actions: LeadDetailActions = {
   sendConsultationInvitation: sendConsultationInvitationAction,
   sendConsultationFollowUp: sendConsultationFollowUpAction,
   sendMantraCollabIntro: sendMantraCollabIntroEmailAction,
+  sendWeb6SolutionsIntro: sendWeb6SolutionsIntroEmailAction,
+  sendTeknokraftIntro: sendTeknokraftIntroEmailAction,
+  sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
   // email (admin-only per the brief) or reassign a lead. Likewise no
   // resendAppointmentNotification / sendAppointmentReminder - those manual

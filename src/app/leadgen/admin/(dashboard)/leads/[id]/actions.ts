@@ -6,9 +6,12 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import { isEmailDncBlocked } from "@/lib/dnc-suppression";
 import {
+  isHidebrandtClient,
   isLeadgenAppointmentCountable,
   isMantraCollabClient,
+  isTeknokraftClient,
   isValidEmail,
+  isWeb6SolutionsClient,
   LEADGEN_BOOKING_BUTTON_LABEL,
   LEADGEN_CONSULTATION_CTA_LABEL,
   LEADGEN_LEAD_STATUSES,
@@ -17,6 +20,13 @@ import {
   type LeadgenAppointmentStatus,
   type LeadgenLeadStatus,
 } from "@/lib/leadgen-types";
+
+// Shared "Book a Consultation" CTA label for the three website-services
+// clients' own campaign intro emails below - distinct from
+// LEADGEN_CONSULTATION_CTA_LABEL/LEADGEN_BOOKING_BUTTON_LABEL (the
+// generic system's "Book a free 15-minute consultation" wording) per the
+// brief's own requested CTA text for these three emails specifically.
+const CAMPAIGN_BOOKING_CTA_LABEL = "Book a Consultation";
 
 type ActionResult = { error?: string };
 
@@ -566,4 +576,123 @@ export async function sendMantraCollabIntroEmailAction(leadId: string, formData:
 
   revalidatePath(`/leadgen/admin/leads/${leadId}`);
   return result;
+}
+
+// Shared by the three website-services clients' own "Send X Email"
+// actions below - same structure as sendMantraCollabIntroEmailAction
+// above (client-gate check, DNC check, required-booking-link guard,
+// activity log, updated_at bump), generalized to also pass the client's
+// services_info_link through as a second CTA button (this campaign email
+// carries both a booking link and a "Visit [Client]" website link,
+// unlike Mantra Collab's intentionally single-link intro).
+async function sendCampaignIntroEmailAction(
+  leadId: string,
+  formData: FormData,
+  config: {
+    isThisClient: (client: { slug: string }) => boolean;
+    wrongClientError: string;
+    templateKey: string;
+    activityType: "web6_solutions_intro_sent" | "teknokraft_intro_sent" | "hidebrandt_intro_sent";
+    activityLabel: string;
+  }
+): Promise<SendLeadgenEmailResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { data: lead } = await supabase
+    .from("leadgen_leads")
+    .select("client_id, campaign_id, leadgen_clients(name, slug, booking_link, services_info_link)")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found." };
+
+  const toEmail = String(formData.get("to_email") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const submittedBookingUrl = String(formData.get("booking_url") ?? "").trim() || null;
+  const submittedServicesUrl = String(formData.get("services_url") ?? "").trim() || null;
+  type EmbeddedClient = { name: string; slug: string; booking_link: string | null; services_info_link: string | null };
+  const clientEmbed = lead.leadgen_clients as unknown as EmbeddedClient | EmbeddedClient[] | null;
+  const embeddedClient = Array.isArray(clientEmbed) ? clientEmbed[0] : clientEmbed;
+  if (!embeddedClient || !config.isThisClient(embeddedClient)) {
+    return { emailId: "", error: config.wrongClientError };
+  }
+  const branding = resolveLeadgenEmailBranding(
+    embeddedClient,
+    submittedBookingUrl ?? embeddedClient.booking_link,
+    submittedServicesUrl ?? embeddedClient.services_info_link
+  );
+
+  if (!toEmail) return { emailId: "", error: "This lead has no email address on file. Add one before sending." };
+  if (!isValidEmail(toEmail)) return { emailId: "", error: "Enter a valid email address." };
+  if (await isEmailDncBlocked(toEmail)) return { emailId: "", error: "This email address is on the Do Not Contact list and cannot be sent to." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+  if (!branding.bookingUrl) return { emailId: "", error: "Please add a Consultation Booking Link in Client Settings before sending this email." };
+
+  const buttons: { url: string | null | undefined; label: string; style?: "button" | "booking" }[] = [
+    { url: branding.bookingUrl, label: CAMPAIGN_BOOKING_CTA_LABEL, style: "booking" as const },
+  ];
+  if (branding.servicesUrl) buttons.push({ url: branding.servicesUrl, label: `Visit ${branding.clientName}`, style: "button" as const });
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: config.templateKey,
+    toEmail,
+    subject,
+    body,
+    html: buildLeadgenBookingEmailHtml(body, buttons),
+    sentBy: adminUser.id,
+    clientVisible: false,
+  });
+
+  if (result.error) return result;
+
+  const now2 = new Date().toISOString();
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: adminUser.id,
+    activity_type: config.activityType,
+    notes: `${config.activityLabel} email sent to ${toEmail} by ${adminUser.full_name || adminUser.email} (Admin).`,
+    occurred_at: now2,
+  });
+
+  // An automated email send is not "contact" - last_contacted_at is
+  // deliberately left untouched here.
+  await supabase.from("leadgen_leads").update({ updated_at: now2 }).eq("id", leadId);
+
+  revalidatePath(`/leadgen/admin/leads/${leadId}`);
+  return result;
+}
+
+export async function sendWeb6SolutionsIntroEmailAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  return sendCampaignIntroEmailAction(leadId, formData, {
+    isThisClient: isWeb6SolutionsClient,
+    wrongClientError: "This email can only be sent for a Web6 Solutions lead.",
+    templateKey: "web6_solutions_intro",
+    activityType: "web6_solutions_intro_sent",
+    activityLabel: "Web6 Solutions intro",
+  });
+}
+
+export async function sendTeknokraftIntroEmailAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  return sendCampaignIntroEmailAction(leadId, formData, {
+    isThisClient: isTeknokraftClient,
+    wrongClientError: "This email can only be sent for a Teknokraft Canada Inc. lead.",
+    templateKey: "teknokraft_intro",
+    activityType: "teknokraft_intro_sent",
+    activityLabel: "Teknokraft Canada Inc. intro",
+  });
+}
+
+export async function sendHidebrandtIntroEmailAction(leadId: string, formData: FormData): Promise<SendLeadgenEmailResult> {
+  return sendCampaignIntroEmailAction(leadId, formData, {
+    isThisClient: isHidebrandtClient,
+    wrongClientError: "This email can only be sent for a Hidebrandt Web Services lead.",
+    templateKey: "hidebrandt_intro",
+    activityType: "hidebrandt_intro_sent",
+    activityLabel: "Hidebrandt Web Services intro",
+  });
 }

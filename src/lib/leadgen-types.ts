@@ -487,6 +487,9 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "appointment_reminder_sent",
   "appointment_reminder_auto_sent",
   "mantra_collab_intro_sent",
+  "web6_solutions_intro_sent",
+  "teknokraft_intro_sent",
+  "hidebrandt_intro_sent",
   "opportunity_created",
   "opportunity_outcome_changed",
 ] as const;
@@ -511,6 +514,9 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   appointment_reminder_sent: "Appointment reminder sent",
   appointment_reminder_auto_sent: "Automatic 24-hour appointment reminder sent",
   mantra_collab_intro_sent: "Mantra Collab intro email sent",
+  web6_solutions_intro_sent: "Web6 Solutions intro email sent",
+  teknokraft_intro_sent: "Teknokraft Canada Inc. intro email sent",
+  hidebrandt_intro_sent: "Hidebrandt Web Services intro email sent",
   opportunity_created: "Added to pipeline",
   opportunity_outcome_changed: "Pipeline outcome updated",
 };
@@ -759,6 +765,24 @@ export function isHiddenLeadgenCampaignName(name: string | null | undefined): bo
 // matched by slug, same style as isLeadgenBrentsEssentials below.
 export function isMantraCollabClient(client: Pick<LeadgenClientRow, "slug">): boolean {
   return client.slug.trim().toLowerCase() === "mantra-collab";
+}
+
+// Same one-client-one-hardcoded-intro-email pattern as
+// isMantraCollabClient above, for the three website-services clients
+// whose campaign emails carry client-specific copy rather than the
+// generic {{client_business_name}}-substituted consultation_information
+// template (see WEB6_SOLUTIONS_EMAIL_BODY/TEKNOKRAFT_EMAIL_BODY/
+// HIDEBRANDT_EMAIL_BODY in components/leadgen/LeadDetailClient.tsx).
+export function isWeb6SolutionsClient(client: Pick<LeadgenClientRow, "slug">): boolean {
+  return client.slug.trim().toLowerCase() === "web6-solutions";
+}
+
+export function isTeknokraftClient(client: Pick<LeadgenClientRow, "slug">): boolean {
+  return client.slug.trim().toLowerCase() === "teknokraft-canada";
+}
+
+export function isHidebrandtClient(client: Pick<LeadgenClientRow, "slug">): boolean {
+  return client.slug.trim().toLowerCase() === "hidebrandt-web-services";
 }
 
 export type LeadgenAppointmentNotificationRecipient = { email: string; name: string | null };
