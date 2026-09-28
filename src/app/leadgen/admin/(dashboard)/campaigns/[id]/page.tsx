@@ -13,6 +13,7 @@ import {
 } from "@/lib/leadgen-types";
 import CampaignDetailClient from "./CampaignDetailClient";
 import { buildLeadgenConversionFunnel, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
+import { getWebsiteLaunchReadiness, WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -38,6 +39,8 @@ export default async function LeadgenCampaignDetailPage({ params }: { params: Pr
 
   const bookingLink = client ? resolveSiteRelativeUrl((client as LeadgenClientRow).booking_link) : null;
   const conversionFunnel = buildLeadgenConversionFunnel((conversions ?? []) as Pick<LeadgenConversionRow, "conversion_status">[]);
+  const launchReadiness = client && WEBSITE_LAUNCH_CLIENTS.includes(client.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])
+    ? await getWebsiteLaunchReadiness(client.id) : null;
 
   return (
     <CampaignDetailClient
@@ -49,6 +52,7 @@ export default async function LeadgenCampaignDetailPage({ params }: { params: Pr
       assignedAgents={(assignedAgents ?? []) as LeadgenCampaignAgentRow[]}
       bookingLink={bookingLink}
       conversionFunnel={conversionFunnel}
+      launchReadiness={launchReadiness}
     />
   );
 }

@@ -10,7 +10,7 @@ export default async function NewLeadgenCallListSegmentPage() {
   const { data: campaigns } = await admin
     .from("leadgen_campaigns")
     .select("id, name, client_id")
-    .eq("status", "active")
+    .in("status", ["active", "paused"])
     .order("name");
   const campaignRows = (campaigns ?? []) as { id: string; name: string; client_id: string }[];
 

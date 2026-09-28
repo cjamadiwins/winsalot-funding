@@ -87,8 +87,8 @@ export async function uploadSegmentAction(formData: FormData): Promise<{ error: 
     .select("id, status, client_id")
     .eq("id", leadgenCampaignId)
     .maybeSingle();
-  if (!campaign || campaign.status !== "active") {
-    return { error: "Select a valid, active campaign." };
+  if (!campaign || !["active", "paused"].includes(campaign.status)) {
+    return { error: "Select a valid active or paused campaign for draft preparation." };
   }
   const { data: activeClient } = await supabaseAdmin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
   if (!activeClient) return { error: "This campaign's client is inactive." };

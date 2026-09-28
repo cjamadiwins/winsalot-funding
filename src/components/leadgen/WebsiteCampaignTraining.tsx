@@ -4,7 +4,7 @@ import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import type { LeadgenClientRow, LeadgenCampaignRow } from "@/lib/leadgen-types";
 
 type TrainingClient = Pick<LeadgenClientRow, "id" | "name" | "active" | "call_script_value_proposition" | "call_script_services" | "call_script_closing" | "call_script_notes" | "call_script_override">;
-type TrainingCampaign = Pick<LeadgenCampaignRow, "id" | "client_id" | "status" | "territory" | "description" | "service_type" | "qualification_criteria">;
+type TrainingCampaign = Pick<LeadgenCampaignRow, "id" | "client_id" | "status" | "start_date" | "territory" | "description" | "service_type" | "qualification_criteria">;
 
 export function WebsiteServicesCampaignTraining() {
   return (
@@ -41,9 +41,10 @@ export function WebsiteClientTrainingCard({ client, campaign, agentName, admin }
       </div>
       <p className="mt-2 text-sm text-slate-700"><strong>Client services:</strong> {client.call_script_services?.trim() || campaign.service_type || campaign.description || "See the client campaign for approved services."}</p>
       <p className="mt-1 text-sm text-slate-700"><strong>Target geography:</strong> {campaign.territory?.trim() || "See the client campaign for the approved territory."}</p>
+      <p className="mt-1 text-sm text-slate-700"><strong>Launch Date:</strong> {campaign.start_date || "September 29, 2026"}</p>
       <p className="mt-1 text-sm text-slate-700"><strong>Appointment Target:</strong> 8–12 appointments per campaign. This is a campaign goal, not guaranteed conversions or sales.</p>
       <p className="mt-3 text-sm font-semibold text-slate-900">Approved customized call script</p>
-      <div className="mt-2"><ClientCallScriptPanel script={script} compact /></div>
+      <div id={`website-script-${client.id}`} className="mt-2 scroll-mt-6"><ClientCallScriptPanel script={script} compact /></div>
       <p className="mt-3 text-sm text-slate-700"><strong>Qualified lead:</strong> {campaign.qualification_criteria?.length ? campaign.qualification_criteria.join("; ") : "A relevant business and decision maker or appropriate contact, genuine interest in the client’s services, and willingness to meet the client."}</p>
       <p className="mt-2 text-sm text-slate-700"><strong>Client-specific notes:</strong> {script.notes || campaign.description || "Review the client campaign before calling; use only approved services and pricing."}</p>
       {admin && <Link href={`/leadgen/admin/clients/${client.id}`} className="mt-3 inline-block text-sm font-semibold text-sky-700 hover:text-sky-800">Open client record</Link>}
