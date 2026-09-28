@@ -63,6 +63,8 @@ import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 import OperationsMonitoringCard from "@/components/crm-ui/OperationsMonitoringCard";
 import { fetchOperationsMonitoringSummary } from "@/lib/leadgen-monitoring-data";
+import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-react";
+import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -86,6 +88,8 @@ export default async function LeadgenAdminDashboardPage() {
     dncRows,
     { data: openShifts },
     operationsMonitoringSummary,
+    { data: conversions },
+    { count: paymentsTriggeredCount },
   ] = await Promise.all([
       admin
         .from("leadgen_leads")
@@ -140,6 +144,11 @@ export default async function LeadgenAdminDashboardPage() {
       admin.from("leadgen_agent_attendance").select("agent_id").is("clock_out", null),
       // Operations Monitoring dashboard card (below).
       fetchOperationsMonitoringSummary(admin),
+      // Conversion Tracking summary cards (below) - every conversion
+      // record, filtered/counted in JS same as every other dashboard card
+      // on this page.
+      admin.from("leadgen_conversions").select("id, conversion_status, admin_verification_status, conversion_status_set_at, created_at"),
+      admin.from("leadgen_conversion_payment_triggers").select("id", { count: "exact", head: true }),
     ]);
 
   const allLeads = leads ?? [];
@@ -161,6 +170,23 @@ export default async function LeadgenAdminDashboardPage() {
   const countableAppointments = allAppointments.filter((a) => isLeadgenAppointmentCountable(a.status));
 
   const trends = computeLeadgenDashboardTrends(allLeads, now);
+
+  // Conversion Tracking summary (brief "DASHBOARD / REPORTING") - a
+  // compact addition to the existing dashboard, not a redesign. "This
+  // Month" uses conversion_status_set_at when set (the moment Admin last
+  // changed the pipeline stage) falling back to created_at for a record
+  // nobody has touched yet, so a brand-new appointment-triggered row still
+  // counts as activity "this month".
+  const allConversions = (conversions ?? []) as Pick<LeadgenConversionRow, "id" | "conversion_status" | "admin_verification_status" | "conversion_status_set_at" | "created_at">[];
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const conversionSummary = {
+    conversionsThisMonth: allConversions.filter((c) => new Date(c.conversion_status_set_at ?? c.created_at) >= monthStart).length,
+    pendingVerification: allConversions.filter((c) => c.admin_verification_status === "pending_admin_verification").length,
+    convertedPaid: allConversions.filter((c) => c.conversion_status === "converted_paid").length,
+    convertedPending: allConversions.filter((c) => c.conversion_status === "converted_payment_pending").length,
+    notConverted: allConversions.filter((c) => c.conversion_status === "not_converted").length,
+    paymentsTriggered: paymentsTriggeredCount ?? 0,
+  };
 
   // Opportunity Pipeline summary card (below) - stage counts from the
   // same allLeads array already fetched above, no new query.
@@ -334,6 +360,23 @@ export default async function LeadgenAdminDashboardPage() {
         categories={operationsMonitoringSummary.categories.map((c) => ({ key: c.key, label: c.label, headline: c.headline, status: c.status }))}
         href="/leadgen/admin/monitoring"
       />
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-indigo-700">Conversion Tracking</h2>
+          <Link href="/leadgen/admin/conversions" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+            View all conversions
+          </Link>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <KpiCard label="Conversions This Month" value={conversionSummary.conversionsThisMonth} icon={<TrendingUp />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.conversionsThisMonth} href="/leadgen/admin/conversions" />
+          <KpiCard label="Pending Verification" value={conversionSummary.pendingVerification} icon={<Clock />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.pendingVerification} href="/leadgen/admin/conversions?filter=pending" />
+          <KpiCard label="Converted – Paid" value={conversionSummary.convertedPaid} icon={<CheckCircle2 />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.convertedPaid} href="/leadgen/admin/conversions?filter=converted_paid" />
+          <KpiCard label="Converted – Payment Pending" value={conversionSummary.convertedPending} icon={<HandCoins />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.convertedPending} href="/leadgen/admin/conversions?filter=converted_payment_pending" />
+          <KpiCard label="Not Converted" value={conversionSummary.notConverted} icon={<XCircle />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.notConverted} href="/leadgen/admin/conversions?filter=not_converted" />
+          <KpiCard label="Performance Payments Triggered" value={conversionSummary.paymentsTriggered} icon={<Receipt />} tone={LEADGEN_CONVERSION_DASHBOARD_TONE.paymentsTriggered} href="/leadgen/admin/conversions" />
+        </div>
+      </section>
+
       <ApprovedVoicemailScriptCard agentName={adminUser.full_name || adminUser.email} email={adminUser.email} role={adminUser.role} />
 
       <PhoneReputationComplianceCard />

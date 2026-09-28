@@ -24,6 +24,7 @@ import {
   Target,
   Table2,
   ShieldAlert,
+  TrendingUp,
 } from "lucide-react";
 import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -36,6 +37,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Opportunity Finder", href: "/leadgen/admin/opportunity-finder", icon: <Target /> },
   { label: "Call List Segments", href: "/leadgen/admin/call-list-segments", icon: <Table2 /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
+  { label: "Conversions", href: "/leadgen/admin/conversions", icon: <TrendingUp /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
   { label: "Call Logs", href: "/leadgen/admin/performance/call-notes", icon: <PhoneCall /> },
   { label: "Dialpad Performance", href: "/leadgen/admin/dialpad", icon: <PhoneCall /> },
@@ -53,13 +55,16 @@ const NAV_ITEMS: CrmNavItem[] = [
 export default async function LeadgenAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireLeadgenAdmin();
   const supabase = await createSupabaseServerClient();
-  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadMonitoringCount }] = await Promise.all([
+  const [{ data: notifications }, { count: pendingLeaveCount }, chatUnreadCount, { count: unreadMonitoringCount }, { count: pendingConversionCount }] = await Promise.all([
     supabase.from("leadgen_notifications").select("*").order("created_at", { ascending: false }).limit(20),
     supabase.from("leadgen_leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     loadLeadgenChatUnreadCount(supabase, user.id),
     // Operations Monitoring badge - unread escalation notifications the
     // cron sweep wrote (leadgen-monitoring-notifications.ts).
     supabase.from("leadgen_notifications").select("id", { count: "exact", head: true }).eq("is_read", false).ilike("link_path", "/leadgen/admin/monitoring%"),
+    // Conversion Tracking badge - client-reported conversions awaiting
+    // Admin confirm/reject (see supabase/migrations/20260928020000_leadgen_conversion_tracking.sql).
+    supabase.from("leadgen_conversions").select("id", { count: "exact", head: true }).eq("admin_verification_status", "pending_admin_verification"),
   ]);
 
   // Stays visible until every pending request has been approved or
@@ -69,6 +74,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
     if (item.href === "/leadgen/admin/leave-requests") return { ...item, badgeCount: pendingLeaveCount ?? 0 };
     if (item.href === "/leadgen/admin/chat") return { ...item, badgeCount: chatUnreadCount };
     if (item.href === "/leadgen/admin/monitoring") return { ...item, badgeCount: unreadMonitoringCount ?? 0 };
+    if (item.href === "/leadgen/admin/conversions") return { ...item, badgeCount: pendingConversionCount ?? 0 };
     return item;
   });
 

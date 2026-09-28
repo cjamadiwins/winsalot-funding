@@ -15,6 +15,7 @@ import {
 } from "@/lib/leadgen-types";
 import KpiCard from "@/components/crm-ui/KpiCard";
 import { assignCampaignAgentsAction, updateCampaignAction } from "../../actions";
+import type { LeadgenConversionFunnel } from "@/lib/leadgen-conversions";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
 
@@ -26,6 +27,7 @@ export default function CampaignDetailClient({
   agents,
   assignedAgents,
   bookingLink,
+  conversionFunnel,
 }: {
   campaign: LeadgenCampaignRow;
   client: LeadgenClientRow;
@@ -42,6 +44,11 @@ export default function CampaignDetailClient({
   // an absolute URL (see resolveSiteRelativeUrl) - copyable so an agent
   // can send it manually.
   bookingLink: string | null;
+  // Post-appointment Conversion Tracking funnel (brief "CLIENT CAMPAIGN
+  // VIEW") - a separate, additive metric from the "Conversion Rate" KPI
+  // card above (lead-to-appointment), based on actual confirmed paying
+  // customers rather than merely appointments.
+  conversionFunnel: LeadgenConversionFunnel;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -172,6 +179,25 @@ export default function CampaignDetailClient({
         ) : (
           <p className="mt-2.5 text-[13px] text-slate-500">No booking link configured for {client.name} yet - add one in Client Settings.</p>
         )}
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-indigo-700">Post-Appointment Conversion Funnel</h2>
+        <p className="mt-1 text-[12.5px] text-slate-500">
+          Conversion Rate here is based on actual Admin-confirmed paying customers, not merely appointments booked.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <KpiCard label="Appointments Booked" value={String(conversionFunnel.appointmentsBooked)} tone="blue" icon={<CalendarCheck />} />
+          <KpiCard label="Appointments Attended" value={String(conversionFunnel.appointmentsAttended)} tone="indigo" icon={<CheckCircle2 />} />
+          <KpiCard label="Proposals / Quotes" value={String(conversionFunnel.proposalsSent)} tone="amber" icon={<Target />} />
+          <KpiCard label="Converted Customers" value={String(conversionFunnel.convertedCustomers)} tone="green" icon={<Star />} />
+          <KpiCard
+            label="Conversion Rate"
+            value={conversionFunnel.conversionRatePercent != null ? `${conversionFunnel.conversionRatePercent}%` : "—"}
+            tone="purple"
+            icon={<Percent />}
+          />
+        </div>
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
