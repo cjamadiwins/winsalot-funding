@@ -6,8 +6,8 @@ import { LEADGEN_OPPORTUNITY_OUTCOMES, type LeadgenOpportunityOutcome } from "@/
 
 type ActionResult = { error?: string };
 
-const selectClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-[12.5px] text-slate-900";
-const inputClass = "w-28 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[12.5px] text-slate-900";
+const selectClass = "rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900";
+const inputClass = "w-28 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900";
 
 // "Client Consultation Outcome" (brief section 6) - the only part of a
 // leadgen_client_opportunities row a client can ever change, enforced at
@@ -65,10 +65,10 @@ export default function PipelineOutcomeForm({
           <input type="number" step="0.01" min="0" name="deal_value" placeholder="Deal value (optional)" defaultValue={currentDealValue ?? ""} className={inputClass} />
         </>
       )}
-      <button type="submit" disabled={isPending} className="rounded-full bg-indigo-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+      <button type="submit" disabled={isPending} className="rounded-full bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
         Save
       </button>
-      {error && <p className="w-full text-[12px] text-red-600">{error}</p>}
+      {error && <p className="w-full text-sm text-red-600">{error}</p>}
     </form>
   );
 }

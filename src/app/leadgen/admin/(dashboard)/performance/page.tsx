@@ -232,7 +232,7 @@ export default async function LeadgenAdminPerformancePage() {
 
       <div className="mt-6 space-y-6">
         {allAgents.length === 0 ? (
-          <p className="text-[13.5px] text-slate-500">No active agents yet.</p>
+          <p className="text-sm text-slate-500">No active agents yet.</p>
         ) : (
           allAgents.map((agent) => {
             const agentName = agent.full_name || agent.email;

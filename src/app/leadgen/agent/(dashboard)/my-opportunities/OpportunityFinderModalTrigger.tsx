@@ -82,11 +82,11 @@ export default function OpportunityFinderModalTrigger({
             <Sparkles className="h-5 w-5" />
           </span>
           <div>
-            <div className="text-[16px] font-bold text-slate-900">Opportunity Finder</div>
-            <div className="mt-0.5 text-[12.5px] text-slate-600">Your own leads ranked 0-100, without leaving your dashboard.</div>
+            <div className="text-base font-bold text-slate-900">Opportunity Finder</div>
+            <div className="mt-0.5 text-sm text-slate-600">Your own leads ranked 0-100, without leaving your dashboard.</div>
           </div>
         </div>
-        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-[12px] font-bold text-red-800">
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-sm font-bold text-red-800">
           <PhoneCall className="h-3.5 w-3.5" /> {hotCount} Hot
         </span>
       </button>
@@ -98,15 +98,15 @@ export default function OpportunityFinderModalTrigger({
         subtitle={selectedId ? undefined : "Your own leads ranked 0-100, with why the CRM flagged each one and what to do next."}
         headerLeft={
           selectedId ? (
-            <button type="button" onClick={backToList} className="text-[13px] font-semibold text-sky-600 hover:text-sky-700">
+            <button type="button" onClick={backToList} className="text-sm font-semibold text-sky-600 hover:text-sky-700">
               ← Back to Opportunities
             </button>
           ) : undefined
         }
         footer={
           <>
-            <span className="text-[12px] text-slate-500">{rows.length} scored opportunit{rows.length === 1 ? "y" : "ies"}</span>
-            <button type="button" onClick={close} className="rounded-lg bg-slate-900 px-4 py-2 text-[12.5px] font-semibold text-white">
+            <span className="text-sm text-slate-500">{rows.length} scored opportunit{rows.length === 1 ? "y" : "ies"}</span>
+            <button type="button" onClick={close} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
               Close
             </button>
           </>
@@ -123,16 +123,16 @@ export default function OpportunityFinderModalTrigger({
                 <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-lg font-extrabold text-slate-900">{detail.score.score}</span>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(detail.score)]}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${OPPORTUNITY_CATEGORY_STYLES[effectiveOpportunityCategory(detail.score)]}`}>
                       {OPPORTUNITY_CATEGORY_LABELS[effectiveOpportunityCategory(detail.score)]}
                     </span>
                   </div>
-                  <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] text-slate-600">
+                  <ul className="mt-2 list-disc space-y-0.5 pl-4 text-sm text-slate-600">
                     {detail.score.reasons.slice(0, 3).map((reason, i) => (
                       <li key={i}>{reason}</li>
                     ))}
                   </ul>
-                  <div className="mt-2 text-[12.5px] font-semibold text-slate-800">{detail.score.recommended_action}</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-800">{detail.score.recommended_action}</div>
                 </div>
               )}
               <LeadDetailClient

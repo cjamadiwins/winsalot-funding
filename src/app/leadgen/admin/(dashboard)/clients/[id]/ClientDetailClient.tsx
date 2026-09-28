@@ -26,7 +26,7 @@ import KpiCard from "@/components/crm-ui/KpiCard";
 import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
 
-const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[14px] text-slate-900";
+const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default function ClientDetailClient({
   client,
@@ -83,8 +83,8 @@ export default function ClientDetailClient({
       <RefreshOnFocus />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-        <p className="text-[13.5px] font-semibold text-sky-800">Viewing {client.name}</p>
-        <Link href="/leadgen/admin/clients" className="text-[13px] font-semibold text-sky-700 hover:text-sky-900">
+        <p className="text-sm font-semibold text-sky-800">Viewing {client.name}</p>
+        <Link href="/leadgen/admin/clients" className="text-sm font-semibold text-sky-700 hover:text-sky-900">
           ← Back to All Clients
         </Link>
       </div>
@@ -100,21 +100,21 @@ export default function ClientDetailClient({
         <div className="flex flex-wrap gap-2.5">
           <Link
             href={`/leadgen/admin/clients/${client.id}/reports`}
-            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13.5px] font-bold text-indigo-700 transition hover:bg-indigo-100"
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
           >
             <BarChart3 className="h-4 w-4" strokeWidth={2.3} />
             Client Report
           </Link>
           <Link
             href={`/leadgen/admin/leads?client=${client.id}&openAdd=1`}
-            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
+            className="flex items-center gap-2 rounded-[11px] bg-[var(--crm-accent,#3e7ef7)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--crm-accent-hover,#2e63d6)]"
           >
             <UserPlus className="h-4 w-4" strokeWidth={2.3} />
             Add Lead
           </Link>
           <Link
             href={`/leadgen/admin/appointments?client=${client.id}&openAdd=1`}
-            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-[13.5px] font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
+            className="flex items-center gap-2 rounded-[11px] border-[1.5px] border-[var(--crm-accent,#3e7ef7)]/30 bg-white px-4 py-2.5 text-sm font-bold text-[var(--crm-accent,#3e7ef7)] transition hover:bg-[var(--crm-bg-2,#eaf0f6)]"
           >
             <CalendarPlus className="h-4 w-4" strokeWidth={2.3} />
             Book Appointment
@@ -165,8 +165,8 @@ export default function ClientDetailClient({
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Client Information</h2>
-            <button type="button" onClick={() => setEditingClient((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Client Information</h2>
+            <button type="button" onClick={() => setEditingClient((v) => !v)} className="text-sm font-semibold text-sky-600">
               {editingClient ? "Cancel" : "Edit"}
             </button>
           </div>
@@ -179,35 +179,35 @@ export default function ClientDetailClient({
               className="mt-4 space-y-3"
             >
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Client Name</span>
+                <span className="text-sm font-semibold text-slate-600">Client Name</span>
                 <input name="name" required defaultValue={client.name} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">URL Slug</span>
+                <span className="text-sm font-semibold text-slate-600">URL Slug</span>
                 <input name="slug" required defaultValue={client.slug} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Contact Name</span>
+                <span className="text-sm font-semibold text-slate-600">Contact Name</span>
                 <input name="contact_name" defaultValue={client.contact_name ?? ""} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Contact Email</span>
+                <span className="text-sm font-semibold text-slate-600">Contact Email</span>
                 <input name="contact_email" type="email" defaultValue={client.contact_email ?? ""} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Contact Phone</span>
+                <span className="text-sm font-semibold text-slate-600">Contact Phone</span>
                 <input name="contact_phone" defaultValue={client.contact_phone ?? ""} className={inputClass} />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Consultation Booking Link</span>
+                <span className="text-sm font-semibold text-slate-600">Consultation Booking Link</span>
                 <input name="booking_link" type="url" placeholder="https://calendly.com/…" defaultValue={client.booking_link ?? ""} className={inputClass} />
-                <span className="text-[12px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   The &ldquo;Book a Free 15-Minute Consultation&rdquo; button in every consultation email opens this link directly (e.g. a
                   Calendly page) in a new tab. Leave blank to have those emails ask the prospect to reply instead of showing a broken link.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Services Information Link</span>
+                <span className="text-sm font-semibold text-slate-600">Services Information Link</span>
                 <input
                   name="services_info_link"
                   type="url"
@@ -215,13 +215,13 @@ export default function ClientDetailClient({
                   defaultValue={client.services_info_link ?? ""}
                   className={inputClass}
                 />
-                <span className="text-[12px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   Optional second button (&ldquo;LEARN MORE ABOUT {client.name.toUpperCase()} SERVICES&rdquo;) in consultation emails. Left out
                   of the email entirely when blank.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Calendly Event Type URI (optional)</span>
+                <span className="text-sm font-semibold text-slate-600">Calendly Event Type URI (optional)</span>
                 <input
                   name="calendly_event_type_uri"
                   type="url"
@@ -229,27 +229,27 @@ export default function ClientDetailClient({
                   defaultValue={client.calendly_event_type_uri ?? ""}
                   className={inputClass}
                 />
-                <span className="text-[12px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   Matches an incoming Calendly booking webhook to this client. Only needed once more than one client uses Calendly - find it in
                   the payload of a test booking, under <code>payload.scheduled_event.event_type</code>.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Appointment Notification Emails</span>
+                <span className="text-sm font-semibold text-slate-600">Appointment Notification Emails</span>
                 <textarea
                   name="appointment_notification_emails"
                   placeholder={"e.g. vikas@mantracollab.com, praveen@mantracollab.com"}
                   defaultValue={(client.appointment_notification_emails ?? []).join(", ")}
                   className={`${inputClass} min-h-[50px] resize-y`}
                 />
-                <span className="text-[12px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   Who gets the immediate email when one of this client&apos;s appointments is booked, plus the 24-hour and 1-hour reminders
                   before it. Comma or newline-separated - supports more than one person. Leave blank to fall back to the single Contact Email
                   above.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Client SMS Notification Number</span>
+                <span className="text-sm font-semibold text-slate-600">Client SMS Notification Number</span>
                 <input
                   name="sms_notification_number"
                   type="tel"
@@ -257,26 +257,26 @@ export default function ClientDetailClient({
                   defaultValue={client.sms_notification_number ?? ""}
                   className={inputClass}
                 />
-                <span className="text-[12px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   The SMS equivalent of Appointment Notification Emails above: this number gets a text the moment one of this client&apos;s
                   appointments is booked, plus the 24-hour and 1-hour reminders before it. Leave blank to skip SMS for this client - the
                   booking flow and every other notification are unaffected either way.
                 </span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-slate-600">Internal Notes</span>
+                <span className="text-sm font-semibold text-slate-600">Internal Notes</span>
                 <textarea name="notes" defaultValue={client.notes ?? ""} className={`${inputClass} min-h-[60px] resize-y`} />
               </label>
-              <label className="flex items-center gap-2 text-[13.5px]">
+              <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="active" value="true" defaultChecked={client.active} />
                 Active client
               </label>
-              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
                 Save
               </button>
             </form>
           ) : (
-            <dl className="mt-4 space-y-2 text-[14px]">
+            <dl className="mt-4 space-y-2 text-sm">
               <Row label="Contact" value={client.contact_name} />
               {client.contact_email && (
                 <div className="flex justify-between gap-4">
@@ -285,12 +285,12 @@ export default function ClientDetailClient({
                     {client.contact_email}
                     {isBounced(client.contact_email) && (
                       <div className="mt-1 flex items-center justify-end gap-2">
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">⚠ Bounced</span>
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-sm font-semibold text-rose-700">⚠ Bounced</span>
                         <button
                           type="button"
                           disabled={isPending}
                           onClick={() => runAction(() => clearBouncedEmailAction(client.contact_email!))}
-                          className="text-[11px] font-semibold text-sky-600 hover:text-sky-700"
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700"
                         >
                           Clear &amp; Approve
                         </button>
@@ -317,8 +317,8 @@ export default function ClientDetailClient({
 
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaigns</h2>
-            <button type="button" onClick={() => setShowCampaignForm((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Campaigns</h2>
+            <button type="button" onClick={() => setShowCampaignForm((v) => !v)} className="text-sm font-semibold text-sky-600">
               {showCampaignForm ? "Cancel" : "+ Add Campaign"}
             </button>
           </div>
@@ -335,14 +335,14 @@ export default function ClientDetailClient({
                 <input name="start_date" type="date" className={inputClass} />
                 <input name="end_date" type="date" className={inputClass} />
               </div>
-              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-sky-700">
+              <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
                 Create Campaign
               </button>
             </form>
           )}
 
           {campaigns.length === 0 ? (
-            <p className="mt-3 text-[13.5px] text-slate-500">No campaigns yet.</p>
+            <p className="mt-3 text-sm text-slate-500">No campaigns yet.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {campaigns.map((campaign) => (
@@ -351,11 +351,11 @@ export default function ClientDetailClient({
                     <Link href={`/leadgen/admin/campaigns/${campaign.id}`} className="font-semibold text-sky-600 hover:text-sky-700">
                       {campaign.name}
                     </Link>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 capitalize">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700 capitalize">
                       {campaign.status}
                     </span>
                   </div>
-                  <p className="mt-1 text-[12.5px] text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     {leadCountByCampaign[campaign.id] ?? 0} leads · {appointmentCountByCampaign[campaign.id] ?? 0} appointments
                   </p>
                 </li>
@@ -367,8 +367,8 @@ export default function ClientDetailClient({
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-sky-700">Client Call Script</h2>
-          <button type="button" onClick={() => setEditingScript((v) => !v)} className="text-[12.5px] font-semibold text-sky-600">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Client Call Script</h2>
+          <button type="button" onClick={() => setEditingScript((v) => !v)} className="text-sm font-semibold text-sky-600">
             {editingScript ? "Cancel" : "Edit Script"}
           </button>
         </div>
@@ -379,30 +379,30 @@ export default function ClientDetailClient({
             className="mt-4 space-y-3"
           >
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Short Opening / Value Proposition</span>
+              <span className="text-sm font-semibold text-slate-600">Short Opening / Value Proposition</span>
               <textarea
                 name="call_script_value_proposition"
                 placeholder="We help businesses improve or build their website and generate more customer inquiries through SEO."
                 defaultValue={client.call_script_value_proposition ?? ""}
                 className={`${inputClass} min-h-[60px] resize-y`}
               />
-              <span className="text-[12px] text-slate-500">Replaces the generic sentence in the Opening. Leave blank to use the default wording.</span>
+              <span className="text-sm text-slate-500">Replaces the generic sentence in the Opening. Leave blank to use the default wording.</span>
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Services Offered</span>
+              <span className="text-sm font-semibold text-slate-600">Services Offered</span>
               <textarea
                 name="call_script_services"
                 placeholder="e.g. website design or redesign, website maintenance, hosting, e-commerce and SEO"
                 defaultValue={client.call_script_services ?? ""}
                 className={`${inputClass} min-h-[60px] resize-y`}
               />
-              <span className="text-[12px] text-slate-500">
+              <span className="text-sm text-slate-500">
                 Fills in &ldquo;[Client Business Name] can help with…&rdquo; in the If Interested section - only list what this specific client
                 actually offers.
               </span>
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Optional Appointment Closing</span>
+              <span className="text-sm font-semibold text-slate-600">Optional Appointment Closing</span>
               <textarea
                 name="call_script_closing"
                 placeholder="Optional closing line, e.g. a specific objection response or booking reminder."
@@ -411,7 +411,7 @@ export default function ClientDetailClient({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Internal Agent Notes</span>
+              <span className="text-sm font-semibold text-slate-600">Internal Agent Notes</span>
               <textarea
                 name="call_script_notes"
                 placeholder="Notes for the agent only - never read aloud to the prospect."
@@ -420,18 +420,18 @@ export default function ClientDetailClient({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Client Call Script (full override, optional)</span>
+              <span className="text-sm font-semibold text-slate-600">Client Call Script (full override, optional)</span>
               <textarea
                 name="call_script_override"
                 placeholder="Leave blank to use the standard Opening / If Interested template built from the fields above. If filled in, this replaces the entire script."
                 defaultValue={client.call_script_override ?? ""}
                 className={`${inputClass} min-h-[120px] resize-y`}
               />
-              <span className="text-[12px] text-slate-500">
+              <span className="text-sm text-slate-500">
                 You can use [Agent Name], [Client Business Name], [Prospect Business Name], and [Client-Specific Services] anywhere in this text.
               </span>
             </label>
-            <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+            <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
               Save
             </button>
           </form>
@@ -540,11 +540,11 @@ function CommunicationsSection({
   return (
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Communications</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Communications</h2>
         <button
           type="button"
           onClick={() => setShowComposer(!showComposer)}
-          className="rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-sky-700"
+          className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
         >
           {showComposer ? "Cancel" : "+ Draft New Email"}
         </button>
@@ -565,7 +565,7 @@ function CommunicationsSection({
           className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4"
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Start from a Template (optional)</span>
+            <span className="text-sm font-semibold text-slate-600">Start from a Template (optional)</span>
             <select value={selectedTemplate} onChange={(e) => applyTemplate(e.target.value)} className={inputClass}>
               <option value="">Blank email</option>
               {composerTemplates.map((t) => (
@@ -580,11 +580,11 @@ function CommunicationsSection({
           <input type="hidden" name="services_url" value={servicesUrl} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">To</span>
+              <span className="text-sm font-semibold text-slate-600">To</span>
               <input name="to_email" type="email" required defaultValue={client.contact_email ?? ""} className={inputClass} />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-600">Campaign (optional)</span>
+              <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
               <select name="campaign_id" className={inputClass} defaultValue="">
                 <option value="">No specific campaign</option>
                 {campaigns.map((c) => (
@@ -596,11 +596,11 @@ function CommunicationsSection({
             </label>
           </div>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Subject</span>
+            <span className="text-sm font-semibold text-slate-600">Subject</span>
             <input name="subject" required value={subject} onChange={(e) => setSubject(e.target.value)} className={inputClass} />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-slate-600">Message</span>
+            <span className="text-sm font-semibold text-slate-600">Message</span>
             <textarea
               name="body"
               required
@@ -609,7 +609,7 @@ function CommunicationsSection({
               className={`${inputClass} min-h-[160px] resize-y`}
             />
           </label>
-          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-sky-700">
+          <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
             {isPending ? "Sending…" : "Send Email"}
           </button>
         </form>
@@ -635,12 +635,12 @@ function CommunicationsSection({
       </div>
 
       {filtered.length === 0 ? (
-        <p className="mt-4 text-[13.5px] text-slate-500">No emails sent to this client yet.</p>
+        <p className="mt-4 text-sm text-slate-500">No emails sent to this client yet.</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[600px] text-left text-[13px]">
+          <table className="w-full min-w-[600px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-sm font-semibold uppercase text-slate-500">
                 <th className="py-2 pr-3">Date</th>
                 <th className="py-2 pr-3">To</th>
                 <th className="py-2 pr-3">Subject</th>
@@ -657,14 +657,14 @@ function CommunicationsSection({
                     <td className="py-2 pr-3 text-slate-600">{new Date(email.created_at).toLocaleString()}</td>
                     <td className="py-2 pr-3">
                       {email.to_email}
-                      {isBounced(email.to_email) && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠</span>}
+                      {isBounced(email.to_email) && <span className="ml-1.5 text-sm font-semibold text-rose-600">⚠</span>}
                     </td>
                     <td className="py-2 pr-3 max-w-[220px] truncate">{email.subject}</td>
                     <td className="py-2 pr-3">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>
                         {LEADGEN_EMAIL_STATUS_LABELS[email.status]}
                       </span>
-                      {reason && <div className="mt-1 max-w-[220px] text-[11px] text-slate-500">{reason}</div>}
+                      {reason && <div className="mt-1 max-w-[220px] text-sm text-slate-500">{reason}</div>}
                     </td>
                     <td className="py-2 pr-3 text-slate-500">{new Date(leadgenEmailStatusAt(email)).toLocaleString()}</td>
                     <td className="py-2 pr-3">
@@ -673,7 +673,7 @@ function CommunicationsSection({
                           type="button"
                           disabled={isPending}
                           onClick={() => runAction(() => resendLeadgenEmailAction(email.id))}
-                          className="text-[12px] font-semibold text-sky-600 hover:text-sky-700"
+                          className="text-sm font-semibold text-sky-600 hover:text-sky-700"
                         >
                           Resend
                         </button>

@@ -28,26 +28,26 @@ export default function ClientCallScriptPanel({ script, compact = false }: { scr
   return (
     <div className={`rounded-xl border border-sky-200 bg-sky-50/60 ${compact ? "p-3" : "p-4"}`}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-sky-700">
           {script.isCustomOverride ? "Complete Call Script" : "Call Script"}
         </h3>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-sky-700 transition hover:bg-sky-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
         >
           <Copy className="h-3 w-3" strokeWidth={2.5} />
           {copied ? "Copied!" : "Copy Script"}
         </button>
       </div>
 
-      <div className={`mt-2.5 space-y-2.5 text-[13.5px] leading-6 text-slate-800 ${compact ? "text-[13px] leading-[1.4]" : ""}`}>
+      <div className={`mt-2.5 space-y-2.5 text-sm leading-6 text-slate-800 ${compact ? "text-sm leading-[1.4]" : ""}`}>
         {script.isCustomOverride ? (
           <p className="whitespace-pre-wrap">{script.fullText}</p>
         ) : (
           <>
             <div>
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Opening</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening</p>
               {script.opening?.map((line, i) => (
                 <p key={i} className="mt-0.5">
                   &ldquo;{line}&rdquo;
@@ -56,13 +56,13 @@ export default function ClientCallScriptPanel({ script, compact = false }: { scr
             </div>
             {script.ifInterested && (
               <div>
-                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">If Interested</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">If Interested</p>
                 <p className="mt-0.5">&ldquo;{script.ifInterested}&rdquo;</p>
               </div>
             )}
             {script.closing && (
               <div>
-                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">Closing</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Closing</p>
                 <p className="mt-0.5">&ldquo;{script.closing}&rdquo;</p>
               </div>
             )}
@@ -72,8 +72,8 @@ export default function ClientCallScriptPanel({ script, compact = false }: { scr
 
       {script.notes && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Internal Agent Notes — not for the prospect</p>
-          <p className="mt-1 whitespace-pre-wrap text-[13px] text-amber-900">{script.notes}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Internal Agent Notes — not for the prospect</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">{script.notes}</p>
         </div>
       )}
     </div>

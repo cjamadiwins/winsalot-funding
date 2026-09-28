@@ -32,7 +32,7 @@ const PERIOD_LABEL: Record<"current" | "future", string> = {
 };
 const PERIOD_BADGE_CLASS = "bg-slate-100 text-slate-500";
 
-const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-[13.5px] text-slate-900";
+const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-sm text-slate-900";
 
 // Table of history spans a lot of months for an old dataset - cap how
 // far back the month picker/table reach so both stay a manageable size.
@@ -136,7 +136,7 @@ export default function MonthlyPerformanceSection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Monthly Performance</h2>
-          <p className="mt-1 text-[13px] text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             Permanently saved weekly results rolled up by month. The monthly goal is 4 appointments times the number of
             Monday-Friday weeks in the selected month that have begun - weeks that haven&apos;t started yet don&apos;t
             count against it yet.
@@ -179,11 +179,11 @@ export default function MonthlyPerformanceSection({
       </div>
 
       <div className="mt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Breakdown</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Weekly Breakdown</div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full min-w-[520px] text-left text-[12.5px]">
+          <table className="w-full min-w-[520px] text-left text-sm">
             <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Week</th>
                 <th className="p-2.5">Booked</th>
                 <th className="p-2.5">Target</th>
@@ -210,7 +210,7 @@ export default function MonthlyPerformanceSection({
                       <td className="p-2.5 text-slate-600">{week.target}</td>
                       <td className="p-2.5 text-slate-600">{isFuture ? "—" : `${week.percentage}%`}</td>
                       <td className="p-2.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${statusBadgeClass}`}>{statusLabel}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass}`}>{statusLabel}</span>
                       </td>
                     </tr>
                   );
@@ -222,11 +222,11 @@ export default function MonthlyPerformanceSection({
       </div>
 
       <div className="mt-6">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monthly History</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Monthly History</div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full min-w-[520px] text-left text-[12.5px]">
+          <table className="w-full min-w-[520px] text-left text-sm">
             <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Month</th>
                 <th className="p-2.5">Appointments Booked</th>
                 <th className="p-2.5">Monthly Goal</th>
@@ -251,7 +251,7 @@ export default function MonthlyPerformanceSection({
                     <td className="p-2.5 text-slate-600">{row.monthlyGoal}</td>
                     <td className="p-2.5 text-slate-600">{row.percentage}%</td>
                     <td className="p-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${style.badge}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.badge}`}>
                         {LEADGEN_PERFORMANCE_TIER_LABEL[tier]}
                       </span>
                     </td>
@@ -269,9 +269,9 @@ export default function MonthlyPerformanceSection({
 function Stat({ label, value, badgeClassName }: { label: string; value: string; badgeClassName?: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       {badgeClassName ? (
-        <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[15px] font-bold ${badgeClassName}`}>{value}</div>
+        <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-base font-bold ${badgeClassName}`}>{value}</div>
       ) : (
         <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
       )}

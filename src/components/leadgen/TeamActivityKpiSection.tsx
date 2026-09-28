@@ -59,12 +59,12 @@ export default function TeamActivityKpiSection({
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-      <h3 className="text-[15px] font-bold text-slate-900">Team Totals</h3>
-      <p className="mt-1 text-[12.5px] text-slate-500">
+      <h3 className="text-base font-bold text-slate-900">Team Totals</h3>
+      <p className="mt-1 text-sm text-slate-500">
         Across {team.agentCount} active agent{team.agentCount === 1 ? "" : "s"}.
       </p>
 
-      <h4 className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-sky-700">Activity</h4>
+      <h4 className="mt-4 text-sm font-semibold uppercase tracking-wide text-sky-700">Activity</h4>
       <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenCallLogRecordsModal
           label="Team Calls Today"
@@ -134,7 +134,7 @@ export default function TeamActivityKpiSection({
         />
       </div>
 
-      <h4 className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Results</h4>
+      <h4 className="mt-5 text-sm font-semibold uppercase tracking-wide text-emerald-700">Results</h4>
       <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <LeadgenLeadRecordsModal
           label="Total Interested Leads"

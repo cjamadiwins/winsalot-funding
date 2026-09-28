@@ -14,7 +14,7 @@ export default function CallLogTrainingContent() {
           normal lead workflow.
         </p>
 
-        <div className="mt-6 space-y-6 text-[14px] leading-7 text-slate-700 sm:text-[15px]">
+        <div className="mt-6 space-y-6 text-sm leading-7 text-slate-700 sm:text-base">
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <h2 className="text-base font-bold text-slate-900">How to log a call</h2>
             <ul className="mt-2 list-disc space-y-1.5 pl-5">

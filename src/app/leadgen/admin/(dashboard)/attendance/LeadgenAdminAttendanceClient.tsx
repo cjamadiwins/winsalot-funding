@@ -313,7 +313,7 @@ export default function LeadgenAdminAttendanceClient({
               <div className="flex items-center justify-between gap-2">
                 <div className="font-medium text-slate-900">{agent?.full_name || row.agent_name}</div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
                     liveStatus === "idle"
                       ? "bg-rose-100 text-rose-700"
                       : liveStatus === "on_break" || liveStatus === "on_lunch"
@@ -359,13 +359,13 @@ export default function LeadgenAdminAttendanceClient({
                 ? new Date(session.acknowledged_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
                 : "—";
               return (
-                <li key={session.id} className="px-4 py-2.5 text-[13px]">
+                <li key={session.id} className="px-4 py-2.5 text-sm">
                   <span className="font-medium text-slate-900">{agent?.full_name || agent?.email || "Unknown agent"}</span>
                   <span className="ml-2 text-slate-600">Idle duration: {session.idle_duration_minutes ?? "—"} min</span>
                   <span className="ml-2 text-slate-600">Reason: {reasonLabel}</span>
                   <span className="ml-2 text-slate-600">Acknowledged: {acknowledgedTime}</span>
                   {session.escalated_at && (
-                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Escalated</span>
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-sm font-semibold text-amber-800">Escalated</span>
                   )}
                   {session.acknowledged_explanation && (
                     <p className="mt-0.5 text-slate-500">{session.acknowledged_explanation}</p>

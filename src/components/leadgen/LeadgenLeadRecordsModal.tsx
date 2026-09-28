@@ -86,7 +86,7 @@ export default function LeadgenLeadRecordsModal({
       title={label}
       countLabel={`${records.length} matching lead${records.length === 1 ? "" : "s"}`}
     >
-      {error && <p className="my-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">{error}</p>}
+      {error && <p className="my-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       {records.length === 0 ? (
         <div className="py-12 text-center">
           <CircleCheck className="mx-auto h-8 w-8 text-emerald-500" />
@@ -106,20 +106,20 @@ export default function LeadgenLeadRecordsModal({
                       <Link href={detailHref} className="font-bold text-slate-900 hover:text-sky-700 hover:underline">
                         {record.business_name}
                       </Link>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${LEADGEN_LEAD_STATUS_STYLES[record.status]}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${LEADGEN_LEAD_STATUS_STYLES[record.status]}`}>
                         {record.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-[12.5px] text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {record.contact_name ? `${record.contact_name} · ` : ""}
                       {record.phone ?? "—"}
                       {record.email ? ` · ${record.email}` : ""}
                     </p>
-                    <p className="mt-1 text-[12.5px] text-slate-500">Agent: {record.agentName}</p>
+                    <p className="mt-1 text-sm text-slate-500">Agent: {record.agentName}</p>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-2 text-[12.5px] sm:grid-cols-3">
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                   <div className="rounded-lg bg-slate-50 p-2.5">
                     <span className="flex items-center gap-1 text-slate-400"><Phone className="h-3 w-3" /> Last Contact</span>
                     <div className="font-medium text-slate-700">{record.last_contacted_at ? formatDate(record.last_contacted_at) : "—"}</div>
@@ -146,13 +146,13 @@ export default function LeadgenLeadRecordsModal({
                 </div>
 
                 {record.latestNote && (
-                  <p className="mt-2 text-[12.5px] text-slate-600">
+                  <p className="mt-2 text-sm text-slate-600">
                     <span className="font-semibold text-slate-700">Latest note:</span> {record.latestNote}
                   </p>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <Link href={detailHref} className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700">
+                  <Link href={detailHref} className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                     View Prospect
                   </Link>
                   <button
@@ -161,11 +161,11 @@ export default function LeadgenLeadRecordsModal({
                       setNoteOpenId(noteOpenId === record.id ? null : record.id);
                       setNoteValue("");
                     }}
-                    className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700"
+                    className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
                   >
                     Add Note
                   </button>
-                  <Link href={detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-[11.5px] font-semibold text-slate-700">
+                  <Link href={detailHref} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">
                     Log Call
                   </Link>
                   {record.followUpId && onCompleteFollowUp && (
@@ -178,7 +178,7 @@ export default function LeadgenLeadRecordsModal({
                           () => setCompletedFollowUpIds((current) => new Set(current).add(record.followUpId!))
                         )
                       }
-                      className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {completedFollowUpIds.has(record.followUpId) ? "Follow-Up Completed" : "Complete Follow-Up"}
                     </button>
@@ -187,12 +187,12 @@ export default function LeadgenLeadRecordsModal({
                     <button
                       type="button"
                       onClick={() => setRescheduleOpenId(rescheduleOpenId === record.id ? null : record.id)}
-                      className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11.5px] font-semibold text-amber-700"
+                      className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"
                     >
                       {record.followUpId ? "Reschedule" : "Schedule Follow-Up"}
                     </button>
                   )}
-                  <Link href={detailHref} className="rounded-full border border-purple-300 bg-purple-50 px-3 py-1 text-[11.5px] font-semibold text-purple-700">
+                  <Link href={detailHref} className="rounded-full border border-purple-300 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
                     Book Appointment
                   </Link>
                 </div>
@@ -204,7 +204,7 @@ export default function LeadgenLeadRecordsModal({
                       value={noteValue}
                       onChange={(event) => setNoteValue(event.target.value)}
                       placeholder="Add a short note..."
-                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-[13px]"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     />
                     <button
                       type="button"
@@ -218,7 +218,7 @@ export default function LeadgenLeadRecordsModal({
                           }
                         )
                       }
-                      className="rounded-lg bg-sky-700 px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+                      className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
                     >
                       Save Note
                     </button>
@@ -236,14 +236,14 @@ export default function LeadgenLeadRecordsModal({
                     className="mt-2 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-end"
                   >
                     <label className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold text-slate-700">Note</span>
-                      <input name="note" placeholder="What happened on the call?" className="rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
+                      <span className="text-xs font-semibold text-slate-700">Note</span>
+                      <input name="note" placeholder="What happened on the call?" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold text-slate-700">Follow-up date &amp; time</span>
-                      <input type="datetime-local" name="scheduled_at" required className="rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
+                      <span className="text-xs font-semibold text-slate-700">Follow-up date &amp; time</span>
+                      <input type="datetime-local" name="scheduled_at" required className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                     </label>
-                    <button type="submit" disabled={isPending} className="rounded-lg bg-amber-600 px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40">
+                    <button type="submit" disabled={isPending} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
                       Save
                     </button>
                   </form>

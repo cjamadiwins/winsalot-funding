@@ -89,7 +89,7 @@ export default async function LeadgenLeadsPage({
         </div>
         <Link
           href="/leadgen/admin"
-          className="rounded-full border border-slate-300 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:border-slate-400"
+          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400"
         >
           ← Back to Dashboard
         </Link>

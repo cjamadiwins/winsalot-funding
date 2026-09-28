@@ -25,13 +25,13 @@ export function BrentsEssentialsCallScript({ agentFullName }: { agentFullName: s
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-sky-200 bg-sky-50 p-4 sm:p-5">
-        <h3 className="text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 1 — Identify the Business</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 1 — Identify the Business</h3>
         <p className="mt-2">
           &ldquo;Good morning/afternoon. May I please confirm that I&apos;m speaking with <strong>[Business Name]</strong>?&rdquo;
         </p>
         <p className="mt-1 italic text-slate-600">(Wait for confirmation.)</p>
 
-        <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 2 — Introduce Yourself</h3>
+        <h3 className="mt-5 text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 2 — Introduce Yourself</h3>
         <p className="mt-2">
           &ldquo;My name is <strong>{agentFullName}</strong>, and I&apos;m calling on behalf of <strong>Brent&apos;s Essentials</strong>.&rdquo;
         </p>
@@ -165,24 +165,24 @@ export function MantraCollabCallScript({ agentFullName }: { agentFullName: strin
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-sky-200 bg-sky-50 p-4 sm:p-5">
-        <h3 className="text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 1 — Identify the Business</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 1 — Identify the Business</h3>
         <p className="mt-2">
           &ldquo;Good morning/afternoon. May I please confirm that I&apos;m speaking with <strong>[Business Name]</strong>?&rdquo;
         </p>
         <p className="mt-1 italic text-slate-600">(Wait for confirmation.)</p>
 
-        <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 2 — Introduce Yourself</h3>
+        <h3 className="mt-5 text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 2 — Introduce Yourself</h3>
         <p className="mt-2">
           &ldquo;My name is <strong>{agentFullName}</strong>, and I&apos;m calling on behalf of <strong>Mantra Collab</strong>.&rdquo;
         </p>
 
-        <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 3 - Give the Reason for Calling</h3>
+        <h3 className="mt-5 text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 3 - Give the Reason for Calling</h3>
         <p className="mt-2">
           &ldquo;We help businesses improve or redesign their website so it better showcases their work, builds credibility, and helps
           turn visitors into customer inquiries.&rdquo;
         </p>
 
-        <h3 className="mt-5 text-[14px] font-bold uppercase tracking-wide text-slate-800 sm:text-[15px]">Step 4 - Request the Appointment</h3>
+        <h3 className="mt-5 text-sm font-bold uppercase tracking-wide text-slate-800 sm:text-base">Step 4 - Request the Appointment</h3>
         <p className="mt-2">
           &ldquo;I would like to schedule a short appointment for you to learn how Mantra Collab can help your business. Would{" "}
           <strong>[Day and Time]</strong> work for you?&rdquo;

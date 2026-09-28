@@ -128,7 +128,7 @@ export default function ResultsByAgentChart({
   }, [rows]);
 
   if (agents.length === 0) {
-    return <p className="mt-3 text-[13.5px] text-slate-500">No agents yet.</p>;
+    return <p className="mt-3 text-sm text-slate-500">No agents yet.</p>;
   }
 
   return (
@@ -140,7 +140,7 @@ export default function ResultsByAgentChart({
               key={option}
               type="button"
               onClick={() => setFilter(option)}
-              className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
                 filter === option ? "bg-[var(--crm-accent,#3e7ef7)] text-white" : "text-slate-500 hover:text-slate-900"
               }`}
             >
@@ -151,7 +151,7 @@ export default function ResultsByAgentChart({
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {METRICS.map((metric) => (
-            <span key={metric.key} className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-600">
+            <span key={metric.key} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
               <span className={`h-2.5 w-2.5 rounded-sm ${metric.dotClass}`} aria-hidden="true" />
               {metric.label}
             </span>
@@ -188,7 +188,7 @@ export default function ResultsByAgentChart({
           style={{ height: CHART_HEIGHT }}
         >
           {[4, 3, 2, 1, 0].map((step) => (
-            <span key={step} className="text-[10px] font-semibold text-slate-400">
+            <span key={step} className="text-xs font-semibold text-slate-400">
               {Math.round((axisMax * step) / 4)}
             </span>
           ))}
@@ -227,14 +227,14 @@ export default function ResultsByAgentChart({
           <div className="mt-2 flex items-start justify-around gap-2 px-2" style={{ minWidth: rows.length * 96 }}>
             {rows.map((row) => (
               <div key={row.agentId} className="flex w-24 flex-col items-center gap-1 text-center">
-                <Link href={buildLeadsHref(row.agentId)} className="truncate text-[12px] font-semibold text-slate-900 hover:text-sky-600">
+                <Link href={buildLeadsHref(row.agentId)} className="truncate text-sm font-semibold text-slate-900 hover:text-sky-600">
                   {row.agentName}
                 </Link>
                 <button
                   type="button"
                   onClick={() => setExpanded((current) => (current === row.agentId ? null : row.agentId))}
                   title={`${row.agentName} — Lead-to-Appointment Rate: ${formatConversionRate(row.leadToAppointmentRate)}`}
-                  className={`cursor-pointer rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition ${
+                  className={`cursor-pointer rounded-full px-2 py-0.5 text-xs font-semibold transition ${
                     expanded === row.agentId ? "bg-cyan-600 text-white" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                   }`}
                 >
@@ -265,7 +265,7 @@ export default function ResultsByAgentChart({
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5a623] shadow-sm">
             <Trophy className="h-4 w-4 text-white" strokeWidth={2.2} />
           </span>
-          <p className="text-[12.5px] text-blue-900">
+          <p className="text-sm text-blue-900">
             <Link href={buildLeadsHref(topPerformer.agentId)} className="font-bold text-blue-900 hover:underline">
               Top Performer: {topPerformer.agentName}
             </Link>{" "}
@@ -297,19 +297,19 @@ function ConversionDrilldown({
 }) {
   return (
     <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50/50 p-3.5">
-      <div className="flex items-center justify-between text-[12px] font-semibold text-cyan-800">
+      <div className="flex items-center justify-between text-sm font-semibold text-cyan-800">
         <span>{title}</span>
         <span className="tabular-nums">
           {count} / {totalLeads}
         </span>
       </div>
       {leads.length === 0 ? (
-        <p className="mt-2 text-[12.5px] text-slate-500">No appointments booked in this period.</p>
+        <p className="mt-2 text-sm text-slate-500">No appointments booked in this period.</p>
       ) : (
         <ul className="mt-2 space-y-1">
           {leads.map((lead) => (
             <li key={lead.id}>
-              <Link href={leadHref(lead.id)} className="text-[12.5px] font-medium text-sky-700 hover:text-sky-900 hover:underline">
+              <Link href={leadHref(lead.id)} className="text-sm font-medium text-sky-700 hover:text-sky-900 hover:underline">
                 {lead.business_name}
               </Link>
             </li>

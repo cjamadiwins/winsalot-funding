@@ -67,10 +67,10 @@ export default function AgentPerformanceCard({
       </div>
 
       <div className="mt-5">
-        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-slate-500">
           <span>Weekly Progress</span>
           <span className="flex items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal ${tierStyle.badge}`}>{band.label}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold normal-case tracking-normal ${tierStyle.badge}`}>{band.label}</span>
             <span className={tierStyle.text}>{percentage}%</span>
           </span>
         </div>
@@ -80,26 +80,26 @@ export default function AgentPerformanceCard({
       </div>
 
       <div className="mt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Daily Breakdown</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Daily Breakdown</div>
         <div className="mt-1.5 grid grid-cols-5 gap-1.5">
           {dailyBreakdown.map((day) => (
             <div key={day.date} className="rounded-lg border border-slate-100 bg-slate-50 px-1.5 py-2 text-center">
-              <div className="text-[10px] font-medium text-slate-500">{day.label.split(",")[0]}</div>
-              <div className="mt-0.5 text-[15px] font-bold text-slate-900">{day.count}</div>
+              <div className="text-xs font-medium text-slate-500">{day.label.split(",")[0]}</div>
+              <div className="mt-0.5 text-base font-bold text-slate-900">{day.count}</div>
             </div>
           ))}
         </div>
       </div>
 
       <div className="mt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Booked Appointments</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Booked Appointments</div>
         {appointments.length === 0 ? (
-          <p className="mt-2 text-[13px] text-slate-500">No booked appointments yet.</p>
+          <p className="mt-2 text-sm text-slate-500">No booked appointments yet.</p>
         ) : (
           <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-100">
-            <table className="w-full min-w-[520px] text-left text-[12.5px]">
+            <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="sticky top-0 bg-[var(--crm-surface)]">
-                <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+                <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                   <th className="p-2.5">Business Name</th>
                   <th className="p-2.5">Contact Name</th>
                   <th className="p-2.5">Appointment Date</th>
@@ -124,7 +124,7 @@ export default function AgentPerformanceCard({
                       {appt.appointment_date} {appt.appointment_time}
                     </td>
                     <td className="p-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>
                         {appt.status}
                       </span>
                     </td>
@@ -143,7 +143,7 @@ export default function AgentPerformanceCard({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
     </div>
   );

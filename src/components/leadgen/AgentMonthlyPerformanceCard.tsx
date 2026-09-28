@@ -24,7 +24,7 @@ const TIER_STYLES: Record<LeadgenPerformanceTier, { bar: string; badge: string; 
   red: { bar: "bg-rose-500", badge: "bg-rose-100 text-rose-800", text: "text-rose-700" },
 };
 
-const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-[13.5px] text-slate-900";
+const selectClass = "rounded-lg border border-slate-300 bg-[var(--crm-surface)] px-3 py-2 text-sm text-slate-900";
 
 // Table/history spans a lot of months for an old dataset - cap how far
 // back the month picker/history reach so both stay a manageable size.
@@ -134,10 +134,10 @@ export default function AgentMonthlyPerformanceCard({
       </div>
 
       <div className="mt-4">
-        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-slate-500">
           <span>Monthly Progress</span>
           <span className="flex items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal ${tierStyle.badge}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold normal-case tracking-normal ${tierStyle.badge}`}>
               {LEADGEN_PERFORMANCE_TIER_LABEL[tier]}
             </span>
             <span className={tierStyle.text}>{monthly.percentage}%</span>
@@ -149,11 +149,11 @@ export default function AgentMonthlyPerformanceCard({
       </div>
 
       <div className="mt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monthly History</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Monthly History</div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full min-w-[420px] text-left text-[12.5px]">
+          <table className="w-full min-w-[420px] text-left text-sm">
             <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200 text-[10.5px] font-semibold uppercase text-slate-500">
+              <tr className="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
                 <th className="p-2.5">Month</th>
                 <th className="p-2.5">Booked</th>
                 <th className="p-2.5">Goal</th>
@@ -175,7 +175,7 @@ export default function AgentMonthlyPerformanceCard({
                     <td className="p-2.5 text-slate-600">{row.totalBooked}</td>
                     <td className="p-2.5 text-slate-600">{row.monthlyGoal}</td>
                     <td className="p-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${TIER_STYLES[rowTier].badge}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TIER_STYLES[rowTier].badge}`}>
                         {row.percentage}%
                       </span>
                     </td>
@@ -193,9 +193,9 @@ export default function AgentMonthlyPerformanceCard({
 function Stat({ label, value, badgeClassName }: { label: string; value: string; badgeClassName?: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       {badgeClassName ? (
-        <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[15px] font-bold ${badgeClassName}`}>{value}</div>
+        <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-base font-bold ${badgeClassName}`}>{value}</div>
       ) : (
         <div className="mt-1 text-[17px] font-bold text-slate-900">{value}</div>
       )}

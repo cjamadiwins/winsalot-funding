@@ -27,14 +27,14 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 function StatusBadge({ status }: { status: MonitoringStatus }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ${MONITORING_STATUS_STYLES[status]}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${MONITORING_STATUS_STYLES[status]}`}>{status}</span>;
 }
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-const selectClass = "rounded-lg border border-slate-300 px-3 py-1.5 text-[13px] text-slate-700";
+const selectClass = "rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700";
 
 export default function OperationsMonitoringClient({
   summary,
@@ -83,7 +83,7 @@ export default function OperationsMonitoringClient({
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
               tab === t.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -95,7 +95,7 @@ export default function OperationsMonitoringClient({
       {(showStatusFilter || showAgentFilter) && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {showStatusFilter && (
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               Status
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as MonitoringStatus | "all")} className={selectClass}>
                 <option value="all">All</option>
@@ -106,7 +106,7 @@ export default function OperationsMonitoringClient({
             </label>
           )}
           {showAgentFilter && (
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               Agent
               <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className={selectClass}>
                 <option value="all">All Agents</option>
@@ -132,7 +132,7 @@ export default function OperationsMonitoringClient({
                 className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-semibold text-slate-700">{c.label}</span>
+                  <span className="text-sm font-semibold text-slate-700">{c.label}</span>
                   <StatusBadge status={c.status} />
                 </div>
                 <div className="mt-2 text-lg font-bold text-slate-900">{c.headline}</div>
@@ -258,8 +258,8 @@ function Table({ headers, rows, emptyMessage }: { headers: string[]; rows: React
   }
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <table className="w-full min-w-[720px] border-collapse text-left text-[13px]">
-        <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <thead className="border-b border-slate-200 bg-slate-50 text-sm font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             {headers.map((h) => (
               <th key={h} className="px-3 py-2.5">

@@ -237,7 +237,7 @@ export default function LeadgenAttendanceCard({ openShift }: { openShift: Leadge
         </div>
       )}
 
-      <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Attendance</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance</h2>
 
       {!openShift && (
         <div className="mt-3">

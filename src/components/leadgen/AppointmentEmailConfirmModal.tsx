@@ -90,14 +90,14 @@ export default function AppointmentEmailConfirmModal({
           </button>
         </div>
 
-        <dl className="mt-3 space-y-1.5 rounded-lg border border-slate-200 p-3.5 text-[13.5px]">
+        <dl className="mt-3 space-y-1.5 rounded-lg border border-slate-200 p-3.5 text-sm">
           <Row label="Business Name" value={businessName} />
           <Row label="Contact Name" value={contactName || "—"} />
           <Row label="Current Email" value={email || "No email on file"} />
           <Row label="Appointment" value={`${appointmentDate} ${appointmentTime} (${timezone})`} />
         </dl>
 
-        <div className={`mt-3 rounded-lg border p-3.5 text-[13px] ${email ? "border-sky-200 bg-sky-50 text-sky-900" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+        <div className={`mt-3 rounded-lg border p-3.5 text-sm ${email ? "border-sky-200 bg-sky-50 text-sky-900" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
           {email ? (
             <p>
               This will send {mode === "reminder" ? "an appointment reminder" : "a resent appointment confirmation"} to{" "}
@@ -108,10 +108,10 @@ export default function AppointmentEmailConfirmModal({
           )}
         </div>
 
-        {note && <p className="mt-2 text-[12px] text-slate-500">{note}</p>}
+        {note && <p className="mt-2 text-sm text-slate-500">{note}</p>}
 
         {mode === "reminder" && showCountAsAutomaticReminder && (
-          <label className="mt-3 flex items-start gap-2 text-[12.5px] text-slate-600">
+          <label className="mt-3 flex items-start gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
               checked={countAsAutomaticReminder}
@@ -122,18 +122,18 @@ export default function AppointmentEmailConfirmModal({
           </label>
         )}
 
-        {error && <p className="mt-3 text-[13px] font-medium text-rose-600">{error}</p>}
+        {error && <p className="mt-3 text-sm font-medium text-rose-600">{error}</p>}
 
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             disabled={submitting || !email}
             onClick={handleConfirm}
-            className="rounded-full bg-sky-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Sending…" : actionLabel}
           </button>
-          <button type="button" disabled={submitting} onClick={onClose} className="text-[13.5px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
+          <button type="button" disabled={submitting} onClick={onClose} className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
             Cancel
           </button>
         </div>

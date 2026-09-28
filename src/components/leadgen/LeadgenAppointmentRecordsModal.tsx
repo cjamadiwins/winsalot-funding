@@ -71,27 +71,27 @@ export default function LeadgenAppointmentRecordsModal({
                       ) : (
                         <span className="font-bold text-slate-900">{appt.business_name}</span>
                       )}
-                      <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800">Booked</span>
+                      <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sm font-bold text-sky-800">Booked</span>
                     </div>
-                    <p className="mt-1 text-[12.5px] text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {appt.contact_name ?? "—"} · {appt.phone ?? "—"} · {appt.email ?? "—"}
                     </p>
-                    <p className="mt-1 text-[12.5px] text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       Agent: {appt.agentName} · {appt.meeting_type}
                     </p>
                   </div>
                   <div className="shrink-0 rounded-lg bg-emerald-50 px-3 py-2 text-right">
-                    <div className="text-[15px] font-bold text-emerald-800">
+                    <div className="text-base font-bold text-emerald-800">
                       {start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                     </div>
-                    <div className="text-[12.5px] font-semibold text-emerald-700">
+                    <div className="text-sm font-semibold text-emerald-700">
                       {start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} ({appt.timezone})
                     </div>
                   </div>
                 </div>
 
                 {appt.appointment_notes && (
-                  <p className="mt-2 text-[12.5px] text-slate-600">
+                  <p className="mt-2 text-sm text-slate-600">
                     <span className="font-semibold text-slate-700">Notes:</span> {appt.appointment_notes}
                   </p>
                 )}
@@ -100,14 +100,14 @@ export default function LeadgenAppointmentRecordsModal({
                   {appt.lead_id && (
                     <Link
                       href={`${leadHrefBase}/${appt.lead_id}`}
-                      className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[11.5px] font-semibold text-indigo-700"
+                      className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700"
                     >
                       View Prospect
                     </Link>
                   )}
                   <Link
                     href={`${appointmentsHref}?highlight=${appt.id}`}
-                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-[11.5px] font-semibold text-sky-700"
+                    className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700"
                   >
                     Manage Appointment
                   </Link>

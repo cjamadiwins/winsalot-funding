@@ -73,7 +73,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Link href="/leadgen/admin/call-list-segments" className="inline-flex items-center gap-1 text-[12.5px] text-slate-500 hover:text-slate-700">
+            <Link href="/leadgen/admin/call-list-segments" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
               <ArrowLeft className="h-3.5 w-3.5" /> All segments
             </Link>
             <h1 className="mt-1 text-2xl font-bold text-slate-900">{segment.name}</h1>
