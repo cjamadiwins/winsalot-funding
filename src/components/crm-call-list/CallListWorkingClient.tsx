@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PhoneCall, Rocket } from "lucide-react";
+import { PhoneCall, Rocket, FileText } from "lucide-react";
 import { CALL_LOG_OUTCOMES, CALL_LOG_OUTCOME_STYLES, type CallLogOutcome } from "@/lib/call-log";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import { locationLines } from "@/lib/call-list-card-location";
 import type { CallListLeadRow } from "@/lib/call-list-types";
+import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
+import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
+import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 
 // Deliberately per-lead, one-at-a-time (no row selection, no "export"/
 // "copy all" affordance, no CSV/bulk endpoint reachable from this view -
@@ -34,14 +37,25 @@ export default function CallListWorkingClient({
   logCallAction,
   promoteAction,
   hiddenFields,
+  callScriptClient,
+  agentName,
 }: {
   leads: CallListLeadRow[];
   logCallAction: (leadId: string, formData: FormData) => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
   hiddenFields: string[];
+  // Client Call Script (brief "Call List") - every lead in this list
+  // shares this one client (a call list segment is deployed against a
+  // single campaign/client), so the CRM resolves it once, server-side,
+  // rather than the agent having to remember which script belongs here.
+  // Null when this segment has no linked client - the "Script" button
+  // simply doesn't render in that case.
+  callScriptClient?: CallScriptClientOption | null;
+  agentName?: string;
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [scriptOpenId, setScriptOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "not_contacted">("not_contacted");
   const [isPending, startTransition] = useTransition();
   const [notice, setNotice] = useState<Record<string, string>>({});
@@ -159,6 +173,15 @@ export default function CallListWorkingClient({
                       <Rocket className="h-3 w-3" /> Promote
                     </button>
                   )}
+                  {callScriptClient && (
+                    <button
+                      type="button"
+                      onClick={() => setScriptOpenId(scriptOpenId === lead.id ? null : lead.id)}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+                    >
+                      <FileText className="h-3 w-3" /> {scriptOpenId === lead.id ? "Hide Script" : "View Call Script"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setOpenId(openId === lead.id ? null : lead.id)}
@@ -168,6 +191,15 @@ export default function CallListWorkingClient({
                   </button>
                 </div>
               </div>
+
+              {scriptOpenId === lead.id && callScriptClient && (
+                <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                  <ClientCallScriptPanel
+                    script={buildLeadgenCallScript({ agentName: agentName ?? "", prospectBusinessName: lead.business_name, client: callScriptClient })}
+                    compact
+                  />
+                </div>
+              )}
 
               {notice[lead.id] && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">{notice[lead.id]}</p>}
 

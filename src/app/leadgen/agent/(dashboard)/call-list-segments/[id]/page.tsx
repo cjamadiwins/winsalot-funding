@@ -5,6 +5,7 @@ import { isAgentAssignedToActiveSegment } from "@/lib/call-list-segments";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
+import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 import { logCallListCallAction, promoteCallListLeadAction } from "../actions";
 
 export default async function LeadgenAgentCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -37,6 +38,25 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
     supabase.from("call_list_column_visibility").select("hidden_fields").eq("crm", "lead_generation").maybeSingle(),
   ]);
   const hiddenFields = (visibility?.hidden_fields as string[] | null) ?? [];
+
+  // "View Call Script" (brief "Call List") - every lead in a deployed
+  // segment shares the same one client (a segment is deployed against a
+  // single leadgen_campaign_id), so this is resolved once here rather
+  // than per lead. Null when the segment has no linked campaign - the
+  // per-lead script button/panel simply doesn't render in that case.
+  const segmentRow = segment as CallListSegmentRow;
+  let callScriptClient: CallScriptClientOption | null = null;
+  if (segmentRow.leadgen_campaign_id) {
+    const { data: campaign } = await supabase.from("leadgen_campaigns").select("client_id").eq("id", segmentRow.leadgen_campaign_id).maybeSingle();
+    if (campaign?.client_id) {
+      const { data: client } = await supabase
+        .from("leadgen_clients")
+        .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
+        .eq("id", campaign.client_id)
+        .maybeSingle();
+      if (client) callScriptClient = client as CallScriptClientOption;
+    }
+  }
 
   // Hidden columns must not reach the agent's browser at all "through
   // agent-side API responses if possible" - extra_fields (imported junk
@@ -75,7 +95,14 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
 
       <div className="mt-6">
-        <CallListWorkingClient leads={sanitizedLeads} logCallAction={logCallListCallAction} promoteAction={promoteCallListLeadAction} hiddenFields={hiddenFields} />
+        <CallListWorkingClient
+          leads={sanitizedLeads}
+          logCallAction={logCallListCallAction}
+          promoteAction={promoteCallListLeadAction}
+          hiddenFields={hiddenFields}
+          callScriptClient={callScriptClient}
+          agentName={agent.full_name || agent.email}
+        />
       </div>
     </div>
   );

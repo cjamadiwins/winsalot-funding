@@ -8,6 +8,39 @@ import { isValidEmail, LEADGEN_BOOKING_BUTTON_LABEL, leadgenServicesButtonLabel,
 
 type ActionResult = { error?: string };
 
+function textOrNull(formData: FormData, key: string): string | null {
+  const value = String(formData.get(key) ?? "").trim();
+  return value ? value : null;
+}
+
+// Admin-only edit for the five Client Call Script fields (brief "Client
+// customization"). Never reachable by an agent - this file only exports
+// server actions, and every one of them independently calls
+// requireLeadgenAdmin() itself; RLS (leadgen_clients_admin_all being the
+// only write policy on this table) is the real, defense-in-depth backstop.
+export async function updateClientCallScriptAction(clientId: string, formData: FormData): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("leadgen_clients")
+    .update({
+      call_script_value_proposition: textOrNull(formData, "call_script_value_proposition"),
+      call_script_services: textOrNull(formData, "call_script_services"),
+      call_script_closing: textOrNull(formData, "call_script_closing"),
+      call_script_notes: textOrNull(formData, "call_script_notes"),
+      call_script_override: textOrNull(formData, "call_script_override"),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", clientId);
+  if (error) return { error: "Failed to save the call script." };
+
+  revalidatePath(`/leadgen/admin/clients/${clientId}`);
+  revalidatePath("/leadgen/admin");
+  revalidatePath("/leadgen/agent");
+  return {};
+}
+
 // Direct client email (brief section "DIRECT CLIENT EMAIL FROM THE
 // CRM") - admin-only. lead_id is always null on the resulting row,
 // which is exactly what marks it as a client-facing communication
