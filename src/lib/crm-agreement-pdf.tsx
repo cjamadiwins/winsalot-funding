@@ -11,6 +11,7 @@ import {
   isPerformanceBasedFirst,
   isStagedPerformanceBasedFirst,
   buildPerformanceBasedFirstPaymentSummary,
+  formatCurrencyAmount,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
@@ -158,7 +159,7 @@ export function AgreementPdfDocument({ agreement, template }: AgreementPdfProps)
               <View style={styles.sectionRow}>
                 <View>
                   <Text style={styles.label}>Campaign Fee</Text>
-                  <Text style={styles.value}>{agreement.monthly_fee != null ? formatCurrency(agreement.monthly_fee, agreement.currency) : "Not yet set"}</Text>
+                  <Text style={styles.value}>{agreement.monthly_fee != null ? formatCurrencyAmount(agreement.monthly_fee, agreement.currency) : "Not yet set"}</Text>
                 </View>
                 <View>
                   <Text style={styles.label}>Upfront Payment</Text>

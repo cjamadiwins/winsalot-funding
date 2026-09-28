@@ -427,6 +427,9 @@ export async function sendAgreementAction(agreementId: string, reviewedConfirmat
   const { data: agreement } = await supabase.from("crm_client_agreements").select("*").eq("id", agreementId).maybeSingle();
   if (!agreement) return { error: "Agreement not found." };
   if (agreement.status !== "draft") return { error: "Only a draft agreement can be sent." };
+  if (!agreement.business_email || !isValidEmail(agreement.business_email)) {
+    return { error: "A valid client/business email is required before sending. Add one in Edit Draft first." };
+  }
   // A staged Performance-Based First Campaign's real terms live in
   // staged_deposit_amount, not monthly_fee - it's allowed to stay blank
   // (see the Campaign Fee form-fix). Every other agreement still requires

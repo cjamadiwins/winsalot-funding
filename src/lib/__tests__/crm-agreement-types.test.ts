@@ -253,7 +253,7 @@ describe("buildPerformanceBasedFirstFeesStatement", () => {
   it("shows the Campaign Fee, $0 upfront payment, and the conversion-trigger wording", () => {
     const body = buildPerformanceBasedFirstFeesStatement(performanceBasedFirstBase);
     expect(body).toContain("This is a Performance-Based First Campaign.");
-    expect(body).toContain("Campaign Fee: $750 CAD");
+    expect(body).toContain("Campaign Fee: CA$750");
     expect(body).toContain("Upfront Payment: $0");
     expect(body).toContain("the Client will not pay the Campaign Fee upfront");
     expect(body).toContain("The Client agrees to notify Winsalot Corp when a Winsalot-generated prospect becomes a paying customer.");
@@ -262,7 +262,7 @@ describe("buildPerformanceBasedFirstFeesStatement", () => {
 
   it("uses the agreement's own fee and currency, never a hardcoded $750", () => {
     const body = buildPerformanceBasedFirstFeesStatement({ monthly_fee: 900, currency: "USD" });
-    expect(body).toContain("Campaign Fee: $900 USD");
+    expect(body).toContain("Campaign Fee: $900");
     expect(body).not.toContain("$750");
   });
 });

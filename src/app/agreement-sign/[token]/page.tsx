@@ -10,6 +10,7 @@ import {
   isPerformanceBasedFirst,
   isStagedPerformanceBasedFirst,
   buildPerformanceBasedFirstPaymentSummary,
+  formatCurrencyAmount,
   PERFORMANCE_BASED_FIRST_DOC_LABEL,
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
@@ -137,7 +138,7 @@ export default async function AgreementSignPage({ params }: { params: Promise<{ 
                 <div>
                   <dt className="font-semibold text-slate-500">Campaign Fee</dt>
                   <dd className="text-slate-900">
-                    {agreement.monthly_fee != null ? `$${Number(agreement.monthly_fee).toLocaleString()} ${agreement.currency}` : "Not yet set"}
+                    {agreement.monthly_fee != null ? formatCurrencyAmount(Number(agreement.monthly_fee), agreement.currency) : "Not yet set"}
                   </dd>
                 </div>
                 <div>
