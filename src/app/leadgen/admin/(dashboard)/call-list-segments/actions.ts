@@ -29,6 +29,35 @@ import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/ca
 
 const BASE_PATH = "/leadgen/admin/call-list-segments";
 
+// A single Ottawa lead moves atomically between the two approved clients.
+// The database function retains the call-list ID and writes a transfer audit.
+export async function transferOttawaPainterLeadAction(
+  sourceSegmentId: string,
+  leadId: string,
+  targetCampaignId: string
+): Promise<{ error?: string; destinationSegmentId?: string }> {
+  const adminUser = await requireLeadgenAdmin();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (![sourceSegmentId, leadId, targetCampaignId].every((id) => uuid.test(id))) return { error: "Invalid transfer selection." };
+  const admin = getSupabaseAdmin();
+  const { data: segment } = await admin.from("call_list_segments")
+    .select("id, crm, source_file_name").eq("id", sourceSegmentId).maybeSingle();
+  const { data: lead } = await admin.from("call_list_leads")
+    .select("id, segment_id").eq("id", leadId).maybeSingle();
+  if (segment?.crm !== "lead_generation" || !segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")
+      || lead?.segment_id !== sourceSegmentId) return { error: "This Ottawa lead is no longer in the selected segment." };
+  const { data, error } = await admin.rpc("leadgen_transfer_ottawa_painter", {
+    p_lead_id: leadId,
+    p_target_campaign_id: targetCampaignId,
+    p_admin_id: adminUser.id,
+  });
+  if (error || typeof data !== "string") return { error: error?.message ?? "Transfer failed." };
+  revalidatePath(`${BASE_PATH}/${sourceSegmentId}`);
+  revalidatePath(`${BASE_PATH}/${data}`);
+  revalidatePath(BASE_PATH);
+  return { destinationSegmentId: data };
+}
+
 // Step 1 of the upload wizard: parse the file and return its headers plus
 // a best-effort suggested mapping, but write nothing to the database yet
 // - the brief's "do NOT immediately reject the upload" when a required

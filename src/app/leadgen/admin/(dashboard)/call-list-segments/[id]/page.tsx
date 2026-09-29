@@ -10,6 +10,7 @@ import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEdito
 import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
 import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/crm-call-list/SegmentPerformanceClient";
+import OttawaPainterTransferClient from "@/components/crm-call-list/OttawaPainterTransferClient";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 import {
   addSegmentLeadAction,
@@ -24,6 +25,7 @@ import {
   updateCallListColumnVisibilityAction,
   updateSegmentLeadAction,
   updateSegmentStatusAction,
+  transferOttawaPainterLeadAction,
 } from "../actions";
 
 async function resolveServiceLabel(admin: ReturnType<typeof getSupabaseAdmin>, leadgenCampaignId: string | null): Promise<string | null> {
@@ -146,7 +148,28 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     promoted: leads.filter((l) => l.promoted_leadgen_lead_id).length,
   };
 
+  let transferTarget: { id: string; name: string; status: string; clientName: string } | null = null;
+  if (segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")) {
+    const { data: currentCampaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
+    const { data: currentClient } = currentCampaign
+      ? await admin.from("leadgen_clients").select("name").eq("id", currentCampaign.client_id).maybeSingle()
+      : { data: null };
+    const targetClientName = currentClient?.name === "Hidebrandt Web Services" ? "Web6 Solutions"
+      : currentClient?.name === "Web6 Solutions" ? "Hidebrandt Web Services" : null;
+    if (targetClientName) {
+      const { data: client } = await admin.from("leadgen_clients").select("id").eq("name", targetClientName).eq("active", true).maybeSingle();
+      const campaignName = targetClientName === "Web6 Solutions"
+        ? "Web6 Solutions – Website Design Lead Generation"
+        : "Hidebrandt Web Services – Website Services Lead Generation";
+      const { data: campaign } = client
+        ? await admin.from("leadgen_campaigns").select("id, name, status").eq("client_id", client.id).eq("name", campaignName).maybeSingle()
+        : { data: null };
+      if (campaign) transferTarget = { ...campaign, clientName: targetClientName };
+    }
+  }
+
   return (
+    <div className="space-y-6">
     <SegmentPerformanceClient
       basePath="/leadgen/admin/call-list-segments"
       segment={segment}
@@ -169,5 +192,16 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       callScriptClient={callScriptClient}
       adminName={adminUser.full_name || adminUser.email}
     />
+    {transferTarget && segment.status === "active" && (
+      <OttawaPainterTransferClient
+        sourceSegmentId={segment.id}
+        leads={leads.filter((lead) => !lead.removed_at && !lead.promoted_leadgen_lead_id
+          && ["no_website", "website_review"].includes(String(lead.extra_fields?.website_category)))
+          .map((lead) => ({ id: lead.id, business_name: lead.business_name, phone: lead.phone }))}
+        targetCampaign={transferTarget}
+        transferAction={transferOttawaPainterLeadAction}
+      />
+    )}
+    </div>
   );
 }
