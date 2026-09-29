@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { CrmPaymentRow } from "@/lib/crm-clients-types";
-import { formatCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
+import { formatCurrency, recentPaymentDisplayCurrency, PAYMENT_METHOD_LABELS } from "@/lib/crm-clients-types";
 
 type ActionResult = { error?: string };
 
@@ -63,7 +63,7 @@ export default function PaymentDetailModal({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Amount</span>
-              <span className="font-medium">{formatCurrency(payment.amount, payment.currency)}</span>
+              <span className="font-medium">{formatCurrency(payment.amount, recentPaymentDisplayCurrency(payment.currency, clientName))}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Method</span>

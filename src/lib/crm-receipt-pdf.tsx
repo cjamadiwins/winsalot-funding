@@ -41,7 +41,7 @@ export function ReceiptPdfDocument({ receipt }: { receipt: ReceiptData }) {
             <View style={styles.brandRow}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer's own Image element, no alt prop. */}
               <Image src={WINSALOT_LOGO_DATA_URI} style={styles.logo} />
-              <Text style={styles.brand}>Winsalot Corp</Text>
+              <Text style={styles.brand}>Winsalot Corp.</Text>
             </View>
             <Text style={styles.tagline}>Empowering Businesses, One Solution at a Time.</Text>
             <Text style={styles.contact}>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
@@ -94,7 +94,7 @@ export function ReceiptPdfDocument({ receipt }: { receipt: ReceiptData }) {
         </View>
 
         <Text style={styles.thanks}>Thank you for your business. This receipt confirms payment was received by Winsalot Corp.</Text>
-        <Text style={styles.footer}>Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
+        <Text style={styles.footer}>Winsalot Corp. · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com</Text>
       </Page>
     </Document>
   );

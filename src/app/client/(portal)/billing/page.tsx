@@ -12,10 +12,10 @@ export default async function ClientPortalBillingPage() {
     <div>
       <div className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element -- existing static brand asset */}
-        <img src="/winsalot-logo.png" alt="Winsalot Corp" className="h-10 w-10 object-contain" />
+        <img src="/winsalot-logo.png" alt="Winsalot Corp." className="h-10 w-10 object-contain" />
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Billing &amp; Payments</h1>
-          <p className="text-sm text-slate-500">Payments received by Winsalot Corp for {client.name}.</p>
+          <p className="text-sm text-slate-500">Payments received by Winsalot Corp. for {client.name}.</p>
         </div>
       </div>
 
