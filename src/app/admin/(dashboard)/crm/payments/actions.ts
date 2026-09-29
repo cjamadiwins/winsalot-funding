@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getResendClient } from "@/lib/resend";
-import { getEmailReplyTo, getEmailSender } from "@/lib/email-senders";
+import { sendAndLogClientEmail } from "@/lib/crm-client-communications";
 import { loadReceiptByPaymentId } from "@/lib/crm-receipt";
 import { renderReceiptPdfBuffer } from "@/lib/crm-receipt-pdf";
 import { renderReceiptEmail } from "@/lib/crm-receipt-email";
@@ -28,16 +27,24 @@ export async function emailPaymentReceiptAction(paymentId: string, to: string): 
 
   const email = renderReceiptEmail(receipt);
   const pdf = await renderReceiptPdfBuffer(receipt);
-  const { data: sent, error: sendError } = await getResendClient().emails.send({
-    from: getEmailSender("billing"),
-    to: recipient,
-    replyTo: getEmailReplyTo(),
+  const { data: paymentRow } = await getSupabaseAdmin().from("crm_payments").select("client_id").eq("id", paymentId).maybeSingle();
+  if (!paymentRow?.client_id) return { error: "Payment not found." };
+
+  // Sent and logged in one step: the receipt lands in the client's
+  // Communication History (unique resend_email_id, so never twice).
+  const result = await sendAndLogClientEmail({
+    clientId: paymentRow.client_id as string,
+    toEmail: recipient,
     subject: email.subject,
     text: email.text,
     html: email.html,
+    emailType: "payment_receipt",
+    senderCategory: "billing",
+    sentBy: { id: admin.id, name: admin.full_name || admin.email },
+    related: { type: "payment", id: paymentId },
     attachments: [{ filename: `Winsalot-Receipt-${receipt.receiptNumber}.pdf`, content: pdf }],
   });
-  if (sendError || !sent) return { error: `Failed to send the receipt: ${sendError?.message ?? "Unknown email error."}` };
+  if (!result.ok) return { error: result.error };
 
   const db = getSupabaseAdmin();
   const { data: current } = await db.from("crm_payments").select("client_id, receipt_email_count").eq("id", paymentId).maybeSingle();

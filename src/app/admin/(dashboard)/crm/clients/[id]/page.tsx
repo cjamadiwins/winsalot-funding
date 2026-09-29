@@ -9,6 +9,10 @@ import ClientPortalAccessPanel from "@/components/crm-clients/ClientPortalAccess
 import ClientReportsPanel from "@/components/crm-clients/ClientReportsPanel";
 import LeadgenClientLinkPanel from "@/components/crm-clients/LeadgenClientLinkPanel";
 import CampaignPaymentSetupPanel from "@/components/crm-clients/CampaignPaymentSetupPanel";
+import ClientCommunicationHistory from "@/components/crm-clients/ClientCommunicationHistory";
+import { listClientCommunications } from "@/lib/crm-client-communications";
+import { buildCampaignSetupDraft } from "@/lib/crm-client-communications-shared";
+import { formatCurrency } from "@/lib/crm-clients-types";
 import { loadLeadgenClientReport } from "@/lib/leadgen-client-report-data";
 import { resolveLeadgenReportMonth } from "@/lib/leadgen-client-report";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -35,6 +39,7 @@ import {
   resetClientAccessAction,
 } from "./portal-actions";
 import { sendClientReportAction } from "./report-actions";
+import { sendClientUpdateAction, resendClientCommunicationAction, getClientCommunicationContentAction } from "./communication-actions";
 import { updateLeadgenCampaignConfigAction } from "./campaign-actions";
 import {
   updateLeadgenPaymentConfigAction,
@@ -112,6 +117,29 @@ export default async function ClientProfilePage({ params, searchParams }: { para
     }
   }
 
+
+  // Client Communication History + the draft for the campaign setup email
+  // (built only from this client's own record; Admin reviews before sending).
+  const communications = await listClientCommunications(id);
+  const { data: latestAgreement } = await getSupabaseAdmin()
+    .from("crm_client_agreements")
+    .select("contact_person, campaign_start_date, legal_business_name")
+    .eq("client_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const depositPayment = detail.payments.find((p) => p.payment_type === "initial_campaign_deposit" && !p.reversed_at) ?? null;
+  const activeLeadgenCampaign = (leadgenCampaigns ?? []).find((c) => c.status === "active") ?? (leadgenCampaigns ?? [])[0] ?? null;
+  const setupDraft = buildCampaignSetupDraft({
+    contactName: latestAgreement?.contact_person ?? detail.client.primary_contact_name ?? null,
+    companyName: latestAgreement?.legal_business_name ?? detail.client.company_name,
+    campaignName: activeLeadgenCampaign?.name ?? null,
+    service: detail.client.service ?? null,
+    campaignStartDate: latestAgreement?.campaign_start_date ?? null,
+    depositReceivedLabel: depositPayment ? formatCurrency(depositPayment.amount, depositPayment.currency) : null,
+  });
+  const hasSetupEmail = communications.some((c) => c.source === "client_comm" && c.category === "Campaign setup" && c.status !== "failed");
+
   return (
     <div>
       <ClientProfileClient
@@ -127,6 +155,17 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         recordAppointmentAction={recordClientAppointmentAction}
         deleteAppointmentAction={deleteClientAppointmentAction}
         recordPaymentAction={recordStandaloneClientPaymentAction}
+      />
+
+      <ClientCommunicationHistory
+        clientId={id}
+        clientEmail={detail.client.email ?? null}
+        entries={communications}
+        setupDraft={setupDraft}
+        hasSetupEmail={hasSetupEmail}
+        sendUpdateAction={sendClientUpdateAction}
+        resendAction={resendClientCommunicationAction}
+        getContentAction={getClientCommunicationContentAction}
       />
 
       <LeadgenClientLinkPanel

@@ -228,6 +228,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, tracked: true });
   }
 
+  // Client Communication History (crm_client_communications): receipts,
+  // agreement/intake emails, manual client updates and the campaign setup
+  // email. resend_email_id is unique, so this can match at most one row.
+  // Same "only ever apply what this exact event carries" rule as the
+  // branches around it; a delivery event never rewrites a newer status.
+  const { data: clientComm } = await admin
+    .from("crm_client_communications")
+    .select("id, status_at")
+    .eq("resend_email_id", emailId)
+    .maybeSingle();
+
+  if (clientComm) {
+    console.log(`[resend-webhook] matched email ${emailId} to crm_client_communications ${clientComm.id}`);
+    const isNewer = new Date(eventAt) >= new Date(clientComm.status_at);
+    const clientCommUpdates: Record<string, unknown> = { [STATUS_COLUMN[status]]: eventAt };
+    if (isNewer) {
+      clientCommUpdates.status = status;
+      clientCommUpdates.status_at = eventAt;
+    }
+    if (event.type === "email.bounced") clientCommUpdates.error_detail = event.data.bounce.message;
+    if (event.type === "email.failed") clientCommUpdates.error_detail = event.data.failed.reason;
+
+    const { error: clientCommUpdateError } = await admin.from("crm_client_communications").update(clientCommUpdates).eq("id", clientComm.id);
+    if (clientCommUpdateError) {
+      console.error(`[resend-webhook] failed to update crm_client_communications ${clientComm.id}:`, clientCommUpdateError);
+    }
+    return NextResponse.json({ received: true, tracked: true, category: "crm_client_communications" });
+  }
+
   // Automatic weekly Growth CRM campaign delivery tracking. This branch
   // runs before crm_lead_emails because marketing sends intentionally use
   // their own occurrence-keyed table to make cron retries idempotent.
