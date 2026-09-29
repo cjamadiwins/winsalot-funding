@@ -49,6 +49,7 @@ import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
+import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 import { WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
@@ -260,6 +261,11 @@ export default async function LeadgenAgentDashboardPage() {
 
   // Admin-selected active client (read-only here - only Admin can change it).
   const activeClient = await getAgentActiveClient(agent.id);
+  const assignedClientIds = new Set(await getAgentAssignedClientIds(agent.id));
+  const assignedClientNames = (clients ?? [])
+    .filter((c) => c.active && assignedClientIds.has(c.id))
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b));
 
   // Client Call Script dashboard card - "only show clients/campaigns the
   // agent is permitted to work on". Mirrors leadgen_agent_campaign_allowed()
@@ -344,10 +350,13 @@ export default async function LeadgenAgentDashboardPage() {
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Active Client</h2>
-        <p className="mt-1 text-lg font-bold text-slate-900">{activeClient ? activeClient.clientName : "Not selected"}</p>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Your Clients</h2>
+        <p className="mt-1 text-lg font-bold text-slate-900">
+          Primary: {activeClient ? activeClient.clientName : "Not selected"}
+        </p>
+        {assignedClientNames.length > 0 && <p className="mt-0.5 text-sm text-slate-700">Assigned: {assignedClientNames.join(", ")}</p>}
         <p className="mt-0.5 text-sm text-slate-600">
-          Set by Admin. A call list always uses the client it belongs to; this only applies when working outside a specific call list.
+          Set by Admin. A call list always uses the client it belongs to; your Primary client only applies when working outside a specific call list.
         </p>
       </section>
 

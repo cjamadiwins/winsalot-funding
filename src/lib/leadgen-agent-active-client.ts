@@ -52,3 +52,57 @@ export function pickAttributionClient<T>(callListClient: T | null | undefined, a
   if (agentActiveClient) return { source: "agent_default", client: agentActiveClient };
   return { source: "none", client: null };
 }
+
+// ---------------------------------------------------------------------------
+// Multi-client assignment (Admin dashboard -> Agent Client Status).
+//
+// An agent's assigned clients are derived from the EXISTING
+// leadgen_campaign_agents rows (an agent is assigned to a client when they
+// have a row on any of that client's campaigns) - no second relationship is
+// stored. The Primary/Current client is the existing
+// leadgen_users.current_campaign_id. Nothing here touches call logs, leads,
+// appointments, emails or reports, which keep the client_id they were recorded
+// under.
+// ---------------------------------------------------------------------------
+
+export type CampaignAgentRow = { campaign_id: string; agent_id: string };
+export type CampaignRow = { id: string; client_id: string };
+
+export type AgentClientAssignment = {
+  // Assigned clients that Admin can see/manage (active, non-test), each with
+  // how many campaign rows back that assignment.
+  clients: { clientId: string; rows: number }[];
+  // Every leadgen_campaign_agents row the agent has (including rows for
+  // inactive/test clients that aren't shown). Zero means "unrestricted".
+  totalRows: number;
+  primaryClientId: string | null;
+};
+
+export function groupAgentClientAssignments(
+  campaignAgents: CampaignAgentRow[],
+  campaigns: CampaignRow[],
+  manageableClientIds: Set<string>,
+  agents: { id: string; current_campaign_id: string | null }[]
+): Map<string, AgentClientAssignment> {
+  const clientByCampaign = new Map(campaigns.map((c) => [c.id, c.client_id]));
+  const result = new Map<string, AgentClientAssignment>();
+  for (const agent of agents) {
+    const rows = campaignAgents.filter((r) => r.agent_id === agent.id);
+    const perClient = new Map<string, number>();
+    for (const row of rows) {
+      const clientId = clientByCampaign.get(row.campaign_id);
+      if (clientId && manageableClientIds.has(clientId)) perClient.set(clientId, (perClient.get(clientId) ?? 0) + 1);
+    }
+    const primaryClientId = agent.current_campaign_id ? (clientByCampaign.get(agent.current_campaign_id) ?? null) : null;
+    result.set(agent.id, {
+      clients: [...perClient.entries()].map(([clientId, count]) => ({ clientId, rows: count })),
+      totalRows: rows.length,
+      primaryClientId: primaryClientId && manageableClientIds.has(primaryClientId) ? primaryClientId : null,
+    });
+  }
+  return result;
+}
+
+// The two restriction rules live in a client-safe module so the Admin UI and
+// the server actions can never disagree about them.
+export { assignmentWouldRestrictAgentClient as assignmentWouldRestrictAgent, removalWouldUnrestrictAgentClient as removalWouldUnrestrictAgent } from "./leadgen-agent-client-rules";
