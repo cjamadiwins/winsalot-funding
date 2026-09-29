@@ -236,6 +236,19 @@ export function describeClientRelatedRecords(counts: ClientRelatedCounts): strin
   return parts.join(", ");
 }
 
+// Display-only: Brent's Essentials' historical $750 payment (and its client
+// record) were seeded as USD, but Winsalot bills it in CAD. Recent Payments
+// on the Invoices page shows that one client as CAD without touching the
+// stored currency, so no other (or future USD) client's payment is ever
+// relabelled. Remove this once the record itself is corrected.
+const CAD_DISPLAY_CLIENT_NAMES = new Set(["brent's essentials"]);
+
+export function recentPaymentDisplayCurrency(currency: string | null | undefined, clientName: string | null | undefined): string {
+  const normalizedName = (clientName ?? "").replace(/[\u2018\u2019]/g, "'").trim().toLowerCase();
+  if (currency === "USD" && CAD_DISPLAY_CLIENT_NAMES.has(normalizedName)) return "CAD";
+  return currency || "CAD";
+}
+
 export function formatCurrency(amount: number | null | undefined, currency: string | null | undefined): string {
   const value = amount ?? 0;
   try {

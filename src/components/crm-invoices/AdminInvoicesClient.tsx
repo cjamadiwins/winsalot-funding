@@ -13,7 +13,7 @@ import {
   canPermanentlyDeleteTestInvoice,
 } from "@/lib/crm-invoices-types";
 import type { InvoiceDashboardSummary } from "@/lib/crm-invoices-data";
-import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency, canPermanentlyDeleteTestPayment, type CrmPaymentRow } from "@/lib/crm-clients-types";
+import { CLIENT_CURRENCIES, CLIENT_CURRENCY_LABELS, DEFAULT_CLIENT_CURRENCY, formatCurrency, recentPaymentDisplayCurrency, canPermanentlyDeleteTestPayment, type CrmPaymentRow } from "@/lib/crm-clients-types";
 import { defaultPaymentInstructionsText } from "@/lib/payment-methods";
 import LineItemsEditor, { type LineItemDraft } from "./LineItemsEditor";
 import ManageMenu from "@/components/crm-ui/ManageMenu";
@@ -148,15 +148,15 @@ export default function AdminInvoicesClient({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">Invoiced This Month</div>
-          <div className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(summary.totalInvoicedThisMonth, "USD")}</div>
+          <div className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(summary.totalInvoicedThisMonth, DEFAULT_CLIENT_CURRENCY)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">Collected This Month</div>
-          <div className="mt-1 text-lg font-bold text-emerald-600">{formatCurrency(summary.totalCollectedThisMonth, "USD")}</div>
+          <div className="mt-1 text-lg font-bold text-emerald-600">{formatCurrency(summary.totalCollectedThisMonth, DEFAULT_CLIENT_CURRENCY)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">Outstanding Balance</div>
-          <div className="mt-1 text-lg font-bold text-amber-600">{formatCurrency(summary.outstandingBalance, "USD")}</div>
+          <div className="mt-1 text-lg font-bold text-amber-600">{formatCurrency(summary.outstandingBalance, DEFAULT_CLIENT_CURRENCY)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)] p-4">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-muted)]">Overdue Invoices</div>
@@ -174,6 +174,7 @@ export default function AdminInvoicesClient({
           <ul className="mt-2 space-y-1 text-sm">
             {summary.recentPayments.slice(0, 5).map((p) => {
               const clientName = p.crm_clients?.company_name ?? "Unknown client";
+              const displayCurrency = recentPaymentDisplayCurrency(p.currency, p.crm_clients?.company_name);
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3">
                   <span>
@@ -183,7 +184,7 @@ export default function AdminInvoicesClient({
                     — {formatDate(p.payment_date)}
                   </span>
                   <span className="flex items-center gap-3">
-                    <span className="font-medium">{formatCurrency(p.amount, p.currency)}</span>
+                    <span className="font-medium">{formatCurrency(p.amount, displayCurrency)}</span>
                     <ManageMenu
                       items={[
                         { key: "view", label: "View payment details", onSelect: () => setPaymentModal({ payment: p, mode: "view" }) },
@@ -218,7 +219,7 @@ export default function AdminInvoicesClient({
                               id: p.id,
                               label: p.reference_number || `Payment on ${formatDate(p.payment_date)}`,
                               clientName,
-                              amountLabel: formatCurrency(p.amount, p.currency),
+                              amountLabel: formatCurrency(p.amount, displayCurrency),
                             }),
                         },
                       ]}

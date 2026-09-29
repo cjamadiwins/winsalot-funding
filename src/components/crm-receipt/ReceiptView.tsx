@@ -9,9 +9,9 @@ export default function ReceiptView({ receipt }: { receipt: ReceiptData }) {
       <header className="flex items-center justify-between gap-4 bg-[#1e3a8a] px-6 py-5 text-white">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- existing static brand asset, same as other CRM shells */}
-          <img src="/winsalot-logo.png" alt="Winsalot Corp" className="h-11 w-11 rounded bg-white/10 object-contain" />
+          <img src="/winsalot-logo.png" alt="Winsalot Corp." className="h-11 w-11 rounded bg-white/10 object-contain" />
           <div>
-            <div className="text-xl font-bold">Winsalot Corp</div>
+            <div className="text-xl font-bold">Winsalot Corp.</div>
             <div className="text-[11px] text-blue-100">Empowering Businesses, One Solution at a Time.</div>
           </div>
         </div>
@@ -36,7 +36,7 @@ export default function ReceiptView({ receipt }: { receipt: ReceiptData }) {
         <p className="mt-6 text-[12.5px] text-slate-500">Thank you for your business. This receipt confirms payment was received by Winsalot Corp.</p>
       </div>
       <footer className="border-t border-slate-100 px-6 py-3 text-[11.5px] text-slate-500">
-        Winsalot Corp · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+        Winsalot Corp. · 647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
       </footer>
     </article>
   );

@@ -4,7 +4,7 @@ import { getSiteUrl } from "./site-url";
 import { formatReceiptDate, type ReceiptData } from "./crm-receipt";
 
 export function defaultReceiptSubject(receipt: Pick<ReceiptData, "receiptNumber">): string {
-  return `Payment receipt ${receipt.receiptNumber} from Winsalot Corp`;
+  return `Payment receipt ${receipt.receiptNumber} from Winsalot Corp.`;
 }
 
 // Branded (existing /winsalot-logo.png, same hosted-URL approach as
@@ -18,7 +18,7 @@ export function renderReceiptEmail(receipt: ReceiptData): { subject: string; tex
     "",
     "Thank you - we've received your payment. Your receipt is below and attached as a PDF.",
     "",
-    "Winsalot Corp",
+    "Winsalot Corp.",
     `Receipt No.: ${receipt.receiptNumber}`,
     `Receipt For: ${receipt.businessName}`,
     `Amount Paid: ${receipt.amountLabel}`,
@@ -26,7 +26,7 @@ export function renderReceiptEmail(receipt: ReceiptData): { subject: string; tex
     `Description: ${receipt.description}`,
     `Status: ${receipt.status}`,
     "",
-    "Winsalot Corp · Empowering Businesses, One Solution at a Time.",
+    "Winsalot Corp. · Empowering Businesses, One Solution at a Time.",
     "info@winsalotcorp.com · 647-300-1270 · winsalotcorp.com",
   ].join("\n");
 
@@ -40,8 +40,8 @@ export function renderReceiptEmail(receipt: ReceiptData): { subject: string; tex
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
 <tr><td style="background:#1e3a8a;padding:20px 24px;">
   <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-    <td><img src="${logoUrl}" width="44" alt="Winsalot Corp" style="display:block;border:0;height:auto;"></td>
-    <td style="padding-left:12px;color:#ffffff;font-size:22px;font-weight:700;">Winsalot Corp</td>
+    <td><img src="${logoUrl}" width="44" alt="Winsalot Corp." style="display:block;border:0;height:auto;"></td>
+    <td style="padding-left:12px;color:#ffffff;font-size:22px;font-weight:700;">Winsalot Corp.</td>
   </tr></table>
 </td></tr>
 <tr><td style="padding:24px;">
@@ -57,7 +57,7 @@ export function renderReceiptEmail(receipt: ReceiptData): { subject: string; tex
   </table>
 </td></tr>
 <tr><td style="padding:16px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.6;color:#6b7280;">
-  Winsalot Corp · Empowering Businesses, One Solution at a Time.<br>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
+  Winsalot Corp. · Empowering Businesses, One Solution at a Time.<br>647-300-1270 · info@winsalotcorp.com · winsalotcorp.com
 </td></tr>
 </table></td></tr></table></body></html>`;
   return { subject, text, html };
