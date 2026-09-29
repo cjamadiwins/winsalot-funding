@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, CalendarCheck, BarChart3, MessageSquare, UserCircle, Phone, GitBranch, HandCoins } from "lucide-react";
+import { LayoutDashboard, Users, CalendarCheck, BarChart3, MessageSquare, UserCircle, Phone, GitBranch, HandCoins, Receipt } from "lucide-react";
 import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { signOutClientAction } from "./actions";
@@ -23,6 +23,7 @@ export default async function ClientPortalLayout({ children }: { children: React
     { label: "Call Activity", href: "/client/call-activity", icon: <Phone /> },
     { label: "Reports", href: "/client/reports", icon: <BarChart3 /> },
     { label: "Communications", href: "/client/communications", icon: <MessageSquare /> },
+    { label: "Billing", href: "/client/billing", icon: <Receipt /> },
     { label: "Profile", href: "/client/profile", icon: <UserCircle /> },
   ];
 

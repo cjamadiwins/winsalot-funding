@@ -417,12 +417,13 @@ export default function ClientProfileClient({
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Invoice</th>
                 <th className="px-4 py-3">Recorded By</th>
+                <th className="px-4 py-3">Receipt</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {payments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-text-muted)]">
                     No payments recorded yet.
                   </td>
                 </tr>
@@ -438,6 +439,11 @@ export default function ClientProfileClient({
                   <td className="px-4 py-3">{p.reference_number || "-"}</td>
                   <td className="px-4 py-3">{p.invoice_id ? "Linked" : "No invoice"}</td>
                   <td className="px-4 py-3">{p.recorded_by_name}</td>
+                  <td className="px-4 py-3">
+                    <Link href={`/admin/crm/payments/${p.id}/receipt`} className="font-medium text-sky-700 hover:underline">
+                      {p.receipt_number ?? "View receipt"}
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

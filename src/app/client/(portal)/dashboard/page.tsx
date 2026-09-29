@@ -19,6 +19,8 @@ import {
   type LeadgenClientOpportunityRow,
   type LeadgenClientActivityRow,
 } from "@/lib/leadgen-types";
+import { loadPortalReceipts } from "@/lib/crm-portal-billing";
+import { formatReceiptDate } from "@/lib/crm-receipt";
 import { computeClientDashboardSummary, ownersReachedCount } from "@/lib/client-portal-dashboard";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
@@ -75,6 +77,7 @@ export default async function ClientPortalDashboardPage() {
     supabase.from("leadgen_campaigns").select("*").eq("client_id", client.id).order("created_at", { ascending: false }),
   ]);
 
+  const receipts = await loadPortalReceipts(client.id);
   const allLeads = (leads ?? []) as LeadgenLeadRow[];
   const allAppointments = (appointments ?? []) as LeadgenAppointmentRow[];
   const allCampaigns = (campaigns ?? []) as LeadgenCampaignRow[];
@@ -269,6 +272,33 @@ export default async function ClientPortalDashboardPage() {
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      {receipts.length > 0 && (
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Recent Payments</h2>
+            <Link href="/client/billing" className="text-[12.5px] font-semibold text-sky-600 hover:text-sky-700">
+              Billing &amp; Receipts →
+            </Link>
+          </div>
+          <ul className="mt-2 space-y-1.5 text-[13px]">
+            {receipts.slice(0, 3).map((r) => (
+              <li key={r.paymentId} className="flex items-center justify-between gap-2">
+                <span className="text-slate-700">
+                  {r.description} — {formatReceiptDate(r.paymentDate)}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="font-semibold text-slate-900">{r.amountLabel}</span>
+                  <StatusBadge label="Paid" className="bg-emerald-100 text-emerald-800" />
+                  <Link href={`/client/billing/${r.paymentId}`} className="font-semibold text-sky-600 hover:text-sky-700">
+                    Receipt
+                  </Link>
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

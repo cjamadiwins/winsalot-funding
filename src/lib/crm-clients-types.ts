@@ -149,6 +149,13 @@ export type CrmPaymentRow = {
   reversed_by: string | null;
   reversal_reason: string | null;
   is_test_data: boolean;
+  receipt_number: string | null;
+  payment_type: string | null;
+  description: string | null;
+  agreement_id: string | null;
+  receipt_last_emailed_at: string | null;
+  receipt_last_emailed_to: string | null;
+  receipt_email_count: number;
 };
 
 // Mirrors canPermanentlyDeleteTestInvoice() in crm-invoices-types.ts: a
