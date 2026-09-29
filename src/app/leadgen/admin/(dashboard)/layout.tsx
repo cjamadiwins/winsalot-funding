@@ -25,6 +25,7 @@ import {
   Table2,
   ShieldAlert,
   TrendingUp,
+  Link2,
 } from "lucide-react";
 import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsReadAction, clearAllNotificationsAction } from "./actions";
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
@@ -36,6 +37,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Leads", href: "/leadgen/admin/leads", icon: <Users /> },
   { label: "Opportunity Finder", href: "/leadgen/admin/opportunity-finder", icon: <Target /> },
   { label: "Call List Segments", href: "/leadgen/admin/call-list-segments", icon: <Table2 /> },
+  { label: "Client Assignments", href: "/leadgen/admin/assignments", icon: <Link2 /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
   { label: "Conversions", href: "/leadgen/admin/conversions", icon: <TrendingUp /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },

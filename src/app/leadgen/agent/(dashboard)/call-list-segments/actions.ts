@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { CALL_LOG_AUTOMATIC_NOTES, DO_NOT_CALL_OUTCOME, isCallLogOutcome } from "@/lib/call-log";
 import { addOrUpdateDncSuppression } from "@/lib/dnc-suppression";
 import { getSegmentLead, updateSegmentLeadCallState } from "@/lib/call-list-leads";
 import { getSegment, isAgentAssignedToActiveSegment } from "@/lib/call-list-segments";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
+import { resolveSegmentAssignment, CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE } from "@/lib/leadgen-campaign-assignment";
 
 type ActionResult = { error?: string };
 
@@ -27,20 +27,19 @@ export async function logCallListCallAction(leadId: string, formData: FormData):
   const agent = await requireLeadgenAgent();
   const lead = await getSegmentLead(leadId);
   if (!lead) return { error: "This lead no longer exists." };
+  const segment = await getSegment(lead.segment_id);
+  if (!segment) return { error: "This call list no longer exists." };
+
+  // The call list is the source of truth for which client this call is
+  // attributed to - resolved here from the list itself, never from anything
+  // the browser sends. An unassigned list blocks client-specific outreach.
+  const assignment = await resolveSegmentAssignment(segment);
+  if (assignment.state === "unassigned") return { error: CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE };
+  if (assignment.state === "inactive") return { error: `This call list belongs to ${assignment.clientName}, whose campaign is paused or inactive. Ask Admin before calling.` };
   if (!(await isAgentAssignedToActiveSegment(lead.segment_id, agent.id))) {
     return { error: "This call list isn't assigned to you." };
   }
-
-  const segment = await getSegment(lead.segment_id);
-  if (!segment || !segment.leadgen_campaign_id) {
-    return { error: "This segment isn't linked to a campaign." };
-  }
-
-  const admin = getSupabaseAdmin();
-  const { data: campaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
-  if (!campaign) return { error: "The campaign linked to this segment no longer exists." };
-  const { data: client } = await admin.from("leadgen_clients").select("id, name").eq("id", campaign.client_id).maybeSingle();
-  if (!client) return { error: "The client linked to this segment no longer exists." };
+  const client = { id: assignment.clientId, name: assignment.clientName };
 
   const outcome = String(formData.get("outcome") ?? "").trim();
   const extraDetails = String(formData.get("notes") ?? "").trim();
@@ -63,6 +62,7 @@ export async function logCallListCallAction(leadId: string, formData: FormData):
     outcome,
     notes,
     client_id: client.id,
+    campaign_id: assignment.campaignId,
     call_list_segment_id: lead.segment_id,
     call_list_lead_id: lead.id,
     callback_at: callbackAt,
@@ -102,6 +102,8 @@ export async function promoteCallListLeadAction(leadId: string): Promise<{ error
   const agent = await requireLeadgenAgent();
   const lead = await getSegmentLead(leadId);
   if (!lead) return { error: "This lead no longer exists." };
+  const promoteSegment = await getSegment(lead.segment_id);
+  if (promoteSegment && (await resolveSegmentAssignment(promoteSegment)).state === "unassigned") return { error: CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE };
   if (!(await isAgentAssignedToActiveSegment(lead.segment_id, agent.id))) {
     return { error: "This call list isn't assigned to you." };
   }

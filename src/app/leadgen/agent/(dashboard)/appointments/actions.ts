@@ -47,6 +47,12 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const supabase = await createSupabaseServerClient();
   const { data: activeClient } = await supabase.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
   if (!activeClient) return { error: "This client is inactive." };
+  // Attribution follows the lead (which follows its call list): an
+  // appointment for a lead can only be booked under that lead's own client.
+  if (leadId) {
+    const { data: leadRow } = await supabase.from("leadgen_leads").select("client_id").eq("id", leadId).maybeSingle();
+    if (leadRow && leadRow.client_id !== clientId) return { error: "This lead belongs to a different client. Open the lead to book under the correct client." };
+  }
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({

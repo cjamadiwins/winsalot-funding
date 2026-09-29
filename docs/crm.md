@@ -1359,3 +1359,15 @@ Building real invite/deactivate/remove controls surfaced two gaps in the origina
       and Upcoming only)
 - [ ] `/admin/crm/leads/[id]` (the full lead page) is unchanged — still has Lead Details, Quote
       Request Email/Link, Log Activity, and the existing Close Lead panel for detailed work
+
+## Lead Generation CRM: call-list-driven client/campaign assignment
+
+The **call list is the source of truth** for which client an agent is calling for. No new tables:
+
+- **Call List → Client/Campaign**: `call_list_segments.leadgen_campaign_id` → `leadgen_campaigns.client_id`.
+- **Call List → Agents**: `call_list_segment_agents`. **Client/Campaign → Agents**: `leadgen_campaign_agents`.
+- `resolveSegmentAssignment()` (`src/lib/leadgen-campaign-assignment.ts`) turns a list into `assigned` / `unassigned` / `inactive`. Agent pages and Server Actions use it - the client is never taken from the browser.
+- **Admin** manages everything at `/leadgen/admin/assignments` (Client Assignments): campaign → agents, list → campaign, list → agents. An unassigned production (active/completed) list, or one still on the internal test client (`leadgen_clients.is_internal_test`), is flagged there and on the admin dashboard.
+- **Agents** see "Calling for: <client>" on their call lists, the working list and the lead page. An unassigned list shows **Campaign Assignment Required** and blocks logging calls/promoting leads; a paused campaign shows "Campaign Not Active".
+- **Attribution**: call logs store `client_id` + `campaign_id` at call time (`leadgen_call_logs.campaign_id`), leads get `client_id`/`campaign_id` when promoted from the list, and emails, follow-ups, appointments and conversions follow the lead. Reassigning a list only affects work from then on; history is never rewritten.
+- The agent dashboard's "Current Campaign" selector (`leadgen_users.current_campaign_id`) is display-only and is not used for attribution.

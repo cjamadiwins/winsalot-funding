@@ -69,6 +69,13 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
   }
 
   return (
+    <>
+      {/* Attribution follows the lead's own client/campaign, which was set from
+          its call list when it was promoted - shown, never chosen, here. */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[12.5px] text-sky-900">
+        <span className="font-semibold">Calling for: {detail.client!.name}</span>
+        {detail.campaign && <span className="text-sky-700">Campaign: {detail.campaign.name}</span>}
+      </div>
     <LeadDetailClient
       lead={detail.lead}
       client={detail.client!}
@@ -97,5 +104,6 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       listPath="/leadgen/agent/leads"
       dncSuppression={detail.dncSuppression}
     />
+    </>
   );
 }

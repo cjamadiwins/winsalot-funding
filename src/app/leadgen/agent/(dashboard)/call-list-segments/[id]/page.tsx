@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isAgentAssignedToActiveSegment } from "@/lib/call-list-segments";
+import { resolveSegmentAssignment, CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE } from "@/lib/leadgen-campaign-assignment";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
@@ -18,6 +19,29 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
   // simply won't be returned here, same as any other id-in-the-URL page
   // in this app.
   const { data: segment } = await supabase.from("call_list_segments").select("*").eq("id", id).maybeSingle();
+
+  // The call list itself decides which client this agent is calling for. If
+  // it has no client/campaign, don't guess and don't load any leads - the
+  // agent is blocked from client-specific outreach until Admin assigns it.
+  const assignment = segment && segment.status !== "draft" ? await resolveSegmentAssignment(segment as CallListSegmentRow) : null;
+  if (segment && assignment && assignment.state !== "assigned") {
+    const paused = assignment.state === "inactive";
+    return (
+      <div className="mx-auto mt-16 max-w-md rounded-2xl border border-amber-300 bg-amber-50 p-8 text-center">
+        <h1 className="font-heading text-lg font-bold text-amber-900">{paused ? "Campaign Not Active" : "Campaign Assignment Required"}</h1>
+        <p className="mt-1 text-sm font-semibold text-amber-900">{(segment as CallListSegmentRow).name}</p>
+        <p className="mt-2 text-sm text-amber-800">
+          {paused
+            ? `This call list belongs to ${assignment.clientName}, whose campaign is paused or inactive. Ask Admin before calling.`
+            : CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE}
+        </p>
+        <Link href="/leadgen/agent/call-list-segments" className="mt-5 inline-block rounded-full bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white">
+          ← Back to My Call Lists
+        </Link>
+      </div>
+    );
+  }
+
   if (!segment || !(await isAgentAssignedToActiveSegment(id, agent.id))) {
     return (
       <div className="mx-auto mt-16 max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-8 text-center">
@@ -44,18 +68,14 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
   // single leadgen_campaign_id), so this is resolved once here rather
   // than per lead. Null when the segment has no linked campaign - the
   // per-lead script button/panel simply doesn't render in that case.
-  const segmentRow = segment as CallListSegmentRow;
   let callScriptClient: CallScriptClientOption | null = null;
-  if (segmentRow.leadgen_campaign_id) {
-    const { data: campaign } = await supabase.from("leadgen_campaigns").select("client_id").eq("id", segmentRow.leadgen_campaign_id).maybeSingle();
-    if (campaign?.client_id) {
-      const { data: client } = await supabase
-        .from("leadgen_clients")
-        .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
-        .eq("id", campaign.client_id)
-        .maybeSingle();
-      if (client) callScriptClient = client as CallScriptClientOption;
-    }
+  if (assignment?.state === "assigned") {
+    const { data: client } = await supabase
+      .from("leadgen_clients")
+      .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
+      .eq("id", assignment.clientId)
+      .maybeSingle();
+    if (client) callScriptClient = client as CallScriptClientOption;
   }
 
   // Hidden columns must not reach the agent's browser at all "through
@@ -102,6 +122,7 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
           hiddenFields={hiddenFields}
           callScriptClient={callScriptClient}
           agentName={agent.full_name || agent.email}
+          callingFor={assignment?.state === "assigned" ? { clientName: assignment.clientName, campaignName: assignment.campaignName } : null}
         />
       </div>
     </div>

@@ -66,6 +66,7 @@ import { fetchOperationsMonitoringSummary } from "@/lib/leadgen-monitoring-data"
 import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-react";
 import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
+import { findAssignmentProblems, loadAssignmentOverview } from "@/lib/leadgen-campaign-assignment";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -332,8 +333,25 @@ export default async function LeadgenAdminDashboardPage() {
     };
   });
 
+  const assignmentProblems = findAssignmentProblems(await loadAssignmentOverview({ withCounts: false }));
+  const assignmentProblemCount = assignmentProblems.unassignedProduction.length + assignmentProblems.onInternalTestClient.length;
+
   return (
     <div>
+      {assignmentProblemCount > 0 && (
+        <Link
+          href="/leadgen/admin/assignments"
+          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <span>
+            <strong>Campaign Assignment Required:</strong>{" "}
+            {assignmentProblems.unassignedProduction.length > 0 && `${assignmentProblems.unassignedProduction.length} production call list(s) have no client/campaign`}
+            {assignmentProblems.unassignedProduction.length > 0 && assignmentProblems.onInternalTestClient.length > 0 && "; "}
+            {assignmentProblems.onInternalTestClient.length > 0 && `${assignmentProblems.onInternalTestClient.length} are still on the internal test client`}.
+          </span>
+          <span className="font-semibold">Assign now →</span>
+        </Link>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">

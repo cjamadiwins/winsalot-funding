@@ -39,6 +39,7 @@ export default function CallListWorkingClient({
   hiddenFields,
   callScriptClient,
   agentName,
+  callingFor,
 }: {
   leads: CallListLeadRow[];
   logCallAction: (leadId: string, formData: FormData) => Promise<{ error?: string }>;
@@ -52,6 +53,10 @@ export default function CallListWorkingClient({
   // simply doesn't render in that case.
   callScriptClient?: CallScriptClientOption | null;
   agentName?: string;
+  // Lead Generation CRM only: the client/campaign this call list belongs to,
+  // resolved server-side from the list itself (never chosen by the agent).
+  // Growth CRM doesn't pass it, so nothing renders there.
+  callingFor?: { clientName: string; campaignName: string } | null;
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -97,6 +102,12 @@ export default function CallListWorkingClient({
 
   return (
     <div className="space-y-3">
+      {callingFor && (
+        <div className="flex flex-wrap items-center gap-x-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[12.5px] text-sky-900">
+          <span className="font-semibold">Calling for: {callingFor.clientName}</span>
+          <span className="text-sky-700">Campaign: {callingFor.campaignName}</span>
+        </div>
+      )}
       <div className="flex items-center gap-2 text-[12.5px]">
         <button
           type="button"
@@ -208,6 +219,9 @@ export default function CallListWorkingClient({
                   action={(formData) => handleSubmit(lead.id, formData)}
                   className="mt-3 grid grid-cols-1 gap-2 border-t border-[var(--color-border)] pt-3 sm:grid-cols-2"
                 >
+                  {callingFor && (
+                    <p className="text-[12px] font-semibold text-sky-800 sm:col-span-2">Calling for: {callingFor.clientName} - this call is recorded under this client.</p>
+                  )}
                   <label className="block text-[12.5px] sm:col-span-1">
                     <span className="mb-1 block font-medium text-[var(--color-text-muted)]">Outcome</span>
                     <select name="outcome" required defaultValue="" className="w-full rounded-lg border border-[var(--color-input-border)] px-2.5 py-1.5 text-[13px]">
