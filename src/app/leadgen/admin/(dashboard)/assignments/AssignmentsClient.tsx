@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AssignmentOverview, AssignmentProblems } from "@/lib/leadgen-campaign-assignment";
+import { formatStatusLabel } from "@/lib/leadgen-types";
 
 type ActionResult = { error?: string; removedFromLists?: number };
 
@@ -162,7 +163,7 @@ export default function AssignmentsClient({
                 {group.campaigns.map((campaign) => (
                   <div key={campaign.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2">
                     <div className="min-w-[260px] flex-1 text-sm text-slate-700">
-                      {campaign.name} <Chip label={campaign.status} className={STATUS_STYLES[campaign.status] ?? STATUS_STYLES.completed} />
+                      {campaign.name} <Chip label={formatStatusLabel(campaign.status)} className={STATUS_STYLES[campaign.status] ?? STATUS_STYLES.completed} />
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                       {overview.agents.map((agent) => (
@@ -209,7 +210,7 @@ export default function AssignmentsClient({
                         {segment.name}
                       </Link>
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-slate-500">
-                        <Chip label={segment.status} className={STATUS_STYLES[segment.status] ?? STATUS_STYLES.completed} />
+                        <Chip label={formatStatusLabel(segment.status)} className={STATUS_STYLES[segment.status] ?? STATUS_STYLES.completed} />
                         {segment.leadCount} lead(s) · {segment.callLogCount} call(s) logged
                         {production && unassigned && <Chip label="Campaign assignment required" className="bg-rose-100 text-rose-800" />}
                         {production && campaign?.isInternalTest && <Chip label="On internal test client" className="bg-violet-100 text-violet-800" />}
@@ -228,7 +229,7 @@ export default function AssignmentsClient({
                             {group.campaigns.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.name}
-                                {c.status !== "active" ? ` (${c.status})` : ""}
+                                {c.status !== "active" ? ` (${formatStatusLabel(c.status)})` : ""}
                               </option>
                             ))}
                           </optgroup>

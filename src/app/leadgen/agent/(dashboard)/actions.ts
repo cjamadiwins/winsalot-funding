@@ -3,9 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
-import { isLeadgenAgentDashboardCampaignId } from "@/lib/leadgen-agent-campaigns";
 import { opportunityTodayKey } from "@/lib/opportunity-finder";
 
 export async function signOutLeadgenAgentAction() {
@@ -19,67 +17,14 @@ export type UpdateCurrentCampaignState = {
   message: string | null;
 };
 
-// The signed-in agent's own current_campaign_id is the only thing this
-// action can ever change. The target row always comes from
-// requireLeadgenAgent()'s authenticated session (never from form input),
-// so an agent can only update their own selection - and every failure
-// path returns a visible error instead of swallowing it, so "Saved"
-// (below, in AgentCampaignSelector) only ever appears once the database
-// update has actually succeeded.
-export async function updateCurrentCampaignAction(
-  _prevState: UpdateCurrentCampaignState,
-  formData: FormData
-): Promise<UpdateCurrentCampaignState> {
-  const agent = await requireLeadgenAgent();
-  const rawCampaignId = formData.get("campaignId");
-  const campaignId = typeof rawCampaignId === "string" && rawCampaignId.trim() ? rawCampaignId.trim() : null;
-
-  // Defense in depth: the dropdown only ever renders the campaigns in
-  // LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS, but this rejects any other
-  // campaign id (e.g. "Q3 Growth Campaign") even if posted directly.
-  if (campaignId && !isLeadgenAgentDashboardCampaignId(campaignId)) {
-    return { status: "error", message: "That business is not available for selection." };
-  }
-
-  const admin = getSupabaseAdmin();
-
-  if (campaignId) {
-    const { data: campaign, error: campaignError } = await admin
-      .from("leadgen_campaigns")
-      .select("id, client_id")
-      .eq("id", campaignId)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (campaignError) {
-      return { status: "error", message: "Could not verify the selected business. Please try again." };
-    }
-    if (!campaign) {
-      return { status: "error", message: "The selected business is no longer active." };
-    }
-    const { data: activeClient } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
-    if (!activeClient) return { status: "error", message: "The selected business is no longer active." };
-  }
-
-  const { data: updated, error } = await admin
-    .from("leadgen_users")
-    .update({ current_campaign_id: campaignId })
-    .eq("id", agent.id)
-    .eq("role", "agent")
-    .eq("active", true)
-    .select("id");
-
-  if (error) {
-    return { status: "error", message: "Could not save your business selection. Please try again." };
-  }
-  if (!updated || updated.length === 0) {
-    return { status: "error", message: "Could not save your business selection: your agent account could not be found." };
-  }
-
-  revalidatePath("/leadgen/agent");
-  revalidatePath("/leadgen/admin");
-
-  return { status: "success", message: null };
+// The agent's active client is now chosen by Admin only (Agent Client Status
+// on the admin dashboard -> setAgentActiveClientAction). Agents can see their
+// selection but this action no longer changes anything, even if it's posted
+// directly - it exists only so any stale page fails with a clear message.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- signature kept for the useActionState-style callers; arguments are intentionally ignored.
+export async function updateCurrentCampaignAction(_prevState: UpdateCurrentCampaignState, _formData: FormData): Promise<UpdateCurrentCampaignState> {
+  await requireLeadgenAgent();
+  return { status: "error", message: "Your active client is set by Admin. Ask Admin if it needs to change." };
 }
 
 // Marks one of the signed-in agent's own leadgen_notifications rows read

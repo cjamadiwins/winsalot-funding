@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { CALL_LOG_AUTOMATIC_NOTES, DO_NOT_CALL_OUTCOME, isCallLogOutcome } from "@/lib/call-log";
 import { addOrUpdateDncSuppression } from "@/lib/dnc-suppression";
 import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
+import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
 
 type ActionResult = { error?: string };
 
@@ -35,8 +36,8 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
   // assigned to this agent - so a wrong-business attribution can't happen
   // just by picking the wrong dropdown entry. Agents with no assignments yet
   // keep the previous behaviour.
-  const assignedClientIds = await getAgentAssignedClientIds(agent.id);
-  if (assignedClientIds.length > 0 && !assignedClientIds.includes(clientId)) {
+  const [assignedClientIds, activeClient] = await Promise.all([getAgentAssignedClientIds(agent.id), getAgentActiveClient(agent.id)]);
+  if (assignedClientIds.length > 0 && !assignedClientIds.includes(clientId) && activeClient?.clientId !== clientId) {
     return { error: "That client isn't assigned to you. Ask Admin to assign it, or work it from an assigned call list." };
   }
 

@@ -10,7 +10,6 @@ import { cleanupLeadgenTestClientsAction, createClientAction, deleteLeadgenClien
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
 export default function ClientsListClient({ clients }: { clients: LeadgenClientRow[] }) {
-  const visibleClients = clients.filter((client) => client.active !== showInactive);
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -20,6 +19,10 @@ export default function ClientsListClient({ clients }: { clients: LeadgenClientR
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Must come after the showInactive state above: reading a `const` before its
+  // declaration throws "Cannot access ... before initialization" in production,
+  // which is what made /leadgen/admin/clients return 500.
+  const visibleClients = clients.filter((client) => client.active !== showInactive);
 
   function handleSubmit(formData: FormData) {
     setError(null);

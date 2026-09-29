@@ -18,6 +18,7 @@ import {
   type LeadgenClientRow,
   type LeadgenEmailRow,
   type LeadgenEmailTemplateRow,
+  formatStatusLabel,
 } from "@/lib/leadgen-types";
 import { clearBouncedEmailAction, updateClientAction, createCampaignAction, resendLeadgenEmailAction } from "../../actions";
 import { sendClientCommunicationAction, updateClientCallScriptAction } from "./actions";
@@ -352,7 +353,7 @@ export default function ClientDetailClient({
                       {campaign.name}
                     </Link>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700 capitalize">
-                      {campaign.status}
+                      {formatStatusLabel(campaign.status)}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-slate-500">
