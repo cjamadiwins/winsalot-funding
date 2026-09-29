@@ -4,6 +4,8 @@ import { getEmailSender, getEmailReplyTo } from "./email-senders";
 import { getSiteUrl } from "./site-url";
 import { escapeHtml } from "./html";
 import { renderAgreementPdfBuffer } from "./crm-agreement-pdf";
+import { logClientCommunication, type ClientCommType } from "./crm-client-communications";
+import { redactSecureLinks } from "./crm-client-communications-shared";
 import {
   AGREEMENT_SERVICE_TYPE_LABELS,
   pilotProgramLabel,
@@ -14,6 +16,37 @@ import {
   type CrmAgreementTemplateRow,
   type CrmClientAgreementRow,
 } from "./crm-agreement-types";
+
+// Records the client-facing agreement/intake emails in the client's
+// Communication History. Secure one-time signing/intake links are redacted
+// before anything is stored, and a logging problem can never fail (or block)
+// the send itself.
+async function logAgreementEmail(
+  agreement: CrmClientAgreementRow,
+  emailType: ClientCommType,
+  subject: string,
+  resendEmailId: string | null | undefined,
+  text: string,
+  html: string | null
+): Promise<void> {
+  if (!resendEmailId) return;
+  try {
+    await logClientCommunication({
+      clientId: agreement.client_id,
+      toEmail: agreement.business_email,
+      subject,
+      emailType,
+      sender: getEmailSender("growth"),
+      sentBy: null,
+      text: redactSecureLinks(text),
+      html: html ? redactSecureLinks(html) : null,
+      resendEmailId,
+      related: { type: "agreement", id: agreement.id },
+    });
+  } catch (err) {
+    console.error("[crm-agreement-emails] failed to log client communication:", err);
+  }
+}
 
 // "your complimentary pilot program agreement" only ever applies to a
 // Free Pilot - a Paid Pilot's own outbound emails must never claim it's
@@ -73,7 +106,7 @@ export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, t
   ]);
 
   const resend = getResendClient();
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: getEmailSender("growth"),
     to: agreement.business_email,
     replyTo: getEmailReplyTo(),
@@ -83,6 +116,7 @@ export async function sendAgreementSignEmail(agreement: CrmClientAgreementRow, t
   });
 
   if (error) return { error: error.message };
+  await logAgreementEmail(agreement, "agreement_sent", subject, data?.id, text, html);
   return {};
 }
 
@@ -129,7 +163,7 @@ export async function sendSignedAgreementClientCopy(
   ]);
 
   const resend = getResendClient();
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: getEmailSender("growth"),
     to: agreement.business_email,
     replyTo: getEmailReplyTo(),
@@ -140,6 +174,7 @@ export async function sendSignedAgreementClientCopy(
   });
 
   if (error) return { error: error.message };
+  await logAgreementEmail(agreement, "agreement_signed_copy", subject, data?.id, text, html);
   return {};
 }
 
@@ -236,7 +271,7 @@ export async function sendIntakeFormEmail(agreement: CrmClientAgreementRow, toke
   ]);
 
   const resend = getResendClient();
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: getEmailSender("growth"),
     to: agreement.business_email,
     replyTo: getEmailReplyTo(),
@@ -246,6 +281,7 @@ export async function sendIntakeFormEmail(agreement: CrmClientAgreementRow, toke
   });
 
   if (error) return { error: error.message };
+  await logAgreementEmail(agreement, "intake_form", subject, data?.id, text, html);
   return {};
 }
 
