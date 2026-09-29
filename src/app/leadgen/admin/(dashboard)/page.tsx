@@ -67,9 +67,9 @@ import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-re
 import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { findAssignmentProblems, loadAssignmentOverview } from "@/lib/leadgen-campaign-assignment";
-import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
+import { groupAgentClientAssignments, listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import AgentClientStatusClient from "@/components/leadgen/AgentClientStatusClient";
-import { setAgentActiveClientAction } from "./assignments/actions";
+import { assignAgentClientAction, removeAgentClientAction, setAgentActiveClientAction } from "./assignments/actions";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -333,7 +333,14 @@ export default async function LeadgenAdminDashboardPage() {
   });
 
   const selectableClients = await listSelectableActiveClients();
-  const clientIdByCampaignId = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.client_id] as const));
+  const { data: campaignAgentRows } = await admin.from("leadgen_campaign_agents").select("campaign_id, agent_id");
+  const agentClientAssignments = groupAgentClientAssignments(
+    campaignAgentRows ?? [],
+    (campaigns ?? []).map((c) => ({ id: c.id, client_id: c.client_id })),
+    new Set(selectableClients.map((c) => c.id)),
+    agents.map((a) => ({ id: a.id, current_campaign_id: a.current_campaign_id }))
+  );
+  const selectableClientName = new Map(selectableClients.map((c) => [c.id, c.name] as const));
   const assignmentProblems = findAssignmentProblems(await loadAssignmentOverview({ withCounts: false }));
   const assignmentProblemCount = assignmentProblems.unassignedProduction.length + assignmentProblems.onInternalTestClient.length;
 
@@ -481,19 +488,26 @@ export default async function LeadgenAdminDashboardPage() {
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Agent Client Status</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Choose the client each agent is working now. A call list that belongs to a specific client always takes priority over this selection.
+          Assign the clients each agent works and mark one as their Primary client. A call list that belongs to a specific client always takes priority over the Primary client.
         </p>
         {agents.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No active agents.</p>
         ) : (
           <AgentClientStatusClient
-            agents={agents.map((agent) => ({
-              id: agent.id,
-              name: agent.full_name,
-              clientId: agent.current_campaign_id ? (clientIdByCampaignId.get(agent.current_campaign_id) ?? null) : null,
-            }))}
+            agents={agents.map((agent) => {
+              const assignment = agentClientAssignments.get(agent.id);
+              return {
+                id: agent.id,
+                name: agent.full_name,
+                clients: (assignment?.clients ?? []).map((c) => ({ id: c.clientId, name: selectableClientName.get(c.clientId) ?? "Unknown client", rows: c.rows })),
+                totalRows: assignment?.totalRows ?? 0,
+                primaryClientId: assignment?.primaryClientId ?? null,
+              };
+            })}
             clients={selectableClients.map((client) => ({ id: client.id, name: client.name }))}
-            setAgentClient={setAgentActiveClientAction}
+            assignClient={assignAgentClientAction}
+            removeClient={removeAgentClientAction}
+            setPrimary={setAgentActiveClientAction}
           />
         )}
       </section>

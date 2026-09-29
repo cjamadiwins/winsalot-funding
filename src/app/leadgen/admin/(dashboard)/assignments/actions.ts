@@ -5,8 +5,9 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import { ensureRestrictedAgentOnCampaign } from "@/lib/leadgen-campaign-assignment";
+import { assignmentWouldRestrictAgent, removalWouldUnrestrictAgent } from "@/lib/leadgen-agent-active-client";
 
-type ActionResult = { error?: string; removedFromLists?: number };
+type ActionResult = { error?: string; removedFromLists?: number; remainingLists?: number };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -115,11 +116,107 @@ export async function setSegmentCampaignAction(segmentId: string, campaignId: st
   return {};
 }
 
-// Agent Client Status (admin dashboard): set or clear the client an agent is
-// currently working. Admin-only - agents have no write path to this. It is a
-// *default*: a call list that belongs to a specific client always wins, and
-// nothing recorded earlier is rewritten (historical calls, leads,
-// appointments and emails keep the client they were created under).
+// ---------------------------------------------------------------------------
+// Agent Client Status (admin dashboard): multiple clients per agent plus one
+// Primary/Current client.
+//
+// Assignments reuse the existing leadgen_campaign_agents rows (an agent is
+// assigned to a client when they have a row on that client's campaigns); the
+// Primary client is the existing leadgen_users.current_campaign_id. These
+// actions only ever change those assignment rows - never a call log, lead,
+// appointment, email or report - so everything recorded earlier keeps the
+// client it was created under. Admin-only (agents have no write path).
+//
+// Attribution priority is unchanged and lives elsewhere: an explicit call-list
+// client always wins, then the Primary client, then no selection.
+// ---------------------------------------------------------------------------
+
+async function campaignIdsForClient(db: ReturnType<typeof getSupabaseAdmin>, clientId: string): Promise<string[]> {
+  const { data } = await db.from("leadgen_campaigns").select("id").eq("client_id", clientId);
+  return (data ?? []).map((c) => c.id as string);
+}
+
+async function agentCampaignRows(db: ReturnType<typeof getSupabaseAdmin>, agentId: string): Promise<{ id: string; campaign_id: string }[]> {
+  const { data } = await db.from("leadgen_campaign_agents").select("id, campaign_id").eq("agent_id", agentId);
+  return (data ?? []) as { id: string; campaign_id: string }[];
+}
+
+// Assign a client to an agent: adds the agent to all of that client's
+// campaigns. Going from "no assignments" (the agent can see every client) to
+// one assignment restricts them to only assigned clients, so that transition
+// needs an explicit confirmation.
+export async function assignAgentClientAction(agentId: string, clientId: string, confirmed = false): Promise<ActionResult> {
+  const admin = await requireLeadgenAdmin();
+  if (!UUID.test(agentId) || !UUID.test(clientId)) return { error: "Invalid request." };
+  const db = getSupabaseAdmin();
+  if (!(await assertActiveAgent(db, agentId))) return { error: "That agent isn't active." };
+  if (!(await listSelectableActiveClients()).some((c) => c.id === clientId)) return { error: "That client isn't an active client." };
+
+  const campaignIds = await campaignIdsForClient(db, clientId);
+  if (campaignIds.length === 0) return { error: "That client has no campaigns yet." };
+
+  const rows = await agentCampaignRows(db, agentId);
+  if (assignmentWouldRestrictAgent(rows.length) && !confirmed) {
+    return { error: "This agent can currently see every client. Assigning a client limits them to only their assigned clients - confirm to continue." };
+  }
+
+  const { error } = await db
+    .from("leadgen_campaign_agents")
+    .upsert(campaignIds.map((campaign_id) => ({ campaign_id, agent_id: agentId, assigned_by: admin.id })), { onConflict: "campaign_id,agent_id", ignoreDuplicates: true });
+  if (error) return { error: `Failed to assign the client: ${error.message}` };
+
+  refresh();
+  revalidatePath("/leadgen/agent");
+  return {};
+}
+
+// Remove a client from an agent. Deletes only the agent's campaign
+// assignments for that client. Nothing recorded under the client is touched,
+// and the agent's call-list roster is left alone (the count still on a list is
+// returned so Admin can decide). If it was the Primary client, Primary is
+// cleared. Removing an agent's last assignment makes them unrestricted, so
+// that needs an explicit confirmation.
+export async function removeAgentClientAction(agentId: string, clientId: string, confirmed = false): Promise<ActionResult> {
+  await requireLeadgenAdmin();
+  if (!UUID.test(agentId) || !UUID.test(clientId)) return { error: "Invalid request." };
+  const db = getSupabaseAdmin();
+
+  const campaignIds = await campaignIdsForClient(db, clientId);
+  const rows = await agentCampaignRows(db, agentId);
+  const clientRows = rows.filter((r) => campaignIds.includes(r.campaign_id));
+
+  if (clientRows.length > 0 && removalWouldUnrestrictAgent(rows.length, clientRows.length) && !confirmed) {
+    return { error: "This is the agent's last assigned client. With none assigned they can see every client - confirm to continue." };
+  }
+
+  if (clientRows.length > 0) {
+    const { error } = await db.from("leadgen_campaign_agents").delete().eq("agent_id", agentId).in("campaign_id", campaignIds);
+    if (error) return { error: `Failed to remove the client: ${error.message}` };
+  }
+
+  // Primary/Current pointing at this client is cleared.
+  const { data: user } = await db.from("leadgen_users").select("current_campaign_id").eq("id", agentId).maybeSingle();
+  if (user?.current_campaign_id && campaignIds.includes(user.current_campaign_id as string)) {
+    await db.from("leadgen_users").update({ current_campaign_id: null }).eq("id", agentId).eq("role", "agent");
+  }
+
+  const { data: segments } = campaignIds.length
+    ? await db.from("call_list_segments").select("id").eq("crm", "lead_generation").in("leadgen_campaign_id", campaignIds)
+    : { data: [] as { id: string }[] };
+  const segmentIds = (segments ?? []).map((s) => s.id as string);
+  const { count } = segmentIds.length
+    ? await db.from("call_list_segment_agents").select("segment_id", { count: "exact", head: true }).eq("agent_id", agentId).in("segment_id", segmentIds)
+    : { count: 0 };
+
+  refresh();
+  revalidatePath("/leadgen/agent");
+  return { remainingLists: count ?? 0 };
+}
+
+// Set or clear the agent's Primary/Current client. It's a default only: a call
+// list that belongs to a specific client always wins. A campaign-restricted
+// agent's Primary must be one of their assigned clients; an unrestricted agent
+// (no assignments) can still have one without being restricted.
 export async function setAgentActiveClientAction(agentId: string, clientId: string | null): Promise<ActionResult> {
   const admin = await requireLeadgenAdmin();
   if (!UUID.test(agentId) || (clientId !== null && !UUID.test(clientId))) return { error: "Invalid request." };
@@ -130,10 +227,25 @@ export async function setAgentActiveClientAction(agentId: string, clientId: stri
   if (clientId) {
     const option = (await listSelectableActiveClients()).find((c) => c.id === clientId);
     if (!option) return { error: "That client isn't an active client." };
+
+    const rows = await agentCampaignRows(db, agentId);
+    if (rows.length > 0) {
+      const clientCampaigns = await campaignIdsForClient(db, clientId);
+      if (!rows.some((r) => clientCampaigns.includes(r.campaign_id))) return { error: "Assign this client to the agent before making it their Primary client." };
+    }
+
+    // Already the Primary client (e.g. saved on one of its other campaigns)?
+    // Keep the existing campaign rather than rewriting it.
+    const { data: current } = await db.from("leadgen_users").select("current_campaign_id").eq("id", agentId).maybeSingle();
+    const clientCampaignIds = await campaignIdsForClient(db, clientId);
+    if (current?.current_campaign_id && clientCampaignIds.includes(current.current_campaign_id as string)) {
+      refresh();
+      return {};
+    }
+
     campaignId = option.campaignId;
-    // An already campaign-restricted agent needs access to the client Admin
-    // picked or they couldn't see its leads; an unrestricted agent (no
-    // assignments) already sees everything and is deliberately left alone.
+    // A restricted agent needs access to the Primary campaign itself to see
+    // its leads; an unrestricted agent already sees everything.
     await ensureRestrictedAgentOnCampaign(campaignId, agentId, admin.id);
   }
 
@@ -143,7 +255,7 @@ export async function setAgentActiveClientAction(agentId: string, clientId: stri
     .eq("id", agentId)
     .eq("role", "agent")
     .select("id");
-  if (error) return { error: `Failed to save the agent's client: ${error.message}` };
+  if (error) return { error: `Failed to save the agent's Primary client: ${error.message}` };
   if (!updated || updated.length === 0) return { error: "Agent not found." };
 
   refresh();
