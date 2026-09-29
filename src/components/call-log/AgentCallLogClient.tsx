@@ -22,7 +22,7 @@ type ActionResult = { error?: string };
 // Lead Gen CRM: the agent must pick one of the CRM's existing clients.
 export type BusinessClientField =
   | { mode: "fixed"; value: string }
-  | { mode: "select"; options: { id: string; name: string }[] };
+  | { mode: "select"; options: { id: string; name: string }[]; defaultId?: string | null };
 
 type Props = {
   crmLabel: string;
@@ -38,7 +38,8 @@ const DEFAULT_DNC_REASON = "Requested Do Not Call during outbound call";
 
 export default function AgentCallLogClient({ crmLabel, records, createAction, businessClientField }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
-  const [clientId, setClientId] = useState<string | null>(null);
+  const defaultClientId = businessClientField.mode === "select" ? (businessClientField.defaultId ?? null) : null;
+  const [clientId, setClientId] = useState<string | null>(defaultClientId);
   const automaticNote = CALL_LOG_AUTOMATIC_NOTES[outcome];
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       }
       setSaved(true);
       setOutcome("No Answer");
-      setClientId(null);
+      setClientId(defaultClientId);
       setBusinessName("");
       setPhone("");
       setDncReason(DEFAULT_DNC_REASON);

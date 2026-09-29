@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
+import { ensureRestrictedAgentOnCampaign } from "@/lib/leadgen-campaign-assignment";
 
 type ActionResult = { error?: string; removedFromLists?: number };
 
@@ -75,11 +77,7 @@ export async function setSegmentAgentAction(segmentId: string, agentId: string, 
     if (!(await assertActiveAgent(db, agentId))) return { error: "That agent isn't active." };
     const { error } = await db.from("call_list_segment_agents").upsert({ segment_id: segmentId, agent_id: agentId }, { onConflict: "segment_id,agent_id", ignoreDuplicates: true });
     if (error) return { error: `Failed to assign the agent: ${error.message}` };
-    if (segment.leadgen_campaign_id) {
-      await db
-        .from("leadgen_campaign_agents")
-        .upsert({ campaign_id: segment.leadgen_campaign_id, agent_id: agentId, assigned_by: admin.id }, { onConflict: "campaign_id,agent_id", ignoreDuplicates: true });
-    }
+    if (segment.leadgen_campaign_id) await ensureRestrictedAgentOnCampaign(segment.leadgen_campaign_id, agentId, admin.id);
   } else {
     const { error } = await db.from("call_list_segment_agents").delete().eq("segment_id", segmentId).eq("agent_id", agentId);
     if (error) return { error: `Failed to remove the agent: ${error.message}` };
@@ -111,9 +109,44 @@ export async function setSegmentCampaignAction(segmentId: string, campaignId: st
   // Agents already on this list get access to the new client too.
   if (campaignId) {
     const { data: onList } = await db.from("call_list_segment_agents").select("agent_id").eq("segment_id", segmentId);
-    const rows = (onList ?? []).map((r) => ({ campaign_id: campaignId, agent_id: r.agent_id as string, assigned_by: admin.id }));
-    if (rows.length > 0) await db.from("leadgen_campaign_agents").upsert(rows, { onConflict: "campaign_id,agent_id", ignoreDuplicates: true });
+    for (const row of onList ?? []) await ensureRestrictedAgentOnCampaign(campaignId, row.agent_id as string, admin.id);
   }
   refresh();
+  return {};
+}
+
+// Agent Client Status (admin dashboard): set or clear the client an agent is
+// currently working. Admin-only - agents have no write path to this. It is a
+// *default*: a call list that belongs to a specific client always wins, and
+// nothing recorded earlier is rewritten (historical calls, leads,
+// appointments and emails keep the client they were created under).
+export async function setAgentActiveClientAction(agentId: string, clientId: string | null): Promise<ActionResult> {
+  const admin = await requireLeadgenAdmin();
+  if (!UUID.test(agentId) || (clientId !== null && !UUID.test(clientId))) return { error: "Invalid request." };
+  const db = getSupabaseAdmin();
+  if (!(await assertActiveAgent(db, agentId))) return { error: "That agent isn't active." };
+
+  let campaignId: string | null = null;
+  if (clientId) {
+    const option = (await listSelectableActiveClients()).find((c) => c.id === clientId);
+    if (!option) return { error: "That client isn't an active client." };
+    campaignId = option.campaignId;
+    // An already campaign-restricted agent needs access to the client Admin
+    // picked or they couldn't see its leads; an unrestricted agent (no
+    // assignments) already sees everything and is deliberately left alone.
+    await ensureRestrictedAgentOnCampaign(campaignId, agentId, admin.id);
+  }
+
+  const { data: updated, error } = await db
+    .from("leadgen_users")
+    .update({ current_campaign_id: campaignId })
+    .eq("id", agentId)
+    .eq("role", "agent")
+    .select("id");
+  if (error) return { error: `Failed to save the agent's client: ${error.message}` };
+  if (!updated || updated.length === 0) return { error: "Agent not found." };
+
+  refresh();
+  revalidatePath("/leadgen/agent");
   return {};
 }

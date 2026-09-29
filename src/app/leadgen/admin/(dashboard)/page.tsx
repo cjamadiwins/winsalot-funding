@@ -67,6 +67,9 @@ import { CheckCircle2, HandCoins, XCircle, Receipt, TrendingUp } from "lucide-re
 import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { findAssignmentProblems, loadAssignmentOverview } from "@/lib/leadgen-campaign-assignment";
+import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
+import AgentClientStatusClient from "@/components/leadgen/AgentClientStatusClient";
+import { setAgentActiveClientAction } from "./assignments/actions";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -170,10 +173,6 @@ export default async function LeadgenAdminDashboardPage() {
   const allAppointments = appointments ?? [];
   const allClients = clients ?? [];
   const agents = users ?? [];
-  const clientNameById = new Map(allClients.map((client) => [client.id, client.name] as const));
-  const clientNameByCampaignId = new Map(
-    (campaigns ?? []).map((campaign) => [campaign.id, clientNameById.get(campaign.client_id) ?? campaign.name] as const)
-  );
 
   // Cancelled/Replaced appointments (isLeadgenAppointmentCountable,
   // leadgen-types.ts) never count toward "Results by Client"'s
@@ -333,6 +332,8 @@ export default async function LeadgenAdminDashboardPage() {
     };
   });
 
+  const selectableClients = await listSelectableActiveClients();
+  const clientIdByCampaignId = new Map((campaigns ?? []).map((campaign) => [campaign.id, campaign.client_id] as const));
   const assignmentProblems = findAssignmentProblems(await loadAssignmentOverview({ withCounts: false }));
   const assignmentProblemCount = assignmentProblems.unassignedProduction.length + assignmentProblems.onInternalTestClient.length;
 
@@ -479,23 +480,21 @@ export default async function LeadgenAdminDashboardPage() {
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Agent Client Status</h2>
-        <p className="mt-1 text-sm text-slate-500">Each active agent&apos;s currently selected client.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Choose the client each agent is working now. A call list that belongs to a specific client always takes priority over this selection.
+        </p>
         {agents.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No active agents.</p>
         ) : (
-          <div className="mt-3 divide-y divide-slate-100">
-            {agents.map((agent) => {
-              const clientName = agent.current_campaign_id ? clientNameByCampaignId.get(agent.current_campaign_id) : null;
-              return (
-                <div key={agent.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <span className="text-sm font-semibold text-slate-800">{agent.full_name}</span>
-                  <span className={`rounded-full px-3 py-1 text-sm font-semibold ${clientName ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500"}`}>
-                    {clientName ?? "Not selected"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <AgentClientStatusClient
+            agents={agents.map((agent) => ({
+              id: agent.id,
+              name: agent.full_name,
+              clientId: agent.current_campaign_id ? (clientIdByCampaignId.get(agent.current_campaign_id) ?? null) : null,
+            }))}
+            clients={selectableClients.map((client) => ({ id: client.id, name: client.name }))}
+            setAgentClient={setAgentActiveClientAction}
+          />
         )}
       </section>
 

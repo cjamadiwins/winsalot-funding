@@ -14,6 +14,7 @@ import {
   type LeadgenAgentAttendanceRow,
   type LeadgenFollowUpWithLead,
   type LeadgenLeadRow,
+  formatStatusLabel,
 } from "@/lib/leadgen-types";
 import OpportunityPipelineSummaryCard from "@/components/crm-ui/OpportunityPipelineSummaryCard";
 import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE, type LeadgenOpportunityScoreRow } from "@/lib/opportunity-finder";
@@ -47,11 +48,10 @@ import LeadgenAttendanceCard from "./LeadgenAttendanceCard";
 import LeadToAppointmentRateCard from "./LeadToAppointmentRateCard";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
-import AgentCampaignSelector from "@/components/leadgen/AgentCampaignSelector";
+import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 import { WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
-import { LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS } from "@/lib/leadgen-agent-campaigns";
 import { addBoardLeadNoteAction } from "./my-opportunities/actions";
 import LeadgenLeadRecordsModal from "@/components/leadgen/LeadgenLeadRecordsModal";
 import { buildLeadCardRecords, latestLeadgenEmailByLeadId } from "@/lib/leadgen-dashboard-records";
@@ -241,7 +241,6 @@ export default async function LeadgenAgentDashboardPage() {
   // Mantra-restricted agent's dashboard never surfaces Brent's Essentials
   // (or vice versa) just because leadgen_clients itself is readable.
   const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
-  const activeClientIds = new Set((clients ?? []).filter((c) => c.active).map((c) => c.id));
   const myByClient = new Map<string, { name: string; leads: number; appointments: number }>();
   for (const lead of myLeads) {
     const name = clientNameById.get(lead.client_id);
@@ -259,15 +258,8 @@ export default async function LeadgenAgentDashboardPage() {
     myByClient.set(appt.client_id, entry);
   }
 
-  // The agent dashboard's "Current Campaign" selector shows exactly the
-  // campaigns registered in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS
-  // (keyed by campaign id, not name text) - this is what keeps
-  // "Q3 Growth Campaign" out of this dropdown even though it shares
-  // Brent's Essentials' client_id. Each option's label is the campaign's
-  // related client name, never the longer campaign name.
-  const agentCampaignOptions = (campaigns ?? [])
-    .filter((campaign) => campaign.id in LEADGEN_AGENT_DASHBOARD_CAMPAIGN_SCRIPTS && activeClientIds.has(campaign.client_id))
-    .map((campaign) => ({ id: campaign.id, businessName: clientNameById.get(campaign.client_id) ?? campaign.name }));
+  // Admin-selected active client (read-only here - only Admin can change it).
+  const activeClient = await getAgentActiveClient(agent.id);
 
   // Client Call Script dashboard card - "only show clients/campaigns the
   // agent is permitted to work on". Mirrors leadgen_agent_campaign_allowed()
@@ -351,11 +343,13 @@ export default async function LeadgenAgentDashboardPage() {
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {agentDisplayName}</h1>
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
-      <AgentCampaignSelector
-        campaigns={agentCampaignOptions}
-        currentCampaignId={agent.current_campaign_id}
-        agentFullName={agentDisplayName}
-      />
+      <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Active Client</h2>
+        <p className="mt-1 text-lg font-bold text-slate-900">{activeClient ? activeClient.clientName : "Not selected"}</p>
+        <p className="mt-0.5 text-sm text-slate-600">
+          Set by Admin. A call list always uses the client it belongs to; this only applies when working outside a specific call list.
+        </p>
+      </section>
 
       <ClientCallScriptSelector
         clients={callScriptClients}
@@ -591,7 +585,7 @@ export default async function LeadgenAgentDashboardPage() {
               <p><strong>Appointment Target:</strong> 8–12 appointments (goal, not guaranteed sales)</p>
               <p><strong>Qualified lead:</strong> {campaign.qualification_criteria?.length ? campaign.qualification_criteria.join("; ") : "Relevant business and appropriate contact, genuine interest in services, willing to meet the client"}</p>
               <p><strong>Notes:</strong> {client.call_script_notes || campaign.description || "Review client training before calling"}</p>
-              <p><strong>Call list:</strong> {segments.length ? segments.map((segment) => `${segment.name} (${segment.status})`).join(", ") : "No assigned segment yet"}</p>
+              <p><strong>Call list:</strong> {segments.length ? segments.map((segment) => `${segment.name} (${formatStatusLabel(segment.status)})`).join(", ") : "No assigned segment yet"}</p>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-sky-700">
                 <Link href={`/leadgen/agent/training#website-client-${client.id}`} className="hover:underline">Open training</Link>
                 <Link href={`/leadgen/agent/training#website-script-${client.id}`} className="hover:underline">Open customized script</Link>

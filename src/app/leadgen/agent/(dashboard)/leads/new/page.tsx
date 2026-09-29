@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isHiddenLeadgenCampaignName } from "@/lib/leadgen-types";
+import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
 import { createAgentLeadAction } from "./actions";
 import ClientCampaignFields from "./ClientCampaignFields";
 
@@ -15,7 +16,7 @@ export default async function LeadgenAgentNewLeadPage({
   // Client field below, the agent can still change it.
   searchParams: Promise<{ error?: string; client?: string }>;
 }) {
-  await requireLeadgenAgent();
+  const agent = await requireLeadgenAgent();
   const params = await searchParams;
   const supabase = await createSupabaseServerClient();
 
@@ -23,7 +24,15 @@ export default async function LeadgenAgentNewLeadPage({
     supabase.from("leadgen_clients").select("*").eq("active", true).order("name"),
     supabase.from("leadgen_campaigns").select("*").eq("status", "active").order("name"),
   ]);
-  const preselectedClientId = params.client && (clients ?? []).some((c) => c.id === params.client) ? params.client : "";
+  // Explicit ?client= wins; otherwise the Admin-selected active client is the
+  // default (the agent can still change it in the form, as before).
+  const activeClient = await getAgentActiveClient(agent.id);
+  const preselectedClientId =
+    params.client && (clients ?? []).some((c) => c.id === params.client)
+      ? params.client
+      : activeClient && (clients ?? []).some((c) => c.id === activeClient.clientId)
+        ? activeClient.clientId
+        : "";
 
   return (
     <div>

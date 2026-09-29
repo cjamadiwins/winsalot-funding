@@ -1501,3 +1501,10 @@ export type LeadgenLeaveRequestAuditLogRow = {
   note: string | null;
   details: Record<string, unknown> | null;
 };
+
+// Display-only: stored statuses stay lowercase ("active", "paused", ...) -
+// this only capitalizes them for the UI ("Active", "Paused", "Not Started").
+export function formatStatusLabel(status: string | null | undefined): string {
+  if (!status) return "";
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}

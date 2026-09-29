@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import AgentCallLogClient from "@/components/call-log/AgentCallLogClient";
 import type { CallLogRow } from "@/lib/call-log";
 import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
+import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
 import { createLeadgenCallLogAction } from "./actions";
 
 type LeadgenCallLogRecord = Omit<CallLogRow, "businessClient"> & {
@@ -24,8 +25,11 @@ export default async function LeadgenAgentCallLogPage() {
 
   // Manual calls can only be logged for clients Admin assigned to this agent
   // (agents with no assignments yet keep the full list, as before).
-  const assignedClientIds = await getAgentAssignedClientIds(agent.id);
-  const clientOptions = (clients ?? []).filter((c) => assignedClientIds.length === 0 || assignedClientIds.includes(c.id));
+  // Hierarchy for a call made outside a call list: the Admin-selected active
+  // client is the pre-selected default (calls from a call list never come
+  // through here - they always use the list's own client).
+  const [assignedClientIds, activeClient] = await Promise.all([getAgentAssignedClientIds(agent.id), getAgentActiveClient(agent.id)]);
+  const clientOptions = (clients ?? []).filter((c) => assignedClientIds.length === 0 || assignedClientIds.includes(c.id) || c.id === activeClient?.clientId);
 
   const records: CallLogRow[] = ((data ?? []) as unknown as LeadgenCallLogRecord[]).map(
     ({ client_id: _client_id, leadgen_clients, ...rest }) => ({
@@ -39,7 +43,7 @@ export default async function LeadgenAgentCallLogPage() {
       crmLabel="Lead Generation CRM"
       records={records}
       createAction={createLeadgenCallLogAction}
-      businessClientField={{ mode: "select", options: clientOptions.map((c) => ({ id: c.id, name: c.name })) }}
+      businessClientField={{ mode: "select", options: clientOptions.map((c) => ({ id: c.id, name: c.name })), defaultId: clientOptions.some((c) => c.id === activeClient?.clientId) ? activeClient!.clientId : null }}
     />
   );
 }
