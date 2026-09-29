@@ -187,6 +187,14 @@ export default function AdminInvoicesClient({
                     <ManageMenu
                       items={[
                         { key: "view", label: "View payment details", onSelect: () => setPaymentModal({ payment: p, mode: "view" }) },
+                        { key: "receipt", label: "View receipt", onSelect: () => router.push(`/admin/crm/payments/${p.id}/receipt`) },
+                        { key: "receipt-pdf", label: "Download receipt PDF", onSelect: () => window.open(`/admin/crm/payments/${p.id}/receipt/pdf`, "_blank") },
+                        {
+                          key: "receipt-email",
+                          label: p.receipt_email_count > 0 ? "Resend receipt" : "Email receipt",
+                          disabled: !!p.reversed_at,
+                          onSelect: () => router.push(`/admin/crm/payments/${p.id}/receipt`),
+                        },
                         {
                           key: "edit",
                           label: "Edit payment details",
