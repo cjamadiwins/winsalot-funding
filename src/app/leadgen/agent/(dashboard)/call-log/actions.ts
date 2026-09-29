@@ -5,6 +5,7 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { CALL_LOG_AUTOMATIC_NOTES, DO_NOT_CALL_OUTCOME, isCallLogOutcome } from "@/lib/call-log";
 import { addOrUpdateDncSuppression } from "@/lib/dnc-suppression";
+import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
 
 type ActionResult = { error?: string };
 
@@ -29,6 +30,15 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
   // business referencing deserves a clear error, not a generic DB failure.
   const { data: client } = await supabase.from("leadgen_clients").select("id, name").eq("id", clientId).eq("active", true).maybeSingle();
   if (!client) return { error: "Select a valid Business / Client." };
+
+  // A manual (non-call-list) call can only be logged for a client Admin has
+  // assigned to this agent - so a wrong-business attribution can't happen
+  // just by picking the wrong dropdown entry. Agents with no assignments yet
+  // keep the previous behaviour.
+  const assignedClientIds = await getAgentAssignedClientIds(agent.id);
+  if (assignedClientIds.length > 0 && !assignedClientIds.includes(clientId)) {
+    return { error: "That client isn't assigned to you. Ask Admin to assign it, or work it from an assigned call list." };
+  }
 
   const { error } = await supabase.from("leadgen_call_logs").insert({
     agent_id: agent.id,
