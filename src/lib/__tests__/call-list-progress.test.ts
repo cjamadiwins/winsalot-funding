@@ -95,10 +95,11 @@ describe("call list progress counting", () => {
 describe("call list progress presentation", () => {
   it("never uses red and maps In Progress to green, Completed to blue", () => {
     const all = JSON.stringify(CALL_LIST_PROGRESS_STYLES);
-    expect(all).not.toMatch(/red|rose|pink|orange/);
+    expect(all).not.toMatch(/red|rose|pink|orange|violet|purple/);
     expect(CALL_LIST_PROGRESS_STYLES.in_progress.bar).toContain("emerald");
     expect(CALL_LIST_PROGRESS_STYLES.completed.bar).toContain("blue");
-    expect(CALL_LIST_PROGRESS_STYLES.not_started.bar).toContain("slate");
+    expect(CALL_LIST_PROGRESS_STYLES.not_started.bar).toBe("bg-slate-300");
+    expect(CALL_LIST_PROGRESS_STYLES.paused.bar).toBe("bg-slate-600");
     expect(CALL_LIST_PROGRESS_STYLES.mostly_worked.bar).toContain("amber");
     expect(CALL_LIST_PROGRESS_LABELS.in_progress).toBe("In Progress");
   });

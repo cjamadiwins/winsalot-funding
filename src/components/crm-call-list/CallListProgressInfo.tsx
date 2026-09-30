@@ -3,7 +3,7 @@ import { CALL_LIST_PROGRESS_LABELS, CALL_LIST_PROGRESS_STYLES, formatLastWorked,
 // Narrow vertical side accent. Status is also written out wherever it is
 // shown, so colour is never the only signal.
 export function ProgressSideBar({ status, className = "" }: { status: CallListProgress["status"]; className?: string }) {
-  return <span aria-hidden="true" data-progress-side-bar={status} className={`block w-1 self-stretch rounded-full ${CALL_LIST_PROGRESS_STYLES[status].bar} ${className}`} />;
+  return <span aria-hidden="true" data-progress-side-bar={status} className={`block w-[5px] shrink-0 self-stretch rounded-full ${CALL_LIST_PROGRESS_STYLES[status].bar} ${className}`} />;
 }
 
 export function ProgressBar({ progress }: { progress: CallListProgress }) {
