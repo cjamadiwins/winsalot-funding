@@ -39,6 +39,7 @@ export type CallListSegmentRow = {
   growth_opportunity_type: "lead_generation" | "business_financing" | "both_services" | null;
   leadgen_campaign_id: string | null;
   crm_client_id: string | null;
+  campaign_owner_name: string | null;
   // Per-list call script (both CRMs): Growth template key + optional custom text.
   call_script_key: string | null;
   call_script_text: string | null;
