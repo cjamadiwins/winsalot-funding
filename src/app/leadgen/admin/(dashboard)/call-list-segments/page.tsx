@@ -81,7 +81,7 @@ export default async function LeadgenCallListSegmentsPage() {
       </div>
 
       <div className="mt-6">
-        <CallListSegmentsClient basePath="/leadgen/admin/call-list-segments" rows={rows} />
+        <CallListSegmentsClient basePath="/leadgen/admin/call-list-segments" rows={rows} compact />
       </div>
     </div>
   );
