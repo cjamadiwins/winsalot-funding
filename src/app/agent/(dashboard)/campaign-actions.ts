@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCrmUser } from "@/lib/crm-auth";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { loadAgentScriptKeys } from "@/lib/growth-agent-scripts";
 import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
 
 export type UpdateCrmCampaignResult = { status: "success" | "error"; message: string | null };
@@ -19,6 +21,12 @@ export async function updateCrmCurrentCampaignAction(campaignKey: GrowthCrmCampa
 
   if (campaignKey && !isGrowthCrmCampaignKey(campaignKey)) {
     return { status: "error", message: "That campaign is not available for selection." };
+  }
+
+  // Agents may only select a campaign tied to a call list Admin has assigned to them.
+  if (campaignKey) {
+    const allowed = await loadAgentScriptKeys(await createSupabaseServerClient());
+    if (!allowed.includes(campaignKey)) return { status: "error", message: "That campaign isn't assigned to you." };
   }
 
   const admin = getSupabaseAdmin();

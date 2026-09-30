@@ -5,6 +5,8 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getSegment, getSegmentAgentIds } from "@/lib/call-list-segments";
 import { isAgentService, type AgentService } from "@/lib/crm-agent-service-shared";
+import { GROWTH_CRM_CAMPAIGN_KEYS, GROWTH_CRM_CAMPAIGN_LABELS } from "@/lib/growth-crm-campaign-scripts";
+import { resolveGrowthScriptKey } from "@/lib/call-list-script-shared";
 import { listSegmentLeads, listRemovedSegmentLeads } from "@/lib/call-list-leads";
 import { getHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
@@ -17,6 +19,7 @@ import {
   deleteDraftSegmentAction,
   deploySegmentAction,
   saveSegmentAssignmentAction,
+  saveSegmentScriptAction,
   previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
@@ -154,6 +157,13 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       callLogs={callLogs}
       stats={stats}
       deployAction={deploySegmentAction}
+      script={{
+        templateOptions: GROWTH_CRM_CAMPAIGN_KEYS.map((k) => ({ value: k, label: GROWTH_CRM_CAMPAIGN_LABELS[k] })),
+        initialKey: resolveGrowthScriptKey(segment) ?? "",
+        initialText: segment.call_script_text ?? "",
+        helpText: "The script assigned agents see in this list's workspace. Pick a template for this service/campaign and/or write a custom script (custom text replaces the template). Changes apply immediately and never affect past calls.",
+        saveAction: saveSegmentScriptAction,
+      }}
       assignment={{ scopeLabel: "Service", scopeOptions: serviceOptions, initialScope: currentService, agentServices, saveAction: saveSegmentAssignmentAction }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}

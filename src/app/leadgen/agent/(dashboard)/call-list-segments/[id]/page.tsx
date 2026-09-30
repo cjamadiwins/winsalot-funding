@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isAgentAssignedToActiveSegment } from "@/lib/call-list-segments";
 import { resolveSegmentAssignment, CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE } from "@/lib/leadgen-campaign-assignment";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
+import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
+import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
@@ -54,6 +56,11 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
     );
   }
 
+  // Per-list script (Admin-managed): a custom script for this list overrides the
+  // client's script; blank falls back to the client's. Only readable through the
+  // segment RLS above, so it disappears when the agent is unassigned.
+  const listScriptText = (segment as CallListSegmentRow).call_script_text?.trim() || null;
+
   const [{ data: leads }, { data: visibility }] = await Promise.all([
     supabase.from("call_list_leads").select("*").eq("segment_id", id).order("created_at", { ascending: true }),
     // RLS: agent select-only on call_list_column_visibility - Admin's
@@ -75,7 +82,9 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
       .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
       .eq("id", assignment.clientId)
       .maybeSingle();
-    if (client) callScriptClient = client as CallScriptClientOption;
+    if (client) {
+      callScriptClient = { ...(client as CallScriptClientOption), call_script_override: listScriptText ?? (client as CallScriptClientOption).call_script_override };
+    }
   }
 
   // Hidden columns must not reach the agent's browser at all "through
@@ -113,6 +122,15 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
       </Link>
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
+
+      {callScriptClient && (
+        <section className="mt-4">
+          <h2 className="mb-2 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
+            Call Script{assignment?.state === "assigned" ? ` — ${assignment.clientName}` : ""}
+          </h2>
+          <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName: agent.full_name || agent.email, client: callScriptClient })} compact />
+        </section>
+      )}
 
       <div className="mt-6">
         <CallListWorkingClient

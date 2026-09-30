@@ -4,10 +4,12 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
+import CampaignQuickScriptCard from "@/components/crm-ui/CampaignQuickScriptCard";
+import { resolveGrowthScriptKey, substituteAgentName } from "@/lib/call-list-script-shared";
 import { logCallListCallAction, promoteCallListLeadAction } from "../actions";
 
 export default async function AgentCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireCrmUser();
+  const agent = await requireCrmUser();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -72,6 +74,28 @@ export default async function AgentCallListSegmentDetailPage({ params }: { param
       </Link>
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
+
+      {/* The list's own call script (Admin-managed): only reachable through the
+          segment RLS above, so it disappears when the agent is unassigned. */}
+      {(() => {
+        const listSegment = segment as CallListSegmentRow;
+        const agentName = agent.full_name.trim() || "Winsalot Agent";
+        const templateKey = resolveGrowthScriptKey(listSegment);
+        if (listSegment.call_script_text) {
+          return (
+            <section className="mt-4 rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4">
+              <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Call Script</h2>
+              <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-6 text-slate-700">{substituteAgentName(listSegment.call_script_text, agentName)}</p>
+            </section>
+          );
+        }
+        return templateKey ? (
+          <section className="mt-4">
+            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Call Script</h2>
+            <CampaignQuickScriptCard campaignKey={templateKey} agentName={agentName} />
+          </section>
+        ) : null;
+      })()}
 
       <div className="mt-6">
         <CallListWorkingClient leads={sanitizedLeads} logCallAction={logCallListCallAction} promoteAction={promoteCallListLeadAction} hiddenFields={hiddenFields} />
