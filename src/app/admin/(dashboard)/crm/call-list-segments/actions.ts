@@ -23,6 +23,7 @@ import {
 } from "@/lib/call-list-leads";
 import { deploySegment } from "@/lib/call-list-deploy";
 import { saveGrowthSegmentAssignment } from "@/lib/call-list-assignment";
+import { saveSegmentScript } from "@/lib/call-list-script";
 import { promoteToGrowthOpportunity } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
@@ -282,4 +283,20 @@ export async function saveSegmentAssignmentAction(segmentId: string, service: st
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to save the assignment." };
   }
+}
+
+// Admin-only: attach or update this list's call script (template and/or custom
+// text). Takes effect immediately for assigned agents; no history is touched.
+export async function saveSegmentScriptAction(segmentId: string, key: string | null, text: string): Promise<{ error?: string }> {
+  await requireCrmAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "growth") return { error: "Segment not found." };
+  try {
+    await saveSegmentScript(segment, { key, text });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save the script." };
+  }
+  revalidatePath(`${BASE_PATH}/${segmentId}`);
+  revalidatePath("/agent", "layout");
+  return {};
 }

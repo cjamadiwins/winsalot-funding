@@ -18,6 +18,7 @@ import {
   deleteDraftSegmentAction,
   deploySegmentAction,
   saveSegmentAssignmentAction,
+  saveSegmentScriptAction,
   previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
@@ -163,6 +164,12 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     .map((c) => ({ value: c.id as string, label: `${assignClientById.get(c.client_id as string)?.name} — ${c.name}` }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
+  // Which client campaigns each agent already holds (client assignment is separate from list assignment).
+  const { data: heldRows } = await admin.from("leadgen_campaign_agents").select("agent_id, campaign_id");
+  const agentScopes: Record<string, string[]> = {};
+  for (const agent of agents) agentScopes[agent.id] = [];
+  for (const row of heldRows ?? []) (agentScopes[row.agent_id as string] ??= []).push(row.campaign_id as string);
+
   let transferTarget: { id: string; name: string; status: string; clientName: string } | null = null;
   if (segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")) {
     const { data: currentCampaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
@@ -197,7 +204,13 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       callLogs={callLogs}
       stats={stats}
       deployAction={deploySegmentAction}
-      assignment={{ scopeLabel: "Client / Campaign", scopeOptions: clientOptions, initialScope: segment.leadgen_campaign_id ?? "", saveAction: saveSegmentAssignmentAction }}
+      script={{
+        initialKey: "",
+        initialText: segment.call_script_text ?? "",
+        helpText: "Leave blank to use this client's call script (edit it on the client's page). Write a custom script to use for this list only. Assigned agents see it in this list's workspace immediately; past calls are never affected.",
+        saveAction: saveSegmentScriptAction,
+      }}
+      assignment={{ scopeLabel: "Client / Campaign", scopeOptions: clientOptions, initialScope: segment.leadgen_campaign_id ?? "", agentScopes, saveAction: saveSegmentAssignmentAction, helpText: "Client assignment and list assignment are separate. Client = which clients an agent may work for (set on the Admin dashboard, Agent Client Status). List = which of that client's call lists they work (set here). Removing an agent from a list keeps their client; removing the client cuts access to all of that client's lists." }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}

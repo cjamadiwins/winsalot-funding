@@ -24,6 +24,7 @@ export default function SegmentAssignmentPanelClient({
   agents,
   assignedAgentIds,
   agentServices,
+  agentScopes,
   saveAction,
   helpText,
 }: {
@@ -36,6 +37,10 @@ export default function SegmentAssignmentPanelClient({
   // Growth only: each agent's Admin-set service. When provided, agents who
   // can't take the chosen service are greyed out (the server enforces it too).
   agentServices?: Record<string, AgentService | null>;
+  // Lead Gen only: the scope values (client campaigns) each agent is assigned to.
+  // Client assignment is separate from list assignment, so an agent is only
+  // selectable for a list whose client they already hold.
+  agentScopes?: Record<string, string[]>;
   saveAction: (segmentId: string, scope: string, agentIds: string[]) => Promise<{ error?: string; added?: number; removed?: number }>;
   helpText?: string;
 }) {
@@ -46,15 +51,17 @@ export default function SegmentAssignmentPanelClient({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const eligible = (agentId: string, forScope: string) => !agentServices || serviceAllowsOpportunityType(agentServices[agentId] ?? null, forScope);
+  const eligible = (agentId: string, forScope: string) =>
+    agentScopes ? (agentScopes[agentId] ?? []).includes(forScope) : !agentServices || serviceAllowsOpportunityType(agentServices[agentId] ?? null, forScope);
+  const restrictsByScope = !!agentServices || !!agentScopes;
 
   function changeScope(next: string) {
     setScope(next);
-    if (agentServices) {
+    if (restrictsByScope) {
       const dropped = selected.filter((id) => !eligible(id, next));
       if (dropped.length > 0) {
         setSelected((prev) => prev.filter((id) => eligible(id, next)));
-        setNotice(`${dropped.length} agent(s) can't take this service and were unselected.`);
+        setNotice(`${dropped.length} agent(s) aren't assigned to this ${agentScopes ? "client" : "service"} and were unselected.`);
         return;
       }
     }
@@ -116,14 +123,20 @@ export default function SegmentAssignmentPanelClient({
           return (
             <label
               key={agent.id}
-              title={ok ? undefined : `Not assigned to this service${service && isAgentService(service) ? ` (${AGENT_SERVICE_LABELS[service]} only)` : ""} - change it on the CRM Agents page.`}
+              title={
+                ok
+                  ? undefined
+                  : agentScopes
+                    ? "Not assigned to this client - assign the client first (Admin dashboard, Agent Client Status)."
+                    : `Not assigned to this service${service && isAgentService(service) ? ` (${AGENT_SERVICE_LABELS[service]} only)` : ""} - change it on the CRM Agents page.`
+              }
               className={`rounded-full border px-3 py-1 text-[12.5px] ${ok || on ? "cursor-pointer" : "cursor-not-allowed opacity-45"} ${
                 on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"
               }`}
             >
               <input type="checkbox" className="hidden" checked={on} disabled={(!ok && !on) || isPending} onChange={() => toggle(agent.id)} />
               {agent.name}
-              {!ok && <span className="ml-1 text-[10.5px]">(not eligible)</span>}
+              {!ok && <span className="ml-1 text-[10.5px]">({agentScopes ? "no client access" : "not eligible"})</span>}
             </label>
           );
         })}

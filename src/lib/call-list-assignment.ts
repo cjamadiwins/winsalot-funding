@@ -88,21 +88,35 @@ export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, s
 }
 
 // ---------------------------------------------------------------------------
-// Lead Generation CRM: Client (campaign) + Agents. An agent added to a list is
-// also given that client's campaign (idempotent), because access needs both.
-// Removing an agent from a list removes only their access to that list; their
-// separate client assignment stays until Admin removes it (Assignments page).
+// Lead Generation CRM: Client (campaign) + Agents. Client assignment and list
+// assignment are separate:
+//   * Client assignment (leadgen_campaign_agents) = which clients an agent may
+//     work for. Managed on the Admin dashboard (Agent Client Status).
+//   * List assignment (call_list_segment_agents) = which specific lists under
+//     that client the agent works. Managed here.
+// An agent can only be put on a list of a client they already hold; this never
+// grants a client. Removing an agent from a list leaves their client assignment;
+// removing the client assignment cuts access to every list under that client
+// (RLS needs both), while the list rows are kept so re-assigning restores them.
 // ---------------------------------------------------------------------------
 
-export async function grantLeadgenCampaignAccess(admin: Admin, campaignId: string, agentIds: string[], assignedBy: string | null): Promise<void> {
+export async function assertLeadgenAgentsAssignedToCampaign(admin: Admin, campaignId: string, agentIds: string[]): Promise<void> {
   if (agentIds.length === 0) return;
-  const { error } = await admin
-    .from("leadgen_campaign_agents")
-    .upsert(agentIds.map((agent_id) => ({ campaign_id: campaignId, agent_id, assigned_by: assignedBy })), { onConflict: "campaign_id,agent_id", ignoreDuplicates: true });
-  if (error) throw new Error(`Failed to give the agent access to this client: ${error.message}`);
+  const [{ data: rows }, { data: users }] = await Promise.all([
+    admin.from("leadgen_campaign_agents").select("agent_id").eq("campaign_id", campaignId).in("agent_id", agentIds),
+    admin.from("leadgen_users").select("id, full_name, email").in("id", agentIds),
+  ]);
+  const held = new Set((rows ?? []).map((r) => r.agent_id as string));
+  const missing = agentIds.filter((id) => !held.has(id));
+  if (missing.length === 0) return;
+  const names = missing.map((id) => {
+    const user = (users ?? []).find((u) => u.id === id);
+    return (user?.full_name as string) || (user?.email as string) || "An agent";
+  });
+  throw new Error(`${names.join(", ")} ${names.length === 1 ? "isn't" : "aren't"} assigned to this client yet. Assign the client first (Admin dashboard, Agent Client Status), then add them to the list.`);
 }
 
-export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, campaignId: string, agentIds: string[], adminId: string): Promise<SaveAssignmentResult> {
+export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, campaignId: string, agentIds: string[]): Promise<SaveAssignmentResult> {
   if (segment.crm !== "lead_generation") throw new Error("Call list not found.");
   const admin = getSupabaseAdmin();
 
@@ -117,6 +131,7 @@ export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, 
     const activeIds = new Set((agents ?? []).map((a) => a.id as string));
     if (wanted.some((id) => !activeIds.has(id))) throw new Error("One of the selected agents isn't an active agent.");
   }
+  await assertLeadgenAgentsAssignedToCampaign(admin, campaignId, wanted);
 
   if (segment.leadgen_campaign_id !== campaignId) {
     // Only affects work from now on: existing call logs, appointments, emails
@@ -124,7 +139,5 @@ export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, 
     const { error } = await admin.from("call_list_segments").update({ leadgen_campaign_id: campaignId }).eq("id", segment.id);
     if (error) throw new Error(`Failed to update the client: ${error.message}`);
   }
-  const result = await applyRosterDiff(admin, segment.id, wanted);
-  await grantLeadgenCampaignAccess(admin, campaignId, wanted, adminId);
-  return result;
+  return applyRosterDiff(admin, segment.id, wanted);
 }

@@ -108,41 +108,58 @@ describe("Growth: service + agents", () => {
   });
 });
 
-describe("Lead Gen: client + agents", () => {
+describe("Lead Gen: client assignment and list assignment stay separate", () => {
   beforeEach(() => {
     db.leadgen_campaigns = [{ id: "c-tek", client_id: "tek" }, { id: "c-hid", client_id: "hid" }];
     db.leadgen_clients = [{ id: "tek", active: true }, { id: "hid", active: true }];
     db.leadgen_users = [
-      { id: "henry", role: "agent", active: true },
-      { id: "goodness", role: "agent", active: true },
+      { id: "henry", full_name: "Henry", role: "agent", active: true },
+      { id: "goodness", full_name: "Goodness", role: "agent", active: true },
     ];
-    db.leadgen_campaign_agents = [];
+    // Both hold Teknokraft; only Henry holds Hidebrandt.
+    db.leadgen_campaign_agents = [
+      { campaign_id: "c-tek", agent_id: "henry" },
+      { campaign_id: "c-tek", agent_id: "goodness" },
+      { campaign_id: "c-hid", agent_id: "henry" },
+    ];
     db.call_list_segments = [{ id: "s1", leadgen_campaign_id: "c-tek" }];
   });
   const lg = (over: Partial<CallListSegmentRow> = {}) => seg({ crm: "lead_generation", growth_opportunity_type: null, leadgen_campaign_id: "c-tek", ...over });
 
-  it("assigns agents to a client's list and grants the client access idempotently", async () => {
-    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"], "admin");
-    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"], "admin");
+  it("puts agents who hold the client on the list, idempotently, without touching client assignment", async () => {
+    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"]);
+    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"]);
     expect(roster()).toEqual(["goodness", "henry"]);
-    expect(db.leadgen_campaign_agents).toHaveLength(2);
+    expect(db.leadgen_campaign_agents).toHaveLength(3);
   });
 
-  it("changes the list's client and keeps the same agents; removal keeps the other agent", async () => {
-    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"], "admin");
-    await saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry", "goodness"], "admin");
-    expect(db.call_list_segments[0].leadgen_campaign_id).toBe("c-hid");
-    const result = await saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["henry"], "admin");
+  it("never grants the client: an agent without it is refused", async () => {
+    await expect(saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["henry", "goodness"])).rejects.toThrow(/Goodness isn't assigned to this client yet/);
+    expect(roster()).toEqual([]);
+    expect(db.leadgen_campaign_agents).toHaveLength(3);
+  });
+
+  it("removing an agent from one list keeps their client assignment and the other agent", async () => {
+    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry", "goodness"]);
+    const result = await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry"]);
     expect(result).toEqual({ added: 0, removed: 1 });
     expect(roster()).toEqual(["henry"]);
+    expect(db.leadgen_campaign_agents.some((r) => r.agent_id === "goodness" && r.campaign_id === "c-tek")).toBe(true);
+  });
+
+  it("changing the list's client requires the agents to hold the new client", async () => {
+    await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry"]);
+    await saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry"]);
+    expect(db.call_list_segments[0].leadgen_campaign_id).toBe("c-hid");
+    await expect(saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["goodness"])).rejects.toThrow(/isn't assigned to this client/);
   });
 
   it("rejects unknown clients, inactive clients and inactive agents", async () => {
-    await expect(saveLeadgenSegmentAssignment(lg(), "nope", ["henry"], "admin")).rejects.toThrow();
+    await expect(saveLeadgenSegmentAssignment(lg(), "nope", ["henry"])).rejects.toThrow();
     db.leadgen_clients.find((c) => c.id === "hid")!.active = false;
-    await expect(saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry"], "admin")).rejects.toThrow(/isn't active/);
+    await expect(saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry"])).rejects.toThrow(/isn't active/);
     db.leadgen_users.find((u) => u.id === "goodness")!.active = false;
-    await expect(saveLeadgenSegmentAssignment(lg(), "c-tek", ["goodness"], "admin")).rejects.toThrow(/active agent/);
+    await expect(saveLeadgenSegmentAssignment(lg(), "c-tek", ["goodness"])).rejects.toThrow(/active agent/);
     expect(roster()).toEqual([]);
   });
 });

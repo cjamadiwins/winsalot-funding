@@ -24,6 +24,7 @@ import {
 } from "@/lib/call-list-leads";
 import { deploySegment } from "@/lib/call-list-deploy";
 import { saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
+import { saveSegmentScript } from "@/lib/call-list-script";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
@@ -307,14 +308,14 @@ export async function updateCallListColumnVisibilityAction(hiddenFields: string[
 }
 
 // Admin-only "Save Assignment": the list's client (campaign) + its agent roster
-// in one step (also usable to edit, remove or reassign later). Adding an agent
-// also gives them that client; history is never touched.
+// in one step (also usable to edit, remove or reassign later). Agents must already
+// hold the client (client assignment is separate); history is never touched.
 export async function saveSegmentAssignmentAction(segmentId: string, campaignId: string, agentIds: string[]): Promise<{ error?: string; added?: number; removed?: number }> {
-  const admin = await requireLeadgenAdmin();
+  await requireLeadgenAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
   try {
-    const result = await saveLeadgenSegmentAssignment(segment, campaignId, agentIds, admin.id);
+    const result = await saveLeadgenSegmentAssignment(segment, campaignId, agentIds);
     revalidatePath(`${BASE_PATH}/${segmentId}`);
     revalidatePath(BASE_PATH);
     revalidatePath("/leadgen/admin/assignments");
@@ -323,4 +324,20 @@ export async function saveSegmentAssignmentAction(segmentId: string, campaignId:
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to save the assignment." };
   }
+}
+
+// Admin-only: attach or update this list's custom call script. Blank = use the
+// client's script. Takes effect immediately for assigned agents; no history is touched.
+export async function saveSegmentScriptAction(segmentId: string, _key: string | null, text: string): Promise<{ error?: string }> {
+  await requireLeadgenAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
+  try {
+    await saveSegmentScript(segment, { key: null, text });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save the script." };
+  }
+  revalidatePath(`${BASE_PATH}/${segmentId}`);
+  revalidatePath("/leadgen/agent", "layout");
+  return {};
 }

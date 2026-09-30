@@ -63,11 +63,11 @@ export async function setCampaignAgentAction(campaignId: string, agentId: string
   return { removedFromLists };
 }
 
-// Call List -> Agent. Assigning an agent to a list on a campaign also makes
-// them an agent on that campaign (so the client shows up in their own
-// client list), never the other way around.
+// Call List -> Agent. Client assignment and list assignment are separate: an
+// agent can only be put on a list of a client they already hold, and removing
+// them from one list leaves their client assignment (and other lists) alone.
 export async function setSegmentAgentAction(segmentId: string, agentId: string, assigned: boolean): Promise<ActionResult> {
-  const admin = await requireLeadgenAdmin();
+  await requireLeadgenAdmin();
   if (!UUID.test(segmentId) || !UUID.test(agentId)) return { error: "Invalid request." };
   const db = getSupabaseAdmin();
 
@@ -76,9 +76,12 @@ export async function setSegmentAgentAction(segmentId: string, agentId: string, 
 
   if (assigned) {
     if (!(await assertActiveAgent(db, agentId))) return { error: "That agent isn't active." };
+    if (segment.leadgen_campaign_id) {
+      const { data: held } = await db.from("leadgen_campaign_agents").select("id").eq("campaign_id", segment.leadgen_campaign_id).eq("agent_id", agentId).maybeSingle();
+      if (!held) return { error: "That agent isn't assigned to this list's client yet. Assign the client to them first." };
+    }
     const { error } = await db.from("call_list_segment_agents").upsert({ segment_id: segmentId, agent_id: agentId }, { onConflict: "segment_id,agent_id", ignoreDuplicates: true });
     if (error) return { error: `Failed to assign the agent: ${error.message}` };
-    if (segment.leadgen_campaign_id) await ensureRestrictedAgentOnCampaign(segment.leadgen_campaign_id, agentId, admin.id);
   } else {
     const { error } = await db.from("call_list_segment_agents").delete().eq("segment_id", segmentId).eq("agent_id", agentId);
     if (error) return { error: `Failed to remove the agent: ${error.message}` };
@@ -92,7 +95,7 @@ export async function setSegmentAgentAction(segmentId: string, agentId: string, 
 // promoted leads keep the client they were recorded under, so historical
 // reporting never changes retroactively.
 export async function setSegmentCampaignAction(segmentId: string, campaignId: string | null): Promise<ActionResult> {
-  const admin = await requireLeadgenAdmin();
+  await requireLeadgenAdmin();
   if (!UUID.test(segmentId) || (campaignId !== null && !UUID.test(campaignId))) return { error: "Invalid request." };
   const db = getSupabaseAdmin();
 
@@ -107,11 +110,8 @@ export async function setSegmentCampaignAction(segmentId: string, campaignId: st
   const { error } = await db.from("call_list_segments").update({ leadgen_campaign_id: campaignId }).eq("id", segmentId);
   if (error) return { error: `Failed to update the call list: ${error.message}` };
 
-  // Agents already on this list get access to the new client too.
-  if (campaignId) {
-    const { data: onList } = await db.from("call_list_segment_agents").select("agent_id").eq("segment_id", segmentId);
-    for (const row of onList ?? []) await ensureRestrictedAgentOnCampaign(campaignId, row.agent_id as string, admin.id);
-  }
+  // Agents on this list keep their list assignment; those who don't hold the new
+  // client simply have no access until Admin assigns the client (kept separate).
   refresh();
   return {};
 }

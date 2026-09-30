@@ -49,6 +49,7 @@ import { addAgentDncSuppressionAction } from "../do-not-contact-actions";
 import { loadGrowthAgentSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
 import AgentCampaignScriptCard from "@/components/crm-ui/AgentCampaignScriptCard";
+import { loadAgentScriptKeys } from "@/lib/growth-agent-scripts";
 import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
 import { fetchAgentOperationsAlerts, computeMyCallKpiPace } from "@/lib/crm-monitoring-data";
@@ -58,6 +59,9 @@ export default async function AgentDashboardPage() {
   const agentDisplayName = crmUser.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
+
+  // Quick Call Script campaigns: only those tied to this agent's assigned call lists.
+  const allowedScriptKeys = await loadAgentScriptKeys(supabase);
 
   const weekStart = crmMondayOf(crmDateKey(new Date()));
   const weekEnd = crmAddDays(weekStart, 6);
@@ -296,11 +300,12 @@ export default async function AgentDashboardPage() {
 
       <AgentCampaignScriptCard
         currentCampaignKey={
-          crmUser.current_campaign_key && isGrowthCrmCampaignKey(crmUser.current_campaign_key)
+          crmUser.current_campaign_key && isGrowthCrmCampaignKey(crmUser.current_campaign_key) && allowedScriptKeys.includes(crmUser.current_campaign_key as GrowthCrmCampaignKey)
             ? (crmUser.current_campaign_key as GrowthCrmCampaignKey)
             : null
         }
         agentName={agentDisplayName}
+        allowedKeys={allowedScriptKeys}
       />
 
       <SalesCoachAgentCard data={salesCoachData} />

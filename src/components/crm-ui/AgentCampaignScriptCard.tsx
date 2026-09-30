@@ -3,7 +3,7 @@
 import { useOptimistic, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { updateCrmCurrentCampaignAction } from "@/app/agent/(dashboard)/campaign-actions";
-import { GROWTH_CRM_CAMPAIGN_KEYS, GROWTH_CRM_CAMPAIGN_LABELS, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
+import { GROWTH_CRM_CAMPAIGN_LABELS, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
 import CampaignQuickScriptCard from "./CampaignQuickScriptCard";
 
 // Agent dashboard's Quick Call Script card - lets the agent pick which
@@ -18,9 +18,12 @@ import CampaignQuickScriptCard from "./CampaignQuickScriptCard";
 export default function AgentCampaignScriptCard({
   currentCampaignKey,
   agentName,
+  allowedKeys,
 }: {
   currentCampaignKey: GrowthCrmCampaignKey | null;
   agentName: string;
+  // Only campaigns tied to call lists Admin has assigned to this agent.
+  allowedKeys: readonly GrowthCrmCampaignKey[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -68,7 +71,11 @@ export default function AgentCampaignScriptCard({
       <div className="sm:flex sm:items-end sm:justify-between sm:gap-5">
         <div className="min-w-0 flex-1">
           <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Quick Call Script</h2>
-          <p className="mt-1 text-[13px] text-slate-600">Select the campaign you&apos;re currently calling for.</p>
+          <p className="mt-1 text-[13px] text-slate-600">
+            {allowedKeys.length === 0
+              ? "Scripts appear here for the call lists Admin assigns to you."
+              : "Select the campaign you're currently calling for (limited to your assigned call lists)."}
+          </p>
         </div>
         <div className="mt-3 flex min-w-0 flex-col gap-1.5 sm:mt-0 sm:w-80">
           <label htmlFor="current-crm-campaign" className="text-[12px] font-semibold text-slate-700">
@@ -82,7 +89,7 @@ export default function AgentCampaignScriptCard({
             className="w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2.5 text-[13.5px] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200 disabled:opacity-70"
           >
             <option value="">Not selected</option>
-            {GROWTH_CRM_CAMPAIGN_KEYS.map((key) => (
+            {allowedKeys.map((key) => (
               <option key={key} value={key}>
                 {GROWTH_CRM_CAMPAIGN_LABELS[key]}
               </option>

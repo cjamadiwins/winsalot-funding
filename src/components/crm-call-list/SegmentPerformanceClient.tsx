@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
 import DeployPanelClient from "./DeployPanelClient";
 import SegmentAssignmentPanelClient from "./SegmentAssignmentPanelClient";
+import SegmentScriptPanelClient from "./SegmentScriptPanelClient";
 import type { AgentService } from "@/lib/crm-agent-service-shared";
 import RemovedRowsPanel from "./RemovedRowsPanel";
 import ManageColumnsPopover from "./ManageColumnsPopover";
@@ -53,6 +54,7 @@ export default function SegmentPerformanceClient({
   callScriptClient,
   adminName,
   assignment,
+  script,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
@@ -79,7 +81,17 @@ export default function SegmentPerformanceClient({
     scopeOptions: { value: string; label: string }[];
     initialScope: string;
     agentServices?: Record<string, AgentService | null>;
+    agentScopes?: Record<string, string[]>;
+    helpText?: string;
     saveAction: (segmentId: string, scope: string, agentIds: string[]) => Promise<{ error?: string; added?: number; removed?: number }>;
+  };
+  // Admin call-script attachment for this list (both CRMs).
+  script?: {
+    templateOptions?: { value: string; label: string }[];
+    initialKey: string;
+    initialText: string;
+    helpText: string;
+    saveAction: (segmentId: string, key: string | null, text: string) => Promise<{ error?: string }>;
   };
   updateStatusAction: (segmentId: string, status: "active" | "completed" | "archived") => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
@@ -255,6 +267,8 @@ export default function SegmentPerformanceClient({
           agents={allAgents}
           assignedAgentIds={assignedAgentIds}
           agentServices={assignment.agentServices}
+          agentScopes={assignment.agentScopes}
+          helpText={assignment.helpText}
           saveAction={assignment.saveAction}
         />
       ) : (
@@ -264,6 +278,18 @@ export default function SegmentPerformanceClient({
           agents={allAgents}
           assignedAgentIds={assignedAgentIds}
           deployAction={deployAction}
+        />
+      )}
+
+      {script && (
+        <SegmentScriptPanelClient
+          key={`${script.initialKey}|${script.initialText.length}`}
+          segmentId={segment.id}
+          templateOptions={script.templateOptions}
+          initialKey={script.initialKey}
+          initialText={script.initialText}
+          helpText={script.helpText}
+          saveAction={script.saveAction}
         />
       )}
 
