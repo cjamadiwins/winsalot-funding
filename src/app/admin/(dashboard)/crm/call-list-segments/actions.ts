@@ -169,12 +169,12 @@ export async function recheckDuplicatesAction(segmentId: string): Promise<{ erro
   }
 }
 
-export async function deploySegmentAction(segmentId: string, agentIds: string[], clientId?: string): Promise<{ error?: string }> {
+export async function deploySegmentAction(segmentId: string, agentIds: string[], _clientId?: string): Promise<{ error?: string }> {
   const admin = await requireCrmAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.crm !== "growth") return { error: "Segment not found." };
   try {
-    await deploySegment(segmentId, agentIds, admin.id, clientId);
+    await deploySegment(segmentId, agentIds, admin.id);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to deploy the segment." };
   }
@@ -270,12 +270,12 @@ export async function updateCallListColumnVisibilityAction(hiddenFields: string[
 // Admin-only "Save Assignment": the list's service + its agent roster in one
 // step (also usable to edit, remove or reassign later). Agents must be eligible
 // for the service; history is never touched.
-export async function saveSegmentAssignmentAction(segmentId: string, service: string, agentIds: string[], clientId?: string): Promise<{ error?: string; added?: number; removed?: number }> {
+export async function saveSegmentAssignmentAction(segmentId: string, service: string, agentIds: string[], _clientId?: string): Promise<{ error?: string; added?: number; removed?: number }> {
   await requireCrmAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.crm !== "growth") return { error: "Segment not found." };
   try {
-    const result = await saveGrowthSegmentAssignment(segment, service, agentIds, clientId ?? "");
+    const result = await saveGrowthSegmentAssignment(segment, service, agentIds);
     revalidatePath(`${BASE_PATH}/${segmentId}`);
     revalidatePath(BASE_PATH);
     revalidatePath("/agent", "layout");
