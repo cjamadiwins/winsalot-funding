@@ -50,6 +50,8 @@ import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPrevie
 import { loadDialpadAgentDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import { getAgentActiveClient } from "@/lib/leadgen-agent-active-client";
 import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
+import { AgentScriptReminder, ScriptSessionRegister } from "@/components/leadgen/script-dock/ScriptDockWidgets";
+import { loadAgentScriptSessions } from "@/lib/leadgen-script-sessions";
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 import { WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
@@ -157,6 +159,8 @@ export default async function LeadgenAgentDashboardPage() {
       .order("name"),
     loadWebsiteTraining(false, agent.id),
   ]);
+
+  const scriptSessions = await loadAgentScriptSessions(supabase, agent.id);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
   const performance = computeLeadgenAgentPerformance((appointments ?? []) as LeadgenPerformanceAppointment[], agent.id);
@@ -396,6 +400,9 @@ export default async function LeadgenAgentDashboardPage() {
           </ul>
         </div>
       )}
+
+      <ScriptSessionRegister sessions={scriptSessions} replace />
+      <AgentScriptReminder sessions={scriptSessions} />
 
       <PhoneReputationComplianceCard />
 

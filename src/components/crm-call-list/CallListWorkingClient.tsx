@@ -38,6 +38,7 @@ export default function CallListWorkingClient({
   promoteAction,
   hiddenFields,
   callScriptClient,
+  websiteServices,
   agentName,
   callingFor,
 }: {
@@ -52,6 +53,8 @@ export default function CallListWorkingClient({
   // Null when this segment has no linked client - the "Script" button
   // simply doesn't render in that case.
   callScriptClient?: CallScriptClientOption | null;
+  // Website-services campaign: per-lead script uses the standard approved opening.
+  websiteServices?: boolean;
   agentName?: string;
   // Lead Generation CRM only: the client/campaign this call list belongs to,
   // resolved server-side from the list itself (never chosen by the agent).
@@ -206,7 +209,7 @@ export default function CallListWorkingClient({
               {scriptOpenId === lead.id && callScriptClient && (
                 <div className="mt-3 border-t border-[var(--color-border)] pt-3">
                   <ClientCallScriptPanel
-                    script={buildLeadgenCallScript({ agentName: agentName ?? "", prospectBusinessName: lead.business_name, client: callScriptClient })}
+                    script={buildLeadgenCallScript({ agentName: agentName ?? "", prospectBusinessName: lead.business_name, client: callScriptClient, websiteServices })}
                     compact
                   />
                 </div>
