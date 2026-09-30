@@ -7,6 +7,7 @@ import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types"
 import CampaignQuickScriptCard from "@/components/crm-ui/CampaignQuickScriptCard";
 import { resolveGrowthScriptKey, substituteAgentName } from "@/lib/call-list-script-shared";
 import { logCallListCallAction, promoteCallListLeadAction } from "../actions";
+import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 
 export default async function AgentCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const agent = await requireCrmUser();
@@ -73,7 +74,7 @@ export default async function AgentCallListSegmentDetailPage({ params }: { param
         ← Back to My Call Lists
       </Link>
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
+      <p className="mt-1 text-sm text-[var(--color-text-muted)]">Client / Campaign Owner: {GROWTH_CALL_LIST_OWNER} · {sanitizedLeads.length} lead(s) in this list.</p>
 
       {/* The list's own call script (Admin-managed): only reachable through the
           segment RLS above, so it disappears when the agent is unassigned. */}

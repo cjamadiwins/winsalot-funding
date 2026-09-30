@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { CallListSegmentRow } from "@/lib/call-list-types";
+import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 
 const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   lead_generation: "Lead Generation",
@@ -64,6 +65,7 @@ export default async function AgentCallListSegmentsPage() {
               <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">
                 {segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—"}
               </div>
+              <div className="mt-2 text-[12px] text-[var(--color-text-muted)]">Client / Campaign Owner: {GROWTH_CALL_LIST_OWNER}</div>
               <div className="mt-3 flex items-center justify-between text-[12.5px]">
                 <span className="text-[var(--color-text-muted)]">{remainingBySegment.get(segment.id) ?? 0} remaining</span>
                 <span className="text-[var(--color-text-muted)]">{totalBySegment.get(segment.id) ?? 0} total</span>

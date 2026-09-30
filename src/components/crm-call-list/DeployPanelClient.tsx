@@ -39,6 +39,7 @@ export default function DeployPanelClient({
   const [clientId, setClientId] = useState(initialClientId);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   function toggle(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
@@ -54,10 +55,14 @@ export default function DeployPanelClient({
       return;
     }
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const result = await deployAction(segmentId, selected, clientId || undefined);
       if (result.error) setError(result.error);
-      else router.refresh();
+      else {
+        if (clientLabel) setNotice(`Deployment confirmed. Client / Campaign Owner: ${clientLabel}.`);
+        router.refresh();
+      }
     });
   }
 
@@ -69,6 +74,7 @@ export default function DeployPanelClient({
         whoever is selected, so unselecting an agent removes their access to this list.
       </p>
       {error && <p className="mt-2 text-[12.5px] text-rose-700">{error}</p>}
+      {notice && <p role="status" className="mt-2 text-[12.5px] text-emerald-700">{notice}</p>}
       {clientOptions && (
         <label className="mt-3 block text-[12.5px] font-semibold text-slate-700">
           Client

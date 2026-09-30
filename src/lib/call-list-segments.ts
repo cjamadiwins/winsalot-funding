@@ -4,8 +4,7 @@ import { getAgentServiceAssignment } from "./crm-agent-service";
 import { serviceAllowsOpportunityType } from "./crm-agent-service-shared";
 import type { CallListCrm, CallListLeadRow, CallListSegmentRow, CallListSegmentStatus } from "./call-list-types";
 import { buildCallListCampaignName } from "./call-list-campaign-name";
-
-const GROWTH_CAMPAIGN_OWNER = "Winsalot Corp";
+import { GROWTH_CALL_LIST_OWNER } from "./growth-call-list-owner";
 
 export async function listSegments(crm: CallListCrm): Promise<CallListSegmentRow[]> {
   const admin = getSupabaseAdmin();
@@ -150,9 +149,9 @@ export async function createDraftSegment(input: {
       crm: input.crm,
       name: input.name,
       campaign_name: input.crm === "growth"
-        ? buildCallListCampaignName({ clientName: GROWTH_CAMPAIGN_OWNER, industry: input.industry?.trim() || input.name, location: input.territory ?? null })
+        ? buildCallListCampaignName({ clientName: GROWTH_CALL_LIST_OWNER, industry: input.industry?.trim() || input.name, location: input.territory ?? null })
         : input.campaignName ?? null,
-      campaign_owner_name: input.crm === "growth" ? GROWTH_CAMPAIGN_OWNER : null,
+      campaign_owner_name: input.crm === "growth" ? GROWTH_CALL_LIST_OWNER : null,
       industry: input.industry ?? null,
       territory: input.territory ?? null,
       source_file_name: input.sourceFileName,

@@ -42,7 +42,8 @@ function table(name: string) {
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: (t: string) => table(t) }) }));
 
-import { GROWTH_CAMPAIGN_OWNER, saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
+import { saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
+import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 import type { CallListSegmentRow } from "@/lib/call-list-types";
 
 const seg = (over: Partial<CallListSegmentRow>) => ({ id: "s1", crm: "growth", growth_opportunity_type: "lead_generation", leadgen_campaign_id: null, crm_client_id: null, campaign_owner_name: null, industry: "Pet Sitter", territory: "Niagara Falls", name: "Pet Sitter — Niagara Falls", source_file_name: "import-original.csv", campaign_name: null, ...over }) as CallListSegmentRow;
@@ -98,7 +99,7 @@ describe("Growth: fixed Winsalot owner, service + agents", () => {
     await saveGrowth("business_financing", ["goodness"]);
     expect(db.call_list_segments[0].growth_opportunity_type).toBe("business_financing");
     expect(db.call_list_segments[0].crm_client_id).toBeNull();
-    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CAMPAIGN_OWNER);
+    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CALL_LIST_OWNER);
     expect(db.call_list_segments[0].campaign_name).toBe("Winsalot Corp — Pet Sitter — Niagara Falls");
     expect(db.crm_clients.map((c) => c.company_name)).toEqual(["Teknokraft Canada Inc.", "Winsalot Corp. Test"]);
     expect(db.call_list_segments[0].source_file_name).toBe("import-original.csv");
@@ -120,7 +121,7 @@ describe("Growth: fixed Winsalot owner, service + agents", () => {
   it("uses the fixed Winsalot owner and leaves prospect and test account records unchanged", async () => {
     const before = structuredClone(db.crm_clients);
     await saveGrowth("lead_generation", ["henry"], seg({ crm_client_id: "prospect1" }));
-    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CAMPAIGN_OWNER);
+    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CALL_LIST_OWNER);
     expect(db.call_list_segments[0].crm_client_id).toBeNull();
     expect(db.crm_clients).toEqual(before);
   });
