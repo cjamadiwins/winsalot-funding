@@ -52,12 +52,10 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       listRemovedSegmentLeads(segment.id),
       getHiddenColumnFields("growth"),
     ]);
-    const [{ data: agentsResult }, { data: clientsResult }] = await Promise.all([
+    const [{ data: agentsResult }] = await Promise.all([
       admin.from("crm_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
-      admin.from("crm_clients").select("id, company_name").eq("status", "Active").eq("is_internal_test", false).order("company_name"),
     ]);
     const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
-    const clientOptions = (clientsResult ?? []).map((c) => ({ id: c.id as string, name: c.company_name as string }));
 
     return (
       <div className="space-y-6">
@@ -90,7 +88,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         <DeployPanelClient
           segmentId={segment.id}
           agents={agents}
-          clientOptions={clientOptions}
+          clientLabel="Winsalot Corp"
           industry={segment.industry}
           location={segment.territory}
           productionLeadCount={leads.length}
@@ -134,10 +132,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
 
   // Admin "Save Assignment": service + agents. Agent eligibility follows each
   // agent's Admin-set Growth service assignment (CRM Agents page).
-  const [{ data: serviceRows }, { data: clientRows }] = await Promise.all([
-    admin.from("crm_agent_service_assignments").select("agent_id, service"),
-    admin.from("crm_clients").select("id, company_name, status, is_internal_test").order("company_name"),
-  ]);
+  const { data: serviceRows } = await admin.from("crm_agent_service_assignments").select("agent_id, service");
   const agentServices: Record<string, AgentService | null> = {};
   for (const agent of agents) agentServices[agent.id] = null;
   for (const row of serviceRows ?? []) if (isAgentService(row.service)) agentServices[row.agent_id as string] = row.service;
@@ -147,9 +142,6 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
     { value: "business_financing", label: "Business Finance" },
     ...(currentService === "both_services" ? [{ value: "both_services", label: "Lead Gen + Financing (existing)" }] : []),
   ];
-  const clientOptions = (clientRows ?? [])
-    .filter((client) => client.is_internal_test !== true && (client.status === "Active" || client.id === segment.crm_client_id))
-    .map((client) => ({ value: client.id as string, label: client.company_name as string }));
 
   const nowIso = new Date().toISOString();
   const stats = {
@@ -186,9 +178,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         scopeLabel: "Service",
         scopeOptions: serviceOptions,
         initialScope: currentService,
-        clientOptions,
-        initialClientId: segment.crm_client_id ?? "",
-        clientProfileHrefPrefix: "/admin/crm/clients",
+        fixedClientLabel: "Winsalot Corp",
         agentServices,
         saveAction: saveSegmentAssignmentAction,
       }}
