@@ -52,8 +52,12 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       listRemovedSegmentLeads(segment.id),
       getHiddenColumnFields("growth"),
     ]);
-    const { data: agentsResult } = await admin.from("crm_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name");
+    const [{ data: agentsResult }, { data: clientsResult }] = await Promise.all([
+      admin.from("crm_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
+      admin.from("crm_clients").select("id, company_name").eq("status", "Active").eq("is_internal_test", false).order("company_name"),
+    ]);
     const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
+    const clientOptions = (clientsResult ?? []).map((c) => ({ id: c.id as string, name: c.company_name as string }));
 
     return (
       <div className="space-y-6">
@@ -83,7 +87,15 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
           updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
         />
 
-        <DeployPanelClient segmentId={segment.id} agents={agents} deployAction={deploySegmentAction} />
+        <DeployPanelClient
+          segmentId={segment.id}
+          agents={agents}
+          clientOptions={clientOptions}
+          industry={segment.industry}
+          location={segment.territory}
+          productionLeadCount={leads.length}
+          deployAction={deploySegmentAction}
+        />
       </div>
     );
   }
@@ -122,7 +134,10 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
 
   // Admin "Save Assignment": service + agents. Agent eligibility follows each
   // agent's Admin-set Growth service assignment (CRM Agents page).
-  const { data: serviceRows } = await admin.from("crm_agent_service_assignments").select("agent_id, service");
+  const [{ data: serviceRows }, { data: clientRows }] = await Promise.all([
+    admin.from("crm_agent_service_assignments").select("agent_id, service"),
+    admin.from("crm_clients").select("id, company_name, status, is_internal_test").order("company_name"),
+  ]);
   const agentServices: Record<string, AgentService | null> = {};
   for (const agent of agents) agentServices[agent.id] = null;
   for (const row of serviceRows ?? []) if (isAgentService(row.service)) agentServices[row.agent_id as string] = row.service;
@@ -132,6 +147,9 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
     { value: "business_financing", label: "Business Finance" },
     ...(currentService === "both_services" ? [{ value: "both_services", label: "Lead Gen + Financing (existing)" }] : []),
   ];
+  const clientOptions = (clientRows ?? [])
+    .filter((client) => client.is_internal_test !== true && (client.status === "Active" || client.id === segment.crm_client_id))
+    .map((client) => ({ value: client.id as string, label: client.company_name as string }));
 
   const nowIso = new Date().toISOString();
   const stats = {
@@ -164,7 +182,16 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         helpText: "The script assigned agents see in this list's workspace. Pick a template for this service/campaign and/or write a custom script (custom text replaces the template). Changes apply immediately and never affect past calls.",
         saveAction: saveSegmentScriptAction,
       }}
-      assignment={{ scopeLabel: "Service", scopeOptions: serviceOptions, initialScope: currentService, agentServices, saveAction: saveSegmentAssignmentAction }}
+      assignment={{
+        scopeLabel: "Service",
+        scopeOptions: serviceOptions,
+        initialScope: currentService,
+        clientOptions,
+        initialClientId: segment.crm_client_id ?? "",
+        clientProfileHrefPrefix: "/admin/crm/clients",
+        agentServices,
+        saveAction: saveSegmentAssignmentAction,
+      }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}
