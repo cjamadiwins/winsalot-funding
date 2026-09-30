@@ -9,7 +9,7 @@ import { saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "./cal
 // later (e.g. to reassign agents) is allowed and simply overwrites the
 // roster and re-stamps deployed_at/deployed_by - the segment's leads and
 // all call history are untouched either way.
-export async function deploySegment(segmentId: string, agentIds: string[], deployedBy: string, clientId?: string): Promise<CallListSegmentRow> {
+export async function deploySegment(segmentId: string, agentIds: string[], deployedBy: string, _legacyClientId?: string): Promise<CallListSegmentRow> {
   if (agentIds.length === 0) {
     throw new Error("Select at least one agent to deploy this segment to.");
   }
@@ -24,9 +24,8 @@ export async function deploySegment(segmentId: string, agentIds: string[], deplo
     // Assigning this list also grants its selected agents access to the client campaign.
     await saveLeadgenSegmentAssignment(segment, segment.leadgen_campaign_id as string, agentIds, undefined, deployedBy);
   } else if (segment?.crm === "growth" && segment.growth_opportunity_type) {
-    // Growth: client ownership + service eligibility are checked together.
-    if (!clientId) throw new Error("Select a production client before deploying this call list.");
-    await saveGrowthSegmentAssignment(segment, segment.growth_opportunity_type, agentIds, clientId);
+    // Growth ownership is fixed to Winsalot Corp; only service and agents are assigned.
+    await saveGrowthSegmentAssignment(segment, segment.growth_opportunity_type, agentIds);
   } else {
     throw new Error("Call list not found.");
   }

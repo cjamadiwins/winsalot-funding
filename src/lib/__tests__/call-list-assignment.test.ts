@@ -42,12 +42,12 @@ function table(name: string) {
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: (t: string) => table(t) }) }));
 
-import { saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
+import { GROWTH_CAMPAIGN_OWNER, saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
 import type { CallListSegmentRow } from "@/lib/call-list-types";
 
-const seg = (over: Partial<CallListSegmentRow>) => ({ id: "s1", crm: "growth", growth_opportunity_type: "lead_generation", leadgen_campaign_id: null, crm_client_id: null, industry: "Pet Sitter", territory: "Niagara Falls", source_file_name: "import-original.csv", campaign_name: null, ...over }) as CallListSegmentRow;
+const seg = (over: Partial<CallListSegmentRow>) => ({ id: "s1", crm: "growth", growth_opportunity_type: "lead_generation", leadgen_campaign_id: null, crm_client_id: null, campaign_owner_name: null, industry: "Pet Sitter", territory: "Niagara Falls", name: "Pet Sitter — Niagara Falls", source_file_name: "import-original.csv", campaign_name: null, ...over }) as CallListSegmentRow;
 const roster = () => (db.call_list_segment_agents ?? []).map((r) => r.agent_id).sort();
-const saveGrowth = (service: string, ids: string[], segment = seg({})) => saveGrowthSegmentAssignment(segment, service, ids, "client1");
+const saveGrowth = (service: string, ids: string[], segment = seg({})) => saveGrowthSegmentAssignment(segment, service, ids);
 
 beforeEach(() => {
   for (const k of Object.keys(db)) delete db[k];
@@ -59,12 +59,15 @@ beforeEach(() => {
     { agent_id: "henry", service: "lead_generation" },
     { agent_id: "goodness", service: "business_financing" },
   ];
-  db.crm_clients = [{ id: "client1", company_name: "Teknokraft Canada Inc.", status: "Active", is_internal_test: false }];
+  db.crm_clients = [
+    { id: "prospect1", company_name: "Teknokraft Canada Inc.", status: "Prospect", is_internal_test: false },
+    { id: "test", company_name: "Winsalot Corp. Test", status: "Prospect", is_internal_test: true },
+  ];
   db.call_list_segments = [{ id: "s1", growth_opportunity_type: "lead_generation", crm_client_id: null, campaign_name: null, source_file_name: "import-original.csv" }];
   db.call_list_segment_agents = [];
 });
 
-describe("Growth: client, service + agents", () => {
+describe("Growth: fixed Winsalot owner, service + agents", () => {
   it("assigns one agent, then multiple, respecting eligibility", async () => {
     await saveGrowth("lead_generation", ["henry"]);
     expect(roster()).toEqual(["henry"]);
@@ -94,8 +97,10 @@ describe("Growth: client, service + agents", () => {
     await expect(saveGrowth("business_financing", ["henry"])).rejects.toThrow(/Henry isn't assigned to Business Finance/);
     await saveGrowth("business_financing", ["goodness"]);
     expect(db.call_list_segments[0].growth_opportunity_type).toBe("business_financing");
-    expect(db.call_list_segments[0].crm_client_id).toBe("client1");
-    expect(db.call_list_segments[0].campaign_name).toBe("Teknokraft Canada Inc. — Pet Sitter — Niagara Falls");
+    expect(db.call_list_segments[0].crm_client_id).toBeNull();
+    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CAMPAIGN_OWNER);
+    expect(db.call_list_segments[0].campaign_name).toBe("Winsalot Corp — Pet Sitter — Niagara Falls");
+    expect(db.crm_clients.map((c) => c.company_name)).toEqual(["Teknokraft Canada Inc.", "Winsalot Corp. Test"]);
     expect(db.call_list_segments[0].source_file_name).toBe("import-original.csv");
     expect(roster()).toEqual(["goodness"]);
     expect(db.crm_opportunities).toEqual([{ id: "o1", opportunity_type: "lead_generation" }]);
@@ -112,12 +117,12 @@ describe("Growth: client, service + agents", () => {
     expect(roster()).toEqual([]);
   });
 
-  it("refuses inactive or dashboard-testing clients", async () => {
-    db.crm_clients.push({ id: "test", company_name: "Winsalot Corp. Test", status: "Active", is_internal_test: true });
-    await expect(saveGrowthSegmentAssignment(seg({}), "lead_generation", ["henry"], "test")).rejects.toThrow(/dashboard testing/);
-    db.crm_clients[0].status = "Paused";
-    await expect(saveGrowthSegmentAssignment(seg({}), "lead_generation", ["henry"], "client1")).rejects.toThrow(/active production client/);
-    expect(roster()).toEqual([]);
+  it("uses the fixed Winsalot owner and leaves prospect and test account records unchanged", async () => {
+    const before = structuredClone(db.crm_clients);
+    await saveGrowth("lead_generation", ["henry"], seg({ crm_client_id: "prospect1" }));
+    expect(db.call_list_segments[0].campaign_owner_name).toBe(GROWTH_CAMPAIGN_OWNER);
+    expect(db.call_list_segments[0].crm_client_id).toBeNull();
+    expect(db.crm_clients).toEqual(before);
   });
 });
 

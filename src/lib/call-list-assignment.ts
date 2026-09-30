@@ -70,27 +70,31 @@ export async function assertGrowthAgentsEligible(admin: Admin, service: string, 
   if (problems.length > 0) throw new Error(problems.join(" "));
 }
 
-export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, service: string, agentIds: string[], clientId: string): Promise<SaveAssignmentResult> {
+export const GROWTH_CAMPAIGN_OWNER = "Winsalot Corp";
+
+export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, service: string, agentIds: string[]): Promise<SaveAssignmentResult> {
   if (segment.crm !== "growth") throw new Error("Call list not found.");
-  if (!clientId) throw new Error("Choose a production client before assigning this call list.");
   // Legacy lists tagged "both services" may keep that tag; everything else is
-  // Lead Generation or Business Finance.
+  // Lead Generation or Business Finance. Growth CRM is Winsalot's internal
+  // prospecting system, so prospects in crm_clients never own these lists.
   const keepsLegacy = service === "both_services" && segment.growth_opportunity_type === "both_services";
   if (!keepsLegacy && !(GROWTH_LIST_SERVICES as readonly string[]).includes(service)) throw new Error("Choose Lead Generation or Business Finance.");
 
   const admin = getSupabaseAdmin();
-  const { data: client } = await admin.from("crm_clients").select("id, company_name, status, is_internal_test").eq("id", clientId).maybeSingle();
-  if (!client || client.status !== "Active") throw new Error("Choose an active production client.");
-  if (client.is_internal_test) throw new Error("Winsalot Corp. Test is for dashboard testing and cannot own a production call list.");
   await assertGrowthAgentsEligible(admin, service, agentIds);
 
-  const campaignName = buildCallListCampaignName({ clientName: client.company_name, industry: segment.industry, location: segment.territory });
-  if (segment.growth_opportunity_type !== service || segment.crm_client_id !== clientId || segment.campaign_name !== campaignName) {
-    // Ownership and display name affect this list going forward. Existing
-    // leads, opportunities, calls, notes, and appointments keep their history.
+  const campaignName = buildCallListCampaignName({
+    clientName: GROWTH_CAMPAIGN_OWNER,
+    industry: segment.industry?.trim() || segment.name,
+    location: segment.territory,
+  });
+  if (segment.growth_opportunity_type !== service || segment.crm_client_id !== null || segment.campaign_owner_name !== GROWTH_CAMPAIGN_OWNER || segment.campaign_name !== campaignName) {
+    // Only the list's fixed internal owner/service and roster change. Leads,
+    // prospects, calls, notes, appointments, and all campaign history remain untouched.
     const { error } = await admin.from("call_list_segments").update({
       growth_opportunity_type: service,
-      crm_client_id: clientId,
+      crm_client_id: null,
+      campaign_owner_name: GROWTH_CAMPAIGN_OWNER,
       campaign_name: campaignName,
     }).eq("id", segment.id);
     if (error) throw new Error(`Failed to update the call list assignment: ${error.message}`);
