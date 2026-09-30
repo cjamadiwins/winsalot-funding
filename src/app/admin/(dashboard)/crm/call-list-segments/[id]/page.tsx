@@ -89,6 +89,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
           segmentId={segment.id}
           agents={agents}
           clientLabel="Winsalot Corp"
+          campaignLabel={segment.campaign_name ?? segment.name}
           industry={segment.industry}
           location={segment.territory}
           productionLeadCount={leads.length}
@@ -179,6 +180,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         scopeOptions: serviceOptions,
         initialScope: currentService,
         fixedClientLabel: "Winsalot Corp",
+        listName: segment.name,
         agentServices,
         saveAction: saveSegmentAssignmentAction,
       }}
