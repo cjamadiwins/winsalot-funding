@@ -14,7 +14,7 @@ export type CallListSegmentRowView = {
   leadCount: number;
 };
 
-export default function CallListSegmentsClient({ basePath, rows }: { basePath: string; rows: CallListSegmentRowView[] }) {
+export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
@@ -31,6 +31,7 @@ export default function CallListSegmentsClient({ basePath, rows }: { basePath: s
           <tr>
             <th className="px-3 py-2 font-semibold">Segment</th>
             <th className="px-3 py-2 font-semibold">Campaign / Service</th>
+            {fixedOwnerLabel && <th className="px-3 py-2 font-semibold">Client / Campaign Owner</th>}
             <th className="px-3 py-2 font-semibold">Territory</th>
             <th className="px-3 py-2 font-semibold">Rows</th>
             <th className="px-3 py-2 font-semibold">Assigned Agents</th>
@@ -48,6 +49,7 @@ export default function CallListSegmentsClient({ basePath, rows }: { basePath: s
                 {segment.source_file_name && <div className="mt-0.5 text-[11.5px] text-slate-500">{segment.source_file_name}</div>}
               </td>
               <td className="px-3 py-2.5 text-slate-700">{serviceLabel}</td>
+              {fixedOwnerLabel && <td className="px-3 py-2.5 text-slate-700">{fixedOwnerLabel}</td>}
               <td className="px-3 py-2.5 text-slate-700">{segment.territory || "—"}</td>
               <td className="px-3 py-2.5 text-slate-700">
                 {leadCount} / {segment.total_uploaded_rows}

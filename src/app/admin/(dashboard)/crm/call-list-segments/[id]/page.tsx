@@ -9,6 +9,7 @@ import { GROWTH_CRM_CAMPAIGN_KEYS, GROWTH_CRM_CAMPAIGN_LABELS } from "@/lib/grow
 import { resolveGrowthScriptKey } from "@/lib/call-list-script-shared";
 import { listSegmentLeads, listRemovedSegmentLeads } from "@/lib/call-list-leads";
 import { getHiddenColumnFields } from "@/lib/call-list-column-visibility";
+import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
 import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
@@ -66,7 +67,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
             </Link>
             <h1 className="mt-1 text-2xl font-bold text-slate-900">{segment.name}</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Draft · {serviceLabel} · {leads.length} row(s) from {segment.source_file_name}
+              Draft · {serviceLabel} · Client / Campaign Owner: {GROWTH_CALL_LIST_OWNER} · {leads.length} row(s) from {segment.source_file_name}
             </p>
           </div>
           <DeleteDraftButton segmentId={segment.id} listHref="/admin/crm/call-list-segments" deleteAction={deleteDraftSegmentAction} />
@@ -88,7 +89,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         <DeployPanelClient
           segmentId={segment.id}
           agents={agents}
-          clientLabel="Winsalot Corp"
+          clientLabel={GROWTH_CALL_LIST_OWNER}
           campaignLabel={segment.campaign_name ?? segment.name}
           industry={segment.industry}
           location={segment.territory}
@@ -160,6 +161,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       basePath="/admin/crm/call-list-segments"
       segment={segment}
       serviceLabel={serviceLabel}
+      campaignOwnerLabel={GROWTH_CALL_LIST_OWNER}
       leads={leads}
       removedLeads={removedLeads}
       agentNameById={agentNameById}
@@ -179,7 +181,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         scopeLabel: "Service",
         scopeOptions: serviceOptions,
         initialScope: currentService,
-        fixedClientLabel: "Winsalot Corp",
+        fixedClientLabel: GROWTH_CALL_LIST_OWNER,
         agentServices,
         saveAction: saveSegmentAssignmentAction,
       }}

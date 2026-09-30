@@ -127,7 +127,7 @@ export default function SegmentAssignmentPanelClient({
         setError(result.error);
         return;
       }
-      setNotice(`Saved. ${result.added ?? 0} agent(s) added, ${result.removed ?? 0} removed.`);
+      setNotice(`Saved. ${result.added ?? 0} agent(s) added, ${result.removed ?? 0} removed.${fixedClientLabel ? ` Campaign Owner: ${fixedClientLabel}.` : ""}`);
       router.refresh();
     });
   }

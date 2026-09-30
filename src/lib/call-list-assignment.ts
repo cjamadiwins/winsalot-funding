@@ -4,6 +4,7 @@ import { isAgentService, serviceAllowsOpportunityType, AGENT_SERVICE_LABELS, typ
 import type { CallListSegmentRow } from "./call-list-types";
 import { assertProductionCampaign } from "./leadgen-test-client-guard";
 import { buildCallListCampaignName } from "./call-list-campaign-name";
+import { GROWTH_CALL_LIST_OWNER } from "./growth-call-list-owner";
 
 // Admin-only "Save Assignment" for a call list, shared by both CRMs' server
 // actions (each action gates on its own requireAdmin first). Only the roster
@@ -70,8 +71,6 @@ export async function assertGrowthAgentsEligible(admin: Admin, service: string, 
   if (problems.length > 0) throw new Error(problems.join(" "));
 }
 
-export const GROWTH_CAMPAIGN_OWNER = "Winsalot Corp";
-
 export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, service: string, agentIds: string[]): Promise<SaveAssignmentResult> {
   if (segment.crm !== "growth") throw new Error("Call list not found.");
   // Legacy lists tagged "both services" may keep that tag; everything else is
@@ -84,17 +83,17 @@ export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, s
   await assertGrowthAgentsEligible(admin, service, agentIds);
 
   const campaignName = buildCallListCampaignName({
-    clientName: GROWTH_CAMPAIGN_OWNER,
+    clientName: GROWTH_CALL_LIST_OWNER,
     industry: segment.industry?.trim() || segment.name,
     location: segment.territory,
   });
-  if (segment.growth_opportunity_type !== service || segment.crm_client_id !== null || segment.campaign_owner_name !== GROWTH_CAMPAIGN_OWNER || segment.campaign_name !== campaignName) {
+  if (segment.growth_opportunity_type !== service || segment.crm_client_id !== null || segment.campaign_owner_name !== GROWTH_CALL_LIST_OWNER || segment.campaign_name !== campaignName) {
     // Only the list's fixed internal owner/service and roster change. Leads,
     // prospects, calls, notes, appointments, and all campaign history remain untouched.
     const { error } = await admin.from("call_list_segments").update({
       growth_opportunity_type: service,
       crm_client_id: null,
-      campaign_owner_name: GROWTH_CAMPAIGN_OWNER,
+      campaign_owner_name: GROWTH_CALL_LIST_OWNER,
       campaign_name: campaignName,
     }).eq("id", segment.id);
     if (error) throw new Error(`Failed to update the call list assignment: ${error.message}`);

@@ -3,6 +3,7 @@ import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSegments } from "@/lib/call-list-segments";
 import CallListSegmentsClient from "@/components/crm-call-list/CallListSegmentsClient";
+import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 
 const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   lead_generation: "Lead Generation",
@@ -75,7 +76,7 @@ export default async function CallListSegmentsPage() {
       )}
 
       <div className="mt-6">
-        <CallListSegmentsClient basePath="/admin/crm/call-list-segments" rows={rows} />
+        <CallListSegmentsClient basePath="/admin/crm/call-list-segments" rows={rows} fixedOwnerLabel={GROWTH_CALL_LIST_OWNER} />
       </div>
     </div>
   );

@@ -36,6 +36,7 @@ export default function SegmentPerformanceClient({
   basePath,
   segment,
   serviceLabel,
+  campaignOwnerLabel,
   leads,
   removedLeads,
   agentNameById,
@@ -59,6 +60,7 @@ export default function SegmentPerformanceClient({
   basePath: string;
   segment: CallListSegmentRow;
   serviceLabel: string;
+  campaignOwnerLabel?: string;
   leads: CallListLeadRow[];
   removedLeads: CallListLeadRow[];
   agentNameById: Map<string, string>;
@@ -180,6 +182,11 @@ export default function SegmentPerformanceClient({
           <h1 className="text-2xl font-bold text-slate-900">{segment.name}</h1>
           <StatusBadge label={CALL_LIST_SEGMENT_STATUS_LABELS[segment.status]} className={CALL_LIST_SEGMENT_STATUS_STYLES[segment.status]} />
         </div>
+        {campaignOwnerLabel && (
+          <p className="mt-1 text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Client / Campaign Owner:</span> {campaignOwnerLabel}
+          </p>
+        )}
         <p className="mt-1 text-sm text-slate-500">
           {serviceLabel}
           {segment.territory ? ` · ${segment.territory}` : ""}
