@@ -180,7 +180,6 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
         scopeOptions: serviceOptions,
         initialScope: currentService,
         fixedClientLabel: "Winsalot Corp",
-        listName: segment.name,
         agentServices,
         saveAction: saveSegmentAssignmentAction,
       }}
