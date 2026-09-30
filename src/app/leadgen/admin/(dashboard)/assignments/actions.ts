@@ -5,7 +5,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import { ensureRestrictedAgentOnCampaign } from "@/lib/leadgen-campaign-assignment";
-import { assignmentWouldRestrictAgent, removalWouldUnrestrictAgent } from "@/lib/leadgen-agent-active-client";
+import { assignmentWouldRestrictAgent } from "@/lib/leadgen-agent-active-client";
 
 type ActionResult = { error?: string; removedFromLists?: number; remainingLists?: number };
 
@@ -170,47 +170,66 @@ export async function assignAgentClientAction(agentId: string, clientId: string,
   return {};
 }
 
-// Remove a client from an agent. Deletes only the agent's campaign
-// assignments for that client. Nothing recorded under the client is touched,
-// and the agent's call-list roster is left alone (the count still on a list is
-// returned so Admin can decide). If it was the Primary client, Primary is
-// cleared. Removing an agent's last assignment makes them unrestricted, so
-// that needs an explicit confirmation.
-export async function removeAgentClientAction(agentId: string, clientId: string, confirmed = false): Promise<ActionResult> {
+export type RemoveClientPreview = {
+  clientName: string;
+  lastAssignment: boolean;
+  primaryAffected: boolean;
+  activeLists: { id: string; name: string }[];
+  eligibleAgents: { id: string; name: string }[];
+  otherClients: { id: string; name: string }[];
+  leadsStillOwned: number;
+};
+
+type RemoveClientOptions = {
+  lists?: "none" | "reassign" | "unassign";
+  reassignTo?: string | null;
+  primary?: "keep" | "clear" | "set";
+  newPrimaryClientId?: string | null;
+  confirmedUnrestricted?: boolean;
+};
+
+// Read-only look at what removing a client from an agent would affect: the
+// agent's ACTIVE call lists for that client, who could take them over, and
+// whether the client is the agent's Primary. Same logic as the removal itself
+// (the database function's dry-run mode), so the modal can't disagree with it.
+export async function previewRemoveAgentClientAction(agentId: string, clientId: string): Promise<{ error?: string; preview?: RemoveClientPreview }> {
   await requireLeadgenAdmin();
   if (!UUID.test(agentId) || !UUID.test(clientId)) return { error: "Invalid request." };
-  const db = getSupabaseAdmin();
+  const { data, error } = await getSupabaseAdmin().rpc("leadgen_remove_agent_client", { p_agent_id: agentId, p_client_id: clientId, p_dry_run: true });
+  if (error) return { error: error.message };
+  return { preview: data as RemoveClientPreview };
+}
 
-  const campaignIds = await campaignIdsForClient(db, clientId);
-  const rows = await agentCampaignRows(db, agentId);
-  const clientRows = rows.filter((r) => campaignIds.includes(r.campaign_id));
+// Remove a client from an agent. Runs as ONE database transaction
+// (leadgen_remove_agent_client): the agent's client assignment, and - when
+// chosen - their active call lists for that client (reassigned to another
+// eligible agent, or simply taken off), and the Primary client all change
+// together or not at all. Only current assignments change: call logs, leads and
+// their ownership, appointments, follow-ups, emails, notes, DNC records,
+// reports and completed/draft lists are never touched. Removing an agent's last
+// assignment makes them unrestricted, so that needs explicit confirmation.
+export async function removeAgentClientAction(agentId: string, clientId: string, options: RemoveClientOptions = {}): Promise<ActionResult> {
+  const admin = await requireLeadgenAdmin();
+  if (!UUID.test(agentId) || !UUID.test(clientId)) return { error: "Invalid request." };
+  if ((options.reassignTo && !UUID.test(options.reassignTo)) || (options.newPrimaryClientId && !UUID.test(options.newPrimaryClientId))) return { error: "Invalid request." };
 
-  if (clientRows.length > 0 && removalWouldUnrestrictAgent(rows.length, clientRows.length) && !confirmed) {
-    return { error: "This is the agent's last assigned client. With none assigned they can see every client - confirm to continue." };
-  }
-
-  if (clientRows.length > 0) {
-    const { error } = await db.from("leadgen_campaign_agents").delete().eq("agent_id", agentId).in("campaign_id", campaignIds);
-    if (error) return { error: `Failed to remove the client: ${error.message}` };
-  }
-
-  // Primary/Current pointing at this client is cleared.
-  const { data: user } = await db.from("leadgen_users").select("current_campaign_id").eq("id", agentId).maybeSingle();
-  if (user?.current_campaign_id && campaignIds.includes(user.current_campaign_id as string)) {
-    await db.from("leadgen_users").update({ current_campaign_id: null }).eq("id", agentId).eq("role", "agent");
-  }
-
-  const { data: segments } = campaignIds.length
-    ? await db.from("call_list_segments").select("id").eq("crm", "lead_generation").in("leadgen_campaign_id", campaignIds)
-    : { data: [] as { id: string }[] };
-  const segmentIds = (segments ?? []).map((s) => s.id as string);
-  const { count } = segmentIds.length
-    ? await db.from("call_list_segment_agents").select("segment_id", { count: "exact", head: true }).eq("agent_id", agentId).in("segment_id", segmentIds)
-    : { count: 0 };
+  const { data, error } = await getSupabaseAdmin().rpc("leadgen_remove_agent_client", {
+    p_agent_id: agentId,
+    p_client_id: clientId,
+    p_list_mode: options.lists ?? "none",
+    p_reassign_to: options.reassignTo ?? null,
+    p_primary_action: options.primary ?? "keep",
+    p_new_primary_client: options.newPrimaryClientId ?? null,
+    p_confirm_unrestricted: options.confirmedUnrestricted ?? false,
+    p_admin_id: admin.id,
+    p_dry_run: false,
+  });
+  if (error) return { error: `Nothing was changed. ${error.message}` };
 
   refresh();
   revalidatePath("/leadgen/agent");
-  return { remainingLists: count ?? 0 };
+  const result = data as { listsAffected: number };
+  return { removedFromLists: result.listsAffected };
 }
 
 // Set or clear the agent's Primary/Current client. It's a default only: a call
