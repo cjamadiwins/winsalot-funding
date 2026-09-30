@@ -22,6 +22,7 @@ import {
   type SegmentLeadEditableFields,
 } from "@/lib/call-list-leads";
 import { deploySegment } from "@/lib/call-list-deploy";
+import { saveGrowthSegmentAssignment } from "@/lib/call-list-assignment";
 import { promoteToGrowthOpportunity } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
@@ -263,4 +264,22 @@ export async function updateCallListColumnVisibilityAction(hiddenFields: string[
   }
   revalidatePath(BASE_PATH);
   return {};
+}
+
+// Admin-only "Save Assignment": the list's service + its agent roster in one
+// step (also usable to edit, remove or reassign later). Agents must be eligible
+// for the service; history is never touched.
+export async function saveSegmentAssignmentAction(segmentId: string, service: string, agentIds: string[]): Promise<{ error?: string; added?: number; removed?: number }> {
+  await requireCrmAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "growth") return { error: "Segment not found." };
+  try {
+    const result = await saveGrowthSegmentAssignment(segment, service, agentIds);
+    revalidatePath(`${BASE_PATH}/${segmentId}`);
+    revalidatePath(BASE_PATH);
+    revalidatePath("/agent", "layout");
+    return result;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save the assignment." };
+  }
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getSegment, setSegmentAgents } from "./call-list-segments";
 import type { CallListSegmentRow } from "./call-list-types";
+import { assertGrowthAgentsEligible, grantLeadgenCampaignAccess } from "./call-list-assignment";
 
 // "Deploy / Assign Segment" (brief item 6): picks the segment's agent
 // roster and flips it from Draft to Active in one step. Deploying again
@@ -21,7 +22,15 @@ export async function deploySegment(segmentId: string, agentIds: string[], deplo
     const { data: client } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
     if (!client) throw new Error("This campaign's client is inactive.");
   }
+  // Growth: agents must be eligible for the list's service (Admin's Service assignment).
+  if (segment?.crm === "growth" && segment.growth_opportunity_type) {
+    await assertGrowthAgentsEligible(admin, segment.growth_opportunity_type, agentIds);
+  }
   await setSegmentAgents(segmentId, agentIds);
+  // Lead Gen: a deployed agent also needs the list's client (access needs both).
+  if (segment?.crm === "lead_generation" && segment.leadgen_campaign_id) {
+    await grantLeadgenCampaignAccess(admin, segment.leadgen_campaign_id, agentIds, deployedBy);
+  }
   const { data, error } = await admin
     .from("call_list_segments")
     .update({ status: "active", deployed_at: new Date().toISOString(), deployed_by: deployedBy })
