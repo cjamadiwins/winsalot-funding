@@ -11,7 +11,7 @@ import {
   type ClientRelatedCounts,
 } from "../crm-clients-types";
 
-const emptyCounts: ClientRelatedCounts = { appointments: 0, invoices: 0, payments: 0, assignedAgents: 0, activities: 0 };
+const emptyCounts: ClientRelatedCounts = { appointments: 0, invoices: 0, payments: 0, assignedAgents: 0, activities: 0, callListCampaigns: 0 };
 
 describe("clientHasRelatedRecords", () => {
   it("is false when every count is zero", () => {
@@ -24,6 +24,7 @@ describe("clientHasRelatedRecords", () => {
     expect(clientHasRelatedRecords({ ...emptyCounts, payments: 1 })).toBe(true);
     expect(clientHasRelatedRecords({ ...emptyCounts, assignedAgents: 1 })).toBe(true);
     expect(clientHasRelatedRecords({ ...emptyCounts, activities: 1 })).toBe(true);
+    expect(clientHasRelatedRecords({ ...emptyCounts, callListCampaigns: 1 })).toBe(true);
   });
 });
 
@@ -33,8 +34,8 @@ describe("describeClientRelatedRecords", () => {
   });
 
   it("lists every non-zero count with correct pluralization", () => {
-    const description = describeClientRelatedRecords({ appointments: 1, invoices: 2, payments: 0, assignedAgents: 1, activities: 3 });
-    expect(description).toBe("1 appointment, 2 invoices, 1 assigned agent, 3 activity records");
+    const description = describeClientRelatedRecords({ appointments: 1, invoices: 2, payments: 0, assignedAgents: 1, activities: 3, callListCampaigns: 2 });
+    expect(description).toBe("1 appointment, 2 invoices, 1 assigned agent, 3 activity records, 2 call list campaigns");
   });
 });
 

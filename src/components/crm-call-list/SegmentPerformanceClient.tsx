@@ -80,10 +80,14 @@ export default function SegmentPerformanceClient({
     scopeLabel: string;
     scopeOptions: { value: string; label: string }[];
     initialScope: string;
+    clientOptions?: { value: string; label: string }[];
+    initialClientId?: string;
+    campaignsByClient?: Record<string, { value: string; label: string }[]>;
+    clientProfileHrefPrefix?: string;
     agentServices?: Record<string, AgentService | null>;
     agentScopes?: Record<string, string[]>;
     helpText?: string;
-    saveAction: (segmentId: string, scope: string, agentIds: string[]) => Promise<{ error?: string; added?: number; removed?: number }>;
+    saveAction: (segmentId: string, scope: string, agentIds: string[], clientId: string | undefined) => Promise<{ error?: string; added?: number; removed?: number }>;
   };
   // Admin call-script attachment for this list (both CRMs).
   script?: {
@@ -179,6 +183,7 @@ export default function SegmentPerformanceClient({
           {serviceLabel}
           {segment.territory ? ` · ${segment.territory}` : ""}
           {segment.industry ? ` · ${segment.industry}` : ""} · Uploaded {new Date(segment.created_at).toLocaleDateString()}
+          {segment.source_file_name ? ` · Source: ${segment.source_file_name}` : ""}
           {segment.deployed_at ? ` · Deployed ${new Date(segment.deployed_at).toLocaleString()}` : ""}
         </p>
       </div>
@@ -264,6 +269,14 @@ export default function SegmentPerformanceClient({
           scopeLabel={assignment.scopeLabel}
           scopeOptions={assignment.scopeOptions}
           initialScope={assignment.initialScope}
+          clientOptions={assignment.clientOptions}
+          initialClientId={assignment.initialClientId}
+          campaignsByClient={assignment.campaignsByClient}
+          clientProfileHrefPrefix={assignment.clientProfileHrefPrefix}
+          industry={segment.industry}
+          location={segment.territory}
+          productionLeadCount={stats.totalLeads}
+          listName={segment.name}
           agents={allAgents}
           assignedAgentIds={assignedAgentIds}
           agentServices={assignment.agentServices}

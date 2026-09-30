@@ -70,8 +70,14 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       listRemovedSegmentLeads(segment.id),
       getHiddenColumnFields("lead_generation"),
     ]);
-    const { data: agentsResult } = await admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name");
+    const [{ data: agentsResult }, { data: campaign }] = await Promise.all([
+      admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
+      segment.leadgen_campaign_id
+        ? admin.from("leadgen_campaigns").select("name, client_id").eq("id", segment.leadgen_campaign_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
     const agents = ((agentsResult ?? []) as { id: string; full_name: string }[]).map((a) => ({ id: a.id, name: a.full_name }));
+    const { data: client } = campaign ? await admin.from("leadgen_clients").select("name").eq("id", campaign.client_id).maybeSingle() : { data: null };
 
     return (
       <div className="space-y-6">
@@ -101,7 +107,15 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
           updateColumnVisibilityAction={updateCallListColumnVisibilityAction}
         />
 
-        <DeployPanelClient segmentId={segment.id} agents={agents} deployAction={deploySegmentAction} />
+        <DeployPanelClient
+          segmentId={segment.id}
+          agents={agents}
+          clientLabel={client?.name ?? undefined}
+          campaignLabel={[segment.industry, segment.territory].filter(Boolean).join(" — ") || campaign?.name || segment.campaign_name || undefined}
+          industry={undefined}
+          productionLeadCount={leads.length}
+          deployAction={deploySegmentAction}
+        />
       </div>
     );
   }
@@ -152,24 +166,23 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
 
   // Admin "Save Assignment": client (campaign) + agents.
   const [{ data: assignCampaigns }, { data: assignClients }] = await Promise.all([
-    admin.from("leadgen_campaigns").select("id, name, client_id").order("name"),
+    admin.from("leadgen_campaigns").select("id, name, client_id, status").order("name"),
     admin.from("leadgen_clients").select("id, name, active, is_internal_test").order("name"),
   ]);
   const assignClientById = new Map((assignClients ?? []).map((c) => [c.id as string, c]));
-  const clientOptions = (assignCampaigns ?? [])
-    .filter((c) => {
-      const client = assignClientById.get(c.client_id as string);
-      // Test-only clients are never offered for production lists (kept only if a list is somehow still on one).
-      return client && (client.active || c.id === segment.leadgen_campaign_id) && (!client.is_internal_test || c.id === segment.leadgen_campaign_id);
-    })
-    .map((c) => ({ value: c.id as string, label: `${assignClientById.get(c.client_id as string)?.name} — ${c.name}` }))
+  const currentCampaign = (assignCampaigns ?? []).find((campaign) => campaign.id === segment.leadgen_campaign_id);
+  const currentClientId = currentCampaign?.client_id as string | undefined;
+  const clientOptions = (assignClients ?? [])
+    .filter((client) => (client.active || client.id === currentClientId) && !client.is_internal_test)
+    .map((client) => ({ value: client.id as string, label: `${client.name}${client.active ? "" : " (inactive)"}` }))
     .sort((a, b) => a.label.localeCompare(b.label));
-
-  // Which client campaigns each agent already holds (client assignment is separate from list assignment).
-  const { data: heldRows } = await admin.from("leadgen_campaign_agents").select("agent_id, campaign_id");
-  const agentScopes: Record<string, string[]> = {};
-  for (const agent of agents) agentScopes[agent.id] = [];
-  for (const row of heldRows ?? []) (agentScopes[row.agent_id as string] ??= []).push(row.campaign_id as string);
+  const campaignsByClient: Record<string, { value: string; label: string }[]> = {};
+  for (const campaign of assignCampaigns ?? []) {
+    const client = assignClientById.get(campaign.client_id as string);
+    if (!client || (!client.active && client.id !== currentClientId) || client.is_internal_test) continue;
+    if (campaign.status !== "active" && campaign.id !== segment.leadgen_campaign_id) continue;
+    (campaignsByClient[campaign.client_id as string] ??= []).push({ value: campaign.id as string, label: campaign.name as string });
+  }
 
   let transferTarget: { id: string; name: string; status: string; clientName: string } | null = null;
   if (segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")) {
@@ -211,7 +224,17 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
         helpText: "Leave blank to use this client's call script (edit it on the client's page). Write a custom script to use for this list only. Assigned agents see it in this list's workspace immediately; past calls are never affected.",
         saveAction: saveSegmentScriptAction,
       }}
-      assignment={{ scopeLabel: "Client / Campaign", scopeOptions: clientOptions, initialScope: segment.leadgen_campaign_id ?? "", agentScopes, saveAction: saveSegmentAssignmentAction, helpText: "Client assignment and list assignment are separate. Client = which clients an agent may work for (set on the Admin dashboard, Agent Client Status). List = which of that client's call lists they work (set here). Removing an agent from a list keeps their client; removing the client cuts access to all of that client's lists." }}
+      assignment={{
+        scopeLabel: "Campaign / List",
+        scopeOptions: [],
+        initialScope: segment.leadgen_campaign_id ?? "",
+        clientOptions,
+        initialClientId: currentCampaign?.client_id as string | undefined,
+        campaignsByClient,
+        clientProfileHrefPrefix: "/leadgen/admin/clients",
+        saveAction: saveSegmentAssignmentAction,
+        helpText: "Choose the production client first, then choose its existing campaign and the agents who work this call list. Selected agents are added to that client's access scope. The segment and its leads stay intact when ownership changes; saved call and appointment history remains under the client recorded at the time.",
+      }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}

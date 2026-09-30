@@ -93,6 +93,7 @@ export async function fetchClientList(supabase: SupabaseClient, filters: ClientL
 
 export type ClientDetail = {
   client: CrmClientRow;
+  callListCampaigns: { id: string; name: string; campaign_name: string | null; industry: string | null; territory: string | null; status: string; source_file_name: string | null }[];
   assignedAgents: CrmClientAgentWithUser[];
   appointments: CrmClientAppointmentWithAgent[];
   invoices: CrmInvoiceRow[];
@@ -110,7 +111,7 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
   if (clientError) return { data: null, error: clientError.message };
   if (!client) return { data: null, error: "Client not found." };
 
-  const [{ data: assignedAgents }, { data: appointments }, { data: invoices }, { data: payments }, { data: activities }, { data: retentionEnrollment }, { data: retentionEvents }] = await Promise.all([
+  const [{ data: assignedAgents }, { data: appointments }, { data: invoices }, { data: payments }, { data: activities }, { data: retentionEnrollment }, { data: retentionEvents }, { data: callListCampaigns }] = await Promise.all([
     supabase.from("crm_client_agents").select("*, crm_users(id, full_name, email)").eq("client_id", clientId),
     supabase
       .from("crm_client_appointments")
@@ -127,11 +128,13 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
     // from this client's general crm_activities Activity History.
     supabase.from("crm_retention_enrollments").select("*").eq("client_id", clientId).is("removed_at", null).maybeSingle(),
     supabase.from("crm_retention_events").select("*").eq("client_id", clientId).order("occurred_at", { ascending: false }),
+    supabase.from("call_list_segments").select("id, name, campaign_name, industry, territory, status, source_file_name").eq("crm", "growth").eq("crm_client_id", clientId).order("created_at", { ascending: false }),
   ]);
 
   return {
     data: {
       client: client as CrmClientRow,
+      callListCampaigns: (callListCampaigns ?? []) as ClientDetail["callListCampaigns"],
       assignedAgents: (assignedAgents ?? []) as CrmClientAgentWithUser[],
       appointments: (appointments ?? []) as CrmClientAppointmentWithAgent[],
       invoices: (invoices ?? []) as CrmInvoiceRow[],
@@ -145,14 +148,15 @@ export async function fetchClientDetail(supabase: SupabaseClient, clientId: stri
 }
 
 // See ClientRelatedCounts' own comment (crm-clients-types.ts) for why
-// these five counts are exactly what gates a permanent delete.
+// these counts are exactly what gates a permanent delete.
 export async function fetchClientRelatedCounts(supabase: SupabaseClient, clientId: string): Promise<ClientRelatedCounts> {
-  const [appointments, invoices, payments, assignedAgents, activities] = await Promise.all([
+  const [appointments, invoices, payments, assignedAgents, activities, callListCampaigns] = await Promise.all([
     supabase.from("crm_client_appointments").select("id", { count: "exact", head: true }).eq("client_id", clientId),
     supabase.from("crm_invoices").select("id", { count: "exact", head: true }).eq("client_id", clientId),
     supabase.from("crm_payments").select("id", { count: "exact", head: true }).eq("client_id", clientId),
     supabase.from("crm_client_agents").select("client_id", { count: "exact", head: true }).eq("client_id", clientId),
     supabase.from("crm_activities").select("id", { count: "exact", head: true }).eq("client_id", clientId),
+    supabase.from("call_list_segments").select("id", { count: "exact", head: true }).eq("crm", "growth").eq("crm_client_id", clientId),
   ]);
 
   return {
@@ -161,6 +165,7 @@ export async function fetchClientRelatedCounts(supabase: SupabaseClient, clientI
     payments: payments.count ?? 0,
     assignedAgents: assignedAgents.count ?? 0,
     activities: activities.count ?? 0,
+    callListCampaigns: callListCampaigns.count ?? 0,
   };
 }
 

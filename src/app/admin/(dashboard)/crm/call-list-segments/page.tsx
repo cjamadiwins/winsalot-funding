@@ -47,6 +47,7 @@ export default async function CallListSegmentsPage() {
     agentNames: (agentIdsBySegment.get(segment.id) ?? []).map((id) => agentNameById.get(id) ?? "Unknown"),
     leadCount: leadCountBySegment.get(segment.id) ?? 0,
   }));
+  const needsClientReview = segments.filter((segment) => (segment.status === "active" || segment.status === "completed") && !segment.crm_client_id);
 
   return (
     <div>
@@ -65,6 +66,13 @@ export default async function CallListSegmentsPage() {
           Upload Call List
         </Link>
       </div>
+
+      {needsClientReview.length > 0 && (
+        <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>{needsClientReview.length} existing production call list(s) need client assignment review.</strong>
+          <span> Their client is left unassigned because the older records did not identify one reliably. Open each list and select its confirmed client before future assignment or deployment.</span>
+        </div>
+      )}
 
       <div className="mt-6">
         <CallListSegmentsClient basePath="/admin/crm/call-list-segments" rows={rows} />

@@ -104,6 +104,7 @@ export type CrmClientRow = {
   // never settable through the normal create/edit client forms, only via
   // direct admin/database action, same as those two.
   is_test_data: boolean;
+  is_internal_test: boolean;
 };
 
 export type CrmClientAgentRow = {
@@ -210,10 +211,11 @@ export type ClientRelatedCounts = {
   payments: number;
   assignedAgents: number;
   activities: number;
+  callListCampaigns: number;
 };
 
 export function clientHasRelatedRecords(counts: ClientRelatedCounts): boolean {
-  return counts.appointments > 0 || counts.invoices > 0 || counts.payments > 0 || counts.assignedAgents > 0 || counts.activities > 0;
+  return counts.appointments > 0 || counts.invoices > 0 || counts.payments > 0 || counts.assignedAgents > 0 || counts.activities > 0 || counts.callListCampaigns > 0;
 }
 
 // A separate, narrower escape hatch from deleteClientAction's normal
@@ -233,6 +235,7 @@ export function describeClientRelatedRecords(counts: ClientRelatedCounts): strin
   if (counts.payments > 0) parts.push(`${counts.payments} payment${counts.payments === 1 ? "" : "s"}`);
   if (counts.assignedAgents > 0) parts.push(`${counts.assignedAgents} assigned agent${counts.assignedAgents === 1 ? "" : "s"}`);
   if (counts.activities > 0) parts.push(`${counts.activities} activity record${counts.activities === 1 ? "" : "s"}`);
+  if (counts.callListCampaigns > 0) parts.push(`${counts.callListCampaigns} call list campaign${counts.callListCampaigns === 1 ? "" : "s"}`);
   return parts.join(", ");
 }
 

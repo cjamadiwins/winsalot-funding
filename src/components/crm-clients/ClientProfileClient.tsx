@@ -57,7 +57,7 @@ export default function ClientProfileClient({
   deleteAppointmentAction: (clientId: string, appointmentId: string) => Promise<ActionResult>;
   recordPaymentAction: (clientId: string, formData: FormData) => Promise<ActionResult>;
 }) {
-  const { client, assignedAgents, appointments, invoices, payments, activities, retentionEnrollment, retentionEvents } = detail;
+  const { client, callListCampaigns, assignedAgents, appointments, invoices, payments, activities, retentionEnrollment, retentionEvents } = detail;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -316,6 +316,19 @@ export default function ClientProfileClient({
             </button>
           </form>
         )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-base font-bold text-slate-900">Call List Campaigns</h2>
+        <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-[var(--color-border)] bg-[var(--crm-surface)]">
+          {callListCampaigns.length === 0 && <p className="p-4 text-sm text-[var(--color-text-muted)]">No call lists assigned to this client.</p>}
+          {callListCampaigns.map((campaign) => (
+            <Link key={campaign.id} href={`/admin/crm/call-list-segments/${campaign.id}`} className="block p-4 hover:bg-slate-50">
+              <div className="font-medium text-slate-900">{campaign.campaign_name || [campaign.industry, campaign.territory].filter(Boolean).join(" — ") || campaign.name}</div>
+              <div className="mt-1 text-[12.5px] text-slate-500">List: {campaign.name} · {campaign.status}{campaign.source_file_name ? ` · Source: ${campaign.source_file_name}` : ""}</div>
+            </Link>
+          ))}
+        </div>
       </section>
 
       {/* Invoices */}

@@ -212,12 +212,12 @@ export async function recheckDuplicatesAction(segmentId: string): Promise<{ erro
   }
 }
 
-export async function deploySegmentAction(segmentId: string, agentIds: string[]): Promise<{ error?: string }> {
+export async function deploySegmentAction(segmentId: string, agentIds: string[], clientId?: string): Promise<{ error?: string }> {
   const admin = await requireLeadgenAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
   try {
-    await deploySegment(segmentId, agentIds, admin.id);
+    await deploySegment(segmentId, agentIds, admin.id, clientId);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to deploy the segment." };
   }
@@ -313,12 +313,12 @@ export async function updateCallListColumnVisibilityAction(hiddenFields: string[
 // Admin-only "Save Assignment": the list's client (campaign) + its agent roster
 // in one step (also usable to edit, remove or reassign later). Agents must already
 // hold the client (client assignment is separate); history is never touched.
-export async function saveSegmentAssignmentAction(segmentId: string, campaignId: string, agentIds: string[]): Promise<{ error?: string; added?: number; removed?: number }> {
-  await requireLeadgenAdmin();
+export async function saveSegmentAssignmentAction(segmentId: string, campaignId: string, agentIds: string[], clientId?: string): Promise<{ error?: string; added?: number; removed?: number }> {
+  const adminUser = await requireLeadgenAdmin();
   const segment = await getSegment(segmentId);
   if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
   try {
-    const result = await saveLeadgenSegmentAssignment(segment, campaignId, agentIds);
+    const result = await saveLeadgenSegmentAssignment(segment, campaignId, agentIds, clientId, adminUser.id);
     revalidatePath(`${BASE_PATH}/${segmentId}`);
     revalidatePath(BASE_PATH);
     revalidatePath("/leadgen/admin/assignments");

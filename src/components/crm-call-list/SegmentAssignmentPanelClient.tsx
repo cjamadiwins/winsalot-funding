@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Save } from "lucide-react";
 import { AGENT_SERVICE_LABELS, isAgentService, serviceAllowsOpportunityType, type AgentService } from "@/lib/crm-agent-service-shared";
@@ -21,6 +22,14 @@ export default function SegmentAssignmentPanelClient({
   scopeLabel,
   scopeOptions,
   initialScope,
+  clientOptions,
+  initialClientId,
+  campaignsByClient,
+  clientProfileHrefPrefix,
+  industry,
+  location,
+  productionLeadCount,
+  listName,
   agents,
   assignedAgentIds,
   agentServices,
@@ -32,20 +41,28 @@ export default function SegmentAssignmentPanelClient({
   scopeLabel: string;
   scopeOptions: Option[];
   initialScope: string;
+  clientOptions?: Option[];
+  initialClientId?: string;
+  campaignsByClient?: Record<string, Option[]>;
+  clientProfileHrefPrefix?: string;
+  industry?: string | null;
+  location?: string | null;
+  productionLeadCount?: number;
+  listName?: string;
   agents: Agent[];
   assignedAgentIds: string[];
   // Growth only: each agent's Admin-set service. When provided, agents who
   // can't take the chosen service are greyed out (the server enforces it too).
   agentServices?: Record<string, AgentService | null>;
-  // Lead Gen only: the scope values (client campaigns) each agent is assigned to.
-  // Client assignment is separate from list assignment, so an agent is only
-  // selectable for a list whose client they already hold.
+  // Lead Gen only: currently unused by the client-first flow. Kept optional
+  // for compatible callers that still choose to restrict agents by campaign.
   agentScopes?: Record<string, string[]>;
-  saveAction: (segmentId: string, scope: string, agentIds: string[]) => Promise<{ error?: string; added?: number; removed?: number }>;
+  saveAction: (segmentId: string, scope: string, agentIds: string[], clientId: string | undefined) => Promise<{ error?: string; added?: number; removed?: number }>;
   helpText?: string;
 }) {
   const router = useRouter();
   const [scope, setScope] = useState(initialScope);
+  const [clientId, setClientId] = useState(initialClientId ?? "");
   const [selected, setSelected] = useState<string[]>(assignedAgentIds);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +71,33 @@ export default function SegmentAssignmentPanelClient({
   const eligible = (agentId: string, forScope: string) =>
     agentScopes ? (agentScopes[agentId] ?? []).includes(forScope) : !agentServices || serviceAllowsOpportunityType(agentServices[agentId] ?? null, forScope);
   const restrictsByScope = !!agentServices || !!agentScopes;
+  const availableScopes = campaignsByClient ? (campaignsByClient[clientId] ?? []) : scopeOptions;
+  const assignmentSummary = clientOptions && (
+    <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[12.5px] text-slate-700">
+      <div className="font-semibold text-slate-900">Assignment summary</div>
+      <div className="mt-1">Client: {clientId && clientProfileHrefPrefix
+        ? <Link href={`${clientProfileHrefPrefix}/${clientId}`} className="font-medium text-sky-700 hover:underline">{clientOptions.find((option) => option.value === clientId)?.label}</Link>
+        : clientOptions.find((option) => option.value === clientId)?.label ?? "Select a client"}</div>
+      {listName && <div>Call List: {listName}</div>}
+      <div>Campaign: {[clientOptions.find((option) => option.value === clientId)?.label, industry, location].filter(Boolean).join(" — ") || "—"}</div>
+      <div>Assigned Agent(s): {agents.filter((agent) => selected.includes(agent.id)).map((agent) => agent.name).join(", ") || "Select at least one agent"}</div>
+      {productionLeadCount !== undefined && <div>Production Leads: {productionLeadCount}</div>}
+    </div>
+  );
+
+  function changeClient(next: string) {
+    setClientId(next);
+    if (campaignsByClient) {
+      const nextCampaigns = campaignsByClient[next] ?? [];
+      const nextScope = nextCampaigns.some((option) => option.value === scope) ? scope : "";
+      setScope(nextScope);
+      const dropped = selected.filter((id) => !eligible(id, nextScope));
+      if (dropped.length > 0) {
+        setSelected((prev) => prev.filter((id) => eligible(id, nextScope)));
+        setNotice(`${dropped.length} agent(s) aren't assigned to this client's campaign and were unselected.`);
+      } else setNotice(null);
+    }
+  }
 
   function changeScope(next: string) {
     setScope(next);
@@ -76,7 +120,7 @@ export default function SegmentAssignmentPanelClient({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await saveAction(segmentId, scope, selected);
+      const result = await saveAction(segmentId, scope, selected, clientId || undefined);
       if (result.error) {
         setError(result.error);
         return;
@@ -96,22 +140,41 @@ export default function SegmentAssignmentPanelClient({
       {error && <p className="mt-2 text-[12.5px] text-rose-700">{error}</p>}
       {notice && !error && <p className="mt-2 text-[12.5px] text-emerald-700">{notice}</p>}
 
+      {clientOptions && (
+        <label className="mt-3 block text-[12.5px] font-semibold text-slate-700">
+          Client
+          <select
+            value={clientId}
+            onChange={(e) => changeClient(e.target.value)}
+            disabled={isPending}
+            className="mt-1 block w-full max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 disabled:opacity-60"
+          >
+            <option value="">Select a production client…</option>
+            {clientOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+      )}
+
+      {!campaignsByClient && assignmentSummary}
+
       <label className="mt-3 block text-[12.5px] font-semibold text-slate-700">
         {scopeLabel}
         <select
           value={scope}
           onChange={(e) => changeScope(e.target.value)}
-          disabled={isPending}
+          disabled={isPending || (!!campaignsByClient && !clientId)}
           className="mt-1 block w-full max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 disabled:opacity-60"
         >
-          {!scopeOptions.some((o) => o.value === scope) && <option value={scope}>{scope || "Not set"}</option>}
-          {scopeOptions.map((option) => (
+          {!availableScopes.some((o) => o.value === scope) && <option value={scope}>{scope || (campaignsByClient ? "Select a campaign…" : "Not set")}</option>}
+          {availableScopes.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
       </label>
+
+      {campaignsByClient && assignmentSummary}
 
       <div className="mt-3 text-[12.5px] font-semibold text-slate-700">Assigned Agents</div>
       <div className="mt-1 flex flex-wrap gap-2">
@@ -146,7 +209,7 @@ export default function SegmentAssignmentPanelClient({
       <div className="mt-4 flex justify-end">
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || selected.length === 0 || (!!clientOptions && !clientId) || (!!campaignsByClient && !scope)}
           onClick={save}
           className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >

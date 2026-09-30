@@ -49,6 +49,9 @@ export default function AssignmentsClient({
     }
     return [...map.entries()].sort((a, b) => a[1].clientName.localeCompare(b[1].clientName));
   }, [overview.campaigns]);
+  const [selectedClientBySegment, setSelectedClientBySegment] = useState<Record<string, string>>(() =>
+    Object.fromEntries(overview.segments.map((segment) => [segment.id, segment.campaignId ? (overview.campaigns.find((c) => c.id === segment.campaignId)?.clientId ?? "") : ""])),
+  );
 
   function run(action: () => Promise<ActionResult>, success?: (result: ActionResult) => string | null) {
     setError(null);
@@ -193,7 +196,8 @@ export default function AssignmentsClient({
             <thead>
               <tr className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <th className="px-3 py-2.5">Call list</th>
-                <th className="px-3 py-2.5">Client / campaign</th>
+                <th className="px-3 py-2.5">Client</th>
+                <th className="px-3 py-2.5">Campaign</th>
                 <th className="px-3 py-2.5">Agents</th>
               </tr>
             </thead>
@@ -203,41 +207,43 @@ export default function AssignmentsClient({
                 const production = segment.status === "active" || segment.status === "completed";
                 const unassigned = !campaign;
                 const warnAgents = campaign ? segment.agentIds.filter((id) => !campaign.agentIds.includes(id)) : [];
+                const rowClientId = selectedClientBySegment[segment.id] ?? campaign?.clientId ?? "";
+                const selectableClients = campaignsByClient.filter(([, group]) => !group.isInternalTest && (group.clientActive || group.campaigns.some((item) => item.id === segment.campaignId)));
+                const selectableCampaigns = overview.campaigns.filter((item) => item.clientId === rowClientId && !item.isInternalTest && (item.status === "active" || item.id === segment.campaignId));
                 return (
                   <tr key={segment.id} className={production && unassigned ? "bg-rose-50" : production && campaign?.isInternalTest ? "bg-amber-50" : ""}>
                     <td className="px-3 py-2.5 align-top">
                       <Link href={`/leadgen/admin/call-list-segments/${segment.id}`} className="font-medium text-slate-900 hover:text-sky-700 hover:underline">
-                        {segment.name}
+                        {segment.campaignName || segment.name}
                       </Link>
+                      {segment.campaignName && <div className="mt-0.5 text-[11.5px] text-slate-600">List: {segment.name}</div>}
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-slate-500">
                         <Chip label={formatStatusLabel(segment.status)} className={STATUS_STYLES[segment.status] ?? STATUS_STYLES.completed} />
-                        {segment.leadCount} lead(s) · {segment.callLogCount} call(s) logged
+                        {segment.industry || segment.territory ? `${[segment.industry, segment.territory].filter(Boolean).join(" · ")} · ` : ""}{segment.leadCount} lead(s) · {segment.callLogCount} call(s) logged
                         {production && unassigned && <Chip label="Campaign assignment required" className="bg-rose-100 text-rose-800" />}
                         {production && campaign?.isInternalTest && <Chip label="On internal test client" className="bg-violet-100 text-violet-800" />}
                       </div>
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       <select
-                        value={segment.campaignId ?? ""}
+                        value={rowClientId}
                         disabled={isPending}
-                        onChange={(e) => changeSegmentCampaign(segment.id, e.target.value || null)}
+                        onChange={(e) => setSelectedClientBySegment((prev) => ({ ...prev, [segment.id]: e.target.value }))}
                         className="w-full min-w-[260px] rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px]"
                       >
-                        <option value="">— Unassigned —</option>
-                        {campaignsByClient
-                          // Test-only clients can never own production call lists, so they're not offered here
-                          // (a list still on one keeps showing it so the control doesn't misreport its state).
-                          .filter(([, group]) => !group.isInternalTest || group.campaigns.some((c) => c.id === segment.campaignId))
-                          .map(([clientId, group]) => (
-                          <optgroup key={clientId} label={`${group.clientName}${group.clientActive ? "" : " (inactive)"}`}>
-                            {group.campaigns.filter((c) => !group.isInternalTest || c.id === segment.campaignId).map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                                {c.status !== "active" ? ` (${formatStatusLabel(c.status)})` : ""}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
+                        <option value="">Select a production client…</option>
+                        {selectableClients.map(([clientId, group]) => <option key={clientId} value={clientId}>{group.clientName}{group.clientActive ? "" : " (inactive)"}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
+                      <select
+                        value={campaign?.clientId === rowClientId ? segment.campaignId ?? "" : ""}
+                        disabled={isPending || !rowClientId}
+                        onChange={(e) => { if (e.target.value) changeSegmentCampaign(segment.id, e.target.value); }}
+                        className="w-full min-w-[220px] rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px] disabled:bg-slate-100"
+                      >
+                        <option value="">Choose this client&apos;s campaign…</option>
+                        {selectableCampaigns.map((option) => <option key={option.id} value={option.id}>{option.name}{option.status !== "active" ? ` (${formatStatusLabel(option.status)})` : ""}</option>)}
                       </select>
                     </td>
                     <td className="px-3 py-2.5 align-top">

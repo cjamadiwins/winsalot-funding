@@ -53,6 +53,7 @@ export type AssignmentOverview = {
     status: CallListSegmentRow["status"];
     industry: string | null;
     territory: string | null;
+    campaignName: string | null;
     campaignId: string | null;
     agentIds: string[];
     leadCount: number;
@@ -88,7 +89,7 @@ export async function loadAssignmentOverview(options: { withCounts?: boolean } =
       admin.from("leadgen_campaigns").select("id, name, status, client_id").order("name"),
       admin.from("leadgen_clients").select("id, name, active, is_internal_test").order("name"),
       admin.from("leadgen_campaign_agents").select("campaign_id, agent_id"),
-      admin.from("call_list_segments").select("id, name, status, industry, territory, leadgen_campaign_id, created_at").eq("crm", "lead_generation").order("name"),
+      admin.from("call_list_segments").select("id, name, status, industry, territory, campaign_name, leadgen_campaign_id, created_at").eq("crm", "lead_generation").order("name"),
       admin.from("call_list_segment_agents").select("segment_id, agent_id"),
       withCounts ? fetchSegmentIdPages("call_list_leads", "segment_id") : Promise.resolve([]),
       withCounts ? fetchSegmentIdPages("leadgen_call_logs", "call_list_segment_id") : Promise.resolve([]),
@@ -138,6 +139,7 @@ export async function loadAssignmentOverview(options: { withCounts?: boolean } =
       status: s.status as CallListSegmentRow["status"],
       industry: (s.industry as string | null) ?? null,
       territory: (s.territory as string | null) ?? null,
+      campaignName: (s.campaign_name as string | null) ?? null,
       campaignId: (s.leadgen_campaign_id as string | null) ?? null,
       agentIds: agentsBySegment.get(s.id as string) ?? [],
       leadCount: leadsBySegment.get(s.id as string) ?? 0,

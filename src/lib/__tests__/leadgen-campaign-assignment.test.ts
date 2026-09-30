@@ -85,6 +85,7 @@ describe("findAssignmentProblems", () => {
     status,
     industry: null,
     territory: null,
+    campaignName: null,
     campaignId,
     agentIds: [],
     leadCount: 0,
