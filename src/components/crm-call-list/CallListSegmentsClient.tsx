@@ -23,7 +23,7 @@ export type CallListSegmentRowView = {
 // padding, right-aligned tabular numerics, inline progress bar, and no
 // left-side row bar - colour is confined to the status/progress cells. The
 // default layout (Lead Generation CRM) is unchanged.
-export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel, compact = false }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string; compact?: boolean }) {
+export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel, compact = false, longNames = false }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string; compact?: boolean; longNames?: boolean }) {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [requestedPage, setRequestedPage] = useState(1);
   const totalPages = getTotalPages(rows.length, pageSize);
@@ -56,7 +56,7 @@ export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel
   if (compact)
     return (
       <div>
-        <CompactTable basePath={basePath} rows={rows} fixedOwnerLabel={fixedOwnerLabel} />
+        <CompactTable basePath={basePath} rows={rows} fixedOwnerLabel={fixedOwnerLabel} longNames={longNames} />
         {pagination}
       </div>
     );
@@ -130,7 +130,11 @@ export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel
   );
 }
 
-function CompactTable({ basePath, rows, fixedOwnerLabel }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string }) {
+// `longNames` (Lead Generation) gives the Segment column more room because its
+// segment names are long; the Growth widths below are left exactly as shipped.
+function CompactTable({ basePath, rows, fixedOwnerLabel, longNames = false }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string; longNames?: boolean }) {
+  const segmentWidth = longNames ? "min-w-[180px] max-w-[270px]" : "max-w-[170px]";
+  const serviceWidth = longNames ? "min-w-[130px] max-w-[190px]" : "min-w-[150px] max-w-[230px]";
   const th = "px-1.5 py-1.5 font-semibold";
   const thNum = `${th} text-right`;
   const td = "px-1.5 py-1.5 text-slate-700";
@@ -157,7 +161,7 @@ function CompactTable({ basePath, rows, fixedOwnerLabel }: { basePath: string; r
         <tbody className="divide-y divide-slate-100">
           {rows.map(({ segment, serviceLabel, agentNames, leadCount, progress }) => (
             <tr key={segment.id} className="align-middle hover:bg-slate-50/60">
-              <td className="min-w-[180px] max-w-[270px] px-1.5 py-1.5">
+              <td className={`${segmentWidth} px-1.5 py-1.5`}>
                 <Link href={`${basePath}/${segment.id}`} className="font-semibold text-slate-900 hover:underline">
                   {segment.name}
                 </Link>
@@ -167,7 +171,7 @@ function CompactTable({ basePath, rows, fixedOwnerLabel }: { basePath: string; r
                   </div>
                 )}
               </td>
-              <td className={`${td} min-w-[130px] max-w-[190px]`}>
+              <td className={`${td} ${serviceWidth}`}>
                 <span title={serviceLabel} className="line-clamp-2">{serviceLabel}</span>
               </td>
               {fixedOwnerLabel && <td className={`${td} whitespace-nowrap`}>{fixedOwnerLabel}</td>}

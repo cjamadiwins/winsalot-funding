@@ -42,4 +42,12 @@ describe("Call List Segments pagination (both CRMs)", () => {
     expect(html).toContain("Page 1 of 1");
     expect((html.match(/<tr /g) ?? []).length).toBe(7);
   });
+  it("Growth keeps its shipped column widths; only Lead Gen (longNames) gets the wider Segment column", () => {
+    const growth = renderToStaticMarkup(<CallListSegmentsClient basePath="/x" rows={rows.slice(0, 2)} fixedOwnerLabel="Winsalot Corp" compact />);
+    expect(growth).toContain("max-w-[170px]");
+    expect(growth).toContain("min-w-[150px] max-w-[230px]");
+    expect(growth).not.toContain("max-w-[270px]");
+    const leadgen = renderToStaticMarkup(<CallListSegmentsClient basePath="/x" rows={rows.slice(0, 2)} compact longNames />);
+    expect(leadgen).toContain("max-w-[270px]");
+  });
 });
