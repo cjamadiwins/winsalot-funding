@@ -34,10 +34,10 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
 
   // A manual (non-call-list) call can only be logged for a client Admin has
   // assigned to this agent - so a wrong-business attribution can't happen
-  // just by picking the wrong dropdown entry. Agents with no assignments yet
-  // keep the previous behaviour.
+  // just by picking the wrong dropdown entry. Agents with no assignments
+  // cannot log client calls at all.
   const [assignedClientIds, activeClient] = await Promise.all([getAgentAssignedClientIds(agent.id), getAgentActiveClient(agent.id)]);
-  if (assignedClientIds.length > 0 && !assignedClientIds.includes(clientId) && activeClient?.clientId !== clientId) {
+  if (!assignedClientIds.includes(clientId) && activeClient?.clientId !== clientId) {
     return { error: "That client isn't assigned to you. Ask Admin to assign it, or work it from an assigned call list." };
   }
 

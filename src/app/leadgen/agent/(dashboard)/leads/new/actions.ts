@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
 import { checkDncSuppression } from "@/lib/dnc-suppression";
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -23,6 +24,10 @@ export async function createAgentLeadAction(formData: FormData) {
   const admin = getSupabaseAdmin();
   const { data: activeClient } = await admin.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
   if (!activeClient) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("This client is inactive.")}`);
+  // Server-side: agents may only add leads for clients Admin has assigned to them.
+  if (!(await getAgentAssignedClientIds(agent.id)).includes(clientId)) {
+    redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("That client isn't assigned to you.")}`);
+  }
   const campaignId = textOrNull(formData, "campaign_id");
   if (campaignId) {
     const { data: campaign } = await admin.from("leadgen_campaigns").select("id").eq("id", campaignId).eq("client_id", clientId).eq("status", "active").maybeSingle();

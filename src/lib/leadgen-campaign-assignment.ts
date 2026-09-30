@@ -182,16 +182,11 @@ export async function getAgentAssignedClientIds(agentId: string): Promise<string
   return [...new Set((campaigns ?? []).map((c) => c.client_id as string))];
 }
 
-// Gives an agent access to a campaign - but ONLY if they're already
-// campaign-restricted. Any leadgen_campaign_agents row flips an agent into
-// RLS-restricted mode (leadgen_agent_campaign_allowed, migration 0077), so
-// adding a row for a currently-unrestricted agent would silently take away
-// their access to every other client. Unrestricted agents already see all
-// campaigns, so nothing needs to be added for them.
+// Admin-only helper: gives an agent access to a campaign (idempotent - a
+// re-assignment after a removal restores access without duplicating rows).
+// An agent only ever sees campaigns with a leadgen_campaign_agents row.
 export async function ensureRestrictedAgentOnCampaign(campaignId: string, agentId: string, assignedBy: string): Promise<void> {
   const admin = getSupabaseAdmin();
-  const { count } = await admin.from("leadgen_campaign_agents").select("id", { count: "exact", head: true }).eq("agent_id", agentId);
-  if (!count) return;
   await admin
     .from("leadgen_campaign_agents")
     .upsert({ campaign_id: campaignId, agent_id: agentId, assigned_by: assignedBy }, { onConflict: "campaign_id,agent_id", ignoreDuplicates: true });
