@@ -28,7 +28,8 @@ describe("call list progress rendering", () => {
     expect(html).toContain("8 follow-ups");
     expect(html).toContain("In Progress");
     expect(html).toMatch(/data-progress-side-bar="in_progress"[^>]*/);
-    expect(html).toContain("w-1 self-stretch");
+    expect(html).toContain("w-[5px]");
+    expect(html).toContain("rounded-full");
     expect(html).toContain("bg-emerald-500");
     expect(html).not.toMatch(/red|rose/);
   });
@@ -44,7 +45,9 @@ describe("call list progress rendering", () => {
     );
     for (const h of ["Worked", "Remaining", "Follow-Ups", "Progress", "Status", "Last Worked", "Assigned Agents", "Client / Campaign Owner"]) expect(html).toContain(h);
     expect(html).toContain('data-progress-side-bar="completed"');
-    expect(html).toContain("border-l-blue-500");
+    expect(html).toContain("bg-blue-500");
+    expect(html).toContain("absolute bottom-2 left-2 top-2");
+    expect(html).not.toContain("border-l-");
     expect(html).toContain("Completed");
     expect(html).not.toMatch(/red-|rose-/);
   });

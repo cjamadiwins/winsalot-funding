@@ -34,13 +34,13 @@ export const CALL_LIST_PROGRESS_LABELS: Record<CallListProgressStatus, string> =
   paused: "Paused",
 };
 
-// Narrow side-accent colours (no red anywhere) + matching text/bar tints.
+// Side-bar colours (no red, no purple) + matching text/progress-fill tints.
 export const CALL_LIST_PROGRESS_STYLES: Record<CallListProgressStatus, { bar: string; fill: string; text: string }> = {
-  not_started: { bar: "bg-slate-400", fill: "bg-slate-400", text: "text-slate-600" },
+  not_started: { bar: "bg-slate-300", fill: "bg-slate-300", text: "text-slate-600" },
   in_progress: { bar: "bg-emerald-500", fill: "bg-emerald-500", text: "text-emerald-700" },
   mostly_worked: { bar: "bg-amber-500", fill: "bg-amber-500", text: "text-amber-700" },
   completed: { bar: "bg-blue-500", fill: "bg-blue-500", text: "text-blue-700" },
-  paused: { bar: "bg-violet-400", fill: "bg-violet-400", text: "text-violet-700" },
+  paused: { bar: "bg-slate-600", fill: "bg-slate-600", text: "text-slate-700" },
 };
 
 export function getCallListProgressStatus(totalLeads: number, workedLeads: number, paused = false): CallListProgressStatus {

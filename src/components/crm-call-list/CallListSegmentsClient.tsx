@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
-import { ProgressBar, ProgressStatusText } from "./CallListProgressInfo";
+import { ProgressBar, ProgressSideBar, ProgressStatusText } from "./CallListProgressInfo";
 import { formatLastWorked, type CallListProgress } from "@/lib/call-list-progress";
 import { CALL_LIST_SEGMENT_STATUS_LABELS, CALL_LIST_SEGMENT_STATUS_STYLES, type CallListSegmentRow } from "@/lib/call-list-types";
 
@@ -15,16 +15,6 @@ export type CallListSegmentRowView = {
   agentNames: string[];
   leadCount: number;
   progress: CallListProgress;
-};
-
-// Table rows can't carry a separate bar element, so the narrow accent is a
-// 4px left border on the row's first cell (same colours as CALL_LIST_PROGRESS_STYLES).
-const CALL_LIST_PROGRESS_SIDE_BORDER: Record<CallListProgress["status"], string> = {
-  not_started: "border-l-slate-400",
-  in_progress: "border-l-emerald-500",
-  mostly_worked: "border-l-amber-500",
-  completed: "border-l-blue-500",
-  paused: "border-l-violet-400",
 };
 
 export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel }: { basePath: string; rows: CallListSegmentRowView[]; fixedOwnerLabel?: string }) {
@@ -61,7 +51,9 @@ export default function CallListSegmentsClient({ basePath, rows, fixedOwnerLabel
         <tbody className="divide-y divide-slate-100">
           {rows.map(({ segment, serviceLabel, agentNames, leadCount, progress }) => (
             <tr key={segment.id} className="align-top">
-              <td className={`border-l-4 px-3 py-2.5 ${CALL_LIST_PROGRESS_SIDE_BORDER[progress.status]}`} data-progress-side-bar={progress.status}>
+              <td className="relative py-2.5 pl-5 pr-3">
+                {/* Per-row rounded status bar, inset top/bottom so it never touches the next list's bar or the table border. */}
+                <ProgressSideBar status={progress.status} className="absolute bottom-2 left-2 top-2" />
                 <Link href={`${basePath}/${segment.id}`} className="font-semibold text-slate-900 hover:underline">
                   {segment.name}
                 </Link>
