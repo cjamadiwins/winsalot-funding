@@ -69,7 +69,7 @@ import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelec
 import { findAssignmentProblems, loadAssignmentOverview } from "@/lib/leadgen-campaign-assignment";
 import { groupAgentClientAssignments, listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import AgentClientStatusClient from "@/components/leadgen/AgentClientStatusClient";
-import { assignAgentClientAction, removeAgentClientAction, setAgentActiveClientAction } from "./assignments/actions";
+import { assignAgentClientAction, previewRemoveAgentClientAction, removeAgentClientAction, setAgentActiveClientAction } from "./assignments/actions";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
@@ -507,6 +507,7 @@ export default async function LeadgenAdminDashboardPage() {
             clients={selectableClients.map((client) => ({ id: client.id, name: client.name }))}
             assignClient={assignAgentClientAction}
             removeClient={removeAgentClientAction}
+            previewRemove={previewRemoveAgentClientAction}
             setPrimary={setAgentActiveClientAction}
           />
         )}

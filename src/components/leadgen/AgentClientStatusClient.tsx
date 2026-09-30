@@ -4,7 +4,23 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { assignmentWouldRestrictAgentClient, removalWouldUnrestrictAgentClient } from "@/lib/leadgen-agent-client-rules";
 
-type ActionResult = { error?: string; remainingLists?: number };
+type ActionResult = { error?: string; removedFromLists?: number };
+type RemoveOptions = {
+  lists?: "none" | "reassign" | "unassign";
+  reassignTo?: string | null;
+  primary?: "keep" | "clear" | "set";
+  newPrimaryClientId?: string | null;
+  confirmedUnrestricted?: boolean;
+};
+type RemovePreview = {
+  clientName: string;
+  lastAssignment: boolean;
+  primaryAffected: boolean;
+  activeLists: { id: string; name: string }[];
+  eligibleAgents: { id: string; name: string }[];
+  otherClients: { id: string; name: string }[];
+  leadsStillOwned: number;
+};
 type ClientOption = { id: string; name: string };
 type Agent = {
   id: string;
@@ -24,12 +40,14 @@ export default function AgentClientStatusClient({
   clients,
   assignClient,
   removeClient,
+  previewRemove,
   setPrimary,
 }: {
   agents: Agent[];
   clients: ClientOption[];
   assignClient: (agentId: string, clientId: string, confirmed?: boolean) => Promise<ActionResult>;
-  removeClient: (agentId: string, clientId: string, confirmed?: boolean) => Promise<ActionResult>;
+  removeClient: (agentId: string, clientId: string, options?: RemoveOptions) => Promise<ActionResult>;
+  previewRemove: (agentId: string, clientId: string) => Promise<{ error?: string; preview?: RemovePreview }>;
   setPrimary: (agentId: string, clientId: string | null) => Promise<ActionResult>;
 }) {
   const router = useRouter();
@@ -37,6 +55,10 @@ export default function AgentClientStatusClient({
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [dialog, setDialog] = useState<{ agent: Agent; client: Agent["clients"][number]; preview: RemovePreview } | null>(null);
+  const [listChoice, setListChoice] = useState<"reassign" | "unassign">("reassign");
+  const [reassignTo, setReassignTo] = useState("");
+  const [primaryChoice, setPrimaryChoice] = useState("");
 
   function run(agentId: string, action: () => Promise<ActionResult>, note?: (result: ActionResult) => string | null) {
     setErrors((prev) => ({ ...prev, [agentId]: "" }));
@@ -66,16 +88,54 @@ export default function AgentClientStatusClient({
     run(agent.id, () => assignClient(agent.id, clientId, restricts));
   }
 
-  function remove(agent: Agent, client: Agent["clients"][number]) {
-    const unrestricts = removalWouldUnrestrictAgentClient(agent.totalRows, client.rows);
-    const message = unrestricts
-      ? `${client.name} is ${agent.name}'s last assigned client.\n\nWith none assigned they will be able to see every client. Remove it anyway?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}.`
-      : `Remove ${client.name} from ${agent.name}?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}; only the assignment is removed.`;
-    if (!window.confirm(message)) return;
-    run(
-      agent.id,
-      () => removeClient(agent.id, client.id, unrestricts),
-      (r) => (r.remainingLists ? `${agent.name} is still on ${r.remainingLists} of ${client.name}'s call list(s) - manage that in Client Assignments.` : null)
+  // Looks up the agent's ACTIVE call lists for this client first. None: the
+  // simple confirmation. Some (or the client is their Primary): a modal where
+  // Admin picks what happens to those lists and to Primary.
+  async function remove(agent: Agent, client: Agent["clients"][number]) {
+    setErrors((prev) => ({ ...prev, [agent.id]: "" }));
+    setNotes((prev) => ({ ...prev, [agent.id]: "" }));
+    setBusyAgentId(agent.id);
+    const { error, preview } = await previewRemove(agent.id, client.id);
+    setBusyAgentId(null);
+    if (error || !preview) {
+      setErrors((prev) => ({ ...prev, [agent.id]: error ?? "Could not check this agent's call lists." }));
+      return;
+    }
+
+    if (preview.activeLists.length === 0 && !preview.primaryAffected) {
+      const unrestricts = removalWouldUnrestrictAgentClient(agent.totalRows, client.rows);
+      const message = unrestricts
+        ? `${client.name} is ${agent.name}'s last assigned client.\n\nWith none assigned they will be able to see every client. Remove it anyway?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}.`
+        : `Remove ${client.name} from ${agent.name}?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}; only the assignment is removed.`;
+      if (!window.confirm(message)) return;
+      run(agent.id, () => removeClient(agent.id, client.id, { lists: "none", primary: "keep", confirmedUnrestricted: unrestricts }));
+      return;
+    }
+
+    setListChoice(preview.eligibleAgents.length > 0 ? "reassign" : "unassign");
+    setReassignTo(preview.eligibleAgents.length === 1 ? preview.eligibleAgents[0].id : "");
+    setPrimaryChoice("");
+    setDialog({ agent, client, preview });
+  }
+
+  function confirmDialog() {
+    if (!dialog) return;
+    const { agent, client, preview } = dialog;
+    const hasLists = preview.activeLists.length > 0;
+    const options: RemoveOptions = {
+      lists: hasLists ? listChoice : "none",
+      reassignTo: hasLists && listChoice === "reassign" ? reassignTo : null,
+      primary: !preview.primaryAffected ? "keep" : primaryChoice === "__none" ? "clear" : "set",
+      newPrimaryClientId: preview.primaryAffected && primaryChoice && primaryChoice !== "__none" ? primaryChoice : null,
+      confirmedUnrestricted: preview.lastAssignment,
+    };
+    setDialog(null);
+    run(agent.id, () => removeClient(agent.id, client.id, options), (r) =>
+      r.removedFromLists
+        ? listChoice === "reassign"
+          ? `${r.removedFromLists} active ${client.name} call list(s) moved from ${agent.name} to ${preview.eligibleAgents.find((a) => a.id === reassignTo)?.name ?? "the selected agent"}.`
+          : `${agent.name} was taken off ${r.removedFromLists} active ${client.name} call list(s); they are now unassigned.`
+        : null
     );
   }
 
@@ -145,6 +205,98 @@ export default function AgentClientStatusClient({
           </div>
         );
       })}
+      {dialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label={`Remove ${dialog.client.name} from ${dialog.agent.name}`}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5 shadow-xl">
+            <h3 className="text-base font-bold text-slate-900">
+              Remove {dialog.client.name} from {dialog.agent.name}?
+            </h3>
+
+            {dialog.preview.activeLists.length > 0 && (
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <p>
+                  {dialog.agent.name} is currently assigned to {dialog.preview.activeLists.length} active {dialog.client.name} call list
+                  {dialog.preview.activeLists.length === 1 ? "" : "s"}. Choose what happens to {dialog.preview.activeLists.length === 1 ? "it" : "them"}:
+                </p>
+                <label className="flex items-start gap-2">
+                  <input type="radio" name="list-choice" className="mt-1" checked={listChoice === "reassign"} disabled={dialog.preview.eligibleAgents.length === 0} onChange={() => setListChoice("reassign")} />
+                  <span className={dialog.preview.eligibleAgents.length === 0 ? "text-slate-400" : ""}>
+                    Reassign them to another eligible agent
+                    {dialog.preview.eligibleAgents.length === 0 && <span className="block text-xs">No other agent is assigned to {dialog.client.name}.</span>}
+                  </span>
+                </label>
+                {listChoice === "reassign" && dialog.preview.eligibleAgents.length > 0 && (
+                  <select aria-label="Reassign call lists to" value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} className="ml-6 w-[calc(100%-1.5rem)] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                    <option value="">Select an agent…</option>
+                    {dialog.preview.eligibleAgents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <label className="flex items-start gap-2">
+                  <input type="radio" name="list-choice" className="mt-1" checked={listChoice === "unassign"} onChange={() => setListChoice("unassign")} />
+                  <span>Remove {dialog.agent.name} from those call lists without reassigning them</span>
+                </label>
+                <details className="ml-6 text-xs text-slate-500">
+                  <summary className="cursor-pointer">Show the call list(s)</summary>
+                  <ul className="mt-1 list-disc pl-4">
+                    {dialog.preview.activeLists.map((l) => (
+                      <li key={l.id}>{l.name}</li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+
+            {dialog.preview.primaryAffected && (
+              <div className="mt-4 text-sm text-slate-700">
+                <p className="font-semibold">{dialog.client.name} is {dialog.agent.name}&rsquo;s Primary client. Choose a new Primary:</p>
+                <select aria-label="New Primary client" value={primaryChoice} onChange={(e) => setPrimaryChoice(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                  <option value="">Select…</option>
+                  {dialog.preview.otherClients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="__none">Leave Primary unselected</option>
+                </select>
+              </div>
+            )}
+
+            {dialog.preview.lastAssignment && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                This is {dialog.agent.name}&rsquo;s last assigned client. With none assigned they will be able to see every client.
+              </p>
+            )}
+            {dialog.preview.leadsStillOwned > 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                {dialog.preview.leadsStillOwned} lead(s) owned by {dialog.agent.name} for this client keep their owner; only current call-list assignments change.
+              </p>
+            )}
+            <p className="mt-3 text-xs text-slate-500">
+              Past calls, leads, appointments, follow-ups, emails, notes and reports stay exactly as recorded. Completed lists are not changed.
+            </p>
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setDialog(null)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog}
+                disabled={
+                  (dialog.preview.activeLists.length > 0 && listChoice === "reassign" && !reassignTo) || (dialog.preview.primaryAffected && !primaryChoice)
+                }
+                className="rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {dialog.preview.activeLists.length > 0 && listChoice === "reassign" ? "Reassign & remove" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
