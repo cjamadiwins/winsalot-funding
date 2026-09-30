@@ -49,12 +49,11 @@ export type GrowthAgentScriptStatusEntry = {
   state: ScriptDisplayState;
   openedAt: string | null;
   lastActivityAt: string | null;
-  listCount: number;
 };
 
-// Admin board: every agent rostered on an active Growth list that has a script,
-// grouped per agent + service so it stays compact. Open beats closed-while-
-// working beats closed beats inactive beats never opened.
+// Admin board: one entry per agent per active Growth list that has a script.
+// The Admin card collapses these to one compact row per agent and shows the
+// per-list detail in a popup.
 export async function loadGrowthAgentScriptStatusBoard(): Promise<GrowthAgentScriptStatusEntry[]> {
   const admin = getSupabaseAdmin();
   const { data: segments } = await admin.from("call_list_segments").select(SEGMENT_FIELDS).eq("crm", "growth").eq("status", "active");
@@ -76,31 +75,21 @@ export async function loadGrowthAgentScriptStatusBoard(): Promise<GrowthAgentScr
   const statusByKey = new Map((statuses ?? []).map((s) => [`${s.segment_id}:${s.agent_id}`, s as ScriptStatusRow]));
   const payloadBySegment = new Map(payloads.map((p) => [p.segmentId, p]));
 
-  const rank: Record<ScriptDisplayState, number> = { open: 4, closed_working: 3, closed: 2, inactive: 1, never_opened: 0 };
   const now = new Date();
-  const groups = new Map<string, GrowthAgentScriptStatusEntry>();
+  const entries: GrowthAgentScriptStatusEntry[] = [];
   for (const roster of rosters ?? []) {
     const name = agentName.get(roster.agent_id as string);
     const payload = payloadBySegment.get(roster.segment_id as string);
     if (!name || !payload) continue;
     const row = statusByKey.get(`${payload.segmentId}:${roster.agent_id}`) ?? null;
-    const entry: GrowthAgentScriptStatusEntry = {
+    entries.push({
       agentId: roster.agent_id as string,
       agentName: name,
       payload,
       state: deriveScriptDisplayState(row, now),
       openedAt: row?.opened_at ?? null,
       lastActivityAt: row?.last_activity_at ?? null,
-      listCount: 1,
-    };
-    const key = `${entry.agentId}:${payload.serviceLabel}`;
-    const existing = groups.get(key);
-    if (!existing) {
-      groups.set(key, entry);
-      continue;
-    }
-    const better = rank[entry.state] > rank[existing.state] || (rank[entry.state] === rank[existing.state] && (entry.lastActivityAt ?? "") > (existing.lastActivityAt ?? ""));
-    groups.set(key, { ...(better ? entry : existing), listCount: existing.listCount + 1 });
+    });
   }
-  return [...groups.values()].sort((a, b) => a.agentName.localeCompare(b.agentName) || a.payload.serviceLabel.localeCompare(b.payload.serviceLabel));
+  return entries.sort((a, b) => a.agentName.localeCompare(b.agentName) || a.payload.segmentName.localeCompare(b.payload.segmentName));
 }
