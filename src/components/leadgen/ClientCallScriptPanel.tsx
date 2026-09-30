@@ -60,6 +60,12 @@ export default function ClientCallScriptPanel({ script, compact = false }: { scr
                 <p className="mt-0.5">&ldquo;{script.ifInterested}&rdquo;</p>
               </div>
             )}
+            {script.adminScript && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin Campaign Script</p>
+                <p className="mt-0.5 whitespace-pre-wrap">{script.adminScript}</p>
+              </div>
+            )}
             {script.closing && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Closing</p>

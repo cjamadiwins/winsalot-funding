@@ -4,8 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isAgentAssignedToActiveSegment } from "@/lib/call-list-segments";
 import { resolveSegmentAssignment, CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE } from "@/lib/leadgen-campaign-assignment";
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
-import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
-import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
+import { ScriptClosedNotice, ScriptSessionRegister } from "@/components/leadgen/script-dock/ScriptDockWidgets";
+import { loadAgentScriptSessions } from "@/lib/leadgen-script-sessions";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
@@ -87,6 +87,10 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
     }
   }
 
+  // Approved Call Script dock: same Client -> Campaign/List -> Agent chain as
+  // everything else here. Built only for lists this agent is assigned to.
+  const scriptSession = assignment?.state === "assigned" ? ((await loadAgentScriptSessions(supabase, agent.id)).find((s) => s.segmentId === id) ?? null) : null;
+
   // Hidden columns must not reach the agent's browser at all "through
   // agent-side API responses if possible" - extra_fields (imported junk
   // columns like IS_WORDPRESS) is never rendered by this view regardless,
@@ -123,13 +127,11 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
       <h1 className="mt-2 font-heading text-2xl font-bold text-[var(--color-ink-strong)]">{(segment as CallListSegmentRow).name}</h1>
       <p className="mt-1 text-sm text-[var(--color-text-muted)]">{sanitizedLeads.length} lead(s) in this list.</p>
 
-      {callScriptClient && (
-        <section className="mt-4">
-          <h2 className="mb-2 text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">
-            Call Script{assignment?.state === "assigned" ? ` — ${assignment.clientName}` : ""}
-          </h2>
-          <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName: agent.full_name || agent.email, client: callScriptClient })} compact />
-        </section>
+      {scriptSession && (
+        <>
+          <ScriptSessionRegister sessions={[scriptSession]} workingSegmentId={scriptSession.segmentId} autoOpen />
+          <ScriptClosedNotice segmentId={scriptSession.segmentId} />
+        </>
       )}
 
       <div className="mt-6">
@@ -139,6 +141,7 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
           promoteAction={promoteCallListLeadAction}
           hiddenFields={hiddenFields}
           callScriptClient={callScriptClient}
+          websiteServices={scriptSession?.websiteServices}
           agentName={agent.full_name || agent.email}
           callingFor={assignment?.state === "assigned" ? { clientName: assignment.clientName, campaignName: assignment.campaignName } : null}
         />

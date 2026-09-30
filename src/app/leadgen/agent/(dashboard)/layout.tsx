@@ -5,6 +5,8 @@ import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadLeadgenChatUnreadCount } from "@/lib/leadgen-chat-data";
+import ScriptDockProvider from "@/components/leadgen/script-dock/ScriptDockProvider";
+import { reportLeadgenScriptStateAction } from "./leadgen-script-status-actions";
 import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
 import type { LeadgenAgentAttendanceRow } from "@/lib/leadgen-types";
 import { pollLeadgenAgentActivityAction, acknowledgeLeadgenIdleWarningAction } from "./leadgen-activity-actions";
@@ -72,6 +74,7 @@ export default async function LeadgenAgentLayout({ children }: { children: React
 
   return (
     <div className="crm-theme crm-theme--leadgen">
+      <ScriptDockProvider agentName={agentDisplayName} reportAction={reportLeadgenScriptStateAction}>
       <CrmShell
         brandTitle="Lead Generation CRM"
         brandSubtitle={
@@ -106,6 +109,7 @@ export default async function LeadgenAgentLayout({ children }: { children: React
       >
         {children}
       </CrmShell>
+      </ScriptDockProvider>
       <AgentActivityMonitor
         initialRow={(openShift as LeadgenAgentAttendanceRow | null)}
         pollAction={pollLeadgenAgentActivityAction}

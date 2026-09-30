@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NotificationBell from "@/components/NotificationBell";
 import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { LeadgenNotificationRow } from "@/lib/leadgen-notifications";
+import ScriptDockProvider from "@/components/leadgen/script-dock/ScriptDockProvider";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadLeadgenChatUnreadCount } from "@/lib/leadgen-chat-data";
 import {
@@ -84,6 +85,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
 
   return (
     <div className="crm-theme crm-theme--leadgen">
+      <ScriptDockProvider agentName={user.full_name?.trim() || user.email}>
       <CrmShell
         brandTitle="Lead Generation CRM"
         brandSubtitle={
@@ -118,6 +120,7 @@ export default async function LeadgenAdminLayout({ children }: { children: React
       >
         {children}
       </CrmShell>
+      </ScriptDockProvider>
     </div>
   );
 }

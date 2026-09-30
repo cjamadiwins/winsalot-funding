@@ -8,6 +8,7 @@
 // the five leadgen_clients columns this reads.
 
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
+import { isWebsiteServicesCampaign, renderWebsiteServicesOpening } from "@/lib/leadgen-website-script";
 
 export type LeadgenCallScriptClientFields = Pick<
   LeadgenClientRow,
@@ -53,6 +54,10 @@ export type LeadgenBuiltCallScript = {
   // aloud to the prospect); rendered as its own separate, clearly-labeled
   // block by ClientCallScriptPanel.
   notes: string | null;
+  // Website-services campaigns only: Admin-written wording (list/client
+  // override) shown after the standard approved opening instead of
+  // replacing it. Null everywhere else.
+  adminScript?: string | null;
   // The complete, read-aloud script (opening + if-interested + closing,
   // or the full override) - what "Copy Script" copies.
   fullText: string;
@@ -71,6 +76,9 @@ export function buildLeadgenCallScript(input: {
   // brief's own template wording.
   prospectBusinessName?: string;
   client: LeadgenCallScriptClientFields;
+  // Website-services campaigns use the one standard approved opening.
+  // Defaults to detecting it from the client.
+  websiteServices?: boolean;
 }): LeadgenBuiltCallScript {
   const agentName = input.agentName.trim() || PLACEHOLDER_AGENT_NAME;
   const prospectName = input.prospectBusinessName?.trim() || PLACEHOLDER_PROSPECT_NAME;
@@ -81,6 +89,24 @@ export function buildLeadgenCallScript(input: {
   const notes = input.client.call_script_notes?.trim() || null;
 
   const override = input.client.call_script_override?.trim();
+  const websiteServices = input.websiteServices ?? isWebsiteServicesCampaign({ clientName, services: input.client.call_script_services });
+  if (websiteServices) {
+    const opening = renderWebsiteServicesOpening(input.agentName.trim(), clientName);
+    const ifInterested = `Great. ${clientName} can set up a short consultation so you can see what would make sense for your business. Would [day/time] work?`;
+    const closingRaw = input.client.call_script_closing?.trim() || null;
+    const closing = closingRaw ? substitutePlaceholders(closingRaw, vars) : null;
+    const adminScript = override ? substitutePlaceholders(override, vars) : null;
+    return {
+      isCustomOverride: false,
+      opening: [opening],
+      ifInterested,
+      closing,
+      notes,
+      adminScript,
+      fullText: [opening, ifInterested, closing, adminScript].filter(Boolean).join("\n\n"),
+    };
+  }
+
   if (override) {
     return {
       isCustomOverride: true,

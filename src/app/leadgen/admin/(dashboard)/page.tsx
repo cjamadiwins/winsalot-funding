@@ -68,6 +68,8 @@ import { LEADGEN_CONVERSION_DASHBOARD_TONE, type LeadgenConversionRow } from "@/
 import ClientCallScriptSelector from "@/components/leadgen/ClientCallScriptSelector";
 import { findAssignmentProblems, loadAssignmentOverview } from "@/lib/leadgen-campaign-assignment";
 import { groupAgentClientAssignments, listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
+import AgentScriptStatusCard from "@/components/leadgen/script-dock/AgentScriptStatusCard";
+import { loadAgentScriptStatusBoard } from "@/lib/leadgen-script-sessions";
 import AgentClientStatusClient from "@/components/leadgen/AgentClientStatusClient";
 import { assignAgentClientAction, previewRemoveAgentClientAction, removeAgentClientAction, setAgentActiveClientAction } from "./assignments/actions";
 import { loadWebsiteTraining } from "@/lib/leadgen-training-data";
@@ -334,6 +336,10 @@ export default async function LeadgenAdminDashboardPage() {
 
   const selectableClients = await listSelectableActiveClients();
   const { data: campaignAgentRows } = await admin.from("leadgen_campaign_agents").select("campaign_id, agent_id");
+  // Agent Script Status card: live Approved Call Script open/closed state.
+  const scriptStatusBoard = await loadAgentScriptStatusBoard();
+  const scriptPreviewSessions = [...new Map(scriptStatusBoard.map((e) => [e.payload.segmentId, e.payload])).values()];
+
   const agentClientAssignments = groupAgentClientAssignments(
     campaignAgentRows ?? [],
     (campaigns ?? []).map((c) => ({ id: c.id, client_id: c.client_id })),
@@ -512,6 +518,11 @@ export default async function LeadgenAdminDashboardPage() {
           />
         )}
       </section>
+
+      <AgentScriptStatusCard
+        rows={scriptStatusBoard.map((e) => ({ agentId: e.agentId, agentName: e.agentName, payload: e.payload, state: e.state, openedAt: e.openedAt, lastActivityAt: e.lastActivityAt }))}
+        previewSessions={scriptPreviewSessions}
+      />
 
       <h2 className="mt-6 text-lg font-bold text-slate-900">Opportunity Finder</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
