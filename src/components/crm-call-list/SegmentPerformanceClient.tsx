@@ -84,6 +84,7 @@ export default function SegmentPerformanceClient({
     initialClientId?: string;
     campaignsByClient?: Record<string, { value: string; label: string }[]>;
     clientProfileHrefPrefix?: string;
+    fixedClientLabel?: string;
     agentServices?: Record<string, AgentService | null>;
     agentScopes?: Record<string, string[]>;
     helpText?: string;
@@ -273,6 +274,7 @@ export default function SegmentPerformanceClient({
           initialClientId={assignment.initialClientId}
           campaignsByClient={assignment.campaignsByClient}
           clientProfileHrefPrefix={assignment.clientProfileHrefPrefix}
+          fixedClientLabel={assignment.fixedClientLabel}
           industry={segment.industry}
           location={segment.territory}
           productionLeadCount={stats.totalLeads}
