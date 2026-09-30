@@ -9,7 +9,7 @@ import { saveGrowthSegmentAssignment, saveLeadgenSegmentAssignment } from "./cal
 // later (e.g. to reassign agents) is allowed and simply overwrites the
 // roster and re-stamps deployed_at/deployed_by - the segment's leads and
 // all call history are untouched either way.
-export async function deploySegment(segmentId: string, agentIds: string[], deployedBy: string): Promise<CallListSegmentRow> {
+export async function deploySegment(segmentId: string, agentIds: string[], deployedBy: string, _legacyClientId?: string): Promise<CallListSegmentRow> {
   if (agentIds.length === 0) {
     throw new Error("Select at least one agent to deploy this segment to.");
   }
