@@ -1,5 +1,7 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { getAgentServiceAssignment } from "./crm-agent-service";
+import { serviceAllowsOpportunityType } from "./crm-agent-service-shared";
 import type { CallListCrm, CallListLeadRow, CallListSegmentRow, CallListSegmentStatus } from "./call-list-types";
 
 export async function listSegments(crm: CallListCrm): Promise<CallListSegmentRow[]> {
@@ -92,6 +94,13 @@ export async function isAgentAssignedToActiveSegment(segmentId: string, agentId:
       .eq("campaign_id", segment.leadgen_campaign_id)
       .maybeSingle();
     if (!assignedRow) return false;
+  }
+  // Growth CRM: Admin's service assignment decides which lists an agent may
+  // work; the roster row alone is not enough (it is kept when the assignment
+  // changes so re-assigning restores access untouched). Lead Gen is unaffected.
+  if (segment.crm === "growth") {
+    const service = await getAgentServiceAssignment(agentId);
+    if (!serviceAllowsOpportunityType(service, segment.growth_opportunity_type ?? "")) return false;
   }
   const { data } = await admin
     .from("call_list_segment_agents")

@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import type { CrmUserRow } from "@/lib/crm-types";
 import type { AgentOnboardingAdminRow } from "@/lib/crm-onboarding-types";
 import { PAYROLL_CURRENCIES, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
-import { inviteAgentAction, removeAgentAction, resendAgentAccessEmailAction, reviewAgentOnboardingAction, updateAgentAction } from "./actions";
+import { inviteAgentAction, removeAgentAction, resendAgentAccessEmailAction, reviewAgentOnboardingAction, setAgentServiceAction, updateAgentAction } from "./actions";
+import { AGENT_SERVICES, AGENT_SERVICE_LABELS, type AgentService } from "@/lib/crm-agent-service-shared";
 
 const inputClasses =
   "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -14,10 +15,12 @@ const buttonClasses =
 export default function AgentsClient({
   agents,
   onboardingRows,
+  serviceAssignments,
   currentUserId,
 }: {
   agents: CrmUserRow[];
   onboardingRows: AgentOnboardingAdminRow[];
+  serviceAssignments: Record<string, AgentService>;
   currentUserId: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -116,6 +119,7 @@ export default function AgentsClient({
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Currency</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Service</th>
               <th className="px-4 py-3">Onboarding</th>
               <th className="px-4 py-3" />
             </tr>
@@ -126,7 +130,7 @@ export default function AgentsClient({
               return (
               <tr key={agent.id} className="border-b border-slate-100 last:border-0 align-top">
                 {editingId === agent.id ? (
-                  <td colSpan={7} className="px-4 py-4">
+                  <td colSpan={8} className="px-4 py-4">
                     <form
                       action={(formData) =>
                         runAction(
@@ -187,6 +191,32 @@ export default function AgentsClient({
                       >
                         {agent.active ? "Active" : "Deactivated"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {agent.role === "agent" ? (
+                        <select
+                          aria-label={`${agent.full_name} service assignment`}
+                          value={serviceAssignments[agent.id] ?? ""}
+                          disabled={isPending}
+                          onChange={(e) => {
+                            const service = e.target.value;
+                            runAction(
+                              () => setAgentServiceAction(agent.id, service),
+                              () => setSuccessMessage(`${agent.full_name} is now assigned to ${AGENT_SERVICE_LABELS[service as AgentService]}.`)
+                            );
+                          }}
+                          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100 disabled:opacity-60"
+                        >
+                          {!serviceAssignments[agent.id] && <option value="">Not assigned</option>}
+                          {AGENT_SERVICES.map((service) => (
+                            <option key={service} value={service}>
+                              {AGENT_SERVICE_LABELS[service]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-slate-400">All services</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-600">
                       {onboarding ? (
@@ -257,7 +287,7 @@ export default function AgentsClient({
 
             {agents.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                   No agents yet.
                 </td>
               </tr>

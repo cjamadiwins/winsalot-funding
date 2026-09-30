@@ -2,18 +2,22 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
 import AgentsClient from "./AgentsClient";
+import { isAgentService, type AgentService } from "@/lib/crm-agent-service-shared";
 import type { AgentOnboardingAdminRow, CrmAgentOnboardingRow } from "@/lib/crm-onboarding-types";
 
 export default async function AdminCrmAgentsPage() {
   const currentAdmin = await requireCrmAdmin();
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: agents, error: agentsError }, { data: onboarding }, { data: modules }, { data: progress }] = await Promise.all([
+  const [{ data: agents, error: agentsError }, { data: onboarding }, { data: modules }, { data: progress }, { data: serviceRows }] = await Promise.all([
     supabase.from("crm_users").select("*").order("created_at", { ascending: false }),
     supabase.from("crm_agent_onboarding").select("*"),
     supabase.from("crm_training_modules").select("id, current_version").eq("is_active", true).eq("is_required", true),
     supabase.from("crm_training_progress").select("user_id, module_id, module_version, completed_at"),
+    supabase.from("crm_agent_service_assignments").select("agent_id, service"),
   ]);
+  const serviceAssignments: Record<string, AgentService> = {};
+  for (const row of serviceRows ?? []) if (isAgentService(row.service)) serviceAssignments[row.agent_id as string] = row.service;
 
   const requiredModules = modules ?? [];
   const onboardingRows = ((onboarding ?? []) as CrmAgentOnboardingRow[]).map((row) => ({
@@ -40,7 +44,7 @@ export default async function AdminCrmAgentsPage() {
 
       {!agentsError && (
         <div className="mt-6">
-          <AgentsClient agents={(agents ?? []) as CrmUserRow[]} onboardingRows={onboardingRows} currentUserId={currentAdmin.id} />
+          <AgentsClient agents={(agents ?? []) as CrmUserRow[]} onboardingRows={onboardingRows} serviceAssignments={serviceAssignments} currentUserId={currentAdmin.id} />
         </div>
       )}
     </div>

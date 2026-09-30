@@ -8,6 +8,7 @@ import { getAuthRedirectBaseUrl } from "@/lib/site-url";
 import { fetchActiveAssignedModules, fetchOwnProgressByModuleId } from "@/lib/crm-training-data";
 import { isModuleCompletedForUser } from "@/lib/crm-training-types";
 import { PAYROLL_CURRENCIES, type PayrollCurrency } from "@/lib/payroll";
+import { isAgentService } from "@/lib/crm-agent-service-shared";
 
 // Every action below returns { error } instead of throwing. Next.js
 // redacts any error *thrown* from a Server Action in production builds
@@ -208,5 +209,27 @@ export async function updateAgentAction(
   if (error) return { error: "Failed to update the agent." };
 
   revalidatePath("/admin/crm/agents");
+  return {};
+}
+
+// Admin-only: which Growth CRM service(s) an agent works. Only changes what the
+// agent can currently see (enforced by RESTRICTIVE RLS, migration
+// 20260930030000); no call, note, opportunity, appointment or email is touched,
+// so history stays intact for reporting and switching back restores access.
+export async function setAgentServiceAction(agentId: string, service: string): Promise<ActionResult> {
+  const currentAdmin = await requireCrmAdmin();
+  if (!isAgentService(service)) return { error: "Choose Lead Generation, Business Finance or Both." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: target } = await supabase.from("crm_users").select("id, role").eq("id", agentId).maybeSingle();
+  if (!target || target.role !== "agent") return { error: "Service assignments apply to agents only." };
+
+  const { error } = await supabase
+    .from("crm_agent_service_assignments")
+    .upsert({ agent_id: agentId, service, assigned_by: currentAdmin.id, updated_at: new Date().toISOString() }, { onConflict: "agent_id" });
+  if (error) return { error: "Failed to update the service assignment." };
+
+  revalidatePath("/admin/crm/agents");
+  revalidatePath("/agent", "layout");
   return {};
 }

@@ -3,6 +3,8 @@
 import { refresh, revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
+import { getAgentServiceAssignment } from "@/lib/crm-agent-service";
+import { serviceAllowsOpportunityType } from "@/lib/crm-agent-service-shared";
 import { closeOpportunity } from "@/lib/close-opportunity";
 import { loadAgentOpportunityDetail, type AgentOpportunityDetailData } from "@/lib/agent-opportunity-detail-data";
 import { sendDetailedServicePricingEmail, sendProspectEmail, type SendProspectEmailResult } from "@/lib/send-prospect-email";
@@ -110,7 +112,7 @@ export async function markApplicationSubmittedAction(id: string): Promise<Action
 // written as null/false, which is harmless since the UI never displays a
 // field group that isn't relevant to the record's type.
 export async function updateOpportunityFieldsAction(id: string, formData: FormData): Promise<ActionResult> {
-  await requireCrmUser();
+  const crmUser = await requireCrmUser();
 
   const opportunityTypeRaw = String(formData.get("opportunity_type") ?? "").trim();
   const businessName = String(formData.get("business_name") ?? "").trim();
@@ -120,6 +122,11 @@ export async function updateOpportunityFieldsAction(id: string, formData: FormDa
   }
   if (!businessName || !phone) {
     return { error: "Business name and phone are required." };
+  }
+  // An agent can't move a record into a service Admin hasn't assigned to them
+  // (RLS also blocks it).
+  if (!serviceAllowsOpportunityType(await getAgentServiceAssignment(crmUser.id), opportunityTypeRaw)) {
+    return { error: "That service isn't assigned to you. Ask Admin." };
   }
 
   const supabase = await createSupabaseServerClient();
