@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSegments } from "@/lib/call-list-segments";
+import { emptyCallListProgress } from "@/lib/call-list-progress";
+import { loadCallListProgress } from "@/lib/call-list-progress-data";
 import CallListSegmentsClient from "@/components/crm-call-list/CallListSegmentsClient";
 import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 
@@ -21,6 +23,7 @@ export default async function CallListSegmentsPage() {
   ]);
 
   const segmentIds = segments.map((s) => s.id);
+  const progressBySegment = await loadCallListProgress(admin, segmentIds);
   const [{ data: agentLinks }, { data: leadCounts }] = await Promise.all([
     segmentIds.length
       ? admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
@@ -47,6 +50,7 @@ export default async function CallListSegmentsPage() {
     serviceLabel: segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—",
     agentNames: (agentIdsBySegment.get(segment.id) ?? []).map((id) => agentNameById.get(id) ?? "Unknown"),
     leadCount: leadCountBySegment.get(segment.id) ?? 0,
+    progress: progressBySegment.get(segment.id) ?? emptyCallListProgress(),
   }));
   const needsClientReview = segments.filter((segment) => (segment.status === "active" || segment.status === "completed") && !segment.crm_client_id);
 

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { emptyCallListProgress } from "@/lib/call-list-progress";
+import { loadCallListProgress } from "@/lib/call-list-progress-data";
+import { CallListCardFrame, CallListProgressSummary } from "@/components/crm-call-list/CallListProgressInfo";
 import type { CallListSegmentRow } from "@/lib/call-list-types";
 import { GROWTH_CALL_LIST_OWNER } from "@/lib/growth-call-list-owner";
 
@@ -29,16 +32,8 @@ export default async function AgentCallListSegmentsPage() {
   const rows = (segments ?? []) as CallListSegmentRow[];
 
   const segmentIds = rows.map((s) => s.id);
-  const { data: leadCounts } = segmentIds.length
-    ? await supabase.from("call_list_leads").select("segment_id, last_outcome").in("segment_id", segmentIds)
-    : { data: [] as { segment_id: string; last_outcome: string | null }[] };
-
-  const totalBySegment = new Map<string, number>();
-  const remainingBySegment = new Map<string, number>();
-  for (const row of leadCounts ?? []) {
-    totalBySegment.set(row.segment_id, (totalBySegment.get(row.segment_id) ?? 0) + 1);
-    if (!row.last_outcome) remainingBySegment.set(row.segment_id, (remainingBySegment.get(row.segment_id) ?? 0) + 1);
-  }
+  // Session-scoped client: RLS still limits this to leads on lists assigned to this agent.
+  const progressBySegment = await loadCallListProgress(supabase, segmentIds);
 
   return (
     <div>
@@ -55,23 +50,25 @@ export default async function AgentCallListSegmentsPage() {
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((segment) => (
+          {rows.map((segment) => {
+            const progress = progressBySegment.get(segment.id) ?? emptyCallListProgress();
+            return (
             <Link
               key={segment.id}
               href={`/agent/call-list-segments/${segment.id}`}
               className="rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] p-4 hover:border-[var(--color-accent)]"
             >
+              <CallListCardFrame status={progress.status}>
               <div className="font-semibold text-[var(--color-ink-strong)]">{segment.name}</div>
               <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">
                 {segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—"}
               </div>
               <div className="mt-2 text-[12px] text-[var(--color-text-muted)]">Client / Campaign Owner: {GROWTH_CALL_LIST_OWNER}</div>
-              <div className="mt-3 flex items-center justify-between text-[12.5px]">
-                <span className="text-[var(--color-text-muted)]">{remainingBySegment.get(segment.id) ?? 0} remaining</span>
-                <span className="text-[var(--color-text-muted)]">{totalBySegment.get(segment.id) ?? 0} total</span>
-              </div>
+              <CallListProgressSummary progress={progress} />
+              </CallListCardFrame>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
