@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSegments } from "@/lib/call-list-segments";
+import { emptyCallListProgress } from "@/lib/call-list-progress";
+import { loadCallListProgress } from "@/lib/call-list-progress-data";
 import CallListSegmentsClient from "@/components/crm-call-list/CallListSegmentsClient";
 
 export default async function LeadgenCallListSegmentsPage() {
@@ -11,7 +13,7 @@ export default async function LeadgenCallListSegmentsPage() {
   const [segments, agentsResult, campaignsResult] = await Promise.all([
     listSegments("lead_generation"),
     admin.from("leadgen_users").select("id, full_name").eq("role", "agent").eq("active", true).order("full_name"),
-    admin.from("leadgen_campaigns").select("id, name, client_id"),
+    admin.from("leadgen_campaigns").select("id, name, client_id, status"),
   ]);
 
   const clientIds = [...new Set(((campaignsResult.data ?? []) as { id: string; name: string; client_id: string }[]).map((c) => c.client_id))];
@@ -27,6 +29,10 @@ export default async function LeadgenCallListSegmentsPage() {
   );
 
   const segmentIds = segments.map((s) => s.id);
+  // Paused only where an existing paused state exists: a paused Lead Gen campaign.
+  const pausedCampaignIds = new Set(((campaignsResult.data ?? []) as { id: string; status: string }[]).filter((c) => c.status === "paused").map((c) => c.id));
+  const pausedSegmentIds = new Set(segments.filter((s) => s.leadgen_campaign_id && pausedCampaignIds.has(s.leadgen_campaign_id)).map((s) => s.id));
+  const progressBySegment = await loadCallListProgress(admin, segmentIds, pausedSegmentIds);
   const [{ data: agentLinks }, { data: leadCounts }] = await Promise.all([
     segmentIds.length
       ? admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
@@ -53,6 +59,7 @@ export default async function LeadgenCallListSegmentsPage() {
     serviceLabel: segment.campaign_name || campaignLabelById.get(segment.leadgen_campaign_id ?? "") || "—",
     agentNames: (agentIdsBySegment.get(segment.id) ?? []).map((id) => agentNameById.get(id) ?? "Unknown"),
     leadCount: leadCountBySegment.get(segment.id) ?? 0,
+    progress: progressBySegment.get(segment.id) ?? emptyCallListProgress(pausedSegmentIds.has(segment.id)),
   }));
 
   return (
