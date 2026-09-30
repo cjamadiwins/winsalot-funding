@@ -81,7 +81,7 @@ export default function SegmentAssignmentPanelClient({
         ? <Link href={`${clientProfileHrefPrefix}/${clientId}`} className="font-medium text-sky-700 hover:underline">{clientOptions?.find((option) => option.value === clientId)?.label}</Link>
         : clientOptions?.find((option) => option.value === clientId)?.label ?? "Select a client")}</div>
       {listName && <div>Call List: {listName}</div>}
-      <div>Campaign: {[clientOptions.find((option) => option.value === clientId)?.label, industry, location].filter(Boolean).join(" — ") || "—"}</div>
+      <div>Campaign: {[fixedClientLabel ?? clientOptions?.find((option) => option.value === clientId)?.label, industry || listName, location].filter(Boolean).join(" — ") || "—"}</div>
       <div>Assigned Agent(s): {agents.filter((agent) => selected.includes(agent.id)).map((agent) => agent.name).join(", ") || "Select at least one agent"}</div>
       {productionLeadCount !== undefined && <div>Production Leads: {productionLeadCount}</div>}
     </div>
