@@ -41,6 +41,8 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadGrowthTeamSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAdminCard } from "@/components/crm-ui/SalesCoachCard";
+import GrowthAgentScriptStatusCard from "@/components/growth-script-dock/GrowthAgentScriptStatusCard";
+import { loadGrowthAgentScriptStatusBoard } from "@/lib/growth-script-sessions";
 import AdminCampaignScriptCard from "@/components/crm-ui/AdminCampaignScriptCard";
 import ConsultationGuideCard from "@/components/crm-ui/ConsultationGuideCard";
 import ApprovedVoicemailScriptCard from "@/components/crm-ui/ApprovedVoicemailScriptCard";
@@ -57,6 +59,8 @@ import { fetchOperationsMonitoringSummary } from "@/lib/crm-monitoring-data";
 // forward, see supabase/migrations/0080-0085.
 export default async function AdminCrmPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const adminUser = await requireCrmAdmin();
+  const scriptStatusBoard = await loadGrowthAgentScriptStatusBoard();
+  const scriptPreviewSessions = [...new Map(scriptStatusBoard.map((e) => [e.payload.segmentId, e.payload])).values()];
   const { deleted } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
@@ -242,6 +246,8 @@ export default async function AdminCrmPage({ searchParams }: { searchParams: Pro
       <ConsultationGuideCard />
 
       <AdminCampaignScriptCard />
+
+      <GrowthAgentScriptStatusCard rows={scriptStatusBoard} previewSessions={scriptPreviewSessions} />
 
       <SalesCoachAdminCard data={salesCoachTeamData} performanceHref="/admin/crm/performance" />
       <OperationsMonitoringCard

@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NotificationBell from "@/components/NotificationBell";
 import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
+import GrowthScriptDockProvider from "@/components/growth-script-dock/GrowthScriptDockProvider";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
 import {
@@ -121,6 +122,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="crm-theme crm-theme--cleaning">
+      <GrowthScriptDockProvider agentName={user.email ?? "Admin"}>
       <CrmShell
         brandTitle="Winsalot Growth CRM"
         brandSubtitle={
@@ -156,6 +158,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       >
         {children}
       </CrmShell>
+      </GrowthScriptDockProvider>
     </div>
   );
 }

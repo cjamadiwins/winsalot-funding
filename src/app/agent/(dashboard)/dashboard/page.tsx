@@ -48,6 +48,8 @@ import DoNotContactModalTrigger from "@/components/crm-ui/DoNotContactModalTrigg
 import { addAgentDncSuppressionAction } from "../do-not-contact-actions";
 import { loadGrowthAgentSalesCoachData } from "@/lib/growth-sales-coach";
 import { SalesCoachAgentCard } from "@/components/crm-ui/SalesCoachCard";
+import { GrowthAgentScriptReminder, GrowthScriptSessionRegister } from "@/components/growth-script-dock/GrowthScriptDockWidgets";
+import { loadGrowthAgentScriptSessions } from "@/lib/growth-script-sessions";
 import AgentCampaignScriptCard from "@/components/crm-ui/AgentCampaignScriptCard";
 import { loadAgentScriptKeys } from "@/lib/growth-agent-scripts";
 import { isGrowthCrmCampaignKey, type GrowthCrmCampaignKey } from "@/lib/growth-crm-campaign-scripts";
@@ -62,6 +64,7 @@ export default async function AgentDashboardPage() {
 
   // Quick Call Script campaigns: only those tied to this agent's assigned call lists.
   const allowedScriptKeys = await loadAgentScriptKeys(supabase);
+  const growthScriptSessions = await loadGrowthAgentScriptSessions(supabase);
 
   const weekStart = crmMondayOf(crmDateKey(new Date()));
   const weekEnd = crmAddDays(weekStart, 6);
@@ -297,6 +300,9 @@ export default async function AgentDashboardPage() {
           </Link>
         </div>
       </div>
+
+      <GrowthScriptSessionRegister sessions={growthScriptSessions} replace />
+      <GrowthAgentScriptReminder sessions={growthScriptSessions} />
 
       <AgentCampaignScriptCard
         currentCampaignKey={
