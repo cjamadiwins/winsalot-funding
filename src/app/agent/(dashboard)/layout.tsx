@@ -6,6 +6,8 @@ import NotificationRefresher from "@/components/crm-ui/NotificationRefresher";
 import type { CrmNotificationRow } from "@/lib/crm-notifications";
 import CrmShell, { type CrmNavItem } from "@/components/crm-ui/CrmShell";
 import { loadCrmChatUnreadCount } from "@/lib/crm-chat-data";
+import GrowthScriptDockProvider from "@/components/growth-script-dock/GrowthScriptDockProvider";
+import { reportGrowthScriptStateAction } from "./growth-script-status-actions";
 import AgentActivityMonitor from "@/components/agent-activity/AgentActivityMonitor";
 import type { AgentAttendanceRow } from "@/lib/crm-types";
 import { pollAgentActivityAction, acknowledgeIdleWarningAction } from "./dashboard/activity-actions";
@@ -79,6 +81,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
 
   return (
     <div className="crm-theme crm-theme--cleaning">
+      <GrowthScriptDockProvider agentName={agentDisplayName} reportAction={reportGrowthScriptStateAction}>
       <CrmShell
         brandTitle="Winsalot Growth CRM"
         brandSubtitle={
@@ -113,6 +116,7 @@ export default async function AgentLayout({ children }: { children: ReactNode })
       >
         {children}
       </CrmShell>
+      </GrowthScriptDockProvider>
       <AgentActivityMonitor
         initialRow={(openShift as AgentAttendanceRow | null)}
         pollAction={pollAgentActivityAction}
