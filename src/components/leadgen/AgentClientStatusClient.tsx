@@ -105,7 +105,7 @@ export default function AgentClientStatusClient({
     if (preview.activeLists.length === 0 && !preview.primaryAffected) {
       const unrestricts = removalWouldUnrestrictAgentClient(agent.totalRows, client.rows);
       const message = unrestricts
-        ? `${client.name} is ${agent.name}'s last assigned client.\n\nWith none assigned they will be able to see every client. Remove it anyway?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}.`
+        ? `${client.name} is ${agent.name}'s last assigned client.\n\nThey will have no clients until you assign one. Remove it anyway?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}.`
         : `Remove ${client.name} from ${agent.name}?\n\nPast calls, leads, appointments, emails and reports stay under ${client.name}; only the assignment is removed.`;
       if (!window.confirm(message)) return;
       run(agent.id, () => removeClient(agent.id, client.id, { lists: "none", primary: "keep", confirmedUnrestricted: unrestricts }));
@@ -167,7 +167,7 @@ export default function AgentClientStatusClient({
 
             {agent.clients.length === 0 ? (
               <p className="mt-1.5 text-[13px] text-slate-500">
-                No clients assigned{agent.totalRows === 0 ? " - this agent can see every client." : "."}
+                No clients assigned{agent.totalRows === 0 ? " - this agent cannot see or work any client until you assign one." : "."}
               </p>
             ) : (
               <ul className="mt-1.5 space-y-1">
@@ -267,7 +267,7 @@ export default function AgentClientStatusClient({
 
             {dialog.preview.lastAssignment && (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                This is {dialog.agent.name}&rsquo;s last assigned client. With none assigned they will be able to see every client.
+                This is {dialog.agent.name}&rsquo;s last assigned client. They will have no clients until you assign one.
               </p>
             )}
             {dialog.preview.leadsStillOwned > 0 && (

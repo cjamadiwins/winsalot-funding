@@ -62,17 +62,15 @@ describe("groupAgentClientAssignments (reuses leadgen_campaign_agents rows)", ()
   });
 });
 
-describe("restriction transitions that need Admin confirmation", () => {
-  it("assigning the first client restricts an unrestricted agent", () => {
-    expect(assignmentWouldRestrictAgent(0)).toBe(true);
+describe("agents only ever work Admin-assigned clients", () => {
+  it("assigning a client never needs an 'unrestricted' confirmation", () => {
+    expect(assignmentWouldRestrictAgent(0)).toBe(false);
     expect(assignmentWouldRestrictAgent(3)).toBe(false);
   });
 
-  it("removing the last client would leave the agent seeing every client", () => {
-    expect(removalWouldUnrestrictAgent(3, 3)).toBe(true);
-    expect(removalWouldUnrestrictAgent(3, 1)).toBe(false);
-    // Rows for hidden (inactive) clients still keep the agent restricted.
-    expect(removalWouldUnrestrictAgent(4, 3)).toBe(false);
+  it("removing the last client leaves the agent with NO clients, never all of them", () => {
+    expect(removalWouldUnrestrictAgent(3, 3)).toBe(false);
+    expect(removalWouldUnrestrictAgent(1, 1)).toBe(false);
   });
 });
 

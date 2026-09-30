@@ -24,12 +24,12 @@ export default async function LeadgenAgentCallLogPage() {
   ]);
 
   // Manual calls can only be logged for clients Admin assigned to this agent
-  // (agents with no assignments yet keep the full list, as before).
+  // (agents with no assignments get an empty list).
   // Hierarchy for a call made outside a call list: the Admin-selected active
   // client is the pre-selected default (calls from a call list never come
   // through here - they always use the list's own client).
   const [assignedClientIds, activeClient] = await Promise.all([getAgentAssignedClientIds(agent.id), getAgentActiveClient(agent.id)]);
-  const clientOptions = (clients ?? []).filter((c) => assignedClientIds.length === 0 || assignedClientIds.includes(c.id) || c.id === activeClient?.clientId);
+  const clientOptions = (clients ?? []).filter((c) => assignedClientIds.includes(c.id));
 
   const records: CallLogRow[] = ((data ?? []) as unknown as LeadgenCallLogRecord[]).map(
     ({ client_id: _client_id, leadgen_clients, ...rest }) => ({

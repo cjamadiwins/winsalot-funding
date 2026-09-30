@@ -248,10 +248,8 @@ export async function setAgentActiveClientAction(agentId: string, clientId: stri
     if (!option) return { error: "That client isn't an active client." };
 
     const rows = await agentCampaignRows(db, agentId);
-    if (rows.length > 0) {
-      const clientCampaigns = await campaignIdsForClient(db, clientId);
-      if (!rows.some((r) => clientCampaigns.includes(r.campaign_id))) return { error: "Assign this client to the agent before making it their Primary client." };
-    }
+    const clientCampaigns = await campaignIdsForClient(db, clientId);
+    if (!rows.some((r) => clientCampaigns.includes(r.campaign_id))) return { error: "Assign this client to the agent before making it their Primary client." };
 
     // Already the Primary client (e.g. saved on one of its other campaigns)?
     // Keep the existing campaign rather than rewriting it.
@@ -263,8 +261,7 @@ export async function setAgentActiveClientAction(agentId: string, clientId: stri
     }
 
     campaignId = option.campaignId;
-    // A restricted agent needs access to the Primary campaign itself to see
-    // its leads; an unrestricted agent already sees everything.
+    // The agent needs access to the Primary campaign itself to see its leads.
     await ensureRestrictedAgentOnCampaign(campaignId, agentId, admin.id);
   }
 

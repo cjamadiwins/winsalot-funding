@@ -83,6 +83,15 @@ export async function isAgentAssignedToActiveSegment(segmentId: string, agentId:
     if (!campaign || campaign.status !== "active") return false;
     const { data: client } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
     if (!client) return false;
+    // Admin removed this client from the agent: the list roster is kept for
+    // history/re-assignment but gives no access while unassigned.
+    const { data: assignedRow } = await admin
+      .from("leadgen_campaign_agents")
+      .select("id")
+      .eq("agent_id", agentId)
+      .eq("campaign_id", segment.leadgen_campaign_id)
+      .maybeSingle();
+    if (!assignedRow) return false;
   }
   const { data } = await admin
     .from("call_list_segment_agents")

@@ -269,19 +269,15 @@ export default async function LeadgenAgentDashboardPage() {
 
   // Client Call Script dashboard card - "only show clients/campaigns the
   // agent is permitted to work on". Mirrors leadgen_agent_campaign_allowed()
-  // (migration 0077) exactly: zero leadgen_campaign_agents rows for this
-  // agent means fully unrestricted (every active client is permitted);
-  // any rows mean restricted to only the clients behind those specific
-  // campaign ids.
-  const restrictedCampaignIds = (myCampaignRestrictions ?? []).length > 0 ? new Set((myCampaignRestrictions ?? []).map((r) => r.campaign_id)) : null;
-  const permittedClientIds = restrictedCampaignIds
-    ? new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id))
-    : null;
+  // (migration 0077) exactly: only the clients behind this
+  // agent's own leadgen_campaign_agents rows are permitted; zero rows means none.
+  const restrictedCampaignIds = new Set((myCampaignRestrictions ?? []).map((r) => r.campaign_id));
+  const permittedClientIds = new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id));
   const preparationClientIds = new Set(websiteTraining.map(({ client }) => client.id));
   const callScriptClients = (activeClientsWithScripts ?? []).filter((c) =>
     WEBSITE_LAUNCH_CLIENTS.includes(c.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])
       ? preparationClientIds.has(c.id)
-      : !permittedClientIds || permittedClientIds.has(c.id)
+      : permittedClientIds.has(c.id)
   );
 
   // The preparation summary reads only segments explicitly assigned to

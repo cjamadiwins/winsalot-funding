@@ -630,8 +630,7 @@ export async function updateCampaignAction(campaignId: string, formData: FormDat
 // intended set of agent ids for this campaign, so the simplest correct
 // implementation is delete-then-insert inside one transaction-like pair
 // of calls, rather than diffing. An agent with zero rows across every
-// campaign remains fully unrestricted (see leadgen_agent_campaign_allowed
-// in migration 0077) - this action is the only way that ever changes.
+// campaign can work no client (leadgen_agent_campaign_allowed) - Admin-only.
 export async function assignCampaignAgentsAction(campaignId: string, formData: FormData): Promise<ActionResult> {
   const admin = await requireLeadgenAdmin();
   const agentIds = formData.getAll("agent_ids").map((v) => String(v));
