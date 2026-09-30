@@ -224,9 +224,13 @@ export default function AssignmentsClient({
                         className="w-full min-w-[260px] rounded-lg border border-slate-300 px-2.5 py-1.5 text-[13px]"
                       >
                         <option value="">— Unassigned —</option>
-                        {campaignsByClient.map(([clientId, group]) => (
+                        {campaignsByClient
+                          // Test-only clients can never own production call lists, so they're not offered here
+                          // (a list still on one keeps showing it so the control doesn't misreport its state).
+                          .filter(([, group]) => !group.isInternalTest || group.campaigns.some((c) => c.id === segment.campaignId))
+                          .map(([clientId, group]) => (
                           <optgroup key={clientId} label={`${group.clientName}${group.clientActive ? "" : " (inactive)"}`}>
-                            {group.campaigns.map((c) => (
+                            {group.campaigns.filter((c) => !group.isInternalTest || c.id === segment.campaignId).map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.name}
                                 {c.status !== "active" ? ` (${formatStatusLabel(c.status)})` : ""}

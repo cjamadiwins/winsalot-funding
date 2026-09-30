@@ -25,6 +25,7 @@ import {
 import { deploySegment } from "@/lib/call-list-deploy";
 import { saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
 import { saveSegmentScript } from "@/lib/call-list-script";
+import { TEST_CLIENT_LIST_MESSAGE, friendlyTestClientError, isTestOnlyCampaign } from "@/lib/leadgen-test-client-guard";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
@@ -100,6 +101,7 @@ export async function uploadSegmentAction(formData: FormData): Promise<{ error: 
 
   if (!name) return { error: "Segment name is required." };
   if (!leadgenCampaignId) return { error: "Select which campaign this segment is for." };
+  if (await isTestOnlyCampaign(leadgenCampaignId)) return { error: TEST_CLIENT_LIST_MESSAGE };
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV or XLSX file to upload." };
 
   let mapping: Partial<Record<CallListTargetField, string>>;
@@ -147,7 +149,8 @@ export async function uploadSegmentAction(formData: FormData): Promise<{ error: 
     await setSegmentTotalUploadedRows(segment.id, inserted);
     await recheckSegmentDuplicates(segment.id, "lead_generation");
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Failed to import this file." };
+    const message = err instanceof Error ? err.message : "Failed to import this file.";
+    return { error: friendlyTestClientError(message) ?? message };
   }
 
   revalidatePath(BASE_PATH);
