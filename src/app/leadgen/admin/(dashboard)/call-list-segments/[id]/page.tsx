@@ -17,6 +17,7 @@ import {
   backfillSegmentLocationsAction,
   deleteDraftSegmentAction,
   deploySegmentAction,
+  saveSegmentAssignmentAction,
   previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
@@ -148,6 +149,20 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     promoted: leads.filter((l) => l.promoted_leadgen_lead_id).length,
   };
 
+  // Admin "Save Assignment": client (campaign) + agents.
+  const [{ data: assignCampaigns }, { data: assignClients }] = await Promise.all([
+    admin.from("leadgen_campaigns").select("id, name, client_id").order("name"),
+    admin.from("leadgen_clients").select("id, name, active, is_internal_test").order("name"),
+  ]);
+  const assignClientById = new Map((assignClients ?? []).map((c) => [c.id as string, c]));
+  const clientOptions = (assignCampaigns ?? [])
+    .filter((c) => {
+      const client = assignClientById.get(c.client_id as string);
+      return client && (client.active || c.id === segment.leadgen_campaign_id);
+    })
+    .map((c) => ({ value: c.id as string, label: `${assignClientById.get(c.client_id as string)?.name} — ${c.name}` }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
   let transferTarget: { id: string; name: string; status: string; clientName: string } | null = null;
   if (segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")) {
     const { data: currentCampaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
@@ -182,6 +197,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       callLogs={callLogs}
       stats={stats}
       deployAction={deploySegmentAction}
+      assignment={{ scopeLabel: "Client / Campaign", scopeOptions: clientOptions, initialScope: segment.leadgen_campaign_id ?? "", saveAction: saveSegmentAssignmentAction }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}

@@ -23,6 +23,7 @@ import {
   type SegmentLeadEditableFields,
 } from "@/lib/call-list-leads";
 import { deploySegment } from "@/lib/call-list-deploy";
+import { saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import { backfillSegmentLocationsFromFile, type BackfillSummary } from "@/lib/call-list-backfill";
@@ -303,4 +304,23 @@ export async function updateCallListColumnVisibilityAction(hiddenFields: string[
   }
   revalidatePath(BASE_PATH);
   return {};
+}
+
+// Admin-only "Save Assignment": the list's client (campaign) + its agent roster
+// in one step (also usable to edit, remove or reassign later). Adding an agent
+// also gives them that client; history is never touched.
+export async function saveSegmentAssignmentAction(segmentId: string, campaignId: string, agentIds: string[]): Promise<{ error?: string; added?: number; removed?: number }> {
+  const admin = await requireLeadgenAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
+  try {
+    const result = await saveLeadgenSegmentAssignment(segment, campaignId, agentIds, admin.id);
+    revalidatePath(`${BASE_PATH}/${segmentId}`);
+    revalidatePath(BASE_PATH);
+    revalidatePath("/leadgen/admin/assignments");
+    revalidatePath("/leadgen/agent", "layout");
+    return result;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save the assignment." };
+  }
 }

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
 import DeployPanelClient from "./DeployPanelClient";
+import SegmentAssignmentPanelClient from "./SegmentAssignmentPanelClient";
+import type { AgentService } from "@/lib/crm-agent-service-shared";
 import RemovedRowsPanel from "./RemovedRowsPanel";
 import ManageColumnsPopover from "./ManageColumnsPopover";
 import BackfillLocationsClient from "./BackfillLocationsClient";
@@ -50,6 +52,7 @@ export default function SegmentPerformanceClient({
   backfillLocationsAction,
   callScriptClient,
   adminName,
+  assignment,
 }: {
   basePath: string;
   segment: CallListSegmentRow;
@@ -70,6 +73,14 @@ export default function SegmentPerformanceClient({
     promoted: number;
   };
   deployAction: (segmentId: string, agentIds: string[]) => Promise<{ error?: string }>;
+  // When provided, the Admin "Save Assignment" panel (service/client + agents) is shown instead of the plain deploy panel.
+  assignment?: {
+    scopeLabel: string;
+    scopeOptions: { value: string; label: string }[];
+    initialScope: string;
+    agentServices?: Record<string, AgentService | null>;
+    saveAction: (segmentId: string, scope: string, agentIds: string[]) => Promise<{ error?: string; added?: number; removed?: number }>;
+  };
   updateStatusAction: (segmentId: string, status: "active" | "completed" | "archived") => Promise<{ error?: string }>;
   promoteAction: (leadId: string) => Promise<{ error?: string; id?: string; linkedExisting?: boolean }>;
   restoreLeadsAction: (segmentId: string, leadIds: string[]) => Promise<{ error?: string }>;
@@ -234,13 +245,27 @@ export default function SegmentPerformanceClient({
 
       <BackfillLocationsClient previewAction={previewLocationsFileAction} backfillAction={backfillLocationsAction} />
 
-      <DeployPanelClient
-        key={[...assignedAgentIds].sort().join(",")}
-        segmentId={segment.id}
-        agents={allAgents}
-        assignedAgentIds={assignedAgentIds}
-        deployAction={deployAction}
-      />
+      {assignment ? (
+        <SegmentAssignmentPanelClient
+          key={`${assignment.initialScope}|${[...assignedAgentIds].sort().join(",")}`}
+          segmentId={segment.id}
+          scopeLabel={assignment.scopeLabel}
+          scopeOptions={assignment.scopeOptions}
+          initialScope={assignment.initialScope}
+          agents={allAgents}
+          assignedAgentIds={assignedAgentIds}
+          agentServices={assignment.agentServices}
+          saveAction={assignment.saveAction}
+        />
+      ) : (
+        <DeployPanelClient
+          key={[...assignedAgentIds].sort().join(",")}
+          segmentId={segment.id}
+          agents={allAgents}
+          assignedAgentIds={assignedAgentIds}
+          deployAction={deployAction}
+        />
+      )}
 
       <div className="rounded-xl border border-slate-200 p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-900">Assigned agents</h2>

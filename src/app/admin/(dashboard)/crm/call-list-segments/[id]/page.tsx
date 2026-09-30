@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getSegment, getSegmentAgentIds } from "@/lib/call-list-segments";
+import { isAgentService, type AgentService } from "@/lib/crm-agent-service-shared";
 import { listSegmentLeads, listRemovedSegmentLeads } from "@/lib/call-list-leads";
 import { getHiddenColumnFields } from "@/lib/call-list-column-visibility";
 import SpreadsheetEditorClient from "@/components/crm-call-list/SpreadsheetEditorClient";
@@ -15,6 +16,7 @@ import {
   backfillSegmentLocationsAction,
   deleteDraftSegmentAction,
   deploySegmentAction,
+  saveSegmentAssignmentAction,
   previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
@@ -115,6 +117,19 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
     agent_name: agentNameById.get(log.agent_id) ?? "Unknown agent",
   }));
 
+  // Admin "Save Assignment": service + agents. Agent eligibility follows each
+  // agent's Admin-set Growth service assignment (CRM Agents page).
+  const { data: serviceRows } = await admin.from("crm_agent_service_assignments").select("agent_id, service");
+  const agentServices: Record<string, AgentService | null> = {};
+  for (const agent of agents) agentServices[agent.id] = null;
+  for (const row of serviceRows ?? []) if (isAgentService(row.service)) agentServices[row.agent_id as string] = row.service;
+  const currentService = segment.growth_opportunity_type ?? "lead_generation";
+  const serviceOptions = [
+    { value: "lead_generation", label: "Lead Generation" },
+    { value: "business_financing", label: "Business Finance" },
+    ...(currentService === "both_services" ? [{ value: "both_services", label: "Lead Gen + Financing (existing)" }] : []),
+  ];
+
   const nowIso = new Date().toISOString();
   const stats = {
     totalLeads: leads.length,
@@ -139,6 +154,7 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
       callLogs={callLogs}
       stats={stats}
       deployAction={deploySegmentAction}
+      assignment={{ scopeLabel: "Service", scopeOptions: serviceOptions, initialScope: currentService, agentServices, saveAction: saveSegmentAssignmentAction }}
       updateStatusAction={updateSegmentStatusAction}
       promoteAction={promoteSegmentLeadAction}
       restoreLeadsAction={restoreSegmentLeadsAction}
