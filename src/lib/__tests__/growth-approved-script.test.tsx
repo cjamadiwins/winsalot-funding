@@ -55,19 +55,21 @@ describe("Growth script panel, reminder and admin card", () => {
     const many = Array.from({ length: 6 }, (_, i) => ({ ...payload, segmentId: `s${i}`, segmentName: `List ${i}` }));
     expect(renderToStaticMarkup(createElement(GrowthScriptReminderView, { open: false, sessions: many, onOpen: () => undefined })).match(/Open Script/g)?.length).toBe(1);
   });
-  it("admin card: green open, amber/gray otherwise, never red, shows service and list", () => {
+  it("admin card: one compact row per agent, Growth owner stays Winsalot Corp, never red", () => {
+    const b = { ...payload, segmentId: "seg-2", segmentName: "Website Designer – Barrie ON" };
     const rows = [
-      { agentId: "a1", agentName: "Henry Osuji", payload, state: "open" as const, openedAt: null, lastActivityAt: null, listCount: 3 },
-      { agentId: "a2", agentName: "Goodness Ugbana", payload: { ...payload, segmentName: "Website Designer – Barrie ON" }, state: "closed_working" as const, openedAt: null, lastActivityAt: null, listCount: 3 },
-      { agentId: "a3", agentName: "Someone", payload, state: "never_opened" as const, openedAt: null, lastActivityAt: null, listCount: 2 },
+      { agentId: "a1", agentName: "Henry Osuji", payload, state: "open" as const, openedAt: null, lastActivityAt: new Date().toISOString() },
+      { agentId: "a1", agentName: "Henry Osuji", payload: { ...payload, segmentId: "seg-3", segmentName: "Website Designer – North Bay ON" }, state: "closed" as const, openedAt: null, lastActivityAt: null },
+      { agentId: "a2", agentName: "Goodness Ugbana", payload: b, state: "closed_working" as const, openedAt: null, lastActivityAt: null },
     ];
     const html = renderToStaticMarkup(createElement(GrowthScriptDockProvider, { agentName: "Admin" }, createElement(GrowthAgentScriptStatusCard, { rows, previewSessions: [] })));
     expect(html).toContain("Agent Script Status");
-    expect(html).toContain("Henry Osuji — Website Development / Web Design");
-    expect(html).toContain("Website Designer – Oshawa ON");
-    expect(html).toContain("2 lists");
+    expect(html.match(/Henry Osuji/g)?.length).toBe(1);
+    expect(html).toContain("2 campaigns");
+    expect(html).toContain("Current: Website Designer – Oshawa ON");
     expect(html).toMatch(/emerald[^"]*">\s*Script Open/);
-    expect(html).toContain("Script Closed — working list");
+    expect(html).toContain("Script Closed");
+    expect(html).not.toContain("Preview Script");
     expect(html).not.toMatch(/rose|red-/);
   });
 });

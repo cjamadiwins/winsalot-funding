@@ -129,18 +129,26 @@ describe("dashboard reminder and admin status card", () => {
     expect(renderToStaticMarkup(createElement(ScriptReminderView, { open: false, sessions: [], onOpen: () => undefined }))).toBe("");
   });
 
-  it("admin card uses green for open, amber/gray otherwise, never red", () => {
+  it("admin card: one compact row per agent, green open, amber/gray otherwise, never red", () => {
+    const other = { ...hidebrandt, segmentId: "seg-h2", campaignId: "camp-h2", campaignName: "Hidebrandt Web Services — Brandon Pet Groomer" };
     const rows = [
-      { agentId: "a1", agentName: "Henry Osuji", payload: teknokraft, state: "open" as const, openedAt: null, lastActivityAt: null },
+      { agentId: "a1", agentName: "Henry Osuji", payload: teknokraft, state: "open" as const, openedAt: null, lastActivityAt: new Date().toISOString() },
+      { agentId: "a1", agentName: "Henry Osuji", payload: hidebrandt, state: "closed" as const, openedAt: null, lastActivityAt: null },
       { agentId: "a2", agentName: "Goodness Ugbana", payload: hidebrandt, state: "closed_working" as const, openedAt: null, lastActivityAt: null },
-      { agentId: "a3", agentName: "Other Agent", payload: hidebrandt, state: "inactive" as const, openedAt: null, lastActivityAt: null },
+      { agentId: "a2", agentName: "Goodness Ugbana", payload: other, state: "never_opened" as const, openedAt: null, lastActivityAt: null },
     ];
     const html = renderToStaticMarkup(createElement(ScriptDockProvider, { agentName: "Admin" }, createElement(AgentScriptStatusCard, { rows, previewSessions: [] })));
     expect(html).toContain("Agent Script Status");
-    expect(html).toContain("Henry Osuji — Teknokraft Canada Inc.");
-    expect(html).toContain("Script Open");
-    expect(html).toContain("Script Closed — working list");
+    expect(html.match(/Henry Osuji/g)?.length).toBe(1);
+    expect(html.match(/Goodness Ugbana/g)?.length).toBe(1);
+    expect(html).toContain("2 campaigns");
+    expect(html).toContain("Current: Teknokraft Canada Inc. Campaign");
+    expect(html.match(/View Details/g)?.length).toBe(2);
     expect(html).toMatch(/emerald[^"]*">\s*Script Open/);
+    expect(html).toContain("Script Closed");
+    // campaign-level detail is not on the main dashboard
+    expect(html).not.toContain("Preview Script");
+    expect(html).not.toContain("Brandon Pet Groomer");
     expect(html).not.toMatch(/rose|red-/);
   });
 });
