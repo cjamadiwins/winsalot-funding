@@ -10,8 +10,8 @@ type Option = { value: string; label: string };
 type Agent = { id: string; name: string };
 
 // Admin-only "Save Assignment" for an existing call list, shared by both CRMs:
-//   Growth CRM:          Service [Lead Generation / Business Finance] + Assigned Agents
-//   Lead Generation CRM: Client [client / campaign]                   + Assigned Agents
+//   Growth CRM:          Winsalot Corp [fixed] + Service + Assigned Agents
+//   Lead Generation CRM: Client [client / campaign] + Assigned Agents
 // Saving replaces the list's agent roster with whoever is ticked (agents who
 // stay are untouched); unticking an agent removes only their access to this
 // list - calls, notes, leads and history stay. The server re-validates
@@ -26,6 +26,7 @@ export default function SegmentAssignmentPanelClient({
   initialClientId,
   campaignsByClient,
   clientProfileHrefPrefix,
+  fixedClientLabel,
   industry,
   location,
   productionLeadCount,
@@ -45,6 +46,7 @@ export default function SegmentAssignmentPanelClient({
   initialClientId?: string;
   campaignsByClient?: Record<string, Option[]>;
   clientProfileHrefPrefix?: string;
+  fixedClientLabel?: string;
   industry?: string | null;
   location?: string | null;
   productionLeadCount?: number;
@@ -72,12 +74,12 @@ export default function SegmentAssignmentPanelClient({
     agentScopes ? (agentScopes[agentId] ?? []).includes(forScope) : !agentServices || serviceAllowsOpportunityType(agentServices[agentId] ?? null, forScope);
   const restrictsByScope = !!agentServices || !!agentScopes;
   const availableScopes = campaignsByClient ? (campaignsByClient[clientId] ?? []) : scopeOptions;
-  const assignmentSummary = clientOptions && (
+  const assignmentSummary = (clientOptions || fixedClientLabel) && (
     <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[12.5px] text-slate-700">
       <div className="font-semibold text-slate-900">Assignment summary</div>
-      <div className="mt-1">Client: {clientId && clientProfileHrefPrefix
-        ? <Link href={`${clientProfileHrefPrefix}/${clientId}`} className="font-medium text-sky-700 hover:underline">{clientOptions.find((option) => option.value === clientId)?.label}</Link>
-        : clientOptions.find((option) => option.value === clientId)?.label ?? "Select a client"}</div>
+      <div className="mt-1">Client: {fixedClientLabel ?? (clientId && clientProfileHrefPrefix
+        ? <Link href={`${clientProfileHrefPrefix}/${clientId}`} className="font-medium text-sky-700 hover:underline">{clientOptions?.find((option) => option.value === clientId)?.label}</Link>
+        : clientOptions?.find((option) => option.value === clientId)?.label ?? "Select a client")}</div>
       {listName && <div>Call List: {listName}</div>}
       <div>Campaign: {[clientOptions.find((option) => option.value === clientId)?.label, industry, location].filter(Boolean).join(" — ") || "—"}</div>
       <div>Assigned Agent(s): {agents.filter((agent) => selected.includes(agent.id)).map((agent) => agent.name).join(", ") || "Select at least one agent"}</div>
@@ -140,7 +142,7 @@ export default function SegmentAssignmentPanelClient({
       {error && <p className="mt-2 text-[12.5px] text-rose-700">{error}</p>}
       {notice && !error && <p className="mt-2 text-[12.5px] text-emerald-700">{notice}</p>}
 
-      {clientOptions && (
+      {clientOptions && !fixedClientLabel && (
         <label className="mt-3 block text-[12.5px] font-semibold text-slate-700">
           Client
           <select
