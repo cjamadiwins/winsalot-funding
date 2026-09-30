@@ -1,14 +1,17 @@
 import { requireCrmUser } from "@/lib/crm-auth";
 import OpportunityFieldsForm from "@/components/OpportunityFieldsForm";
 import { createOpportunityAction } from "./actions";
+import { getAgentServiceAssignment } from "@/lib/crm-agent-service";
+import { allowedOpportunityTypes } from "@/lib/crm-agent-service-shared";
 
 export default async function NewOpportunityPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireCrmUser();
+  const crmUser = await requireCrmUser();
   const params = await searchParams;
+  const allowedTypes = allowedOpportunityTypes(await getAgentServiceAssignment(crmUser.id));
 
   return (
     <div>
@@ -29,7 +32,11 @@ export default async function NewOpportunityPage({
           </p>
         )}
 
-        <OpportunityFieldsForm />
+        {allowedTypes.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)]">No service is assigned to you yet. Ask Admin to assign Lead Generation or Business Finance.</p>
+        ) : (
+          <OpportunityFieldsForm allowedTypes={allowedTypes} />
+        )}
 
         <button
           type="submit"

@@ -16,9 +16,12 @@ const inputClass =
 // buttons/error UI that screen needs.
 export default function OpportunityFieldsForm({
   defaultOpportunityType,
+  allowedTypes = OPPORTUNITY_TYPES,
   defaults,
 }: {
   defaultOpportunityType?: OpportunityType;
+  // Agents are limited to the service(s) Admin assigned; Admin passes nothing.
+  allowedTypes?: readonly OpportunityType[];
   defaults?: Partial<
     Pick<
       CrmOpportunityRow,
@@ -47,7 +50,7 @@ export default function OpportunityFieldsForm({
     >
   >;
 }) {
-  const [type, setType] = useState<OpportunityType>(defaultOpportunityType ?? "lead_generation");
+  const [type, setType] = useState<OpportunityType>(defaultOpportunityType ?? allowedTypes[0] ?? "lead_generation");
   const showLeadGen = type === "lead_generation" || type === "both_services";
   const showFinancing = type === "business_financing" || type === "both_services";
 
@@ -62,7 +65,7 @@ export default function OpportunityFieldsForm({
             required
             className={inputClass}
           >
-            {OPPORTUNITY_TYPES.map((t) => (
+            {allowedTypes.map((t) => (
               <option key={t} value={t}>
                 {OPPORTUNITY_TYPE_LABELS[t]}
               </option>

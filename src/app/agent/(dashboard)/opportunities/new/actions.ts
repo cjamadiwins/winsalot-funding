@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { OPPORTUNITY_TYPES, type OpportunityType } from "@/lib/crm-types";
 import { checkDncSuppression } from "@/lib/dnc-suppression";
+import { getAgentServiceAssignment } from "@/lib/crm-agent-service";
+import { serviceAllowsOpportunityType } from "@/lib/crm-agent-service-shared";
 
 function textOrNull(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -50,6 +52,10 @@ export async function createOpportunityAction(formData: FormData) {
   }
 
   const opportunityType = opportunityTypeRaw as OpportunityType;
+  // Admin decides which service(s) an agent works (also enforced by RLS).
+  if (!serviceAllowsOpportunityType(await getAgentServiceAssignment(crmUser.id), opportunityType)) {
+    redirect(`/agent/opportunities/new?error=${encodeURIComponent("That service isn't assigned to you. Ask Admin.")}`);
+  }
   const supabase = await createSupabaseServerClient();
 
   const { data: opportunity, error } = await supabase
