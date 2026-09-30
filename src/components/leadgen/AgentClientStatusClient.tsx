@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { assignmentWouldRestrictAgentClient, removalWouldUnrestrictAgentClient } from "@/lib/leadgen-agent-client-rules";
 
@@ -175,7 +176,12 @@ export default function AgentClientStatusClient({
                   const isPrimary = client.id === agent.primaryClientId;
                   return (
                     <li key={client.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px] text-slate-700">
-                      <span className="min-w-[200px]">• {client.name}</span>
+                      <span className="min-w-[200px]">
+                        •{" "}
+                        <Link href={`/leadgen/admin/clients/${client.id}`} className="hover:underline focus-visible:underline">
+                          {client.name}
+                        </Link>
+                      </span>
                       <button
                         type="button"
                         disabled={isPending}
@@ -197,7 +203,14 @@ export default function AgentClientStatusClient({
             )}
 
             <p className="mt-1.5 text-[13px] font-semibold text-slate-700">
-              Primary: <span className={primary ? "text-sky-700" : "font-medium text-slate-500"}>{primary ? primary.name : "Not selected"}</span>
+              Primary:{" "}
+              {primary ? (
+                <Link href={`/leadgen/admin/clients/${primary.id}`} className="text-sky-700 hover:underline focus-visible:underline">
+                  {primary.name}
+                </Link>
+              ) : (
+                <span className="font-medium text-slate-500">Not selected</span>
+              )}
             </p>
             {busyAgentId === agent.id && <p className="mt-1 text-xs text-slate-500">Saving…</p>}
             {errors[agent.id] && <p className="mt-1 text-xs text-rose-600">{errors[agent.id]}</p>}
