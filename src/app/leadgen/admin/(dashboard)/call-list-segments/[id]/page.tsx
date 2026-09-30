@@ -159,7 +159,8 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
   const clientOptions = (assignCampaigns ?? [])
     .filter((c) => {
       const client = assignClientById.get(c.client_id as string);
-      return client && (client.active || c.id === segment.leadgen_campaign_id);
+      // Test-only clients are never offered for production lists (kept only if a list is somehow still on one).
+      return client && (client.active || c.id === segment.leadgen_campaign_id) && (!client.is_internal_test || c.id === segment.leadgen_campaign_id);
     })
     .map((c) => ({ value: c.id as string, label: `${assignClientById.get(c.client_id as string)?.name} — ${c.name}` }))
     .sort((a, b) => a.label.localeCompare(b.label));

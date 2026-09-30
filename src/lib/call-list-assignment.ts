@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { isAgentService, serviceAllowsOpportunityType, AGENT_SERVICE_LABELS, type AgentService } from "./crm-agent-service-shared";
 import type { CallListSegmentRow } from "./call-list-types";
+import { assertProductionCampaign } from "./leadgen-test-client-guard";
 
 // Admin-only "Save Assignment" for a call list, shared by both CRMs' server
 // actions (each action gates on its own requireAdmin first). Only the roster
@@ -124,6 +125,7 @@ export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, 
   if (!campaign) throw new Error("That client/campaign no longer exists.");
   const { data: client } = await admin.from("leadgen_clients").select("id, active").eq("id", campaign.client_id).maybeSingle();
   if (!client || (!client.active && segment.leadgen_campaign_id !== campaignId)) throw new Error("That client isn't active.");
+  await assertProductionCampaign(campaignId);
 
   const wanted = [...new Set(agentIds)];
   if (wanted.length > 0) {

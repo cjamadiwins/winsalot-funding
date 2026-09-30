@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import { ensureRestrictedAgentOnCampaign } from "@/lib/leadgen-campaign-assignment";
 import { assignmentWouldRestrictAgent } from "@/lib/leadgen-agent-active-client";
+import { TEST_CLIENT_LIST_MESSAGE, friendlyTestClientError, isTestOnlyCampaign } from "@/lib/leadgen-test-client-guard";
 
 type ActionResult = { error?: string; removedFromLists?: number; remainingLists?: number };
 
@@ -105,10 +106,11 @@ export async function setSegmentCampaignAction(segmentId: string, campaignId: st
   if (campaignId) {
     const { data: campaign } = await db.from("leadgen_campaigns").select("id").eq("id", campaignId).maybeSingle();
     if (!campaign) return { error: "That campaign no longer exists." };
+    if (await isTestOnlyCampaign(campaignId)) return { error: TEST_CLIENT_LIST_MESSAGE };
   }
 
   const { error } = await db.from("call_list_segments").update({ leadgen_campaign_id: campaignId }).eq("id", segmentId);
-  if (error) return { error: `Failed to update the call list: ${error.message}` };
+  if (error) return { error: friendlyTestClientError(error.message) ?? `Failed to update the call list: ${error.message}` };
 
   // Agents on this list keep their list assignment; those who don't hold the new
   // client simply have no access until Admin assigns the client (kept separate).
