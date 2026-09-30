@@ -15,7 +15,7 @@ export default function AdminHiyaCallerReputationCard() {
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Hiya Caller Reputation</h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              Check Winsalot Corp phone-number reputation, spam-label status, registration status, and register new business numbers when needed.
+              Check Winsalot Corp. phone-number reputation, spam-label status, registration status, and register new business numbers when needed.
             </p>
           </div>
         </div>
