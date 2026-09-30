@@ -1,13 +1,13 @@
 import { Phone, ShieldCheck } from "lucide-react";
 
 const rules = [
-  "Use only approved Winsalot Corp Dialpad phone numbers.",
+  "Use only approved Winsalot Corp. Dialpad phone numbers.",
   "Increase call volume gradually on new or recently changed numbers.",
-  "Never call a number on the shared Winsalot Corp Do Not Call List.",
+  "Never call a number on the shared Winsalot Corp. Do Not Call List.",
   "Add a number to the shared Do Not Call List immediately if a prospect asks not to be contacted again.",
   "Avoid repeatedly calling the same prospect within a short period.",
   "Avoid unnecessary rapid back-to-back dialing.",
-  "Keep Winsalot Corp business caller ID enabled and consistent.",
+  "Keep Winsalot Corp. business caller ID enabled and consistent.",
   "Report Spam, Scam Likely, or incorrect caller ID complaints to Admin immediately.",
   "Follow approved calling schedules, campaign assignments, and CRM call lists.",
   "Protecting phone reputation is every agent's responsibility.",
@@ -15,7 +15,7 @@ const rules = [
 
 const statuses = [
   ["DNC Compliance", "Active"],
-  ["Caller ID", "Winsalot Corp"],
+  ["Caller ID", "Winsalot Corp."],
   ["Spam Reports", "Report to Admin"],
   ["Calling Policy", "Active"],
 ] as const;
@@ -33,7 +33,7 @@ export default function PhoneReputationComplianceCard() {
             <Phone className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
           </div>
           <p className="mt-1 text-xs text-slate-600">
-            Help protect Winsalot Corp caller reputation and maintain compliant outbound calling.
+            Help protect Winsalot Corp. caller reputation and maintain compliant outbound calling.
           </p>
 
           <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-[length:var(--crm-shared-body,12px)] leading-5 text-slate-700 sm:grid-cols-2">
