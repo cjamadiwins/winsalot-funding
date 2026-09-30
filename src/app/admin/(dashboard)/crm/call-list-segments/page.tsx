@@ -52,7 +52,9 @@ export default async function CallListSegmentsPage() {
     leadCount: leadCountBySegment.get(segment.id) ?? 0,
     progress: progressBySegment.get(segment.id) ?? emptyCallListProgress(),
   }));
-  const needsClientReview = segments.filter((segment) => (segment.status === "active" || segment.status === "completed") && !segment.crm_client_id);
+  // Growth lists are always owned by Winsalot Corp with no prospect/client
+  // attached (crm_client_id stays null by design). Only flag a real deviation.
+  const ownershipAnomalies = segments.filter((segment) => segment.campaign_owner_name !== GROWTH_CALL_LIST_OWNER || segment.crm_client_id !== null);
 
   return (
     <div>
@@ -72,15 +74,15 @@ export default async function CallListSegmentsPage() {
         </Link>
       </div>
 
-      {needsClientReview.length > 0 && (
+      {ownershipAnomalies.length > 0 && (
         <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>{needsClientReview.length} existing production call list(s) need client assignment review.</strong>
-          <span> Their client is left unassigned because the older records did not identify one reliably. Open each list and select its confirmed client before future assignment or deployment.</span>
+          <strong>{ownershipAnomalies.length} call list(s) do not use {GROWTH_CALL_LIST_OWNER} as the campaign owner.</strong>
+          <span> Open each list and save its assignment to restore the fixed {GROWTH_CALL_LIST_OWNER} ownership.</span>
         </div>
       )}
 
       <div className="mt-6">
-        <CallListSegmentsClient basePath="/admin/crm/call-list-segments" rows={rows} fixedOwnerLabel={GROWTH_CALL_LIST_OWNER} />
+        <CallListSegmentsClient basePath="/admin/crm/call-list-segments" rows={rows} fixedOwnerLabel={GROWTH_CALL_LIST_OWNER} compact />
       </div>
     </div>
   );
