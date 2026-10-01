@@ -39,6 +39,7 @@ export default function CampaignDetailClient({
   conversionFunnel,
   launchReadiness,
   segmentPerformance,
+  feedbackPanel,
 }: {
   campaign: LeadgenCampaignRow;
   client: LeadgenClientRow;
@@ -67,6 +68,9 @@ export default function CampaignDetailClient({
   // "reporting at both levels: combined campaign totals [the KPI cards
   // above] and performance by individual industry/segment [this]".
   segmentPerformance: CampaignSegmentPerformanceRow[];
+  // Server-rendered Admin-only Appointment Quality Insights / Recent Client
+  // Preferences for this campaign (informational - never changes anything).
+  feedbackPanel?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -250,6 +254,8 @@ export default function CampaignDetailClient({
           />
         </div>
       </section>
+
+      {feedbackPanel}
 
       {segmentPerformance.length > 0 && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">

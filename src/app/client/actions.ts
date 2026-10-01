@@ -4,13 +4,17 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendPortalEmail } from "@/lib/client-portal-emails";
+import { safeClientNextPath } from "@/lib/leadgen-appointment-prep";
 
 export async function clientLoginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  // Optional post-login destination, only ever an appointment-brief deep link
+  // (see safeClientNextPath) - used by the "View Appointment Brief" email CTA.
+  const nextPath = safeClientNextPath(formData.get("redirectTo"));
 
   if (!email || !password) {
-    redirect(`/client?error=${encodeURIComponent("Email and password are required.")}`);
+    redirect(`/client?error=${encodeURIComponent("Email and password are required.")}${nextPath ? `&redirectTo=${encodeURIComponent(nextPath)}` : ""}`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -45,7 +49,7 @@ export async function clientLoginAction(formData: FormData) {
     .update({ last_login_at: new Date().toISOString() })
     .eq("id", data.user.id);
 
-  redirect("/client/dashboard");
+  redirect(nextPath ?? "/client/dashboard");
 }
 
 // Public forgot-password action. It intentionally returns the same success

@@ -27,6 +27,9 @@ import {
 import type { LeadgenImmediateConfirmationStatusEntry, LeadgenImmediateSmsConfirmationStatusEntry } from "@/lib/leadgen-appointment-reminders";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
 import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailConfirmModal";
+import AppointmentPrepModal from "./AppointmentPrepModal";
+import { FeedbackStatusBadge, PrepStatusBadge } from "@/components/leadgen/appointment-prep/PrepStatusBadge";
+import { isPreparableAppointment, type FeedbackStatus, type PrepStatus, type PrepSummary } from "@/lib/leadgen-appointment-prep";
 import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
 import {
   bookAppointmentAction,
@@ -58,6 +61,9 @@ export default function AppointmentsListClient({
   confirmationStatusByAppointmentId,
   smsConfirmationStatusByAppointmentId,
   agentNameById,
+  prepStatusByAppointmentId,
+  feedbackStatusByAppointmentId,
+  prepSummary,
   reminderSettings,
   highlightId,
   initialClientFilter,
@@ -91,6 +97,13 @@ export default function AppointmentsListClient({
   // Assigned specialist's display name per appointment id (card field
   // "Agent name") - resolved server-side from leadgen_users.
   agentNameById?: Record<string, string>;
+  // Client Appointment Preparation (separate from the appointment status):
+  // prep status per appointment id (missing = Brief Not Prepared), the
+  // Feedback Pending/Received status for past appointments, and the compact
+  // "Appointment Prep" counts for upcoming appointments.
+  prepStatusByAppointmentId?: Record<string, PrepStatus>;
+  feedbackStatusByAppointmentId?: Record<string, FeedbackStatus>;
+  prepSummary?: PrepSummary;
   // Current leadgen_appointment_reminder_settings row (brief "ADMIN
   // SETTINGS").
   reminderSettings: LeadgenAppointmentReminderSettingsRow;
@@ -111,6 +124,7 @@ export default function AppointmentsListClient({
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(highlightId ?? null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [prepAppointmentId, setPrepAppointmentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const validInitialClient = initialClientFilter && clients.some((c) => c.id === initialClientFilter) ? initialClientFilter : "all";
@@ -337,7 +351,19 @@ export default function AppointmentsListClient({
         </select>
       </div>
 
+      {prepSummary && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-slate-600" aria-label="Appointment Prep summary">
+          <span className="font-semibold text-slate-800">Appointment Prep</span>
+          <span>{prepSummary.ready} Ready</span>
+          <span className={prepSummary.needsPreparation > 0 ? "font-semibold text-amber-700" : ""}>{prepSummary.needsPreparation} Needs Preparation</span>
+          <span>{prepSummary.sent} Sent</span>
+          <span>{prepSummary.viewed} Viewed</span>
+        </p>
+      )}
+
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      {prepAppointmentId && <AppointmentPrepModal appointmentId={prepAppointmentId} onClose={() => setPrepAppointmentId(null)} />}
 
       {showReminderSettings && (
         <section className="mt-4 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
@@ -575,6 +601,8 @@ export default function AppointmentsListClient({
                       >
                         {appt.status}
                       </span>
+                      {isPreparableAppointment(appt) && <PrepStatusBadge status={prepStatusByAppointmentId?.[appt.id] ?? "brief_not_prepared"} />}
+                      {feedbackStatusByAppointmentId?.[appt.id] && <FeedbackStatusBadge status={feedbackStatusByAppointmentId[appt.id]} />}
                       <span
                         title={appt.incentive_status_reason ?? undefined}
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -618,6 +646,15 @@ export default function AppointmentsListClient({
                     >
                       {editingId === appt.id ? "Close" : "Manage"}
                     </button>
+                    {isPreparableAppointment(appt) && (
+                      <button
+                        type="button"
+                        onClick={() => setPrepAppointmentId(appt.id)}
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                      >
+                        Prepare Appointment
+                      </button>
+                    )}
                     {appt.status !== "Cancelled" && appt.status !== "Replaced" && (
                       <button
                         type="button"

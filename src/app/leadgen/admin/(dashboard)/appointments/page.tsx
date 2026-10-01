@@ -9,7 +9,13 @@ import {
   fetchLeadgenImmediateSmsConfirmationStatusMap,
 } from "@/lib/leadgen-appointment-reminders";
 import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
+import { deriveFeedbackStatus, summarizePrep, type FeedbackStatus } from "@/lib/leadgen-appointment-prep";
+import { fetchFeedbackRows, fetchPrepStatusMap } from "@/lib/leadgen-appointment-prep-data";
 import AppointmentsListClient from "./AppointmentsListClient";
+
+function clientFilterRows(rows: LeadgenAppointmentRow[], clientId: string | undefined): LeadgenAppointmentRow[] {
+  return clientId ? rows.filter((r) => r.client_id === clientId) : rows;
+}
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -73,6 +79,20 @@ export default async function LeadgenAppointmentsPage({
     agentNameById[a.id] = a.full_name || a.email;
   }
 
+  // Client Appointment Preparation: separate prep/feedback status per
+  // appointment (never touches the appointment's own status).
+  const [prepStatusByAppointmentId, feedbackRows] = await Promise.all([fetchPrepStatusMap(admin), fetchFeedbackRows(admin)]);
+  const feedbackByAppointmentId = new Map(feedbackRows.map((f) => [f.appointment_id, f]));
+  const feedbackStatusByAppointmentId: Record<string, FeedbackStatus> = {};
+  for (const appt of appointmentRows) {
+    const status = deriveFeedbackStatus(appt, feedbackByAppointmentId.get(appt.id));
+    if (status) feedbackStatusByAppointmentId[appt.id] = status;
+  }
+  const prepSummary = summarizePrep(
+    clientFilterRows(appointmentRows, client),
+    prepStatusByAppointmentId
+  );
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Appointments</h1>
@@ -91,6 +111,9 @@ export default async function LeadgenAppointmentsPage({
         confirmationStatusByAppointmentId={confirmationStatusByAppointmentId}
         smsConfirmationStatusByAppointmentId={smsConfirmationStatusByAppointmentId}
         agentNameById={agentNameById}
+        prepStatusByAppointmentId={prepStatusByAppointmentId}
+        feedbackStatusByAppointmentId={feedbackStatusByAppointmentId}
+        prepSummary={prepSummary}
         reminderSettings={reminderSettings}
         highlightId={highlight}
         initialClientFilter={client}
