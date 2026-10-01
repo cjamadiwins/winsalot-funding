@@ -4,39 +4,26 @@ import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getResendClient } from "./resend";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getCrmPerformanceRecords } from "./crm-performance-data";
-import {
-  CRM_WEEKLY_CONSULTATIONS_TARGET,
-  CRM_WEEKLY_LEADS_ADDED_TARGET,
-  CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
-  CRM_PERFORMANCE_TIER_LABEL,
-  computeCrmPeriodPerformance,
-  crmDateKey,
-  crmPerformanceTier,
-} from "./crm-performance";
+import { crmDateKey } from "./crm-performance";
 import { crmWeekStartsInMonth } from "./crm-performance-history";
-import {
-  LEADGEN_WEEKLY_APPOINTMENT_TARGET,
-  leadgenCreditedAppointments,
-  leadgenDateKey,
-} from "./leadgen-performance";
+import { leadgenCreditedAppointments, type LeadgenPerformanceAppointment } from "./leadgen-performance";
 import { leadgenWeekStartsInMonth } from "./leadgen-performance-history";
-import type { LeadgenPerformanceAppointment } from "./leadgen-performance";
+import { countLeadgenAppointmentsInRange, type GrowthEmailRow, type GrowthFollowUpRow, type GrowthLeadOwnerRow, type ReportCallRow, type ReportFollowUpRow, type ReportLeadRow } from "./agent-performance-report-kpis";
+import {
+  countWeekdaysInclusive,
+  renderAgentPerformanceEmail,
+  renderAgentReportSection,
+  type AgentReportSection,
+} from "./agent-performance-report-email";
+import { buildAgentReportSections } from "./agent-weekly-report-job";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
-const LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
+const GROWTH_ADMIN_REPORT_URL = "https://growth.winsalotcorp.com/admin/crm/performance";
+const LEADGEN_ADMIN_REPORT_URL = "https://leads.winsalotcorp.com/leadgen/admin/performance";
 
-type AgentIdentity = {
-  id: string;
-  full_name: string | null;
-  email: string;
-};
-
-type Recipient = {
-  email: string;
-  name: string;
-  crmAgentId?: string;
-  leadgenAgentId?: string;
-};
+type AgentIdentity = { id: string; full_name: string | null; email: string };
+type Recipient = { email: string; name: string; crmAgentId?: string; leadgenAgentId?: string };
+type AgentSnapshot = { recipient: Recipient; sections: AgentReportSection[] };
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
@@ -48,15 +35,12 @@ function previousMonth(now: Date): { year: number; month: number; start: string;
   const month = currentMonth === 1 ? 12 : currentMonth - 1;
   const year = currentMonth === 1 ? currentYear - 1 : currentYear;
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const label = new Intl.DateTimeFormat("en-CA", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    new Date(Date.UTC(year, month - 1, 1))
-  );
   return {
     year,
     month,
     start: `${year}-${pad2(month)}-01`,
     end: `${year}-${pad2(month)}-${pad2(lastDay)}`,
-    label,
+    label: new Intl.DateTimeFormat("en-CA", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1))),
     key: `${year}-${pad2(month)}`,
   };
 }
@@ -67,140 +51,16 @@ export function isFirstWeekdayInToronto(now: Date = new Date()): boolean {
   return (day === 1 && weekday >= 1 && weekday <= 5) || ((day === 2 || day === 3) && weekday === 1);
 }
 
-function pct(value: number, goal: number): number {
-  return goal > 0 ? Math.round((value / goal) * 100) : 0;
+function safe(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] ?? character);
 }
 
-function statusLabel(percentage: number): string {
-  if (percentage >= 70) return "On Track";
-  if (percentage >= 40) return "Needs Improvement";
-  return "Behind Target";
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
-    return entities[character] ?? character;
-  });
-}
-
-function metricRow(label: string, value: number, goal: number): string {
-  return `<tr><td style="padding:9px 10px;border-bottom:1px solid #e2e8f0;color:#334155">${escapeHtml(label)}</td><td style="padding:9px 10px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#0f172a">${value}</td><td style="padding:9px 10px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b">${goal}</td><td style="padding:9px 10px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#2563eb">${pct(value, goal)}%</td></tr>`;
-}
-
-function section(title: string, rows: string, summary: string, link: string): string {
-  return `<div style="margin-top:24px;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden"><div style="padding:14px 16px;background:#f8fafc"><div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(title)}</div><div style="margin-top:4px;font-size:13px;color:#475569">${escapeHtml(summary)}</div></div><table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#fff"><th style="padding:9px 10px;text-align:left;color:#64748b">Metric</th><th style="padding:9px 10px;color:#64748b">Result</th><th style="padding:9px 10px;color:#64748b">Goal</th><th style="padding:9px 10px;color:#64748b">Rate</th></tr></thead><tbody>${rows}</tbody></table><div style="padding:12px 16px"><a href="${link}" style="color:#2563eb;font-weight:700;text-decoration:none">View full report →</a></div></div>`;
-}
-
-function buildEmail(input: {
-  recipient: Recipient;
-  monthLabel: string;
-  growth?: { consultations: number; leadsAdded: number; emailsDelivered: number; periodCount: number };
-  leadgen?: { booked: number; weekCount: number };
-}): { subject: string; html: string; text: string } {
-  const greetingName = input.recipient.name.trim().split(/\s+/)[0] || "Agent";
-  let sections = "";
-  const textLines = [`Hi ${greetingName},`, "", `Here is your Winsalot monthly performance report for ${input.monthLabel}.`, ""];
-
-  if (input.growth) {
-    const g = input.growth;
-    const goals = {
-      consultations: CRM_WEEKLY_CONSULTATIONS_TARGET * g.periodCount,
-      leadsAdded: CRM_WEEKLY_LEADS_ADDED_TARGET * g.periodCount,
-      emailsDelivered: CRM_WEEKLY_EMAILS_DELIVERED_TARGET * g.periodCount,
-    };
-    const overall = Math.round(
-      [pct(g.consultations, goals.consultations), pct(g.leadsAdded, goals.leadsAdded), pct(g.emailsDelivered, goals.emailsDelivered)]
-        .map((value) => Math.min(100, value))
-        .reduce((sum, value) => sum + value, 0) / 3
-    );
-    // Same gauge bands as the Growth CRM's Agent Performance Score
-    // (crmPerformanceTier: 0-39 Needs Improvement, 40-59 Fair, 60-79 Good,
-    // 80-100 Excellent) so this email's status word can never disagree
-    // with what the agent sees on the dashboard gauge for the same score.
-    const growthStatus = CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(overall)];
-    sections += section(
-      "Growth CRM",
-      metricRow("Consultations booked", g.consultations, goals.consultations) +
-        metricRow("Opportunity leads added", g.leadsAdded, goals.leadsAdded) +
-        metricRow("Emails delivered", g.emailsDelivered, goals.emailsDelivered),
-      `Overall: ${overall}% — ${growthStatus}`,
-      "https://growth.winsalotcorp.com/agent/performance/monthly"
-    );
-    textLines.push("Growth CRM", `Consultations: ${g.consultations}/${goals.consultations}`, `Opportunity leads added: ${g.leadsAdded}/${goals.leadsAdded}`, `Emails delivered: ${g.emailsDelivered}/${goals.emailsDelivered}`, `Overall: ${overall}% — ${growthStatus}`, "");
-  }
-
-  if (input.leadgen) {
-    const l = input.leadgen;
-    const goal = LEADGEN_WEEKLY_APPOINTMENT_TARGET * l.weekCount;
-    const percentage = pct(l.booked, goal);
-    sections += section(
-      "Lead Generation CRM",
-      metricRow("Appointments booked", l.booked, goal),
-      `Overall: ${percentage}% — ${statusLabel(percentage)}`,
-      "https://leads.winsalotcorp.com/leadgen/agent/performance/monthly"
-    );
-    textLines.push("Lead Generation CRM", `Appointments booked: ${l.booked}/${goal}`, `Overall: ${percentage}% — ${statusLabel(percentage)}`, "");
-  }
-
-  textLines.push("Thank you for your work.", "Winsalot Corp.");
-
+function buildAdminEmail(snapshots: AgentSnapshot[], monthLabel: string): { subject: string; html: string; text: string } {
+  const cards = snapshots.map(({ recipient, sections }) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-top:18px;border:1px solid #dbe3ee;border-radius:12px"><tr><td style="padding:12px 14px;background:#f7f9fc"><strong style="font-size:16px;color:#10213f">${safe(recipient.name)}</strong><div style="font-size:12px;color:#52627a">${safe(recipient.email)}</div></td></tr><tr><td style="padding:0 12px 12px">${sections.map((section) => renderAgentReportSection({ ...section, href: section.title === "Growth CRM" ? GROWTH_ADMIN_REPORT_URL : LEADGEN_ADMIN_REPORT_URL })).join("")}</td></tr></table>`).join("");
+  const text = [`Winsalot Corp. monthly agent performance summary — ${monthLabel}`, "", ...snapshots.flatMap(({ recipient, sections }) => [recipient.name, recipient.email, ...sections.flatMap((section) => [section.title, `Overall: ${section.overallPercentage}% — ${section.status}`, ...section.metrics.map((metric) => `${metric.label}: ${metric.result}`)]), ""])].join("\n");
   return {
-    subject: `Your Winsalot performance report — ${input.monthLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:680px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="text-align:center;margin-bottom:18px"><img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" /></div><h1 style="margin:10px 0 8px;font-size:25px;text-align:center">Monthly Agent Performance</h1><p style="margin:0;color:#475569">Hi ${escapeHtml(greetingName)}, here is your private performance report for <strong>${escapeHtml(input.monthLabel)}</strong>.</p>${sections}<p style="margin:24px 0 0;color:#475569;font-size:13px">Thank you for your work.<br><strong>Winsalot Corp.</strong></p></div></div></body></html>`,
-    text: textLines.join("\n"),
-  };
-}
-
-type AgentReportSnapshot = {
-  recipient: Recipient;
-  growth?: { consultations: number; leadsAdded: number; emailsDelivered: number; periodCount: number };
-  leadgen?: { booked: number; weekCount: number };
-};
-
-function buildAdminEmail(monthLabel: string, summaries: AgentReportSnapshot[]): { subject: string; html: string; text: string } {
-  const cards = summaries
-    .map((summary) => {
-      const growthGoals = summary.growth
-        ? {
-            consultations: CRM_WEEKLY_CONSULTATIONS_TARGET * summary.growth.periodCount,
-            leadsAdded: CRM_WEEKLY_LEADS_ADDED_TARGET * summary.growth.periodCount,
-            emailsDelivered: CRM_WEEKLY_EMAILS_DELIVERED_TARGET * summary.growth.periodCount,
-          }
-        : undefined;
-      const leadgenGoal = summary.leadgen ? LEADGEN_WEEKLY_APPOINTMENT_TARGET * summary.leadgen.weekCount : undefined;
-      const growthRows =
-        summary.growth && growthGoals
-          ? metricRow("Growth consultations", summary.growth.consultations, growthGoals.consultations) +
-            metricRow("Growth opportunity leads added", summary.growth.leadsAdded, growthGoals.leadsAdded) +
-            metricRow("Growth emails delivered", summary.growth.emailsDelivered, growthGoals.emailsDelivered)
-          : "";
-      const leadgenRows =
-        summary.leadgen && leadgenGoal !== undefined
-          ? metricRow("Lead Gen appointments", summary.leadgen.booked, leadgenGoal)
-          : "";
-      return `<div style="margin-top:20px;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden"><div style="padding:14px 16px;background:#f8fafc"><div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(summary.recipient.name)}</div><div style="margin-top:3px;font-size:12px;color:#64748b">${escapeHtml(summary.recipient.email)}</div></div><table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:9px 10px;text-align:left;color:#64748b">Metric</th><th style="padding:9px 10px;color:#64748b">Result</th><th style="padding:9px 10px;color:#64748b">Goal</th><th style="padding:9px 10px;color:#64748b">Rate</th></tr></thead><tbody>${growthRows}${leadgenRows}</tbody></table></div>`;
-    })
-    .join("");
-
-  const text = [
-    `Winsalot monthly agent summary — ${monthLabel}`,
-    "",
-    ...summaries.flatMap((summary) => {
-      const lines = [summary.recipient.name, summary.recipient.email];
-      if (summary.growth) {
-        lines.push(
-          `Growth: ${summary.growth.consultations} consultations, ${summary.growth.leadsAdded} opportunity leads added, ${summary.growth.emailsDelivered} emails delivered`
-        );
-      }
-      if (summary.leadgen) lines.push(`Lead Generation: ${summary.leadgen.booked} appointments booked`);
-      return [...lines, ""];
-    }),
-  ].join("\n");
-
-  return {
-    subject: `Admin summary: Winsalot agent performance — ${monthLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:760px;margin:0 auto;padding:28px 14px"><div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)"><div style="text-align:center;margin-bottom:18px"><img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" /></div><h1 style="margin:10px 0 8px;font-size:25px;text-align:center">Monthly Agent Summary</h1><p style="margin:0;color:#475569">Administrative overview for <strong>${escapeHtml(monthLabel)}</strong>. Each agent received a separate private report containing only their own results.</p>${cards}<p style="margin:24px 0 0;color:#475569;font-size:13px"><a href="https://growth.winsalotcorp.com/admin/crm/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Growth performance reports →</a><br><a href="https://leads.winsalotcorp.com/leadgen/admin/performance" style="color:#2563eb;font-weight:700;text-decoration:none">Open Lead Generation performance reports →</a></p></div></div></body></html>`,
+    subject: `Admin summary: Monthly Agent Performance — ${monthLabel}`,
+    html: `<!doctype html><html><body style="margin:0;background:#f1f4f8;font-family:Arial,Helvetica,sans-serif;color:#10213f"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f8"><tr><td align="center" style="padding:18px 10px"><table role="presentation" width="720" style="width:100%;max-width:720px;background:#fff;padding:22px;border-radius:16px"><tr><td><img src="https://growth.winsalotcorp.com/winsalot-logo.png" alt="Winsalot Corp." width="175" style="max-width:100%;height:auto;border:0"></td></tr><tr><td><h1 style="font-size:24px;margin:16px 0 5px">Monthly Agent Performance Summary</h1><p style="color:#52627a;margin:0">Administrative overview for ${safe(monthLabel)}. Each agent received a separate private report.</p>${cards}<p style="font-size:12px;color:#52627a;text-align:center">Winsalot Corp. | Empowering Businesses, One Solution at a Time.</p></td></tr></table></td></tr></table></body></html>`,
     text,
   };
 }
@@ -209,117 +69,86 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
   const now = options.now ?? new Date();
   const reportMonth = previousMonth(now);
   const admin = getSupabaseAdmin();
-
-  const [{ data: crmAgents }, { data: leadgenAgents }, recordsResult, { data: appointments }] = await Promise.all([
+  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
-    admin.from("leadgen_appointments").select("id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("leadgen_appointments").select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("leadgen_call_logs").select("agent_id, created_at"),
+    admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
+    admin.from("leadgen_followups").select("agent_id, scheduled_at, status"),
+    admin.from("leadgen_leads").select("assigned_agent_id, status, created_at"),
+    admin.from("crm_lead_emails").select("agent_id, sent_at, delivered_at").in("email_type", ["follow_up", "consultation_invite"]).not("agent_id", "is", null),
+    admin.from("crm_followups").select("lead_id, opportunity_id, scheduled_at, status").eq("status", "pending"),
+    admin.from("crm_leads").select("id, assigned_agent_id"),
   ]);
 
   const recipients = new Map<string, Recipient>();
-  for (const agent of (crmAgents ?? []) as AgentIdentity[]) {
+  for (const agent of (agentsResult.data ?? []) as AgentIdentity[]) {
     const email = agent.email.trim().toLowerCase();
-    if (!email) continue;
-    recipients.set(email, { email, name: agent.full_name || agent.email, crmAgentId: agent.id });
+    if (email) recipients.set(email, { email, name: agent.full_name || agent.email, crmAgentId: agent.id });
   }
-  for (const agent of (leadgenAgents ?? []) as AgentIdentity[]) {
+  for (const agent of (leadgenAgentsResult.data ?? []) as AgentIdentity[]) {
     const email = agent.email.trim().toLowerCase();
     if (!email) continue;
     const current = recipients.get(email);
     recipients.set(email, { email, name: current?.name || agent.full_name || agent.email, crmAgentId: current?.crmAgentId, leadgenAgentId: agent.id });
   }
 
-  const records = recordsResult;
-  const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
   const growthPeriodCount = crmWeekStartsInMonth(reportMonth.year, reportMonth.month).length;
   const leadgenWeekCount = leadgenWeekStartsInMonth(reportMonth.year, reportMonth.month).length;
+  const validAppointments = (appointmentsResult.data ?? []) as LeadgenPerformanceAppointment[];
+  const snapshots: AgentSnapshot[] = [];
   const results: Array<{ email: string; outcome: "sent" | "dry-run" | "failed"; resendId?: string; error?: string }> = [];
-  const adminSummaries: AgentReportSnapshot[] = [];
+  const weekdays = countWeekdaysInclusive(reportMonth.start, reportMonth.end);
 
   for (const recipient of recipients.values()) {
-    const growthPeriod = recipient.crmAgentId
-      ? computeCrmPeriodPerformance(records, recipient.crmAgentId, reportMonth.start, reportMonth.end)
-      : undefined;
     const leadgenBooked = recipient.leadgenAgentId
-      ? leadgenCreditedAppointments(allAppointments, recipient.leadgenAgentId).filter((appointment) => {
-          const date = leadgenDateKey(appointment.created_at);
-          return date >= reportMonth.start && date <= reportMonth.end;
-        }).length
+      ? countLeadgenAppointmentsInRange(leadgenCreditedAppointments(validAppointments, recipient.leadgenAgentId), recipient.leadgenAgentId, reportMonth.start, reportMonth.end)
       : undefined;
-
-    const snapshot: AgentReportSnapshot = {
-      recipient,
-      growth: growthPeriod
-        ? {
-            consultations: growthPeriod.consultationsBooked,
-            leadsAdded: growthPeriod.leadsAdded,
-            emailsDelivered: growthPeriod.emailsDelivered,
-            periodCount: growthPeriodCount,
-          }
-        : undefined,
-      leadgen: leadgenBooked === undefined ? undefined : { booked: leadgenBooked, weekCount: leadgenWeekCount },
-    };
-    adminSummaries.push(snapshot);
-    const email = buildEmail({ ...snapshot, monthLabel: reportMonth.label });
-
+    const sections = buildAgentReportSections({
+      crmAgentId: recipient.crmAgentId,
+      leadgenAgentId: recipient.leadgenAgentId,
+      start: reportMonth.start,
+      end: reportMonth.end,
+      growthRecords,
+      leadgenAppointments: validAppointments,
+      leadgenBooked,
+      growthGoalWeeks: growthPeriodCount,
+      leadgenGoalWeeks: leadgenWeekCount,
+      callLogs: (callLogsResult.data ?? []) as ReportCallRow[],
+      leadgenEmails: (leadgenEmailsResult.data ?? []).map((row) => ({ agent_id: row.sent_by, sent_at: row.sent_at, delivered_at: row.delivered_at })),
+      leadgenFollowUps: (leadgenFollowUpsResult.data ?? []) as ReportFollowUpRow[],
+      leadgenLeads: (leadgenLeadsResult.data ?? []) as ReportLeadRow[],
+      growthEmails: (growthEmailsResult.data ?? []) as GrowthEmailRow[],
+      growthFollowUps: (growthFollowUpsResult.data ?? []) as GrowthFollowUpRow[],
+      growthLeads: (growthLeadsResult.data ?? []) as GrowthLeadOwnerRow[],
+    });
+    snapshots.push({ recipient, sections });
     if (options.dryRun) {
       results.push({ email: recipient.email, outcome: "dry-run" });
       continue;
     }
-
-    const { data, error } = await getResendClient().emails.send(
-      {
-        from: getEmailSender("growth"),
-        to: recipient.email,
-        replyTo: getEmailReplyTo(),
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-        tags: [
-          { name: "category", value: "agent-monthly-report" },
-          { name: "report_month", value: reportMonth.key },
-        ],
-      },
-      { idempotencyKey: `agent-monthly-report-${reportMonth.key}-${recipient.email.replace(/[^a-z0-9]+/g, "-")}` }
-    );
-
+    const email = renderAgentPerformanceEmail({ recipientName: recipient.name, periodTitle: "Monthly Agent Performance", periodLabel: reportMonth.label, monthly: true, sections });
+    const { data, error } = await getResendClient().emails.send({
+      from: getEmailSender("growth"), to: recipient.email, replyTo: getEmailReplyTo(), subject: email.subject, html: email.html, text: email.text,
+      tags: [{ name: "category", value: "agent-monthly-report" }, { name: "report_month", value: reportMonth.key }],
+    }, { idempotencyKey: `agent-monthly-report-${reportMonth.key}-${recipient.email.replace(/[^a-z0-9]+/g, "-")}` });
     if (error) results.push({ email: recipient.email, outcome: "failed", error: error.message });
     else results.push({ email: recipient.email, outcome: "sent", resendId: data?.id });
   }
 
   const adminEmailAddress = (process.env.AGENT_REPORT_ADMIN_EMAIL || "info@winsalotcorp.com").trim().toLowerCase();
-  const adminEmail = buildAdminEmail(reportMonth.label, adminSummaries);
-  if (options.dryRun) {
-    results.push({ email: adminEmailAddress, outcome: "dry-run" });
-  } else {
-    const { data, error } = await getResendClient().emails.send(
-      {
-        from: getEmailSender("growth"),
-        to: adminEmailAddress,
-        replyTo: getEmailReplyTo(),
-        subject: adminEmail.subject,
-        html: adminEmail.html,
-        text: adminEmail.text,
-        tags: [
-          { name: "category", value: "admin-monthly-agent-summary" },
-          { name: "report_month", value: reportMonth.key },
-        ],
-      },
-      { idempotencyKey: `admin-monthly-agent-summary-${reportMonth.key}` }
-    );
+  const adminEmail = buildAdminEmail(snapshots, reportMonth.label);
+  if (options.dryRun) results.push({ email: adminEmailAddress, outcome: "dry-run" });
+  else {
+    const { data, error } = await getResendClient().emails.send({
+      from: getEmailSender("growth"), to: adminEmailAddress, replyTo: getEmailReplyTo(), subject: adminEmail.subject, html: adminEmail.html, text: adminEmail.text,
+      tags: [{ name: "category", value: "admin-monthly-agent-summary" }, { name: "report_month", value: reportMonth.key }],
+    }, { idempotencyKey: `admin-monthly-agent-summary-${reportMonth.key}` });
     if (error) results.push({ email: adminEmailAddress, outcome: "failed", error: error.message });
     else results.push({ email: adminEmailAddress, outcome: "sent", resendId: data?.id });
   }
 
-  return {
-    reportMonth: reportMonth.key,
-    agentRecipientCount: recipients.size,
-    adminRecipient: adminEmailAddress,
-    recipientCount: recipients.size + 1,
-    sent: results.filter((result) => result.outcome === "sent").length,
-    failed: results.filter((result) => result.outcome === "failed").length,
-    dryRun: !!options.dryRun,
-    results,
-  };
+  return { reportMonth: reportMonth.key, workingDays: weekdays, growthGoalWeeks: growthPeriodCount, leadgenGoalWeeks: leadgenWeekCount, agentRecipientCount: recipients.size, adminRecipient: adminEmailAddress, recipientCount: recipients.size + 1, sent: results.filter((result) => result.outcome === "sent").length, failed: results.filter((result) => result.outcome === "failed").length, dryRun: !!options.dryRun, results };
 }

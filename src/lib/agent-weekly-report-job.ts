@@ -9,9 +9,10 @@ import {
   CRM_WEEKLY_CONSULTATIONS_TARGET,
   CRM_WEEKLY_EMAILS_DELIVERED_TARGET,
   CRM_WEEKLY_LEADS_ADDED_TARGET,
-  computeCrmAgentPerformance,
+  computeCrmPeriodPerformance,
   crmDateKey,
   crmPerformanceTier,
+  crmWeekStartOf,
   crmWeeklyRangeLabel,
 } from "./crm-performance";
 import {
@@ -20,73 +21,43 @@ import {
   computeLeadgenAgentPerformance,
   leadgenDateKey,
   leadgenPerformanceTier,
-  leadgenWeekRangeLabel,
   type LeadgenPerformanceAppointment,
 } from "./leadgen-performance";
+import { LEADGEN_DAILY_CALL_TARGET, LEADGEN_DAILY_EMAIL_TARGET } from "./leadgen-agent-kpi";
 import {
-  LEADGEN_WEEKLY_CALL_TARGET,
-  LEADGEN_WEEKLY_EMAIL_TARGET,
-  computeLeadgenAgentActivityKpis,
-  type LeadgenKpiCallLogRow,
-  type LeadgenKpiEmailRow,
-} from "./leadgen-agent-kpi";
+  computeGrowthReportActivity,
+  computeLeadgenReportActivity,
+  type GrowthEmailRow,
+  type GrowthFollowUpRow,
+  type GrowthLeadOwnerRow,
+  type ReportCallRow,
+  type ReportEmailRow,
+  type ReportFollowUpRow,
+  type ReportLeadRow,
+} from "./agent-performance-report-kpis";
+import {
+  countWeekdaysInclusive,
+  renderAgentPerformanceEmail,
+  renderAgentReportSection,
+  type AgentReportSection,
+} from "./agent-performance-report-email";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
-const LOGO_URL = "https://growth.winsalotcorp.com/winsalot-logo.png";
+const GROWTH_AGENT_REPORT_URL = "https://growth.winsalotcorp.com/agent/performance";
+const LEADGEN_AGENT_REPORT_URL = "https://leads.winsalotcorp.com/leadgen/agent/performance";
+const GROWTH_ADMIN_REPORT_URL = "https://growth.winsalotcorp.com/admin/crm/performance";
+const LEADGEN_ADMIN_REPORT_URL = "https://leads.winsalotcorp.com/leadgen/admin/performance";
 
-type AgentIdentity = {
-  id: string;
-  full_name: string | null;
-  email: string;
-};
+type AgentIdentity = { id: string; full_name: string | null; email: string };
+type Recipient = { email: string; name: string; crmAgentId?: string; leadgenAgentId?: string };
+type AgentSnapshot = { recipient: Recipient; sections: AgentReportSection[] };
 
-type Recipient = {
-  email: string;
-  name: string;
-  crmAgentId?: string;
-  leadgenAgentId?: string;
-};
-
-type WeeklyAgentSnapshot = {
-  recipient: Recipient;
-  growth?: ReturnType<typeof computeCrmAgentPerformance>["current"];
-  leadgen?: ReturnType<typeof computeLeadgenAgentPerformance>;
-  leadgenActivity?: ReturnType<typeof computeLeadgenAgentActivityKpis>;
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
-    return entities[character] ?? character;
-  });
+function pct(value: number, goal: number): number {
+  return goal > 0 ? Math.round((value / goal) * 100) : 0;
 }
 
-function metricRow(label: string, result: number, goal: number, rate: number): string {
-  return `<tr>
-    <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:#334155">${escapeHtml(label)}</td>
-    <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#0f172a">${result}</td>
-    <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b">${goal}</td>
-    <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#2563eb">${rate}%</td>
-  </tr>`;
-}
-
-function section(title: string, summary: string, rows: string, href: string): string {
-  return `<div style="margin-top:22px;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden">
-    <div style="padding:14px 16px;background:#f8fafc">
-      <div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(title)}</div>
-      <div style="margin-top:4px;font-size:13px;color:#475569">${escapeHtml(summary)}</div>
-    </div>
-    <table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr>
-        <th style="padding:9px 10px;text-align:left;color:#64748b">Metric</th>
-        <th style="padding:9px 10px;color:#64748b">Result</th>
-        <th style="padding:9px 10px;color:#64748b">Goal</th>
-        <th style="padding:9px 10px;color:#64748b">Rate</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="padding:12px 16px"><a href="${href}" style="color:#2563eb;font-weight:700;text-decoration:none">View full report →</a></div>
-  </div>`;
+function safe(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] ?? character);
 }
 
 export function isFridayInToronto(now: Date = new Date()): boolean {
@@ -95,277 +66,188 @@ export function isFridayInToronto(now: Date = new Date()): boolean {
   return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay() === 5;
 }
 
-function buildEmail(input: {
-  recipient: Recipient;
-  growth?: ReturnType<typeof computeCrmAgentPerformance>["current"];
-  leadgen?: ReturnType<typeof computeLeadgenAgentPerformance>;
-  leadgenActivity?: ReturnType<typeof computeLeadgenAgentActivityKpis>;
-}): { subject: string; html: string; text: string } {
-  const greetingName = input.recipient.name.trim().split(/\s+/)[0] || "Agent";
-  const weekStart = input.growth?.periodStart ?? input.leadgen?.weekStart ?? crmDateKey(new Date());
-  const weekEnd = input.growth?.periodEnd ?? input.leadgen?.weekEnd ?? weekStart;
-  const rangeLabel = input.growth
-    ? crmWeeklyRangeLabel(weekStart, weekEnd)
-    : input.leadgen
-      ? leadgenWeekRangeLabel(weekStart, weekEnd)
-      : weekStart;
+export function buildAgentReportSections(input: {
+  crmAgentId?: string;
+  leadgenAgentId?: string;
+  start: string;
+  end: string;
+  growthRecords: Awaited<ReturnType<typeof getCrmPerformanceRecords>>;
+  leadgenAppointments: LeadgenPerformanceAppointment[];
+  callLogs: ReportCallRow[];
+  leadgenEmails: ReportEmailRow[];
+  leadgenFollowUps: ReportFollowUpRow[];
+  leadgenLeads: ReportLeadRow[];
+  growthEmails: GrowthEmailRow[];
+  growthFollowUps: GrowthFollowUpRow[];
+  growthLeads: GrowthLeadOwnerRow[];
+  growthGoalWeeks?: number;
+  leadgenGoalWeeks?: number;
+  leadgenBooked?: number;
+}): AgentReportSection[] {
+  const workingDays = countWeekdaysInclusive(input.start, input.end);
+  const growthGoalWeeks = input.growthGoalWeeks ?? 1;
+  const leadgenGoalWeeks = input.leadgenGoalWeeks ?? 1;
+  const sections: AgentReportSection[] = [];
 
-  let sections = "";
-  const textLines = [
-    `Hi ${greetingName},`,
-    "",
-    `Here is your Winsalot weekly performance report for ${rangeLabel}.`,
-    "",
-  ];
-
-  if (input.growth) {
-    const g = input.growth;
-    const status = CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(g.overallPercentage)];
-    sections += section(
-      "Growth CRM",
-      `Overall: ${g.overallPercentage}% — ${status}`,
-      metricRow("Consultations booked", g.consultationsBooked, CRM_WEEKLY_CONSULTATIONS_TARGET, g.consultationsPercentage) +
-        metricRow("Opportunity leads added", g.leadsAdded, CRM_WEEKLY_LEADS_ADDED_TARGET, g.leadsAddedPercentage) +
-        metricRow("Emails delivered", g.emailsDelivered, CRM_WEEKLY_EMAILS_DELIVERED_TARGET, g.emailsDeliveredPercentage),
-      "https://growth.winsalotcorp.com/agent/performance"
-    );
-    textLines.push(
-      "Growth CRM",
-      `Consultations booked: ${g.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}`,
-      `Opportunity leads added: ${g.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}`,
-      `Emails delivered: ${g.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}`,
-      `Overall: ${g.overallPercentage}% — ${status}`,
-      ""
-    );
+  if (input.crmAgentId) {
+    const growth = computeCrmPeriodPerformance(input.growthRecords, input.crmAgentId, input.start, input.end);
+    const consultationGoal = CRM_WEEKLY_CONSULTATIONS_TARGET * growthGoalWeeks;
+    const leadGoal = CRM_WEEKLY_LEADS_ADDED_TARGET * growthGoalWeeks;
+    const deliveredGoal = CRM_WEEKLY_EMAILS_DELIVERED_TARGET * growthGoalWeeks;
+    const consultationRate = Math.min(100, pct(growth.consultationsBooked, consultationGoal));
+    const leadRate = Math.min(100, pct(growth.leadsAdded, leadGoal));
+    const deliveredRate = Math.min(100, pct(growth.emailsDelivered, deliveredGoal));
+    const growthScore = Math.round((consultationRate + leadRate + deliveredRate) / 3);
+    const activity = computeGrowthReportActivity({
+      agentId: input.crmAgentId,
+      start: input.start,
+      end: input.end,
+      emails: input.growthEmails,
+      followUps: input.growthFollowUps,
+      leads: input.growthLeads,
+      opportunityOwners: new Map(input.growthRecords.map((record) => [record.opportunityId, record.assignedAgentId] as const)),
+    });
+    sections.push({
+      title: "Growth CRM",
+      overallPercentage: growthScore,
+      status: CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growthScore)],
+      href: GROWTH_AGENT_REPORT_URL,
+      metrics: [
+        { label: "Consultations booked", result: growth.consultationsBooked, goal: consultationGoal, rate: consultationRate },
+        { label: "Opportunity leads added", result: growth.leadsAdded, goal: leadGoal, rate: leadRate },
+        { label: "Emails sent", result: activity.emailsSent, goal: null, rate: null, informational: true },
+        { label: "Emails delivered", result: growth.emailsDelivered, goal: deliveredGoal, rate: deliveredRate },
+        { label: "Email delivery rate", result: activity.emailDeliveryRate == null ? "—" : `${activity.emailDeliveryRate}%`, goal: null, rate: activity.emailDeliveryRate, informational: true },
+        { label: "Follow-ups due", result: activity.followUpsDue, goal: null, rate: null, informational: true },
+      ],
+    });
   }
 
-  if (input.leadgen) {
-    const l = input.leadgen;
-    const status = LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(l.percentage)];
-    sections += section(
-      "Lead Generation CRM",
-      `Overall: ${l.percentage}% — ${status}`,
-      metricRow("Appointments booked", l.bookedThisWeek, LEADGEN_WEEKLY_APPOINTMENT_TARGET, l.percentage) +
-        (input.leadgenActivity
-          ? metricRow("Calls logged", input.leadgenActivity.callsThisWeek, LEADGEN_WEEKLY_CALL_TARGET, input.leadgenActivity.weeklyCallProgressPct) +
-            metricRow("Emails sent", input.leadgenActivity.emailsThisWeek, LEADGEN_WEEKLY_EMAIL_TARGET, input.leadgenActivity.weeklyEmailProgressPct)
-          : ""),
-      "https://leads.winsalotcorp.com/leadgen/agent/performance"
-    );
-    textLines.push(
-      "Lead Generation CRM",
-      `Appointments booked: ${l.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}`,
-      ...(input.leadgenActivity
-        ? [
-            `Calls logged: ${input.leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}`,
-            `Emails sent: ${input.leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}`,
-          ]
-        : []),
-      `Overall: ${l.percentage}% — ${status}`,
-      ""
-    );
+  if (input.leadgenAgentId) {
+    const leadgen = computeLeadgenAgentPerformance(input.leadgenAppointments, input.leadgenAgentId, new Date(`${input.end}T12:00:00Z`));
+    const activity = computeLeadgenReportActivity({
+      agentId: input.leadgenAgentId,
+      start: input.start,
+      end: input.end,
+      calls: input.callLogs,
+      emails: input.leadgenEmails,
+      followUps: input.leadgenFollowUps,
+      leads: input.leadgenLeads,
+    });
+    const booked = input.leadgenBooked ?? leadgen.bookedThisWeek;
+    const appointmentGoal = LEADGEN_WEEKLY_APPOINTMENT_TARGET * leadgenGoalWeeks;
+    const appointmentRate = input.leadgenBooked === undefined ? leadgen.percentage : pct(booked, appointmentGoal);
+    const emailGoal = LEADGEN_DAILY_EMAIL_TARGET * workingDays;
+    sections.push({
+      title: "Lead Generation CRM",
+      overallPercentage: appointmentRate,
+      status: LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(appointmentRate)],
+      href: LEADGEN_AGENT_REPORT_URL,
+      metrics: [
+        { label: "Calls completed", result: activity.calls, goal: LEADGEN_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, LEADGEN_DAILY_CALL_TARGET * workingDays) },
+        { label: "Emails sent", result: activity.emailsSent, goal: emailGoal, rate: pct(activity.emailsSent, emailGoal) },
+        { label: "Emails delivered", result: activity.emailsDelivered, goal: null, rate: null, informational: true },
+        { label: "Email delivery rate", result: activity.emailDeliveryRate == null ? "—" : `${activity.emailDeliveryRate}%`, goal: null, rate: activity.emailDeliveryRate, informational: true },
+        { label: "Interested / qualified leads", result: activity.interestedLeads, goal: null, rate: null, informational: true },
+        { label: "Follow-ups due", result: activity.followUpsDue, goal: null, rate: null, informational: true },
+        { label: "Appointments booked", result: booked, goal: appointmentGoal, rate: appointmentRate },
+      ],
+    });
   }
-
-  textLines.push(
-    "Keep your follow-ups current, focus on qualified decision-makers, and work toward the weekly targets.",
-    "",
-    "Thank you for your work.",
-    "Winsalot Corp."
-  );
-
-  return {
-    subject: `Your Winsalot weekly performance report — ${rangeLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
-      <div style="max-width:680px;margin:0 auto;padding:28px 14px">
-        <div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)">
-          <div style="text-align:center;margin-bottom:18px">
-            <img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" />
-          </div>
-          <h1 style="margin:0 0 8px;font-size:25px;text-align:center">Weekly Agent Performance</h1>
-          <p style="margin:0;text-align:center;color:#475569">Hi ${escapeHtml(greetingName)}, here is your private performance report for <strong>${escapeHtml(rangeLabel)}</strong>.</p>
-          ${sections}
-          <div style="margin-top:22px;padding:14px 16px;border-radius:12px;background:#eff6ff;color:#1e3a8a;font-size:13px">
-            Keep your follow-ups current, focus on qualified decision-makers, and work toward the weekly targets.
-          </div>
-          <p style="margin:24px 0 0;color:#475569;font-size:13px">Thank you for your work.<br><strong>Winsalot Corp.</strong><br>Empowering Businesses, One Solution at a Time.</p>
-        </div>
-      </div>
-    </body></html>`,
-    text: textLines.join("\n"),
-  };
+  return sections;
 }
 
-
-function buildAdminEmail(input: {
-  snapshots: WeeklyAgentSnapshot[];
-  rangeLabel: string;
-}): { subject: string; html: string; text: string } {
-  const cards = input.snapshots
-    .map(({ recipient, growth, leadgen, leadgenActivity }) => {
-      const growthBlock = growth
-        ? `<div style="margin-top:12px"><strong>Growth CRM</strong><br>Consultations: ${growth.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET}<br>Opportunity leads added: ${growth.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET}<br>Emails delivered: ${growth.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET}<br>Overall: ${growth.overallPercentage}% — ${escapeHtml(CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growth.overallPercentage)])}</div>`
-        : "";
-      const leadgenBlock = leadgen
-        ? `<div style="margin-top:12px"><strong>Lead Generation CRM</strong><br>Appointments booked: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET}${leadgenActivity ? `<br>Calls logged: ${leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}<br>Emails sent: ${leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}` : ""}<br>Overall: ${leadgen.percentage}% — ${escapeHtml(LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(leadgen.percentage)])}</div>`
-        : "";
-      return `<div style="margin-top:16px;border:1px solid #dbe4ee;border-radius:14px;padding:16px"><div style="font-size:17px;font-weight:800;color:#0f172a">${escapeHtml(recipient.name)}</div><div style="margin-top:3px;font-size:12px;color:#64748b">${escapeHtml(recipient.email)}</div>${growthBlock}${leadgenBlock}</div>`;
-    })
-    .join("");
-
-  const textLines = [
-    `Winsalot weekly agent performance summary — ${input.rangeLabel}`,
-    "",
-    ...input.snapshots.flatMap(({ recipient, growth, leadgen, leadgenActivity }) => {
-      const lines = [recipient.name, recipient.email];
-      if (growth) {
-        lines.push(
-          `Growth: ${growth.consultationsBooked}/${CRM_WEEKLY_CONSULTATIONS_TARGET} consultations, ${growth.leadsAdded}/${CRM_WEEKLY_LEADS_ADDED_TARGET} opportunity leads, ${growth.emailsDelivered}/${CRM_WEEKLY_EMAILS_DELIVERED_TARGET} emails delivered, ${growth.overallPercentage}% overall`
-        );
-      }
-      if (leadgen) {
-        lines.push(`Lead Generation: ${leadgen.bookedThisWeek}/${LEADGEN_WEEKLY_APPOINTMENT_TARGET} appointments, ${leadgen.percentage}% overall`);
-        if (leadgenActivity) {
-          lines.push(`Lead Generation calls: ${leadgenActivity.callsThisWeek}/${LEADGEN_WEEKLY_CALL_TARGET}`);
-          lines.push(`Lead Generation emails sent: ${leadgenActivity.emailsThisWeek}/${LEADGEN_WEEKLY_EMAIL_TARGET}`);
-        }
-      }
-      return [...lines, ""];
-    }),
-  ];
-
+function buildAdminEmail(snapshots: AgentSnapshot[], rangeLabel: string): { subject: string; html: string; text: string } {
+  const cards = snapshots.map(({ recipient, sections }) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-top:18px;border:1px solid #dbe3ee;border-radius:12px"><tr><td style="padding:12px 14px;background:#f7f9fc"><strong style="font-size:16px;color:#10213f">${safe(recipient.name)}</strong><div style="font-size:12px;color:#52627a">${safe(recipient.email)}</div></td></tr><tr><td style="padding:0 12px 12px">${sections.map((section) => renderAgentReportSection({ ...section, href: section.title === "Growth CRM" ? GROWTH_ADMIN_REPORT_URL : LEADGEN_ADMIN_REPORT_URL })).join("")}</td></tr></table>`).join("");
+  const text = [`Winsalot Corp. weekly agent performance summary — ${rangeLabel}`, "", ...snapshots.flatMap(({ recipient, sections }) => [recipient.name, recipient.email, ...sections.flatMap((section) => [section.title, `Overall: ${section.overallPercentage}% — ${section.status}`, ...section.metrics.map((metric) => `${metric.label}: ${metric.result}`)]), ""])].join("\n");
   return {
-    subject: `Admin summary: Winsalot weekly agent performance — ${input.rangeLabel}`,
-    html: `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
-      <div style="max-width:760px;margin:0 auto;padding:28px 14px">
-        <div style="background:#ffffff;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(15,23,42,.08)">
-          <div style="text-align:center;margin-bottom:18px">
-            <img src="${LOGO_URL}" alt="Winsalot Corp." width="150" style="display:inline-block;max-width:150px;height:auto;border:0" />
-          </div>
-          <h1 style="margin:0 0 8px;font-size:25px;text-align:center">Weekly Admin Performance Summary</h1>
-          <p style="margin:0;text-align:center;color:#475569">All active agent results for <strong>${escapeHtml(input.rangeLabel)}</strong>.</p>
-          ${cards}
-          <p style="margin:24px 0 0;color:#475569;font-size:13px"><strong>Winsalot Corp.</strong><br>Empowering Businesses, One Solution at a Time.</p>
-        </div>
-      </div>
-    </body></html>`,
-    text: textLines.join("\n"),
+    subject: `Admin summary: Weekly Agent Performance — ${rangeLabel}`,
+    html: `<!doctype html><html><body style="margin:0;background:#f1f4f8;font-family:Arial,Helvetica,sans-serif;color:#10213f"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f4f8"><tr><td align="center" style="padding:18px 10px"><table role="presentation" width="720" style="width:100%;max-width:720px;background:#fff;padding:22px;border-radius:16px"><tr><td><img src="https://growth.winsalotcorp.com/winsalot-logo.png" alt="Winsalot Corp." width="175" style="max-width:100%;height:auto;border:0"></td></tr><tr><td><h1 style="font-size:24px;margin:16px 0 5px">Weekly Agent Performance Summary</h1><p style="color:#52627a;margin:0">All active agents for ${safe(rangeLabel)}. Each agent received a separate private report.</p>${cards}<p style="font-size:12px;color:#52627a;text-align:center">Winsalot Corp. | Empowering Businesses, One Solution at a Time.</p></td></tr></table></td></tr></table></body></html>`,
+    text,
   };
 }
 
 export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?: Date } = {}) {
   const now = options.now ?? new Date();
   const admin = getSupabaseAdmin();
-
-  const [{ data: crmAgents }, { data: leadgenAgents }, recordsResult, { data: appointments }, { data: callLogs }, { data: leadgenEmails }] = await Promise.all([
+  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
-    admin
-      .from("leadgen_appointments")
-      .select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("leadgen_appointments").select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
     admin.from("leadgen_call_logs").select("agent_id, created_at"),
     admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
+    admin.from("leadgen_followups").select("agent_id, scheduled_at, status"),
+    admin.from("leadgen_leads").select("assigned_agent_id, status, created_at"),
+    admin.from("crm_lead_emails").select("agent_id, sent_at, delivered_at").in("email_type", ["follow_up", "consultation_invite"]).not("agent_id", "is", null),
+    admin.from("crm_followups").select("lead_id, opportunity_id, scheduled_at, status").eq("status", "pending"),
+    admin.from("crm_leads").select("id, assigned_agent_id"),
   ]);
 
   const recipients = new Map<string, Recipient>();
-  for (const agent of (crmAgents ?? []) as AgentIdentity[]) {
+  for (const agent of (agentsResult.data ?? []) as AgentIdentity[]) {
     const email = agent.email.trim().toLowerCase();
-    if (!email) continue;
-    recipients.set(email, { email, name: agent.full_name || agent.email, crmAgentId: agent.id });
+    if (email) recipients.set(email, { email, name: agent.full_name || agent.email, crmAgentId: agent.id });
   }
-  for (const agent of (leadgenAgents ?? []) as AgentIdentity[]) {
+  for (const agent of (leadgenAgentsResult.data ?? []) as AgentIdentity[]) {
     const email = agent.email.trim().toLowerCase();
     if (!email) continue;
     const current = recipients.get(email);
-    recipients.set(email, {
-      email,
-      name: current?.name || agent.full_name || agent.email,
-      crmAgentId: current?.crmAgentId,
-      leadgenAgentId: agent.id,
-    });
+    recipients.set(email, { email, name: current?.name || agent.full_name || agent.email, crmAgentId: current?.crmAgentId, leadgenAgentId: agent.id });
   }
 
-  const allAppointments = (appointments ?? []) as LeadgenPerformanceAppointment[];
-  const allCallLogs = (callLogs ?? []) as LeadgenKpiCallLogRow[];
-  const allLeadgenEmails = (leadgenEmails ?? []) as LeadgenKpiEmailRow[];
+  const records = growthRecords;
+  const allAppointments = appointmentsResult.data ?? [];
+  const dateKey = crmDateKey(now);
+  const weekStart = crmWeekStartOf(dateKey);
+  const [year, month, day] = weekStart.split("-").map(Number);
+  const weekEndDate = new Date(Date.UTC(year, month - 1, day + 4));
+  const weekEnd = `${weekEndDate.getUTCFullYear()}-${String(weekEndDate.getUTCMonth() + 1).padStart(2, "0")}-${String(weekEndDate.getUTCDate()).padStart(2, "0")}`;
+  const rangeLabel = crmWeeklyRangeLabel(weekStart, weekEnd);
+  const snapshots: AgentSnapshot[] = [];
   const results: Array<{ email: string; outcome: "sent" | "dry-run" | "failed"; resendId?: string; error?: string }> = [];
-  const snapshots: WeeklyAgentSnapshot[] = [];
 
   for (const recipient of recipients.values()) {
-    const growth = recipient.crmAgentId ? computeCrmAgentPerformance(recordsResult, recipient.crmAgentId, now).current : undefined;
-    const leadgen = recipient.leadgenAgentId ? computeLeadgenAgentPerformance(allAppointments, recipient.leadgenAgentId, now) : undefined;
-    const leadgenActivity = recipient.leadgenAgentId
-      ? computeLeadgenAgentActivityKpis(allCallLogs, allLeadgenEmails, [], recipient.leadgenAgentId, now)
-      : undefined;
-    const email = buildEmail({ recipient, growth, leadgen, leadgenActivity });
-    const weekKey = growth?.periodStart ?? leadgen?.weekStart ?? crmDateKey(now);
-    snapshots.push({ recipient, growth, leadgen, leadgenActivity });
-
+    const sections = buildAgentReportSections({
+      crmAgentId: recipient.crmAgentId,
+      leadgenAgentId: recipient.leadgenAgentId,
+      start: weekStart,
+      end: weekEnd,
+      growthRecords: records,
+      leadgenAppointments: allAppointments,
+      callLogs: (callLogsResult.data ?? []) as ReportCallRow[],
+      leadgenEmails: (leadgenEmailsResult.data ?? []).map((row) => ({ agent_id: row.sent_by, sent_at: row.sent_at, delivered_at: row.delivered_at })),
+      leadgenFollowUps: (leadgenFollowUpsResult.data ?? []) as ReportFollowUpRow[],
+      leadgenLeads: (leadgenLeadsResult.data ?? []) as ReportLeadRow[],
+      growthEmails: (growthEmailsResult.data ?? []) as GrowthEmailRow[],
+      growthFollowUps: (growthFollowUpsResult.data ?? []) as GrowthFollowUpRow[],
+      growthLeads: (growthLeadsResult.data ?? []) as GrowthLeadOwnerRow[],
+    });
+    snapshots.push({ recipient, sections });
     if (options.dryRun) {
       results.push({ email: recipient.email, outcome: "dry-run" });
       continue;
     }
-
-    const { data, error } = await getResendClient().emails.send(
-      {
-        from: getEmailSender("growth"),
-        to: recipient.email,
-        replyTo: getEmailReplyTo(),
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-        tags: [
-          { name: "category", value: "agent-weekly-report" },
-          { name: "report_week", value: weekKey },
-        ],
-      },
-      { idempotencyKey: `agent-weekly-report-${weekKey}-${recipient.email.replace(/[^a-z0-9]+/g, "-")}` }
-    );
-
+    const email = renderAgentPerformanceEmail({ recipientName: recipient.name, periodTitle: "Weekly Agent Performance", periodLabel: rangeLabel, sections });
+    const { data, error } = await getResendClient().emails.send({
+      from: getEmailSender("growth"), to: recipient.email, replyTo: getEmailReplyTo(), subject: email.subject, html: email.html, text: email.text,
+      tags: [{ name: "category", value: "agent-weekly-report" }, { name: "report_week", value: weekStart }],
+    }, { idempotencyKey: `agent-weekly-report-${weekStart}-${recipient.email.replace(/[^a-z0-9]+/g, "-")}` });
     if (error) results.push({ email: recipient.email, outcome: "failed", error: error.message });
     else results.push({ email: recipient.email, outcome: "sent", resendId: data?.id });
   }
 
-  const firstSnapshot = snapshots[0];
-  const rangeLabel = firstSnapshot?.growth
-    ? crmWeeklyRangeLabel(firstSnapshot.growth.periodStart, firstSnapshot.growth.periodEnd)
-    : firstSnapshot?.leadgen
-      ? leadgenWeekRangeLabel(firstSnapshot.leadgen.weekStart, firstSnapshot.leadgen.weekEnd)
-      : leadgenDateKey(now);
   const adminEmailAddress = (process.env.AGENT_REPORT_ADMIN_EMAIL || "info@winsalotcorp.com").trim().toLowerCase();
-  const adminEmail = buildAdminEmail({ snapshots, rangeLabel });
-  const adminWeekKey = firstSnapshot?.growth?.periodStart ?? firstSnapshot?.leadgen?.weekStart ?? crmDateKey(now);
-
-  if (options.dryRun) {
-    results.push({ email: adminEmailAddress, outcome: "dry-run" });
-  } else {
-    const { data, error } = await getResendClient().emails.send(
-      {
-        from: getEmailSender("growth"),
-        to: adminEmailAddress,
-        replyTo: getEmailReplyTo(),
-        subject: adminEmail.subject,
-        html: adminEmail.html,
-        text: adminEmail.text,
-        tags: [
-          { name: "category", value: "admin-weekly-agent-summary" },
-          { name: "report_week", value: adminWeekKey },
-        ],
-      },
-      { idempotencyKey: `admin-weekly-agent-summary-${adminWeekKey}` }
-    );
+  const adminEmail = buildAdminEmail(snapshots, rangeLabel);
+  if (options.dryRun) results.push({ email: adminEmailAddress, outcome: "dry-run" });
+  else {
+    const { data, error } = await getResendClient().emails.send({
+      from: getEmailSender("growth"), to: adminEmailAddress, replyTo: getEmailReplyTo(), subject: adminEmail.subject, html: adminEmail.html, text: adminEmail.text,
+      tags: [{ name: "category", value: "admin-weekly-agent-summary" }, { name: "report_week", value: weekStart }],
+    }, { idempotencyKey: `admin-weekly-agent-summary-${weekStart}` });
     if (error) results.push({ email: adminEmailAddress, outcome: "failed", error: error.message });
     else results.push({ email: adminEmailAddress, outcome: "sent", resendId: data?.id });
   }
 
-  return {
-    reportDate: leadgenDateKey(now),
-    agentRecipientCount: recipients.size,
-    adminRecipient: adminEmailAddress,
-    recipientCount: recipients.size + 1,
-    sent: results.filter((result) => result.outcome === "sent").length,
-    failed: results.filter((result) => result.outcome === "failed").length,
-    dryRun: !!options.dryRun,
-    results,
-  };
+  return { reportDate: leadgenDateKey(now), weekStart, weekEnd, agentRecipientCount: recipients.size, adminRecipient: adminEmailAddress, recipientCount: recipients.size + 1, sent: results.filter((result) => result.outcome === "sent").length, failed: results.filter((result) => result.outcome === "failed").length, dryRun: !!options.dryRun, results };
 }
