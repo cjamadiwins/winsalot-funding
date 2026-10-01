@@ -222,8 +222,12 @@ export async function sendAppointmentBriefAction(appointmentId: string, input: B
     const result = await sendLeadgenEmail(admin, {
       clientId: appointment.client_id,
       campaignId: appointment.campaign_id,
-      leadId: appointment.lead_id,
-      appointmentId: appointment.id,
+      // Client-level communication: lead_id/appointment_id stay null so this
+      // never replaces the prospect-facing "Last appointment email" badge or
+      // the lead's Latest Email Activity (both read by lead/appointment id).
+      // It still appears in the client's Communications view.
+      leadId: null,
+      appointmentId: null,
       templateKey: null,
       toEmail: recipient.email,
       toName: recipient.name,
@@ -283,8 +287,12 @@ export async function sendFeedbackRequestAction(appointmentId: string): Promise<
     const result = await sendLeadgenEmail(admin, {
       clientId: appointment.client_id,
       campaignId: appointment.campaign_id,
-      leadId: appointment.lead_id,
-      appointmentId: appointment.id,
+      // Client-level communication: lead_id/appointment_id stay null so this
+      // never replaces the prospect-facing "Last appointment email" badge or
+      // the lead's Latest Email Activity (both read by lead/appointment id).
+      // It still appears in the client's Communications view.
+      leadId: null,
+      appointmentId: null,
       templateKey: null,
       toEmail: recipient.email,
       toName: recipient.name,

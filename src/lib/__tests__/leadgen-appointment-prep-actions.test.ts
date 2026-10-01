@@ -125,7 +125,11 @@ describe("sendAppointmentBriefAction", () => {
 
     const email = sendLeadgenEmailMock.mock.calls[0][1];
     expect(email.toEmail).toBe("pat@acme.test");
-    expect(email.appointmentId).toBe("appt-1");
+    // Client-level email: must not attach to the lead/appointment email status.
+    expect(email.appointmentId).toBeNull();
+    expect(email.leadId).toBeNull();
+    expect(email.clientId).toBe("client-1");
+    expect(email.clientVisible).toBe(true);
     expect(email.body).toContain("https://leads.winsalotcorp.com/client/appointments/appt-1");
     expect(email.body).not.toContain("INTERNAL");
     expect(email.html).toContain("View Appointment Brief");
