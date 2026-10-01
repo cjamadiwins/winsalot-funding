@@ -376,6 +376,9 @@ export async function updateCampaignFromListAction(segmentId: string, campaignId
     revalidatePath(`${BASE_PATH}/${segmentId}`);
     revalidatePath(`/leadgen/admin/clients/${campaign.clientId}`);
     revalidatePath(`/leadgen/admin/campaigns/${campaignId}`);
+    revalidatePath(BASE_PATH);
+    revalidatePath("/leadgen/admin/assignments");
+    revalidatePath("/leadgen/admin", "layout");
     revalidatePath("/leadgen/agent", "layout");
     return { campaign };
   } catch (err) {

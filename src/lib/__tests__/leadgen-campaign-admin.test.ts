@@ -28,7 +28,7 @@ function table(name: string) {
     insert: (p: Row) => ((op = "insert"), (payload = p), b),
     update: (p: Row) => ((op = "update"), (payload = p), b),
     upsert: (p: Row[], o: { onConflict: string }) => ((op = "upsert"), (payload = p), (conflict = o.onConflict.split(",")), b),
-    maybeSingle: async () => ({ data: matched()[0] ?? null, error: null }),
+    maybeSingle: async () => ({ data: matched()[0] ? { ...matched()[0] } : null, error: null }),
     single: async () => { const r = run(); return { data: (r.data as Row[])?.[0] ?? null, error: r.error }; },
     then: (res: (v: unknown) => unknown) => Promise.resolve(run()).then(res),
   };
@@ -76,6 +76,31 @@ describe("createLeadgenCampaign", () => {
   });
 });
 
+describe("renaming a campaign", () => {
+  it("renames in place: same id, no duplicate, history and other labels untouched", async () => {
+    db.leadgen_leads = [{ id: "l1", campaign_id: "c1" }];
+    db.leadgen_call_logs = [{ id: "k1", campaign_id: "c1" }];
+    db.call_list_segments = [
+      { id: "s1", leadgen_campaign_id: "c1", campaign_name: "Existing" },
+      { id: "s2", leadgen_campaign_id: "c1", campaign_name: "Other — Pet care — Oakville" },
+      { id: "s3", leadgen_campaign_id: "other", campaign_name: "Existing" },
+    ];
+    const c = await updateLeadgenCampaign("c1", form({ name: "Existing Renamed", status: "active", agentIds: [] }), "admin1");
+    expect(c.id).toBe("c1");
+    expect(db.leadgen_campaigns).toHaveLength(1);
+    expect(db.leadgen_campaigns[0]).toMatchObject({ id: "c1", client_id: "cl2", name: "Existing Renamed" });
+    expect(db.call_list_segments.map((r) => r.campaign_name)).toEqual(["Existing Renamed", "Other — Pet care — Oakville", "Existing"]);
+    expect(db.leadgen_leads).toEqual([{ id: "l1", campaign_id: "c1" }]);
+    expect(db.leadgen_call_logs).toEqual([{ id: "k1", campaign_id: "c1" }]);
+    expect(writes).not.toContain("insert:leadgen_campaigns");
+  });
+  it("allows a case-only rename and still blocks a clash with a sibling campaign", async () => {
+    await expect(updateLeadgenCampaign("c1", form({ name: "EXISTING", status: "active", agentIds: [] }), "a")).resolves.toMatchObject({ id: "c1", name: "EXISTING" });
+    db.leadgen_campaigns.push({ id: "c2", client_id: "cl2", name: "Sibling", status: "active" });
+    await expect(updateLeadgenCampaign("c1", form({ name: "sibling", status: "active", agentIds: [] }), "a")).rejects.toThrow(/already has a campaign/);
+  });
+});
+
 describe("updateLeadgenCampaign", () => {
   it("edits campaign fields only; never touches other tables or the client", async () => {
     db.leadgen_leads = [{ id: "l1", campaign_id: "c1" }];
@@ -83,6 +108,7 @@ describe("updateLeadgenCampaign", () => {
     expect(c).toMatchObject({ name: "Renamed", status: "completed", clientId: "cl2", agentIds: ["a1"] });
     expect(db.leadgen_campaign_agents).toEqual([{ campaign_id: "c1", agent_id: "a1" }]); // never removed
     expect(db.leadgen_leads).toEqual([{ id: "l1", campaign_id: "c1" }]);
-    expect([...new Set(writes)].sort()).toEqual(["update:leadgen_campaigns", "upsert:leadgen_campaign_admin_notes"]);
+    // A rename also refreshes matching list display labels (call_list_segments.campaign_name) - nothing else.
+    expect([...new Set(writes)].sort()).toEqual(["update:call_list_segments", "update:leadgen_campaigns", "upsert:leadgen_campaign_admin_notes"]);
   });
 });

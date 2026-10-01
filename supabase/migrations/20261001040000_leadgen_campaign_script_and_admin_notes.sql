@@ -28,7 +28,7 @@ create table if not exists public.leadgen_campaign_admin_notes (
   campaign_id uuid primary key references public.leadgen_campaigns(id) on delete cascade,
   notes text not null default '',
   updated_at timestamptz not null default now(),
-  updated_by uuid references auth.users(id) on delete set null
+  updated_by uuid
 );
 
 alter table public.leadgen_campaign_admin_notes enable row level security;

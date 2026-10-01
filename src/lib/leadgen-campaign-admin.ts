@@ -139,8 +139,9 @@ export async function updateLeadgenCampaign(campaignId: string, input: CampaignF
   if (parsed.error !== undefined) throw new Error(parsed.error);
   const admin = getSupabaseAdmin();
 
-  const { data: current } = await admin.from("leadgen_campaigns").select("id, client_id, status").eq("id", campaignId).maybeSingle();
+  const { data: current } = await admin.from("leadgen_campaigns").select("id, client_id, status, name").eq("id", campaignId).maybeSingle();
   if (!current) throw new Error("That campaign no longer exists.");
+  const oldName = (current.name as string | null) ?? "";
   await assertNameAvailable(admin, current.client_id as string, parsed.fields.name, campaignId);
   if (parsed.fields.status === "active" && current.status !== "active") await assertMayBeActive(admin, current.client_id as string, parsed.fields.start_date);
   await assertActiveAgents(admin, parsed.agentIds);
@@ -153,6 +154,20 @@ export async function updateLeadgenCampaign(campaignId: string, input: CampaignF
     .select(CAMPAIGN_COLUMNS)
     .single();
   if (error || !updated) throw new Error(`Failed to update the campaign: ${error?.message ?? "unknown error"}`);
+
+  // Rename = in-place update of the same row: the campaign ID (and so every lead,
+  // list, assignment, call log, appointment and report keyed to it) is unchanged.
+  // The campaign name is read live everywhere except one stored display label:
+  // a list's campaign_name that is exactly the old name follows the rename.
+  // Labels that differ (e.g. "Client — industry — territory") are left alone.
+  if (oldName && oldName !== parsed.fields.name) {
+    const { error: labelError } = await admin
+      .from("call_list_segments")
+      .update({ campaign_name: parsed.fields.name })
+      .eq("leadgen_campaign_id", campaignId)
+      .eq("campaign_name", oldName);
+    if (labelError) throw new Error(`The campaign was renamed, but list labels could not be refreshed: ${labelError.message}`);
+  }
 
   await grantAgents(admin, campaignId, parsed.agentIds, adminId);
   await saveNotes(admin, campaignId, parsed.adminNotes, adminId);
