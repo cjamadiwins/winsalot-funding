@@ -6,6 +6,7 @@ import { resolveSegmentAssignment, CAMPAIGN_ASSIGNMENT_REQUIRED_MESSAGE } from "
 import CallListWorkingClient from "@/components/crm-call-list/CallListWorkingClient";
 import { ScriptClosedNotice, ScriptSessionRegister } from "@/components/leadgen/script-dock/ScriptDockWidgets";
 import { loadAgentScriptSessions } from "@/lib/leadgen-script-sessions";
+import { resolveScriptOverride } from "@/lib/leadgen-campaign-form";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
@@ -83,7 +84,12 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
       .eq("id", assignment.clientId)
       .maybeSingle();
     if (client) {
-      callScriptClient = { ...(client as CallScriptClientOption), call_script_override: listScriptText ?? (client as CallScriptClientOption).call_script_override };
+      // list script -> campaign script -> client script (blank levels fall through)
+      const { data: campaignScript } = await supabase.from("leadgen_campaigns").select("call_script_text").eq("id", assignment.campaignId).maybeSingle();
+      callScriptClient = {
+        ...(client as CallScriptClientOption),
+        call_script_override: resolveScriptOverride({ listText: listScriptText, campaignText: campaignScript?.call_script_text as string | null | undefined, clientOverride: (client as CallScriptClientOption).call_script_override }),
+      };
     }
   }
 
