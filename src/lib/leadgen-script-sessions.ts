@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import type { createSupabaseServerClient } from "./supabase-server";
 import { isWebsiteServicesCampaign } from "./leadgen-website-script";
 import { deriveScriptDisplayState, type ScriptDisplayState, type ScriptStatusRow } from "./leadgen-script-status";
+import { resolveScriptOverride } from "./leadgen-campaign-form";
 import type { ScriptSessionPayload } from "./leadgen-script-session-types";
 
 type SegmentLike = { id: string; name: string; industry: string | null; call_script_text: string | null; leadgen_campaign_id: string | null };
@@ -18,7 +19,7 @@ async function buildPayloads(segments: SegmentLike[], agentId?: string): Promise
   const campaignIds = [...new Set(segments.map((s) => s.leadgen_campaign_id).filter((id): id is string => !!id))];
   if (campaignIds.length === 0) return [];
   const [{ data: campaigns }, assigned] = await Promise.all([
-    admin.from("leadgen_campaigns").select("id, name, status, client_id, service_type, description").in("id", campaignIds),
+    admin.from("leadgen_campaigns").select("id, name, status, client_id, service_type, description, call_script_text").in("id", campaignIds),
     agentId ? admin.from("leadgen_campaign_agents").select("campaign_id").eq("agent_id", agentId) : Promise.resolve({ data: null }),
   ]);
   const assignedIds = agentId ? new Set((assigned.data ?? []).map((r) => r.campaign_id as string)) : null;
@@ -55,7 +56,7 @@ async function buildPayloads(segments: SegmentLike[], agentId?: string): Promise
         call_script_services: client.call_script_services as string | null,
         call_script_closing: client.call_script_closing as string | null,
         call_script_notes: client.call_script_notes as string | null,
-        call_script_override: listText ?? (client.call_script_override as string | null),
+        call_script_override: resolveScriptOverride({ listText, campaignText: campaign.call_script_text as string | null, clientOverride: client.call_script_override as string | null }),
       },
     });
   }

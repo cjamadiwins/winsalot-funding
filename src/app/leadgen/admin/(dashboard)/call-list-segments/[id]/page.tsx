@@ -13,6 +13,8 @@ import DeployPanelClient from "@/components/crm-call-list/DeployPanelClient";
 import DeleteDraftButton from "@/components/crm-call-list/DeleteDraftButton";
 import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/crm-call-list/SegmentPerformanceClient";
 import OttawaPainterTransferClient from "@/components/crm-call-list/OttawaPainterTransferClient";
+import { loadCampaignDetails } from "@/lib/leadgen-campaign-admin";
+import { resolveScriptOverride } from "@/lib/leadgen-campaign-form";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 import {
   addSegmentLeadAction,
@@ -21,6 +23,8 @@ import {
   deploySegmentAction,
   saveSegmentAssignmentAction,
   saveSegmentScriptAction,
+  createCampaignFromListAction,
+  updateCampaignFromListAction,
   previewUploadFileAction,
   promoteSegmentLeadAction,
   recheckDuplicatesAction,
@@ -46,14 +50,16 @@ async function resolveServiceLabel(admin: ReturnType<typeof getSupabaseAdmin>, l
 // segment's performance stats below.
 async function resolveCallScriptClient(admin: ReturnType<typeof getSupabaseAdmin>, leadgenCampaignId: string | null): Promise<CallScriptClientOption | null> {
   if (!leadgenCampaignId) return null;
-  const { data: campaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", leadgenCampaignId).maybeSingle();
+  const { data: campaign } = await admin.from("leadgen_campaigns").select("client_id, call_script_text").eq("id", leadgenCampaignId).maybeSingle();
   if (!campaign) return null;
   const { data: client } = await admin
     .from("leadgen_clients")
     .select("id, name, call_script_value_proposition, call_script_services, call_script_closing, call_script_notes, call_script_override")
     .eq("id", campaign.client_id)
     .maybeSingle();
-  return (client as CallScriptClientOption | null) ?? null;
+  if (!client) return null;
+  // A campaign-level custom script (blank = none) takes precedence over the client's.
+  return { ...(client as CallScriptClientOption), call_script_override: resolveScriptOverride({ campaignText: campaign.call_script_text, clientOverride: client.call_script_override }) };
 }
 
 export default async function LeadgenCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -190,6 +196,9 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
     (campaignsByClient[campaign.client_id as string] ??= []).push({ value: campaign.id as string, label: campaign.name as string });
   }
 
+  const campaignDetailList = await loadCampaignDetails(admin, Object.values(campaignsByClient).flat().map((option) => option.value));
+  const campaignDetails = Object.fromEntries(campaignDetailList.map((detail) => [detail.id, detail]));
+
   let transferTarget: { id: string; name: string; status: string; clientName: string } | null = null;
   if (segment.source_file_name?.startsWith("campaign-125288-search-924570-painters_ottawa-on-canada")) {
     const { data: currentCampaign } = await admin.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
@@ -239,6 +248,11 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
         campaignsByClient,
         clientProfileHrefPrefix: "/leadgen/admin/clients",
         saveAction: saveSegmentAssignmentAction,
+        campaignManager: {
+          details: campaignDetails,
+          createAction: createCampaignFromListAction.bind(null, segment.id),
+          updateAction: updateCampaignFromListAction.bind(null, segment.id),
+        },
         helpText: "Choose the production client first, then choose its existing campaign and the agents who work this call list. Selected agents are added to that client's access scope. The segment and its leads stay intact when ownership changes; saved call and appointment history remains under the client recorded at the time.",
       }}
       updateStatusAction={updateSegmentStatusAction}

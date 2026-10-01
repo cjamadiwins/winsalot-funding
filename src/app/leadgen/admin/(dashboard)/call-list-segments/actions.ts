@@ -25,6 +25,8 @@ import {
 import { deploySegment } from "@/lib/call-list-deploy";
 import { saveLeadgenSegmentAssignment } from "@/lib/call-list-assignment";
 import { saveSegmentScript } from "@/lib/call-list-script";
+import { createLeadgenCampaign, updateLeadgenCampaign } from "@/lib/leadgen-campaign-admin";
+import type { CampaignDetail, CampaignFormInput } from "@/lib/leadgen-campaign-form";
 import { TEST_CLIENT_LIST_MESSAGE, friendlyTestClientError, isTestOnlyCampaign } from "@/lib/leadgen-test-client-guard";
 import { promoteToLeadgenLead } from "@/lib/call-list-promote";
 import { setHiddenColumnFields } from "@/lib/call-list-column-visibility";
@@ -343,4 +345,40 @@ export async function saveSegmentScriptAction(segmentId: string, _key: string | 
   revalidatePath(`${BASE_PATH}/${segmentId}`);
   revalidatePath("/leadgen/agent", "layout");
   return {};
+}
+
+// Admin-only: create a campaign for the selected client straight from the Call
+// List Assignment panel. Uses the existing leadgen_campaigns model; the list
+// itself is only reassigned later, by "Save Assignment".
+export async function createCampaignFromListAction(segmentId: string, clientId: string, input: CampaignFormInput): Promise<{ error?: string; campaign?: CampaignDetail }> {
+  const adminUser = await requireLeadgenAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
+  try {
+    const campaign = await createLeadgenCampaign(clientId, input, adminUser.id);
+    revalidatePath(`${BASE_PATH}/${segmentId}`);
+    revalidatePath(`/leadgen/admin/clients/${clientId}`);
+    revalidatePath("/leadgen/admin/assignments");
+    return { campaign };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to create the campaign." };
+  }
+}
+
+// Admin-only: edit an existing campaign's details. Never touches leads, call
+// logs, appointments, callbacks, notes, DNC, history, ownership or list rosters.
+export async function updateCampaignFromListAction(segmentId: string, campaignId: string, input: CampaignFormInput): Promise<{ error?: string; campaign?: CampaignDetail }> {
+  const adminUser = await requireLeadgenAdmin();
+  const segment = await getSegment(segmentId);
+  if (!segment || segment.crm !== "lead_generation") return { error: "Segment not found." };
+  try {
+    const campaign = await updateLeadgenCampaign(campaignId, input, adminUser.id);
+    revalidatePath(`${BASE_PATH}/${segmentId}`);
+    revalidatePath(`/leadgen/admin/clients/${campaign.clientId}`);
+    revalidatePath(`/leadgen/admin/campaigns/${campaignId}`);
+    revalidatePath("/leadgen/agent", "layout");
+    return { campaign };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to update the campaign." };
+  }
 }

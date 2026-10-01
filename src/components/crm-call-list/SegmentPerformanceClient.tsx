@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
@@ -91,6 +91,7 @@ export default function SegmentPerformanceClient({
     agentScopes?: Record<string, string[]>;
     helpText?: string;
     saveAction: (segmentId: string, scope: string, agentIds: string[], clientId: string | undefined) => Promise<{ error?: string; added?: number; removed?: number }>;
+    campaignManager?: ComponentProps<typeof SegmentAssignmentPanelClient>["campaignManager"];
   };
   // Admin call-script attachment for this list (both CRMs).
   script?: {
@@ -292,6 +293,7 @@ export default function SegmentPerformanceClient({
           agentScopes={assignment.agentScopes}
           helpText={assignment.helpText}
           saveAction={assignment.saveAction}
+          campaignManager={assignment.campaignManager}
         />
       ) : (
         <DeployPanelClient
