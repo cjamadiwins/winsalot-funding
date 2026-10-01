@@ -1,5 +1,6 @@
 import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenClientOpportunityRow } from "./leadgen-types";
 import { isLeadgenAppointmentCountable } from "./leadgen-types";
+import type { FeedbackMetrics } from "./leadgen-appointment-prep";
 
 export type LeadgenReportPeriod = { from: string; to: string };
 
@@ -21,6 +22,10 @@ export type LeadgenClientReport = {
   // appointmentToWonRate below.
   appointmentsWon: number;
   appointments: LeadgenAppointmentRow[];
+  // Recorded post-appointment client feedback for this period's
+  // appointments (Client Appointment Preparation). Undefined when feedback
+  // could not be loaded; only ever counts feedback that actually exists.
+  appointmentFeedback?: FeedbackMetrics;
   summary: string;
   nextStep: string;
 };

@@ -43,6 +43,8 @@ export default function ClientDetailClient({
   overdueFollowUps,
   bouncedEmails,
   adminName,
+  portalPanel,
+  insightsPanel,
 }: {
   client: LeadgenClientRow;
   campaigns: LeadgenCampaignRow[];
@@ -60,6 +62,10 @@ export default function ClientDetailClient({
   // this preview, exactly like an agent's own name would be on theirs
   // (brief: "[Agent Name] = logged-in Admin/Agent").
   adminName: string;
+  // Server-rendered Admin-only panels (Client Portal strip; Appointment
+  // Quality Insights) - passed in so this client component stays unchanged.
+  portalPanel?: React.ReactNode;
+  insightsPanel?: React.ReactNode;
 }) {
   const bouncedSet = new Set(bouncedEmails);
   const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
@@ -162,6 +168,8 @@ export default function ClientDetailClient({
           icon={<AlertTriangle />}
         />
       </div>
+
+      {portalPanel}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
@@ -365,6 +373,8 @@ export default function ClientDetailClient({
           )}
         </section>
       </div>
+
+      {insightsPanel}
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <div className="flex items-center justify-between">

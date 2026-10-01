@@ -3,6 +3,8 @@ import { requireLeadgenPortalClient } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { LEADGEN_APPOINTMENT_STATUS_STYLES, type LeadgenAppointmentRow } from "@/lib/leadgen-types";
 import { isUpcomingLeadgenAppointment } from "@/lib/client-portal-dashboard";
+import { FeedbackStatusBadge, PrepStatusBadge } from "@/components/leadgen/appointment-prep/PrepStatusBadge";
+import { deriveFeedbackStatus, isPreparableAppointment, type AppointmentFeedbackRow, type PrepStatus } from "@/lib/leadgen-appointment-prep";
 
 type AppointmentFilter = "upcoming" | "completed";
 
@@ -30,13 +32,35 @@ export default async function ClientPortalAppointmentsPage({ searchParams }: { s
     .eq("client_id", client.id)
     .order("appointment_date", { ascending: false });
 
+  // Appointment Brief (only briefs already sent to this client are visible
+  // under RLS) and this client's own feedback.
+  const [{ data: briefRows }, { data: feedbackRows }] = await Promise.all([
+    supabase.from("leadgen_appointment_briefs").select("appointment_id, prep_status").eq("client_id", client.id),
+    supabase.from("leadgen_appointment_feedback").select("appointment_id, submitted_at").eq("client_id", client.id),
+  ]);
+  const briefStatusByAppointment = new Map((briefRows ?? []).map((b) => [b.appointment_id as string, b.prep_status as PrepStatus]));
+  const feedbackByAppointment = new Map((feedbackRows ?? []).map((f) => [f.appointment_id as string, f as Pick<AppointmentFeedbackRow, "submitted_at">]));
+
   const allRows = (appointments ?? []) as LeadgenAppointmentRow[];
+  const pendingFeedback = allRows.filter((appt) => deriveFeedbackStatus(appt, feedbackByAppointment.get(appt.id)) === "feedback_pending");
   const rows = allRows.filter((appt) => matchesAppointmentFilter(appt, filter));
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Appointments</h1>
       <p className="mt-1 text-sm text-slate-500">Every consultation booked for your campaigns.</p>
+
+      {pendingFeedback.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <p className="text-[13px] text-amber-900">
+            <span className="font-semibold">How did the appointment go?</span>{" "}
+            {pendingFeedback.length === 1 ? `${pendingFeedback[0].business_name} is waiting for your feedback.` : `${pendingFeedback.length} appointments are waiting for your feedback.`}
+          </p>
+          <Link href={`/client/appointments/${pendingFeedback[0].id}`} className="rounded-full bg-amber-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-amber-700">
+            Share Feedback
+          </Link>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {APPOINTMENT_FILTER_TABS.map((tab) => {
@@ -62,13 +86,14 @@ export default async function ClientPortalAppointmentsPage({ searchParams }: { s
         {rows.length === 0 ? (
           <p className="p-6 text-center text-[13.5px] text-slate-500">{filter ? "No appointments match this filter." : "No appointments booked yet."}</p>
         ) : (
-          <table className="w-full min-w-[600px] text-left text-[13px]">
+          <table className="w-full min-w-[720px] text-left text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase text-slate-500">
                 <th className="p-3">Business</th>
                 <th className="p-3">Date/Time</th>
                 <th className="p-3">Type</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Brief</th>
               </tr>
             </thead>
             <tbody>
@@ -84,6 +109,20 @@ export default async function ClientPortalAppointmentsPage({ searchParams }: { s
                   <td className="p-3 text-slate-600">{appt.meeting_type}</td>
                   <td className="p-3">
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${LEADGEN_APPOINTMENT_STATUS_STYLES[appt.status]}`}>{appt.status}</span>
+                  </td>
+                  <td className="p-3">
+                    {isPreparableAppointment(appt) ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {briefStatusByAppointment.has(appt.id) && <PrepStatusBadge status={briefStatusByAppointment.get(appt.id)!} />}
+                        {(() => {
+                          const feedbackStatus = deriveFeedbackStatus(appt, feedbackByAppointment.get(appt.id));
+                          return feedbackStatus ? <FeedbackStatusBadge status={feedbackStatus} /> : null;
+                        })()}
+                        <Link href={`/client/appointments/${appt.id}`} className="text-[12px] font-semibold text-[var(--crm-accent,#3e7ef7)] hover:underline">
+                          {briefStatusByAppointment.has(appt.id) ? "View Brief" : "Details"}
+                        </Link>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}

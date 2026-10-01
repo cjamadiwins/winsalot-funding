@@ -58,6 +58,33 @@ export default function ClientPerformanceReport({
         ))}
       </div>
 
+      {report.appointmentFeedback && (report.appointmentsCompleted > 0 || report.appointmentFeedback.feedbackReceived > 0) && (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] px-5 py-3">
+          <h2 className="text-sm font-bold text-slate-900">Appointment Outcomes</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Based only on feedback recorded for this period&apos;s appointments.</p>
+          <dl className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-9">
+            {(
+              [
+                ["Booked", report.appointmentsBooked],
+                ["Completed", report.appointmentsCompleted],
+                ["Feedback Received", report.appointmentFeedback.feedbackReceived],
+                ["Qualified (Strong / Good)", report.appointmentFeedback.strongOrGood],
+                ["Follow-Ups", report.appointmentFeedback.followUpsRequired],
+                ["Proposals / Quotes", report.appointmentFeedback.proposalsOrQuotes],
+                ["Second Meetings", report.appointmentFeedback.secondMeetings],
+                ["Customers Won", report.appointmentFeedback.customersWon],
+                ["No Shows", report.appointmentFeedback.noShows],
+              ] as [string, number][]
+            ).map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-slate-50 px-2 py-1.5">
+                <dd className="text-base font-bold leading-tight text-slate-900">{value}</dd>
+                <dt className="text-[10.5px] leading-tight text-slate-500">{label}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
           <h2 className="font-bold text-slate-900">Performance Summary</h2>

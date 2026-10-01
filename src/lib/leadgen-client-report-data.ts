@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LeadgenAppointmentRow, LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenClientOpportunityRow } from "./leadgen-types";
 import { buildLeadgenClientReport, type LeadgenReportPeriod } from "./leadgen-client-report";
+import { computeFeedbackMetrics, type AppointmentFeedbackRow } from "./leadgen-appointment-prep";
 
 export async function loadLeadgenClientReport(
   supabase: SupabaseClient,
@@ -23,7 +24,7 @@ export async function loadLeadgenClientReport(
   const error = leadsError ?? appointmentsError ?? campaignsError ?? opportunitiesError;
   if (error) throw new Error(error.message);
 
-  return buildLeadgenClientReport({
+  const report = buildLeadgenClientReport({
     client,
     period,
     leads: (leads ?? []) as LeadgenLeadRow[],
@@ -31,4 +32,15 @@ export async function loadLeadgenClientReport(
     campaigns: (campaigns ?? []) as LeadgenCampaignRow[],
     opportunities: (opportunities ?? []) as LeadgenClientOpportunityRow[],
   });
+
+  // Appointment feedback is additive: a failed/blocked read here (e.g. the
+  // migration not applied yet) must never break the existing report.
+  const { data: feedback, error: feedbackError } = await supabase
+    .from("leadgen_appointment_feedback")
+    .select("appointment_id, outcome, opportunity_quality")
+    .eq("client_id", client.id);
+  if (!feedbackError) {
+    report.appointmentFeedback = computeFeedbackMetrics(report.appointments, (feedback ?? []) as Pick<AppointmentFeedbackRow, "appointment_id" | "outcome" | "opportunity_quality">[]);
+  }
+  return report;
 }

@@ -11,6 +11,9 @@ import {
   type LeadgenLeadRow,
   type LeadgenUserRow,
 } from "@/lib/leadgen-types";
+import AppointmentQualityInsights from "@/components/leadgen/appointment-prep/AppointmentQualityInsights";
+import { computeFeedbackMetrics, computeQualityInsights } from "@/lib/leadgen-appointment-prep";
+import { fetchFeedbackRows } from "@/lib/leadgen-appointment-prep-data";
 import CampaignDetailClient from "./CampaignDetailClient";
 import { buildLeadgenConversionFunnel, type LeadgenConversionRow } from "@/lib/leadgen-conversions";
 import { getWebsiteLaunchReadiness, WEBSITE_LAUNCH_CLIENTS } from "@/lib/leadgen-launch-readiness";
@@ -49,6 +52,18 @@ export default async function LeadgenCampaignDetailPage({ params }: { params: Pr
   const launchReadiness = client && WEBSITE_LAUNCH_CLIENTS.includes(client.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])
     ? await getWebsiteLaunchReadiness(client.id) : null;
 
+  // Recorded client feedback for this campaign's appointments (Admin-only,
+  // informational). Counts only; never alters campaign criteria or lists.
+  const campaignAppointments = (appointments ?? []) as LeadgenAppointmentRow[];
+  const campaignAppointmentIds = new Set(campaignAppointments.map((a) => a.id));
+  const campaignFeedback = (await fetchFeedbackRows(admin, campaign.client_id)).filter((f) => campaignAppointmentIds.has(f.appointment_id));
+  const leadById = new Map(((leads ?? []) as LeadgenLeadRow[]).map((l) => [l.id, l]));
+  const feedbackContext: Record<string, { industry: string | null; location: string | null }> = {};
+  for (const appt of campaignAppointments) {
+    const lead = appt.lead_id ? leadById.get(appt.lead_id) : null;
+    feedbackContext[appt.id] = { industry: lead?.industry ?? null, location: lead ? [lead.city, lead.province].filter(Boolean).join(", ") || null : null };
+  }
+
   return (
     <CampaignDetailClient
       campaign={campaign as LeadgenCampaignRow}
@@ -61,6 +76,12 @@ export default async function LeadgenCampaignDetailPage({ params }: { params: Pr
       conversionFunnel={conversionFunnel}
       launchReadiness={launchReadiness}
       segmentPerformance={segmentPerformance}
+      feedbackPanel={
+        <AppointmentQualityInsights
+          metrics={computeFeedbackMetrics(campaignAppointments, campaignFeedback)}
+          insights={computeQualityInsights(campaignFeedback, feedbackContext)}
+        />
+      }
     />
   );
 }
