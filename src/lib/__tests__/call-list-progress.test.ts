@@ -111,3 +111,21 @@ describe("call list progress presentation", () => {
     expect(formatLastWorked(null, now)).toBe("—");
   });
 });
+
+
+describe("production outcome KPIs", () => {
+  it("counts current interested/appointment outcomes and due callbacks, excluding removed leads", () => {
+    const now = "2026-10-01T12:00:00Z";
+    const p = computeCallListProgress([
+      lead({ last_outcome: "Interested" }),
+      lead({ last_outcome: "Appointment Booked", promoted_leadgen_lead_id: "appointment-lead" }),
+      lead({ last_outcome: "Callback", callback_at: "2026-10-01T10:00:00Z" }),
+      lead({ last_outcome: "Callback", callback_at: "2026-10-02T10:00:00Z" }),
+      lead(),
+      lead({ last_outcome: "Interested", removed_at: now }),
+      lead({ last_outcome: "Appointment Booked", callback_at: now, removed_at: now }),
+    ], false, now);
+    expect(p).toMatchObject({ totalLeads: 5, workedLeads: 4, unworkedLeads: 1, progressPercent: 80, interested: 1, appointmentsBooked: 1, pendingFollowUps: 2, callbacksDue: 1, promoted: 1 });
+    expect(computeCallListProgress([])).toMatchObject({ totalLeads: 0, progressPercent: 0, interested: 0, appointmentsBooked: 0 });
+  });
+});

@@ -19,19 +19,24 @@ describe("call list progress rendering", () => {
     const progress = computeCallListProgress(leads(95, 63, 8));
     const html = renderToStaticMarkup(
       <CallListCardFrame status={progress.status}>
-        <CallListProgressSummary progress={progress} />
+        <CallListProgressSummary progress={progress} listStatus="active" />
       </CallListCardFrame>
     );
     expect(html).toContain("63 / 95 worked");
     expect(html).toContain("66%");
     expect(html).toContain("32 remaining");
-    expect(html).toContain("8 follow-ups");
+    expect(html).toContain("Follow-ups / Callbacks");
+    expect(html).toContain(">8</strong>");
+    expect(html).toContain("Interested");
+    expect(html).toContain("Appointments");
+    expect(html).toContain("List: Active");
+    expect(html).toContain('aria-label="Call list completion"');
     expect(html).toContain("In Progress");
     expect(html).toMatch(/data-progress-side-bar="in_progress"[^>]*/);
     expect(html).toContain("w-[5px]");
     expect(html).toContain("rounded-full");
     expect(html).toContain("bg-emerald-500");
-    expect(html).not.toMatch(/red|rose/);
+    expect(html).not.toMatch(/red-|rose-/);
   });
 
   it("admin table has the progress columns and a left-edge accent on each row", () => {

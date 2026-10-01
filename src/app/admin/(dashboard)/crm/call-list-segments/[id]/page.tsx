@@ -1,3 +1,5 @@
+import { loadCallListProgress, countSegmentCalls } from "@/lib/call-list-progress-data";
+import { emptyCallListProgress } from "@/lib/call-list-progress";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -145,15 +147,19 @@ export default async function CallListSegmentDetailPage({ params }: { params: Pr
     ...(currentService === "both_services" ? [{ value: "both_services", label: "Lead Gen + Financing (existing)" }] : []),
   ];
 
-  const nowIso = new Date().toISOString();
+  const [progressBySegment, callsMade] = await Promise.all([
+    loadCallListProgress(admin, [segment.id]),
+    countSegmentCalls(admin, "growth", segment.id),
+  ]);
+  const progress = progressBySegment.get(segment.id) ?? emptyCallListProgress();
   const stats = {
-    totalLeads: leads.length,
-    leadsRemaining: leads.filter((l) => !l.last_outcome).length,
-    callsMade: callLogs.length,
-    interested: leads.filter((l) => l.last_outcome === "Interested").length,
-    callbacksDue: leads.filter((l) => l.callback_at && l.callback_at <= nowIso).length,
-    appointmentsBooked: leads.filter((l) => l.last_outcome === "Appointment Booked").length,
-    promoted: leads.filter((l) => l.promoted_opportunity_id).length,
+    totalLeads: progress.totalLeads,
+    leadsRemaining: progress.unworkedLeads,
+    callsMade,
+    interested: progress.interested,
+    callbacksDue: progress.callbacksDue,
+    appointmentsBooked: progress.appointmentsBooked,
+    promoted: progress.promoted,
   };
 
   return (

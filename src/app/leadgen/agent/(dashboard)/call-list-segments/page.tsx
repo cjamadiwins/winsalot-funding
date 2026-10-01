@@ -20,6 +20,7 @@ export default async function LeadgenAgentCallListSegmentsPage() {
   const { data: segments, error: segmentsError } = await supabase
     .from("call_list_segments")
     .select("*")
+    .eq("crm", "lead_generation")
     .order("created_at", { ascending: false });
   const allRows = (segments ?? []) as CallListSegmentRow[];
   const admin = getSupabaseAdmin();
@@ -85,7 +86,7 @@ export default async function LeadgenAgentCallListSegmentsPage() {
               {segment.leadgen_campaign_id && clientNameByCampaignId.get(segment.leadgen_campaign_id) && (
                 <div className="mt-1 text-[12.5px] font-semibold text-sky-800">Calling for: {clientNameByCampaignId.get(segment.leadgen_campaign_id)}</div>
               )}
-              <CallListProgressSummary progress={progress} />
+              <CallListProgressSummary progress={progress} listStatus={segment.status} />
               </CallListCardFrame>
             </Link>
             );

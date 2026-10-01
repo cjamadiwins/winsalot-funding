@@ -14,6 +14,10 @@ export type CallListProgress = {
   // Whole-number percent, floored so 100 is only ever reached when every lead is worked.
   progressPercent: number;
   pendingFollowUps: number;
+  interested: number;
+  appointmentsBooked: number;
+  callbacksDue: number;
+  promoted: number;
   lastWorkedAt: string | null;
   status: CallListProgressStatus;
 };
@@ -24,6 +28,8 @@ export type CallListProgressLead = {
   last_contacted_at: string | null;
   callback_at: string | null;
   removed_at?: string | null;
+  promoted_opportunity_id?: string | null;
+  promoted_leadgen_lead_id?: string | null;
 };
 
 export const CALL_LIST_PROGRESS_LABELS: Record<CallListProgressStatus, string> = {
@@ -52,17 +58,21 @@ export function getCallListProgressStatus(totalLeads: number, workedLeads: numbe
 }
 
 export function emptyCallListProgress(paused = false): CallListProgress {
-  return { totalLeads: 0, workedLeads: 0, unworkedLeads: 0, progressPercent: 0, pendingFollowUps: 0, lastWorkedAt: null, status: getCallListProgressStatus(0, 0, paused) };
+  return { totalLeads: 0, workedLeads: 0, unworkedLeads: 0, progressPercent: 0, pendingFollowUps: 0, interested: 0, appointmentsBooked: 0, callbacksDue: 0, promoted: 0, lastWorkedAt: null, status: getCallListProgressStatus(0, 0, paused) };
 }
 
 // One row per lead, so a lead called many times (or with several outcomes,
 // callbacks, appointment, DNC) is counted exactly once. Worked = any recorded
 // call outcome; a pending callback is tallied separately and never changes
 // the worked count. Removed leads are excluded.
-export function computeCallListProgress(leads: CallListProgressLead[], paused = false): CallListProgress {
+export function computeCallListProgress(leads: CallListProgressLead[], paused = false, nowIso = new Date().toISOString()): CallListProgress {
   let total = 0;
   let worked = 0;
   let followUps = 0;
+  let interested = 0;
+  let appointments = 0;
+  let callbacksDue = 0;
+  let promoted = 0;
   let last: string | null = null;
   for (const lead of leads) {
     if (lead.removed_at) continue;
@@ -70,6 +80,10 @@ export function computeCallListProgress(leads: CallListProgressLead[], paused = 
     const isWorked = !!lead.last_outcome;
     if (isWorked) worked += 1;
     if (lead.callback_at) followUps += 1;
+    if (lead.callback_at && lead.callback_at <= nowIso) callbacksDue += 1;
+    if (lead.last_outcome === "Interested") interested += 1;
+    if (lead.last_outcome === "Appointment Booked") appointments += 1;
+    if (lead.promoted_opportunity_id || lead.promoted_leadgen_lead_id) promoted += 1;
     const touched = lead.last_contacted_at;
     if (isWorked && touched && (!last || new Date(touched).getTime() > new Date(last).getTime())) last = touched;
   }
@@ -79,6 +93,10 @@ export function computeCallListProgress(leads: CallListProgressLead[], paused = 
     unworkedLeads: total - worked,
     progressPercent: total > 0 ? Math.floor((worked / total) * 100) : 0,
     pendingFollowUps: followUps,
+    interested,
+    appointmentsBooked: appointments,
+    callbacksDue,
+    promoted,
     lastWorkedAt: last,
     status: getCallListProgressStatus(total, worked, paused),
   };

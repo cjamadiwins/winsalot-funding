@@ -24,14 +24,9 @@ export default async function CallListSegmentsPage() {
 
   const segmentIds = segments.map((s) => s.id);
   const progressBySegment = await loadCallListProgress(admin, segmentIds);
-  const [{ data: agentLinks }, { data: leadCounts }] = await Promise.all([
-    segmentIds.length
-      ? admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
-      : Promise.resolve({ data: [] as { segment_id: string; agent_id: string }[] }),
-    segmentIds.length
-      ? admin.from("call_list_leads").select("segment_id").in("segment_id", segmentIds)
-      : Promise.resolve({ data: [] as { segment_id: string }[] }),
-  ]);
+  const { data: agentLinks } = segmentIds.length
+    ? await admin.from("call_list_segment_agents").select("segment_id, agent_id").in("segment_id", segmentIds)
+    : { data: [] as { segment_id: string; agent_id: string }[] };
 
   const agentNameById = new Map(((agentsResult.data ?? []) as { id: string; full_name: string }[]).map((a) => [a.id, a.full_name]));
   const agentIdsBySegment = new Map<string, string[]>();
@@ -40,16 +35,12 @@ export default async function CallListSegmentsPage() {
     list.push(link.agent_id);
     agentIdsBySegment.set(link.segment_id, list);
   }
-  const leadCountBySegment = new Map<string, number>();
-  for (const row of leadCounts ?? []) {
-    leadCountBySegment.set(row.segment_id, (leadCountBySegment.get(row.segment_id) ?? 0) + 1);
-  }
 
   const rows = segments.map((segment) => ({
     segment,
     serviceLabel: segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—",
     agentNames: (agentIdsBySegment.get(segment.id) ?? []).map((id) => agentNameById.get(id) ?? "Unknown"),
-    leadCount: leadCountBySegment.get(segment.id) ?? 0,
+    leadCount: progressBySegment.get(segment.id)?.totalLeads ?? 0,
     progress: progressBySegment.get(segment.id) ?? emptyCallListProgress(),
   }));
   // Growth lists are always owned by Winsalot Corp with no prospect/client

@@ -19,14 +19,27 @@ export async function loadCallListProgress(
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await client
       .from("call_list_leads")
-      .select("id, segment_id, last_outcome, last_contacted_at, callback_at, removed_at")
+      .select("id, segment_id, last_outcome, last_contacted_at, callback_at, removed_at, promoted_opportunity_id, promoted_leadgen_lead_id")
       .in("segment_id", segmentIds)
       .is("removed_at", null)
       .order("id")
       .range(from, from + PAGE - 1);
-    if (error || !data) break;
+    if (error) throw new Error(`Failed to load call list progress: ${error.message}`);
+    if (!data) throw new Error("Failed to load call list progress.");
     leads.push(...(data as CallListProgressLead[]));
     if (data.length < PAGE) break;
   }
   return computeProgressBySegment(leads, pausedSegmentIds);
+}
+
+// Called only after the Admin page's authorization gate. Count all historical
+// calls, including calls on subsequently removed leads, without loading logs.
+export async function countSegmentCalls(client: SupabaseClient, crm: "growth" | "lead_generation", segmentId: string): Promise<number> {
+  const { count, error } = await client
+    .from(crm === "growth" ? "crm_call_logs" : "leadgen_call_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("call_list_segment_id", segmentId);
+  if (error) throw new Error(`Failed to count segment calls: ${error.message}`);
+  if (count === null) throw new Error("Failed to count segment calls.");
+  return count;
 }
