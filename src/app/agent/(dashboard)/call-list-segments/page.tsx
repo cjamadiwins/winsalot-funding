@@ -28,6 +28,7 @@ export default async function AgentCallListSegmentsPage() {
   const { data: segments, error: segmentsError } = await supabase
     .from("call_list_segments")
     .select("*")
+    .eq("crm", "growth")
     .order("created_at", { ascending: false });
   const rows = (segments ?? []) as CallListSegmentRow[];
 
@@ -64,7 +65,7 @@ export default async function AgentCallListSegmentsPage() {
                 {segment.campaign_name || OPPORTUNITY_TYPE_LABELS[segment.growth_opportunity_type ?? ""] || "—"}
               </div>
               <div className="mt-2 text-[12px] text-[var(--color-text-muted)]">Client / Campaign Owner: {GROWTH_CALL_LIST_OWNER}</div>
-              <CallListProgressSummary progress={progress} />
+              <CallListProgressSummary progress={progress} listStatus={segment.status} />
               </CallListCardFrame>
             </Link>
             );
