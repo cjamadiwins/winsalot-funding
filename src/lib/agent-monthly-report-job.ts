@@ -69,11 +69,12 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
   const now = options.now ?? new Date();
   const reportMonth = previousMonth(now);
   const admin = getSupabaseAdmin();
-  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
+  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, growthCallLogsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
     admin.from("leadgen_appointments").select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("crm_call_logs").select("agent_id, created_at"),
     admin.from("leadgen_call_logs").select("agent_id, created_at"),
     admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
     admin.from("leadgen_followups").select("agent_id, scheduled_at, status"),
@@ -116,6 +117,7 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
       leadgenBooked,
       growthGoalWeeks: growthPeriodCount,
       leadgenGoalWeeks: leadgenWeekCount,
+      growthCallLogs: (growthCallLogsResult.data ?? []) as ReportCallRow[],
       callLogs: (callLogsResult.data ?? []) as ReportCallRow[],
       leadgenEmails: (leadgenEmailsResult.data ?? []).map((row) => ({ agent_id: row.sent_by, sent_at: row.sent_at, delivered_at: row.delivered_at })),
       leadgenFollowUps: (leadgenFollowUpsResult.data ?? []) as ReportFollowUpRow[],
