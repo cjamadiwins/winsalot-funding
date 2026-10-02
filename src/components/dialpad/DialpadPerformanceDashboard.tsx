@@ -175,11 +175,12 @@ export default function DialpadPerformanceDashboard({
         </section>
       ) : (
         <>
-          <section className={`grid gap-3 sm:grid-cols-2 ${showCallGoal ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Total Calls" value={totals.calls.toLocaleString()} tone="blue" />
             <Stat label="Inbound Calls" value={totals.inbound.toLocaleString()} tone="indigo" />
             <Stat label="Outbound Calls" value={totals.placed.toLocaleString()} tone="indigo" />
             <Stat label="Answered Calls" value={totals.answered.toLocaleString()} tone="green" />
+            <Stat label="Missed Calls" value={totals.missed.toLocaleString()} tone="red" />
             <Stat label="Avg Talk Time" value={formatDialpadDuration(averageDurationSeconds)} tone="slate" />
             <Stat label="Total Talk Time" value={formatDialpadDuration(totals.duration)} tone="slate" />
             {showCallGoal && (
