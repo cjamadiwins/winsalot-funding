@@ -146,6 +146,9 @@ export type AppointmentBriefRow = {
   client_id: string;
   why_interested: string | null;
   primary_opportunity: string | null;
+  // Added by migration 20261002020000 (null on briefs saved before it).
+  main_interest?: string | null;
+  primary_need?: string | null;
   interest_level: InterestLevel | null;
   recommended_objective: string | null;
   appointment_summary: string | null;
@@ -183,6 +186,8 @@ export type AppointmentFeedbackRow = {
 export type ClientBriefView = {
   why_interested: string | null;
   primary_opportunity: string | null;
+  main_interest: string | null;
+  primary_need: string | null;
   interest_level: InterestLevel | null;
   recommended_objective: string | null;
   appointment_summary: string | null;
@@ -197,6 +202,8 @@ export function toClientBriefView(row: AppointmentBriefRow): ClientBriefView {
   return {
     why_interested: row.why_interested,
     primary_opportunity: row.primary_opportunity,
+    main_interest: row.main_interest ?? null,
+    primary_need: row.primary_need ?? null,
     interest_level: row.interest_level,
     recommended_objective: row.recommended_objective,
     appointment_summary: row.appointment_summary,
@@ -426,38 +433,165 @@ export function computeQualityInsights(
 // ---------------------------------------------------------------------
 // Emails
 // ---------------------------------------------------------------------
-export function buildBriefEmailSubject(businessName: string, appointmentDate: string): string {
-  return `Appointment Brief: ${businessName} (${appointmentDate})`;
+// Field limits shared by the Admin modal and the save action.
+export const BRIEF_LIMITS = { why: 600, opportunity: 120, interest: 120, need: 300, objective: 300, summary: 1500 } as const;
+
+// ---------------------------------------------------------------------
+// Generated client-facing brief
+// ---------------------------------------------------------------------
+// Assembles the "Appointment Summary for Client" from the preparation fields
+// Admin has already entered - nothing is invented. Each paragraph exists only
+// if its source field does, and the Admin is told which fields are missing.
+// Internal notes (the staff-only Admin note) and raw SDR call notes are
+// deliberately NOT inputs: the SDR information reaches this text only through
+// the fields Admin fills in from it.
+export type GenerateBriefInput = {
+  businessName: string;
+  whyInterested: string | null;
+  primaryOpportunity: string | null;
+  mainInterest: string | null;
+  primaryNeed: string | null;
+  recommendedObjective: string | null;
+};
+
+export type GeneratedBrief = {
+  summary: string;
+  canGenerate: boolean;
+  // Human labels of the fields that are still empty, for the Admin prompt.
+  missing: string[];
+};
+
+const INFINITIVE_START =
+  /^(generate|increase|improve|get|grow|attract|showcase|build|boost|find|win|convert|reach|expand|strengthen|rank|replace|redesign|rebrand|create|launch|obtain|secure|understand|streamline|reduce|save)\b/i;
+
+function clean(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
-// Concise plain-text preparation summary. Contains no internal notes and no
-// prospect contact details beyond the business name - the full brief is only
-// available after signing in to the portal via the CTA.
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+export function generateClientBrief(input: GenerateBriefInput): GeneratedBrief {
+  const biz = clean(input.businessName);
+  const why = clean(input.whyInterested);
+  const interest = clean(input.mainInterest);
+  const opportunity = clean(input.primaryOpportunity);
+  const need = clean(input.primaryNeed);
+  const objective = clean(input.recommendedObjective);
+
+  const missing: string[] = [];
+  if (!why) missing.push("Why This Prospect Is Interested");
+  if (!opportunity) missing.push("Primary Opportunity");
+  if (!need) missing.push("Primary Need");
+  if (!objective) missing.push("Recommended Objective");
+
+  const paragraphs: string[] = [];
+  if (why) paragraphs.push(sentence(why));
+  else if (interest) paragraphs.push(sentence(`${biz} is interested in ${interest}`));
+  else if (opportunity) paragraphs.push(sentence(`${biz} has been identified as an opportunity for ${opportunity}`));
+
+  const canGenerate = paragraphs.length > 0;
+  if (!canGenerate) return { summary: "", canGenerate: false, missing };
+
+  if (need) {
+    const lower = need.charAt(0).toLowerCase() + need.slice(1);
+    paragraphs.push(INFINITIVE_START.test(need) ? sentence(`A key priority is to ${lower}`) : sentence(`Primary need identified: ${need}`));
+  }
+  if (objective) paragraphs.push(sentence(`Recommended discussion for the appointment: ${objective}`));
+
+  return { summary: paragraphs.join("\n\n"), canGenerate, missing };
+}
+
+// ---------------------------------------------------------------------
+// Emails
+// ---------------------------------------------------------------------
+export function buildBriefEmailSubject(businessName: string): string {
+  return `Appointment Brief – ${businessName}`;
+}
+
+// "2026-10-05" + "14:30:00" -> "Monday, October 5, 2026 at 2:30 PM (America/Toronto)".
+// Pure string/UTC arithmetic so the day never shifts with the server timezone.
+export function formatAppointmentWhen(date: string, time: string, timezone: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mm)) return `${date} ${time} (${timezone})`;
+  const day = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  const hour12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${day} at ${hour12}:${String(mm).padStart(2, "0")} ${hh < 12 ? "AM" : "PM"} (${timezone})`;
+}
+
+const DISCUSSION_PARAGRAPH = /^recommended (?:discussion|objective)[^:\n]*:\s*([\s\S]+)$/i;
+
+export const BRIEF_LINK_MARKER = "View Appointment Brief";
+
+// The editable email draft. Everything comes from the saved/entered brief
+// fields and the appointment; prospect contact details stay out of the email
+// (the full brief is behind the client portal sign-in link).
 export function buildBriefEmailBody(input: {
+  recipientName: string | null;
   clientName: string;
   businessName: string;
+  industry: string | null;
   appointmentDate: string;
   appointmentTime: string;
   timezone: string;
+  summary: string | null;
   primaryOpportunity: string | null;
-  whyInterested: string | null;
-  recommendedNextStep: string | null;
+  mainInterest: string | null;
+  primaryNeed: string | null;
+  recommendedObjective: string | null;
   portalUrl: string;
 }): string {
-  const lines = [
-    `Hi ${input.clientName} team,`,
-    "",
-    `Your upcoming appointment with ${input.businessName} has been prepared.`,
-    "",
-    `Business: ${input.businessName}`,
-    `Date: ${input.appointmentDate}`,
-    `Time: ${input.appointmentTime} (${input.timezone})`,
+  const paragraphs = (input.summary ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  let discussion = clean(input.recommendedObjective);
+  const bodyParagraphs: string[] = [];
+  for (const paragraph of paragraphs) {
+    const match = DISCUSSION_PARAGRAPH.exec(paragraph);
+    if (match) discussion = clean(match[1]).replace(/\.$/, "") || discussion;
+    else bodyParagraphs.push(paragraph);
+  }
+
+  const highlights = [
+    input.primaryOpportunity ? `Key opportunity: ${clean(input.primaryOpportunity)}` : null,
+    input.mainInterest ? `Main interest: ${clean(input.mainInterest)}` : null,
+    input.primaryNeed ? `Primary need: ${clean(input.primaryNeed)}` : null,
+    discussion ? `Recommended discussion: ${discussion}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  const details = [
+    "Appointment details:",
+    `Prospect: ${input.businessName}`,
+    input.industry ? `Industry: ${input.industry}` : null,
+    `Date & time: ${formatAppointmentWhen(input.appointmentDate, input.appointmentTime, input.timezone)}`,
+  ].filter((line): line is string => Boolean(line));
+
+  const blocks = [
+    `Hi ${input.recipientName?.trim() || `${input.clientName} team`},`,
+    `Here is the preparation brief for your upcoming appointment with ${input.businessName}.`,
+    ...bodyParagraphs,
+    ...(highlights.length ? [highlights.join("\n")] : []),
+    details.join("\n"),
+    `${BRIEF_LINK_MARKER} (sign in to the Winsalot Client Portal):\n${input.portalUrl}`,
+    "Regards,\nWinsalot Corp.",
   ];
-  if (input.primaryOpportunity) lines.push(`Primary opportunity: ${input.primaryOpportunity}`);
-  if (input.whyInterested) lines.push(`Why they agreed to meet: ${input.whyInterested}`);
-  if (input.recommendedNextStep) lines.push(`Recommended next step: ${input.recommendedNextStep}`);
-  lines.push("", "View Appointment Brief (sign in to the Winsalot Client Portal):", input.portalUrl, "", "Best,", "Winsalot Corp. Team");
-  return lines.join("\n");
+  return blocks.join("\n\n");
+}
+
+// Each recipient gets their own greeting ("Hi Theodore,") even though Admin
+// edits one shared body: only a leading "Hi <name>," line is rewritten.
+export function personalizeGreeting(body: string, recipientName: string | null, clientName: string): string {
+  const greeting = `Hi ${recipientName?.trim() || `${clientName} team`},`;
+  return /^Hi [^\n,]+,/.test(body) ? body.replace(/^Hi [^\n,]+,/, greeting) : body;
+}
+
+// Splits an (Admin-edited) brief email body around its portal link so the
+// sender can render the link as a button. If the Admin removed the link block
+// the whole body is sent as plain text.
+export function splitBriefEmailBody(body: string): { before: string; url: string; after: string } | null {
+  const match = /\n*View Appointment Brief[^\n]*\n(https?:\/\/\S+)\n*/.exec(body);
+  if (!match) return null;
+  return { before: body.slice(0, match.index).trim(), url: match[1], after: body.slice(match.index + match[0].length).trim() };
 }
 
 export function buildFeedbackRequestEmailSubject(businessName: string): string {

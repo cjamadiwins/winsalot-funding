@@ -21,7 +21,7 @@ export default function OpportunitySnapshot({
   return (
     <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 text-[12.5px] sm:grid-cols-3">
       <div className="bg-white px-3 py-2">
-        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Prospect Interest</p>
+        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Interest Level</p>
         <p className={`mt-0.5 font-semibold ${level ? INTEREST_STYLES[level] : "text-slate-400"}`}>{level ?? "Not set"}</p>
       </div>
       <div className="bg-white px-3 py-2">

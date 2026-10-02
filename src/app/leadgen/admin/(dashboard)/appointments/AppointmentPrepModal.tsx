@@ -7,6 +7,7 @@ import OpportunitySnapshot from "@/components/leadgen/appointment-prep/Opportuni
 import MeetingGuide from "@/components/leadgen/appointment-prep/MeetingGuide";
 import { FeedbackStatusBadge, PrepStatusBadge } from "@/components/leadgen/appointment-prep/PrepStatusBadge";
 import {
+  BRIEF_LIMITS,
   INTEREST_LEVELS,
   MAX_SUGGESTED_QUESTIONS,
   MAX_TALKING_POINTS,
@@ -14,18 +15,37 @@ import {
   OPPORTUNITY_QUALITY_STYLES,
   PRIMARY_OPPORTUNITY_SUGGESTIONS,
   RECOMMENDED_OBJECTIVES,
+  generateClientBrief,
   parseLineList,
   type PrepStatus,
 } from "@/lib/leadgen-appointment-prep";
+import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailStatus } from "@/lib/leadgen-types";
+import AppointmentBriefEmailModal from "./AppointmentBriefEmailModal";
 import {
   loadAppointmentPrepAction,
+  previewAppointmentBriefEmailAction,
   saveAppointmentBriefAction,
   saveFeedbackAdminNoteAction,
   sendAppointmentBriefAction,
   sendFeedbackRequestAction,
   type AppointmentPrepData,
+  type BriefEmailPreview,
   type BriefFormInput,
 } from "./prep-actions";
+
+// Fields the generated client summary is built from.
+const SUMMARY_SOURCE_KEYS = ["why_interested", "primary_opportunity", "main_interest", "primary_need", "recommended_objective"] as const;
+
+function generateSummary(form: BriefFormInput, businessName: string) {
+  return generateClientBrief({
+    businessName,
+    whyInterested: form.why_interested,
+    primaryOpportunity: form.primary_opportunity,
+    mainInterest: form.main_interest,
+    primaryNeed: form.primary_need,
+    recommendedObjective: form.recommended_objective,
+  });
+}
 
 const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] text-slate-900";
 const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-slate-500";
@@ -39,6 +59,8 @@ function toForm(data: AppointmentPrepData): BriefFormInput {
   return {
     why_interested: brief?.why_interested ?? "",
     primary_opportunity: brief?.primary_opportunity ?? "",
+    main_interest: brief?.main_interest ?? "",
+    primary_need: brief?.primary_need ?? "",
     interest_level: brief?.interest_level ?? "",
     recommended_objective: brief?.recommended_objective ?? "",
     appointment_summary: brief?.appointment_summary ?? "",
@@ -56,6 +78,12 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
   const [form, setForm] = useState<BriefFormInput | null>(null);
   const [feedbackNote, setFeedbackNote] = useState("");
   const [status, setStatus] = useState<PrepStatus>("brief_not_prepared");
+  // True while the client summary is auto-managed (generated from the fields
+  // and not yet edited by hand). Editing the text switches it off; the
+  // "Regenerate" button switches it back on. Generation only fills the text -
+  // nothing is saved or sent until Admin presses Save Brief / Send.
+  const [summaryAuto, setSummaryAuto] = useState(false);
+  const [emailPreview, setEmailPreview] = useState<BriefEmailPreview | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -68,7 +96,11 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
         return;
       }
       setData(result.data);
-      setForm(toForm(result.data));
+      const initial = toForm(result.data);
+      const auto = !initial.appointment_summary.trim();
+      if (auto) initial.appointment_summary = generateSummary(initial, result.data.appointment.business_name).summary;
+      setSummaryAuto(auto);
+      setForm(initial);
       setFeedbackNote(result.data.adminNote?.feedback_note ?? "");
       setStatus(result.data.brief?.prep_status ?? "brief_not_prepared");
     });
@@ -78,7 +110,50 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
   }, [appointmentId]);
 
   function set<K extends keyof BriefFormInput>(key: K, value: BriefFormInput[K]) {
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+    setForm((current) => {
+      if (!current) return current;
+      const next = { ...current, [key]: value };
+      if (summaryAuto && data && (SUMMARY_SOURCE_KEYS as readonly string[]).includes(key)) {
+        next.appointment_summary = generateSummary(next, data.appointment.business_name).summary;
+      }
+      return next;
+    });
+  }
+
+  function regenerateSummary() {
+    if (!form || !data) return;
+    const generatedText = generateSummary(form, data.appointment.business_name).summary;
+    if (form.appointment_summary.trim() && form.appointment_summary.trim() !== generatedText && !window.confirm("Replace the current client summary with a freshly generated one? Your edits to it will be lost.")) return;
+    setForm({ ...form, appointment_summary: generatedText });
+    setSummaryAuto(true);
+  }
+
+  // "Send Appointment Brief" only opens the review step - it never sends.
+  function openEmailPreview() {
+    if (!form) return;
+    setMessage(null);
+    startTransition(async () => {
+      const result = await previewAppointmentBriefEmailAction(appointmentId, form);
+      if (result.error || !result.preview) {
+        setMessage({ kind: "error", text: result.error ?? "Could not prepare the email." });
+        return;
+      }
+      setEmailPreview(result.preview);
+    });
+  }
+
+  async function confirmSend(email: { subject: string; body: string }): Promise<{ error?: string }> {
+    if (!form) return { error: "Form not loaded." };
+    const result = await sendAppointmentBriefAction(appointmentId, form, email);
+    if (result.prepStatus) setStatus(result.prepStatus);
+    if (result.error) return { error: result.error };
+    setEmailPreview(null);
+    setMessage({ kind: "ok", text: result.message ?? "Brief sent." });
+    // Re-load so the Appointment Brief Emails list shows the real send/delivery status.
+    const refreshed = await loadAppointmentPrepAction(appointmentId);
+    if (refreshed.data) setData(refreshed.data);
+    router.refresh();
+    return {};
   }
 
   function run(action: () => Promise<{ error?: string; message?: string; prepStatus?: PrepStatus }>) {
@@ -103,6 +178,7 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
   const feedback = data?.feedback ?? null;
 
   return (
+    <>
     <LargeModal
       open
       onClose={onClose}
@@ -138,10 +214,7 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
               <button
                 type="button"
                 disabled={isPending}
-                onClick={() => {
-                  if (!window.confirm(`Save and email this brief to ${data?.recipients.join(", ") || "the client"}?`)) return;
-                  run(() => sendAppointmentBriefAction(appointmentId, form));
-                }}
+                onClick={openEmailPreview}
                 className="rounded-full bg-sky-600 px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
               >
                 {status === "sent_to_client" || status === "client_viewed" ? "Re-send Appointment Brief" : "Send Appointment Brief"}
@@ -203,7 +276,7 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
               </datalist>
             </label>
             <label className="flex flex-col gap-1">
-              <span className={labelClass}>Prospect Interest</span>
+              <span className={labelClass}>Interest Level</span>
               <select value={form.interest_level} onChange={(e) => set("interest_level", e.target.value)} className={inputClass}>
                 <option value="">Not set</option>
                 {INTEREST_LEVELS.map((level) => (
@@ -215,7 +288,7 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
             </label>
             <label className="flex flex-col gap-1">
               <span className={labelClass}>Recommended Objective</span>
-              <input list="prep-objectives" value={form.recommended_objective} onChange={(e) => set("recommended_objective", e.target.value)} maxLength={160} className={inputClass} />
+              <input list="prep-objectives" value={form.recommended_objective} onChange={(e) => set("recommended_objective", e.target.value)} maxLength={BRIEF_LIMITS.objective} className={inputClass} />
               <datalist id="prep-objectives">
                 {RECOMMENDED_OBJECTIVES.map((o) => (
                   <option key={o} value={o} />
@@ -224,7 +297,18 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
             </label>
           </div>
 
-          <OpportunitySnapshot interestLevel={form.interest_level || null} primaryNeed={form.primary_opportunity || null} objective={form.recommended_objective || null} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Main Interest</span>
+              <input value={form.main_interest} onChange={(e) => set("main_interest", e.target.value)} maxLength={BRIEF_LIMITS.interest} placeholder="e.g. Website Redesign / SEO" className={inputClass} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Primary Need</span>
+              <input value={form.primary_need} onChange={(e) => set("primary_need", e.target.value)} maxLength={BRIEF_LIMITS.need} placeholder="What the prospect needs to accomplish" className={inputClass} />
+            </label>
+          </div>
+
+          <OpportunitySnapshot interestLevel={form.interest_level || null} primaryNeed={form.primary_need || form.primary_opportunity || null} objective={form.recommended_objective || null} />
 
           {/* SDR call notes: existing history, read-only. */}
           <details className="rounded-xl border border-slate-200 bg-white px-3 py-2" open={data.callNotes.length > 0 && !form.appointment_summary}>
@@ -245,10 +329,39 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
               </ul>
             )}
           </details>
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>Appointment Summary for Client (the original call history is never changed)</span>
-            <textarea rows={2} maxLength={800} value={form.appointment_summary} onChange={(e) => set("appointment_summary", e.target.value)} className={inputClass} />
-          </label>
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="prep-summary" className={labelClass}>
+                Appointment Summary for Client (the original call history is never changed)
+              </label>
+              <button type="button" onClick={regenerateSummary} className="rounded-full border border-slate-300 px-2.5 py-0.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50">
+                {form.appointment_summary.trim() ? "Regenerate from fields" : "Generate from fields"}
+              </button>
+            </div>
+            <textarea
+              id="prep-summary"
+              rows={6}
+              maxLength={BRIEF_LIMITS.summary}
+              value={form.appointment_summary}
+              onChange={(e) => {
+                setSummaryAuto(false);
+                setForm({ ...form, appointment_summary: e.target.value });
+              }}
+              className={inputClass}
+            />
+            {(() => {
+              const generated = generateSummary(form, appt.business_name);
+              if (!generated.canGenerate) {
+                return <p className="text-[11.5px] text-amber-700">Needs additional information to generate a client summary — add: {generated.missing.join(", ")}.</p>;
+              }
+              return (
+                <p className={`text-[11.5px] ${generated.missing.length ? "text-amber-700" : "text-slate-400"}`}>
+                  {summaryAuto ? "Auto-generated from the fields above — review and edit before saving. " : "Edited by hand. "}
+                  {generated.missing.length ? `Still missing: ${generated.missing.join(", ")}.` : ""}
+                </p>
+              );
+            })()}
+          </div>
 
           <label className="flex flex-col gap-1">
             <span className={labelClass}>
@@ -314,6 +427,32 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
             <span className={labelClass}>Internal Admin Note · never shown to the client</span>
             <textarea rows={2} maxLength={1000} value={form.admin_note} onChange={(e) => set("admin_note", e.target.value)} className={inputClass} />
           </label>
+
+          {/* Appointment Brief emails already sent - real delivery status */}
+          <section className="rounded-xl border border-slate-200 px-3 py-2">
+            <h3 className="text-[12.5px] font-bold text-slate-800">Appointment Brief Emails</h3>
+            {data.emailHistory.length === 0 ? (
+              <p className="mt-1 text-[12.5px] text-slate-500">Not sent yet. Sending is always a manual step.</p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {data.emailHistory.map((email) => {
+                  const reason = email.status === "failed" ? email.failure_reason : email.status === "bounced" ? email.bounce_reason : null;
+                  const emailStatus = email.status as LeadgenEmailStatus;
+                  return (
+                    <li key={email.id} className="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+                      <span className="min-w-0 break-words text-slate-700">
+                        {formatDateTime(email.sent_at ?? email.created_at)} · {email.to_email}
+                        {reason ? <span className="block text-[11.5px] text-rose-600">{reason}</span> : null}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[emailStatus] ?? "bg-slate-100 text-slate-700"}`}>
+                        {LEADGEN_EMAIL_STATUS_LABELS[emailStatus] ?? email.status}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
           {/* Post-appointment feedback summary */}
           <section className="rounded-xl border border-slate-200 px-3 py-2">
@@ -390,5 +529,14 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
         </div>
       )}
     </LargeModal>
+    {emailPreview && (
+      <AppointmentBriefEmailModal
+        preview={emailPreview}
+        resend={status === "sent_to_client" || status === "client_viewed"}
+        onCancel={() => setEmailPreview(null)}
+        onSend={confirmSend}
+      />
+    )}
+    </>
   );
 }
