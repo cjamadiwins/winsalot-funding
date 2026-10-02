@@ -47,6 +47,7 @@ const GROWTH_AGENT_REPORT_URL = "https://growth.winsalotcorp.com/agent/performan
 const LEADGEN_AGENT_REPORT_URL = "https://leads.winsalotcorp.com/leadgen/agent/performance";
 const GROWTH_ADMIN_REPORT_URL = "https://growth.winsalotcorp.com/admin/crm/performance";
 const LEADGEN_ADMIN_REPORT_URL = "https://leads.winsalotcorp.com/leadgen/admin/performance";
+const GROWTH_DAILY_CALL_TARGET = 80;
 
 type AgentIdentity = { id: string; full_name: string | null; email: string };
 type Recipient = { email: string; name: string; crmAgentId?: string; leadgenAgentId?: string };
@@ -73,6 +74,7 @@ export function buildAgentReportSections(input: {
   end: string;
   growthRecords: Awaited<ReturnType<typeof getCrmPerformanceRecords>>;
   leadgenAppointments: LeadgenPerformanceAppointment[];
+  growthCallLogs: ReportCallRow[];
   callLogs: ReportCallRow[];
   leadgenEmails: ReportEmailRow[];
   leadgenFollowUps: ReportFollowUpRow[];
@@ -102,6 +104,7 @@ export function buildAgentReportSections(input: {
       agentId: input.crmAgentId,
       start: input.start,
       end: input.end,
+      calls: input.growthCallLogs,
       emails: input.growthEmails,
       followUps: input.growthFollowUps,
       leads: input.growthLeads,
@@ -113,6 +116,7 @@ export function buildAgentReportSections(input: {
       status: CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growthScore)],
       href: GROWTH_AGENT_REPORT_URL,
       metrics: [
+        { label: "Calls completed", result: activity.calls, goal: GROWTH_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, GROWTH_DAILY_CALL_TARGET * workingDays) },
         { label: "Consultations booked", result: growth.consultationsBooked, goal: consultationGoal, rate: consultationRate },
         { label: "Opportunity leads added", result: growth.leadsAdded, goal: leadGoal, rate: leadRate },
         { label: "Emails sent", result: activity.emailsSent, goal: null, rate: null, informational: true },
@@ -170,11 +174,12 @@ function buildAdminEmail(snapshots: AgentSnapshot[], rangeLabel: string): { subj
 export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?: Date } = {}) {
   const now = options.now ?? new Date();
   const admin = getSupabaseAdmin();
-  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
+  const [agentsResult, leadgenAgentsResult, growthRecords, appointmentsResult, growthCallLogsResult, callLogsResult, leadgenEmailsResult, leadgenFollowUpsResult, leadgenLeadsResult, growthEmailsResult, growthFollowUpsResult, growthLeadsResult] = await Promise.all([
     admin.from("crm_users").select("id, full_name, email").eq("role", "agent").eq("active", true),
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
     admin.from("leadgen_appointments").select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
+    admin.from("crm_call_logs").select("agent_id, created_at"),
     admin.from("leadgen_call_logs").select("agent_id, created_at"),
     admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
     admin.from("leadgen_followups").select("agent_id, scheduled_at, status"),
@@ -215,6 +220,7 @@ export async function runAgentWeeklyReportJob(options: { dryRun?: boolean; now?:
       end: weekEnd,
       growthRecords: records,
       leadgenAppointments: allAppointments,
+      growthCallLogs: (growthCallLogsResult.data ?? []) as ReportCallRow[],
       callLogs: (callLogsResult.data ?? []) as ReportCallRow[],
       leadgenEmails: (leadgenEmailsResult.data ?? []).map((row) => ({ agent_id: row.sent_by, sent_at: row.sent_at, delivered_at: row.delivered_at })),
       leadgenFollowUps: (leadgenFollowUpsResult.data ?? []) as ReportFollowUpRow[],

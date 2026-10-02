@@ -81,11 +81,13 @@ export function computeGrowthReportActivity(input: {
   agentId: string;
   start: string;
   end: string;
+  calls: ReportCallRow[];
   emails: GrowthEmailRow[];
   followUps: GrowthFollowUpRow[];
   leads: GrowthLeadOwnerRow[];
   opportunityOwners: Map<string, string | null>;
-}): Pick<PeriodActivity, "emailsSent" | "emailsDelivered" | "emailDeliveryRate" | "followUpsDue"> {
+}): Pick<PeriodActivity, "calls" | "emailsSent" | "emailsDelivered" | "emailDeliveryRate" | "followUpsDue"> {
+  const calls = input.calls.filter((row) => row.agent_id === input.agentId && inRange(row.created_at, input.start, input.end, leadgenDateKey)).length;
   const sent = input.emails.filter((row) => row.agent_id === input.agentId && inRange(row.sent_at, input.start, input.end, leadgenDateKey));
   const delivered = sent.filter((row) => row.delivered_at).length;
   const owners = new Map(input.leads.map((lead) => [lead.id, lead.assigned_agent_id] as const));
@@ -95,6 +97,7 @@ export function computeGrowthReportActivity(input: {
     return owner === input.agentId;
   }).length;
   return {
+    calls,
     emailsSent: sent.length,
     emailsDelivered: delivered,
     emailDeliveryRate: sent.length ? Math.round((delivered / sent.length) * 100) : null,
