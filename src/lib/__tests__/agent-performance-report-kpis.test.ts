@@ -39,11 +39,17 @@ describe("agent performance report KPI data", () => {
     expect(result).toEqual({ calls: 1, emailsSent: 2, emailsDelivered: 1, emailDeliveryRate: 50, followUpsDue: 1, interestedLeads: 1 });
   });
 
-  it("scopes Growth email and follow-up activity through the current record owner", () => {
+  it("counts Growth call logs only for the report's agent and date window", () => {
     const result = computeGrowthReportActivity({
       agentId: "agent-a",
       start: "2026-09-28",
       end: "2026-10-02",
+      calls: [
+        { agent_id: "agent-a", created_at: "2026-09-28T13:00:00.000Z" },
+        { agent_id: "agent-a", created_at: "2026-09-29T13:00:00.000Z" },
+        { agent_id: "agent-a", created_at: "2026-10-03T13:00:00.000Z" },
+        { agent_id: "agent-b", created_at: "2026-09-30T13:00:00.000Z" },
+      ],
       emails: [
         { agent_id: "agent-a", sent_at: "2026-09-28T13:00:00.000Z", delivered_at: "2026-09-28T13:01:00.000Z" },
         { agent_id: "agent-b", sent_at: "2026-09-28T13:00:00.000Z", delivered_at: null },
@@ -56,7 +62,7 @@ describe("agent performance report KPI data", () => {
       leads: [{ id: "lead-a", assigned_agent_id: "agent-a" }, { id: "lead-b", assigned_agent_id: "agent-b" }],
       opportunityOwners: new Map([["opp-a", "agent-a"]]),
     });
-    expect(result).toEqual({ emailsSent: 1, emailsDelivered: 1, emailDeliveryRate: 100, followUpsDue: 2 });
+    expect(result).toEqual({ calls: 2, emailsSent: 1, emailsDelivered: 1, emailDeliveryRate: 100, followUpsDue: 2 });
   });
 });
 
