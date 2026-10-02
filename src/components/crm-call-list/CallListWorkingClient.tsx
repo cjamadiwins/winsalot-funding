@@ -9,6 +9,8 @@ import { locationLines } from "@/lib/call-list-card-location";
 import type { CallListLeadRow } from "@/lib/call-list-types";
 import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
+import ClientServicesButton from "@/components/leadgen/client-services/ClientServicesButton";
+import type { ClientServiceRow } from "@/lib/leadgen-client-services";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 
 // Deliberately per-lead, one-at-a-time (no row selection, no "export"/
@@ -41,6 +43,7 @@ export default function CallListWorkingClient({
   websiteServices,
   agentName,
   callingFor,
+  clientServices,
 }: {
   leads: CallListLeadRow[];
   logCallAction: (leadId: string, formData: FormData) => Promise<{ error?: string }>;
@@ -60,6 +63,8 @@ export default function CallListWorkingClient({
   // resolved server-side from the list itself (never chosen by the agent).
   // Growth CRM doesn't pass it, so nothing renders there.
   callingFor?: { clientName: string; campaignName: string } | null;
+  // Read-only Products, Services & Pricing for this list's client (agent view).
+  clientServices?: ClientServiceRow[];
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -109,6 +114,11 @@ export default function CallListWorkingClient({
         <div className="flex flex-wrap items-center gap-x-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[12.5px] text-sky-900">
           <span className="font-semibold">Calling for: {callingFor.clientName}</span>
           <span className="text-sky-700">Campaign: {callingFor.campaignName}</span>
+          {clientServices && (
+            <span className="ml-auto">
+              <ClientServicesButton clientName={callingFor.clientName} services={clientServices} variant="small" />
+            </span>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 text-[12.5px]">

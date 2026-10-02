@@ -42,6 +42,8 @@ import ConsultationEmailModal, { type SendConsultationEmailResult } from "./Cons
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import ClientNotificationModal, { type SendClientNotificationResult } from "./ClientNotificationModal";
 import CommunicationPreferenceBanner from "./CommunicationPreferenceBanner";
+import ClientServicesButton from "./client-services/ClientServicesButton";
+import type { ClientServiceRow } from "@/lib/leadgen-client-services";
 import { clientNotificationLabel } from "@/lib/leadgen-client-notification";
 import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
@@ -191,6 +193,7 @@ export default function LeadDetailClient({
   dncSuppression = null,
   onBack,
   callListSegmentName = null,
+  clientServices,
 }: {
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
@@ -256,6 +259,9 @@ export default function LeadDetailClient({
   // existing caller (dashboards, Opportunity Finder modal) keeps
   // compiling without passing it.
   callListSegmentName?: string | null;
+  // The lead's client's active Products, Services & Pricing (read-only
+  // reference). Optional: when omitted or empty the button simply isn't shown.
+  clientServices?: ClientServiceRow[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -556,6 +562,7 @@ export default function LeadDetailClient({
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
         {isAdmin && actions.sendClientNotification && client.active && <ActionButton onClick={() => setShowClientNotifyModal(true)}>Email Client</ActionButton>}
+        {clientServices && <ClientServicesButton clientName={client.name} services={clientServices} />}
         {isAdmin && actions.deleteLead && (
           <button
             type="button"

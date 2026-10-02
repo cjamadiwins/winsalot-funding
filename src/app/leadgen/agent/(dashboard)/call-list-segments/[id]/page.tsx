@@ -10,6 +10,7 @@ import { resolveScriptOverride } from "@/lib/leadgen-campaign-form";
 import { isColumnHidden } from "@/lib/call-list-columns";
 import type { CallListLeadRow, CallListSegmentRow } from "@/lib/call-list-types";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
+import { fetchClientServices } from "@/lib/leadgen-client-services-data";
 import { logCallListCallAction, promoteCallListLeadAction } from "../actions";
 
 export default async function LeadgenAgentCallListSegmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -125,6 +126,10 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
     callback_at: isColumnHidden(hiddenFields, "callback_at") ? null : lead.callback_at,
   }));
 
+  // Read-only client Products, Services & Pricing, read through the agent's own
+  // session (RLS: active entries of assigned clients only).
+  const clientServices = assignment?.state === "assigned" ? await fetchClientServices(supabase, assignment.clientId, { activeOnly: true }) : [];
+
   return (
     <div>
       <Link href="/leadgen/agent/call-list-segments" className="text-sm font-medium text-[var(--color-accent)]">
@@ -150,6 +155,7 @@ export default async function LeadgenAgentCallListSegmentDetailPage({ params }: 
           websiteServices={scriptSession?.websiteServices}
           agentName={agent.full_name || agent.email}
           callingFor={assignment?.state === "assigned" ? { clientName: assignment.clientName, campaignName: assignment.campaignName } : null}
+          clientServices={clientServices}
         />
       </div>
     </div>
