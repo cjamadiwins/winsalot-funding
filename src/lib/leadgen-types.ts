@@ -503,6 +503,7 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "hidebrandt_intro_sent",
   "opportunity_created",
   "opportunity_outcome_changed",
+  "client_notified",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -530,6 +531,7 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   hidebrandt_intro_sent: "Hidebrandt Web Services intro email sent",
   opportunity_created: "Added to pipeline",
   opportunity_outcome_changed: "Pipeline outcome updated",
+  client_notified: "Client notified",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -938,6 +940,9 @@ export type LeadgenEmailRow = {
   failed_at: string | null;
   failure_reason: string | null;
   client_visible: boolean;
+  // Set only on an admin "Email Client" lead notification (see
+  // leadgen-client-notification.ts); null/absent on every other email.
+  notification_type?: string | null;
 };
 
 // The single most recent status-change timestamp across every possible
