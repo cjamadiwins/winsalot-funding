@@ -81,8 +81,12 @@ function excerpt(text: string, index: number, length: number): string {
   return text.slice(start, end).trim();
 }
 
-const EMAIL_ONLY_EXPLICIT = /\be-?mail\s+only\b|\bonly\s+(?:by\s+|via\s+)?e-?mail\b|\bprefers?\s+(?:to\s+be\s+contacted\s+(?:by|via)\s+)?e-?mail\b|\bno\s+phone\s+calls?\b/i;
-const DO_NOT_CALL = /\b(?:do\s*n[o']?t|don'?t)\s+(?:call|phone)\b|\bno\s+calls?\b/i;
+// The Winsalot-side calling restriction is ONLY the exact marker an admin stores
+// on that one lead's own notes ("EMAIL ONLY — DO NOT CALL"). It is deliberately
+// not inferred from loose phrasing ("no calls", "don't call before 10") or from
+// the lead's status, client, campaign or interest level, so it can never spread
+// to other leads - a lead has it only if its own record carries the marker.
+const EMAIL_ONLY_MARKER = /EMAIL\s+ONLY\s*[—–-]+\s*DO\s+NOT\s+CALL/i;
 const CALL_REQUESTED = /\bcall\s+(?:me|us)\s+back\b|\bcall\s+requested\b|\bplease\s+call\b|\brequests?\s+a\s+(?:phone\s+)?call\b|\bcallback\s+requested\b/i;
 const SPECIFIC_TIME =
   /\b(?:call|reach|contact|phone)\b[^.\n]*\b(?:after|before|at|between|around)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b|\b(?:mornings?|afternoons?|evenings?)\s+(?:only|preferred|are\s+best)\b/i;
@@ -93,17 +97,10 @@ export function detectCommunicationPreferences(lead: Pick<LeadgenLeadRow, "statu
   const text = [lead.notes, lead.client_notes, lead.source_notes].filter((t): t is string => Boolean(t && t.trim())).join("\n");
   const found: CommunicationPreference[] = [];
 
-  let emailOnly: CommunicationPreference | null = null;
-  for (const pattern of [EMAIL_ONLY_EXPLICIT, DO_NOT_CALL]) {
-    const match = pattern.exec(text);
-    if (match) {
-      emailOnly = { kind: "email_only", label: EMAIL_ONLY_LABEL, evidence: excerpt(text, match.index, match[0].length) };
-      break;
-    }
-  }
-  if (!emailOnly && lead.status === "Do not call") {
-    emailOnly = { kind: "email_only", label: EMAIL_ONLY_LABEL, evidence: "Lead status is “Do not call”." };
-  }
+  const marker = EMAIL_ONLY_MARKER.exec(text);
+  const emailOnly: CommunicationPreference | null = marker
+    ? { kind: "email_only", label: EMAIL_ONLY_LABEL, evidence: excerpt(text, marker.index, marker[0].length) }
+    : null;
   if (emailOnly) found.push(emailOnly);
 
   const callRequested = CALL_REQUESTED.exec(text);

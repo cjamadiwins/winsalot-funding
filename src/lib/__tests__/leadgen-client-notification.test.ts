@@ -75,32 +75,50 @@ describe("Mak 7even Renovations (Teknokraft) draft", () => {
     expect(body).toContain("• Scope of work\n• Project cost\n• Estimated project duration / completion timeline");
   });
 
-  it("without the explicit note, the 'via email' request alone does not trigger the internal warning", () => {
+  it("without the stored marker, the 'via email' request alone does not trigger the internal warning", () => {
     const withoutNote = { ...mak, notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration." } as LeadgenLeadRow;
     expect(detectCommunicationPreferences(withoutNote)).toEqual([]);
     expect(buildClientNotificationDraft({ client: teknokraft, lead: withoutNote, type: "proposal_requested" }).body).toContain("by email.");
   });
 });
 
-describe("email-only is per lead, never global", () => {
-  const plain = { ...mak, id: "other", business_name: "Plain Plumbing", notes: "Owner said call back Tuesday.", status: "Interested" } as LeadgenLeadRow;
-  it("another Teknokraft lead without that note is not email-only", () => {
-    expect(detectCommunicationPreferences(plain)).toEqual([]);
-    const { body } = buildClientNotificationDraft({ client: teknokraft, lead: plain, type: "interested_lead" });
-    expect(body).not.toMatch(/email communication only|by email/i);
-    expect(body).toContain("Please follow up with the prospect directly.");
+describe("the Winsalot email-only warning is tied only to a lead's own stored marker", () => {
+  const prefs = (over: Partial<LeadgenLeadRow>) => detectCommunicationPreferences({ ...mak, ...over } as LeadgenLeadRow).map((p) => p.kind);
+
+  it("another Teknokraft lead (same client, same campaign, Interested, proposal requested) is unaffected", () => {
+    const other = { ...mak, id: "other-tek", business_name: "Plain Plumbing", status: "Interested", notes: "Owner asked for a quote via email." } as LeadgenLeadRow;
+    expect(detectCommunicationPreferences(other)).toEqual([]);
+    expect(buildClientNotificationDraft({ client: teknokraft, lead: other, type: "proposal_requested" }).body).not.toMatch(/do not call|email only/i);
   });
+
+  it("a lead belonging to another client is unaffected", () => {
+    const brent = { ...mak, id: "other-client", business_name: "Joe's Auto", client_id: "brents", status: "Interested", notes: "Wants more info." } as unknown as LeadgenLeadRow;
+    expect(detectCommunicationPreferences(brent)).toEqual([]);
+  });
+
+  it("status, client or interest level never trigger it", () => {
+    for (const status of ["Do not call", "Interested", "Callback requested", "Information requested", "Appointment booked"] as const) {
+      expect(prefs({ status, notes: null })).toEqual([]);
+    }
+  });
+
+  it("loose phrasing no longer triggers it (including a call-timing note)", () => {
+    for (const notes of ["Prefers email only, no calls.", "Please do not call, email instead.", "Don't call before 10am.", "no phone calls please", "Wants the proposal via email."]) {
+      expect(prefs({ notes })).not.toContain("email_only");
+    }
+  });
+
+  it("only the exact stored marker triggers it, wherever it appears in that lead's own note", () => {
+    expect(prefs({ notes: "EMAIL ONLY — DO NOT CALL" })).toEqual(["email_only"]);
+    expect(prefs({ notes: "Some other note.\n\nEMAIL ONLY — DO NOT CALL" })).toEqual(["email_only"]);
+    expect(prefs({ notes: "email only - do not call" })).toEqual(["email_only"]);
+  });
+
   it.each([
-    ["Prefers email only, no calls.", "email_only"],
-    ["Please do not call, email instead.", "email_only"],
-    ["Don't call him.", "email_only"],
     ["Call me back after 3pm.", "specific_time"],
     ["Please call tomorrow", "call_requested"],
-  ])("detects %s", (notes, kind) => {
+  ])("other prospect preferences still read from their own lead's note: %s", (notes, kind) => {
     expect(detectCommunicationPreferences({ status: "Interested", notes, client_notes: null, source_notes: null }).map((p) => p.kind)).toContain(kind);
-  });
-  it("treats a Do not call status as a call restriction", () => {
-    expect(detectCommunicationPreferences({ status: "Do not call", notes: null, client_notes: null, source_notes: null })[0].label).toBe(EMAIL_ONLY_LABEL);
   });
 });
 
