@@ -45,6 +45,7 @@ export default function ClientDetailClient({
   adminName,
   portalPanel,
   insightsPanel,
+  servicesPanel,
 }: {
   client: LeadgenClientRow;
   campaigns: LeadgenCampaignRow[];
@@ -66,6 +67,7 @@ export default function ClientDetailClient({
   // Quality Insights) - passed in so this client component stays unchanged.
   portalPanel?: React.ReactNode;
   insightsPanel?: React.ReactNode;
+  servicesPanel?: React.ReactNode;
 }) {
   const bouncedSet = new Set(bouncedEmails);
   const isBounced = (email: string | null | undefined) => !!email && bouncedSet.has(email.trim().toLowerCase());
@@ -373,6 +375,8 @@ export default function ClientDetailClient({
           )}
         </section>
       </div>
+
+      {servicesPanel}
 
       {insightsPanel}
 

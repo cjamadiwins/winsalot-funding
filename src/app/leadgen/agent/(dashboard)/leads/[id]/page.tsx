@@ -3,6 +3,8 @@ import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { loadLeadgenAgentLeadDetail } from "@/lib/leadgen-agent-lead-detail-data";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { fetchClientServices } from "@/lib/leadgen-client-services-data";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
   completeFollowUpAction,
@@ -68,6 +70,10 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
     callListSegmentName = segment?.name ?? null;
   }
 
+  // Read-only client Products, Services & Pricing through the agent's own
+  // session (RLS: active entries of assigned clients only).
+  const clientServices = await fetchClientServices(await createSupabaseServerClient(), detail.client!.id, { activeOnly: true });
+
   return (
     <>
       {/* Attribution follows the lead's own client/campaign, which was set from
@@ -103,6 +109,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       actions={actions}
       listPath="/leadgen/agent/leads"
       dncSuppression={detail.dncSuppression}
+      clientServices={clientServices}
     />
     </>
   );

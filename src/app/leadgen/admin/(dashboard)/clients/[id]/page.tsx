@@ -15,7 +15,10 @@ import ClientPortalAdminPanel from "@/components/leadgen/appointment-prep/Client
 import AppointmentQualityInsights from "@/components/leadgen/appointment-prep/AppointmentQualityInsights";
 import { computeFeedbackMetrics, computeQualityInsights, hasAppointmentPassed } from "@/lib/leadgen-appointment-prep";
 import { fetchClientPortalLogins, fetchFeedbackRows } from "@/lib/leadgen-appointment-prep-data";
+import ClientServicesAdminPanel from "@/components/leadgen/client-services/ClientServicesAdminPanel";
+import { fetchClientServiceHistory, fetchClientServices, fetchUserNames } from "@/lib/leadgen-client-services-data";
 import ClientDetailClient from "./ClientDetailClient";
+import { moveClientServiceAction, saveClientServiceAction, setClientServiceActiveAction } from "./services-actions";
 
 export default async function LeadgenClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const adminUser = await requireLeadgenAdmin();
@@ -65,6 +68,11 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
     ? `/leadgen/admin/clients/${id}/portal-preview/appointments/${previewTarget.id}`
     : `/leadgen/admin/clients/${id}/portal-preview`;
 
+  // Products, Services & Pricing (Admin-only section of the profile).
+  const [services, { history, userNames: historyNames }] = await Promise.all([fetchClientServices(admin, id), fetchClientServiceHistory(admin, id)]);
+  const serviceNames = await fetchUserNames(admin, services.map((s) => s.updated_by));
+  const serviceUserNames = { ...historyNames, ...serviceNames };
+
   const allLeads = leads ?? [];
   const allAppointments = appointments ?? [];
   const countableAppointments = allAppointments.filter((a) => isLeadgenAppointmentCountable(a.status));
@@ -102,6 +110,15 @@ export default async function LeadgenClientDetailPage({ params }: { params: Prom
           logins={portalLogins}
           lastBriefViewedAt={(viewedRows?.[0]?.viewed_at as string | undefined) ?? null}
           previewHref={previewHref}
+        />
+      }
+      servicesPanel={
+        <ClientServicesAdminPanel
+          clientId={id}
+          services={services}
+          history={history}
+          userNames={serviceUserNames}
+          actions={{ save: saveClientServiceAction, setActive: setClientServiceActiveAction, move: moveClientServiceAction }}
         />
       }
       insightsPanel={

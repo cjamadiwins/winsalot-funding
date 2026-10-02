@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { loadLeadgenLeadDetail } from "@/lib/leadgen-lead-detail-data";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { fetchClientServices } from "@/lib/leadgen-client-services-data";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
 import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
@@ -85,6 +86,8 @@ export default async function LeadgenAdminLeadDetailPage({
     callListSegmentName = segment?.name ?? null;
   }
 
+  const clientServices = await fetchClientServices(getSupabaseAdmin(), detail.lead.client_id, { activeOnly: true });
+
   return (
     <LeadDetailClient
       lead={detail.lead}
@@ -114,6 +117,7 @@ export default async function LeadgenAdminLeadDetailPage({
       listPath="/leadgen/admin/leads"
       score={detail.score}
       dncSuppression={detail.dncSuppression}
+      clientServices={clientServices}
     />
   );
 }
