@@ -14,17 +14,15 @@ describe("buildCallListCampaignName", () => {
 });
 
 describe("Website & SEO umbrella label (Hidebrandt + Teknokraft)", () => {
-  it("uses one service label and keeps niche and market separate", () => {
-    expect(buildLeadgenListCampaignName({ clientName: "Teknokraft Canada Inc.", industry: "Pet Sitter / Pet Care", location: "Ottawa, Ontario" }))
-      .toBe("Lead Generation for Website & SEO — Pet Sitter / Pet Care — Ottawa, Ontario");
-    expect(buildLeadgenListCampaignName({ clientName: "Hidebrandt Web Services", industry: "Painting Companies", location: "Winnipeg, Manitoba" }))
-      .toBe("Lead Generation for Website & SEO — Painting Companies — Winnipeg, Manitoba");
+  it("is exactly the umbrella service label; niche and market stay in the list name", () => {
+    expect(buildLeadgenListCampaignName({ clientName: "Teknokraft Canada Inc.", industry: "Pet Sitter / Pet Care", location: "Ottawa, Ontario" })).toBe("Lead Generation for Website & SEO");
+    expect(buildLeadgenListCampaignName({ clientName: "Hidebrandt Web Services", industry: "Painting Companies", location: "Winnipeg, Manitoba" })).toBe("Lead Generation for Website & SEO");
     expect(WEBSITE_SEO_SERVICE_LABEL).toBe("Lead Generation for Website & SEO");
   });
 
-  it("never introduces sub-categories like Website Design / Needs Rebrand / SEO Leads", () => {
+  it("never adds Website/SEO wording per list or sub-categories like Website Design / Needs Rebrand / SEO Leads", () => {
     const label = buildLeadgenListCampaignName({ clientName: "Hidebrandt Web Services", industry: "Auto Repair Shops", location: "Toronto, Ontario" });
-    expect(label).not.toMatch(/Website Design|Needs Rebrand|SEO Leads/);
+    expect(label).not.toMatch(/Website Design|Needs Rebrand|SEO Leads|Auto Repair|Toronto/);
   });
 
   it("leaves every other client's list label unchanged", () => {

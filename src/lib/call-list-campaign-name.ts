@@ -21,10 +21,13 @@ export function isWebsiteSeoClient(clientName: string | null | undefined): boole
   return WEBSITE_SEO_CLIENTS.has((clientName ?? "").trim().toLowerCase());
 }
 
-// Lead Generation CRM list label: standardized service label + niche + market for
-// the Website & SEO clients, the original "Client — industry — location" for any
-// other client. Display text only; Growth CRM keeps buildCallListCampaignName.
+// Lead Generation CRM list campaign label: for the Website & SEO clients it is
+// exactly the umbrella service label - the list's own name carries the niche,
+// market and any genuine qualifier (e.g. "Pet Sitter — Ottawa — No Website"), so
+// Client -> Lead Generation for Website & SEO -> niche list -> leads. Any other
+// client keeps the original "Client — industry — location". Display text only;
+// Growth CRM keeps buildCallListCampaignName.
 export function buildLeadgenListCampaignName(input: { clientName: string; industry: string | null; location: string | null }): string {
   if (!isWebsiteSeoClient(input.clientName)) return buildCallListCampaignName(input);
-  return buildCallListCampaignName({ clientName: WEBSITE_SEO_SERVICE_LABEL, industry: input.industry, location: input.location });
+  return WEBSITE_SEO_SERVICE_LABEL;
 }
