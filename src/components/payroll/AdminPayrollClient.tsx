@@ -23,6 +23,8 @@ import {
   type PayrollRecord,
   type PayrollStatus,
 } from "@/lib/payroll";
+import PayrollStatementDialog from "./PayrollStatementDialog";
+import { isReopened, summarizePayroll, type SharedPayrollRecord } from "@/lib/shared-payroll";
 import { buildPayStatementHtml, openPayStatementWindow } from "@/lib/pay-statement";
 
 type Agent = { id: string; full_name: string; email: string; payroll_currency: PayrollCurrency };
@@ -62,7 +64,7 @@ type Props = {
   companyName: string;
   crmLabel: string;
   agents: Agent[];
-  records: PayrollRecord[];
+  records: SharedPayrollRecord[];
   auditLog: PayrollAuditLogRow[];
   payrollEmails?: PayrollEmailNotification[];
   nextPayday: string;
@@ -81,7 +83,7 @@ type Props = {
   markPaidAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   cancelAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
   reopenAction: (recordId: string, formData: FormData) => Promise<ActionResult>;
-  updateAgentCurrencyAction: (agentId: string, currency: string) => Promise<ActionResult>;
+  updateAgentCurrencyAction: (agentId: string, currency: string, payday?: string) => Promise<ActionResult>;
 };
 
 const inputClasses =
@@ -697,7 +699,10 @@ export default function AdminPayrollClient({
   const [auditOpenId, setAuditOpenId] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [periodFilter, setPeriodFilter] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<string>(records[0]?.payday ?? "all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   function runAction(fn: () => Promise<ActionResult>, onDone?: () => void) {
     setError(null);
@@ -721,24 +726,25 @@ export default function AdminPayrollClient({
     [records]
   );
 
-  const visibleRecords = records.filter((r) => {
+  const currentPeriod = periods.includes(nextPayday) ? nextPayday : periods[0];
+  const years = [...new Set(records.map(r => r.payday.slice(0, 4)))].sort().reverse();
+  const visibleRecords = records.filter(r => {
     if (agentFilter !== "all" && r.agent_id !== agentFilter) return false;
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
-    if (periodFilter !== "all" && r.payday !== periodFilter) return false;
-    return true;
-  });
-
-  const groups = new Map<string, PayrollRecord[]>();
-  for (const record of visibleRecords) {
-    const list = groups.get(record.agent_id) ?? [];
-    list.push(record);
-    groups.set(record.agent_id, list);
+    if (statusFilter === "pending" && r.status !== "draft" && r.status !== "approved") return false;
+    if (statusFilter === "reopened" && !isReopened(r)) return false;
+    if (!["all", "pending", "reopened"].includes(statusFilter) && r.status !== statusFilter) return false;
+    if (periodFilter === "previous" && r.payday >= (currentPeriod ?? nextPayday)) return false;
+    if (periodFilter !== "all" && periodFilter !== "previous" && r.payday !== periodFilter) return false;
+    if (yearFilter !== "all" && !r.payday.startsWith(yearFilter)) return false;
+    const text = `${agentsById.get(r.agent_id)?.full_name ?? "Former agent"} ${r.pay_period_start} ${r.pay_period_end} ${formatPayPeriodLabel(r.pay_period_start, r.pay_period_end)}`.toLowerCase();
+    return text.includes(search.trim().toLowerCase());
+  }).sort((a, b) => b.payday.localeCompare(a.payday) || (agentsById.get(a.agent_id)?.full_name ?? "").localeCompare(agentsById.get(b.agent_id)?.full_name ?? ""));
+  const summaryRecords = records.filter(r => r.payday === (periodFilter !== "all" && periodFilter !== "previous" ? periodFilter : currentPeriod));
+  const summary = summarizePayroll(summaryRecords, new Map(agents.map(a => [a.id, a.payroll_currency])));
+  const selected = records.find(r => r.id === selectedId);
+  function closeStatement() {
+    setSelectedId(null); setEditingId(null); setPayingId(null); setCancellingId(null); setReopeningId(null); setReopenConfirmed(false); setAuditOpenId(null);
   }
-  const orderedAgentIds = Array.from(groups.keys()).sort((a, b) => {
-    const nameA = agentsById.get(a)?.full_name ?? "";
-    const nameB = agentsById.get(b)?.full_name ?? "";
-    return nameA.localeCompare(nameB);
-  });
 
   function printStatement(record: PayrollRecord) {
     const agent = agentsById.get(record.agent_id);
@@ -746,7 +752,7 @@ export default function AdminPayrollClient({
       companyName,
       crmLabel,
       agentName: agent?.full_name ?? "Former agent",
-      currency: agent?.payroll_currency ?? "NGN",
+      currency: (record as SharedPayrollRecord).payroll_currency ?? agent?.payroll_currency ?? "NGN",
       payPeriodStart: record.pay_period_start,
       payPeriodEnd: record.pay_period_end,
       payday: record.payday,
@@ -768,18 +774,28 @@ export default function AdminPayrollClient({
       status: record.status,
       actualPaymentDate: record.actual_payment_date,
       paymentMethod: record.payment_method,
+      agentNote: record.admin_notes,
+      recordId: record.id,
     });
     openPayStatementWindow(html);
   }
 
   return (
     <div>
-      <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Next Payday</p>
-        <p className="mt-1 text-lg font-bold text-sky-900">{formatDateShort(nextPayday)}</p>
-        <p className="mt-1 text-xs text-sky-700">
-          Upcoming: {upcomingPaydays.map((d) => formatDateShort(d)).join(" · ")}
-        </p>
+      <div className="rounded-lg border border-slate-200 bg-[var(--crm-surface)] px-4 py-3">
+        <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500">
+          <h2 className="font-semibold text-slate-800">Pay period summary · {summaryRecords[0] ? formatPayPeriodLabel(summaryRecords[0].pay_period_start, summaryRecords[0].pay_period_end) : "No records"}</h2>
+          <span>Next payday: {formatDateShort(nextPayday)} <span className="hidden lg:inline">· Upcoming: {upcomingPaydays.map(formatDateShort).join(" · ")}</span></span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+          <span>Agents <strong className="text-slate-900">{summary.agents}</strong></span>
+          <span>Paid <strong className="text-emerald-700">{summary.paid}</strong></span>
+          <span>Outstanding <strong className="text-amber-700">{summary.outstanding}</strong></span>
+        </div>
+        {summary.totals.map(t => <dl key={t.currency} className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 xl:grid-cols-5">
+          {[["Gross wages", t.gross], ["Allowances", t.allowances], ["Bonuses / incentives", t.bonuses], ["Deductions", t.deductions], ["Final payroll", t.final]].map(([label, amount]) => <div key={String(label)}><dt className="text-slate-500">{label} · {t.currency}</dt><dd className="mt-0.5 font-semibold tabular-nums text-slate-900">{formatCurrency(Number(amount), t.currency as PayrollCurrency)}</dd></div>)}
+        </dl>)}
+        <p className="mt-2 text-[11px] text-slate-500">Stored payroll amounts for this period. Cancelled records excluded. Filters below apply to the register.</p>
       </div>
 
       {error && (
@@ -793,6 +809,7 @@ export default function AdminPayrollClient({
 
         <div className="flex flex-wrap items-center gap-2">
           <select
+            aria-label="Agent"
             value={agentFilter}
             onChange={(e) => setAgentFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
@@ -805,11 +822,14 @@ export default function AdminPayrollClient({
             ))}
           </select>
           <select
+            aria-label="Payroll status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
           >
             <option value="all">All statuses</option>
+            <option value="pending">Unpaid / Pending</option>
+            <option value="reopened">Reopened</option>
             {(Object.keys(PAYROLL_STATUS_LABELS) as PayrollStatus[]).map((status) => (
               <option key={status} value={status}>
                 {PAYROLL_STATUS_LABELS[status]}
@@ -817,17 +837,21 @@ export default function AdminPayrollClient({
             ))}
           </select>
           <select
+            aria-label="Pay period"
             value={periodFilter}
             onChange={(e) => setPeriodFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
           >
             <option value="all">All pay periods</option>
+            <option value="previous">Previous pay periods</option>
             {periods.map((payday) => (
               <option key={payday} value={payday}>
-                {formatDateShort(payday)}
+                {payday === currentPeriod ? "Current · " : ""}{formatPayPeriodLabel(records.find(r => r.payday === payday)!.pay_period_start, records.find(r => r.payday === payday)!.pay_period_end)}
               </option>
             ))}
           </select>
+          <select aria-label="Year" value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"><option value="all">All years</option>{years.map(y => <option key={y}>{y}</option>)}</select>
+          <input type="search" aria-label="Search agent or pay period" placeholder="Search agent or period" value={search} onChange={e => setSearch(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm sm:w-48" />
         </div>
       </div>
 
@@ -854,20 +878,37 @@ export default function AdminPayrollClient({
         </form>
       )}
 
-      <div className="mt-8 space-y-8">
-        {orderedAgentIds.map((agentId) => {
-          const agent = agentsById.get(agentId);
-          const currency: PayrollCurrency = agent?.payroll_currency ?? "NGN";
-          const agentRecords = groups.get(agentId)!.slice().sort((a, b) => (a.payday < b.payday ? 1 : -1));
-          return (
-            <div key={agentId}>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                {agent?.full_name ?? "Former agent"}
-                {agent && <span className="font-normal normal-case text-slate-400"> · {agent.email}</span>}
-              </h2>
-              <div className="space-y-4">
-                {agentRecords.map((record) => (
-                  <div key={record.id} className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-6">
+      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-[var(--crm-surface)]" tabIndex={0} role="region" aria-label="Payroll register, scroll horizontally for all columns">
+        <table className="w-full min-w-[1450px] text-left text-xs">
+          <caption className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Payroll register · {visibleRecords.length} records · All historical periods remain available through the filters</caption>
+          <thead className="border-y border-slate-200 bg-slate-50 text-slate-600"><tr>
+            {["Agent", "Pay Period", "Payment Date", "Regular Hours", "Gross Wage", "Internet", "Incentive / Bonus", "Other Additions", "Deductions", "Final Amount", "Method", "Status", "Statement"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 py-2 font-semibold">{label}</th>)}
+          </tr></thead>
+          <tbody>{visibleRecords.map((record, index) => {
+            const agent = agentsById.get(record.agent_id);
+            const currency = record.payroll_currency ?? agent?.payroll_currency ?? "NGN";
+            const year = record.payday.slice(0, 4);
+            return <tr key={record.id} onClick={() => setSelectedId(record.id)} className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-sky-50">
+              <th scope="row" className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-800">{agent?.full_name ?? "Former agent"}</th>
+              <td className="whitespace-nowrap px-3 py-2 text-slate-600">{(index === 0 || visibleRecords[index - 1].payday.slice(0, 4) !== year) && <span className="mr-2 font-semibold text-slate-800">{year}</span>}{formatPayPeriodLabel(record.pay_period_start, record.pay_period_end)}</td>
+              <td className="whitespace-nowrap px-3 py-2">{record.actual_payment_date ? formatDateShort(record.actual_payment_date) : "—"}</td>
+              <td className="px-3 py-2 tabular-nums">{record.regular_paid_hours}h</td>
+              {[record.base_pay_earned, record.internet_allowance, record.bonus_commission, record.other_additions, record.deductions, record.total_pay].map((value, i) => <td key={i} className={`whitespace-nowrap px-3 py-2 tabular-nums ${i === 5 ? "font-semibold text-slate-900" : "text-slate-600"}`}>{formatCurrency(value, currency)}</td>)}
+              <td className="whitespace-nowrap px-3 py-2">{record.payment_method ?? "—"}</td>
+              <td className="whitespace-nowrap px-3 py-2"><StatusBadge status={record.status} />{isReopened(record) && <span className="ml-1 text-amber-700">Reopened</span>}</td>
+              <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => setSelectedId(record.id)} aria-label={`View statement for ${agent?.full_name ?? "agent"}, ${formatPayPeriodLabel(record.pay_period_start, record.pay_period_end)}`} className="font-semibold text-sky-700 hover:underline">View Statement</button></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {visibleRecords.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No payroll records match these filters.</p>}
+      </div>
+      {selected && (() => {
+        const record = selected;
+        const agent = agentsById.get(record.agent_id);
+        const currency: PayrollCurrency = record.payroll_currency ?? agent?.payroll_currency ?? "NGN";
+        return <PayrollStatementDialog onClose={closeStatement} title={`${agent?.full_name ?? "Former agent"} · Payroll Statement`}>
+          <p className="mb-3 text-xs text-slate-500">{companyName} · Record {record.id}</p>
+          {error && <p role="alert" className="mb-3 rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
                     {editingId === record.id ? (
                       <form
                         action={(formData) =>
@@ -879,7 +920,7 @@ export default function AdminPayrollClient({
                         className="space-y-3"
                       >
                         <PayrollFormFields
-                          agents={agents}
+                          agents={agents.map(a => a.id === record.agent_id ? { ...a, payroll_currency: currency } : a)}
                           defaultAgentId={record.agent_id}
                           defaultPayday={record.payday}
                           record={record}
@@ -887,7 +928,7 @@ export default function AdminPayrollClient({
                           requireConfirmApprovedEdit={record.status === "approved"}
                           loadAttendanceAction={loadAttendanceAction}
                           loadHolidayPayAction={loadHolidayPayAction}
-                          updateAgentCurrencyAction={updateAgentCurrencyAction}
+                          updateAgentCurrencyAction={(id, value) => updateAgentCurrencyAction(id, value, record.payday)}
                         />
                         <div className="flex items-center gap-3">
                           <button type="submit" disabled={isPending} className={buttonClasses}>
@@ -1184,19 +1225,8 @@ export default function AdminPayrollClient({
                         )}
                       </>
                     )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-
-        {orderedAgentIds.length === 0 && (
-          <p className="rounded-2xl border border-slate-200 bg-[var(--crm-surface)] px-4 py-8 text-center text-slate-500">
-            No payroll records match these filters.
-          </p>
-        )}
-      </div>
+        </PayrollStatementDialog>;
+      })()}
     </div>
   );
 }
