@@ -1,3 +1,5 @@
+import { loadSharedPayrollData } from "@/lib/shared-payroll-data";
+import type { SharedPayrollRecord } from "@/lib/shared-payroll";
 import { loadPayrollEmailNotifications } from "@/lib/payroll-paid-email";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
@@ -9,22 +11,12 @@ import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
 import HolidayPayAdminSection from "@/components/payroll/HolidayPayAdminSection";
 import SubcontractorsAdminSection from "@/components/payroll/SubcontractorsAdminSection";
 import PayrollCostSummary from "@/components/payroll/PayrollCostSummary";
-import {
-  approveLeadgenPayrollAction,
-  cancelLeadgenPayrollAction,
-  createLeadgenPayrollAction,
-  loadLeadgenAttendanceSummaryAction,
-  markLeadgenPayrollPaidAction,
-  reopenLeadgenPayrollAction,
-  updateLeadgenPayrollAction,
-  updateLeadgenPayrollAgentCurrencyAction,
-} from "./actions";
+import { createPayrollAction, updatePayrollAction, approvePayrollAction, markPayrollPaidAction, cancelPayrollAction, reopenPayrollAction, updatePayrollAgentCurrencyAction, loadAttendanceSummaryAction, loadHolidayPaySummaryAction } from "@/lib/shared-payroll-actions";
 import {
   assignHolidayAction,
   createHolidayAction,
   deactivateHolidayAction,
   deleteHolidayAction,
-  loadHolidayPaySummaryAction,
   overrideAssignmentAmountAction,
   reactivateHolidayAction,
   removeAssignmentAction,
@@ -45,6 +37,7 @@ export default async function LeadgenAdminPayrollPage() {
 
   const [
     { data: agents, error: agentsError },
+    { data: sharedAgents, error: sharedAgentsError },
     { data: records, error: recordsError },
     { data: auditLog, error: auditLogError },
     { data: holidays, error: holidaysError },
@@ -54,8 +47,9 @@ export default async function LeadgenAdminPayrollPage() {
     { data: clients, error: clientsError },
   ] = await Promise.all([
     supabase.from("leadgen_users").select("*").eq("role", "agent").order("full_name"),
-    supabase.from("leadgen_payroll").select("*").order("payday", { ascending: false }),
-    supabase.from("leadgen_payroll_audit_log").select("*").order("created_at", { ascending: false }),
+    loadSharedPayrollData(supabase, "winsalot_payroll_agents"),
+    loadSharedPayrollData(supabase, "winsalot_payroll"),
+    loadSharedPayrollData(supabase, "winsalot_payroll_audit_log"),
     supabase.from("holidays").select("*").is("deleted_at", null).order("holiday_date", { ascending: false }),
     supabase.from("holiday_pay_assignments").select("*").not("leadgen_user_id", "is", null),
     supabase.from("leadgen_subcontractors").select("*").order("full_name"),
@@ -66,20 +60,19 @@ export default async function LeadgenAdminPayrollPage() {
   const payrollEmails = await loadPayrollEmailNotifications((records ?? []) as PayrollRecord[]);
 
   const error =
-    agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
+    sharedAgentsError ?? agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
     subcontractorsError ?? subcontractorPaymentsError ?? clientsError;
 
   const subcontractorRows = (subcontractors ?? []) as SubcontractorRow[];
   const subcontractorPaymentRows = (subcontractorPayments ?? []) as SubcontractorPaymentRow[];
   const subcontractorsById = new Map(subcontractorRows.map((s) => [s.id, s]));
-  const agentCurrencyById = new Map(((agents ?? []) as LeadgenUserRow[]).map((a) => [a.id, a.payroll_currency]));
+  const agentCurrencyById = new Map(((sharedAgents ?? []) as LeadgenUserRow[]).map((a) => [a.id, a.payroll_currency]));
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Payroll</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Manage biweekly pay records for Lead Generation CRM agents. Paid every 14 days, in each agent&apos;s own
-        Payroll Currency (set on their profile), driven by attendance and admin-approved day counts.
+        Shared Winsalot Corp payroll records, statements, and payment history across both CRMs.
       </p>
 
       <nav aria-label="Payroll sections" className="mt-5 flex flex-wrap gap-2">
@@ -113,27 +106,27 @@ export default async function LeadgenAdminPayrollPage() {
         <div id="agent-payroll" className="mt-6 scroll-mt-6">
           <AdminPayrollClient
             companyName="Winsalot Corp."
-            crmLabel="Lead Generation CRM"
-            agents={((agents ?? []) as LeadgenUserRow[]).map((a) => ({
+            crmLabel="Winsalot Corp Payroll"
+            agents={((sharedAgents ?? []) as LeadgenUserRow[]).map((a) => ({
               id: a.id,
               full_name: a.full_name,
               email: a.email,
               payroll_currency: a.payroll_currency,
             }))}
-            records={(records ?? []) as PayrollRecord[]}
+            records={(records ?? []) as SharedPayrollRecord[]}
             payrollEmails={payrollEmails}
             auditLog={(auditLog ?? []) as PayrollAuditLogRow[]}
             nextPayday={getNextPayday()}
             upcomingPaydays={getUpcomingPaydays(4)}
-            loadAttendanceAction={loadLeadgenAttendanceSummaryAction}
+            loadAttendanceAction={loadAttendanceSummaryAction}
             loadHolidayPayAction={loadHolidayPaySummaryAction}
-            createAction={createLeadgenPayrollAction}
-            updateAction={updateLeadgenPayrollAction}
-            approveAction={approveLeadgenPayrollAction}
-            markPaidAction={markLeadgenPayrollPaidAction}
-            cancelAction={cancelLeadgenPayrollAction}
-            reopenAction={reopenLeadgenPayrollAction}
-            updateAgentCurrencyAction={updateLeadgenPayrollAgentCurrencyAction}
+            createAction={createPayrollAction}
+            updateAction={updatePayrollAction}
+            approveAction={approvePayrollAction}
+            markPaidAction={markPayrollPaidAction}
+            cancelAction={cancelPayrollAction}
+            reopenAction={reopenPayrollAction}
+            updateAgentCurrencyAction={updatePayrollAgentCurrencyAction}
           />
 
           <div id="holiday-pay" className="mt-8 scroll-mt-6">

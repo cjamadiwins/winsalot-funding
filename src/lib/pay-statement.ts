@@ -14,6 +14,8 @@ export type PayStatementInput = {
   companyName: string;
   crmLabel: string; // "Winsalot Growth CRM" or "Lead Generation CRM"
   agentName: string;
+  agentNote?: string | null;
+  recordId?: string;
   // The agent's own Payroll Currency - every amount below is formatted in
   // this, never a fixed currency (see migration 0134).
   currency: PayrollCurrency;
@@ -78,6 +80,7 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pay Statement - ${escapeHtml(input.agentName)} - ${escapeHtml(input.payday)}</title>
 <style>
   * { box-sizing: border-box; }
@@ -85,17 +88,17 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     color: #0f172a;
     margin: 0;
-    padding: 40px;
+    padding: 24px;
     background: #ffffff;
   }
   .statement { max-width: 640px; margin: 0 auto; }
   h1 { font-size: 20px; margin: 0 0 4px; }
-  .subtitle { color: #64748b; font-size: 13px; margin: 0 0 24px; }
-  .meta { display: flex; justify-content: space-between; margin-bottom: 24px; font-size: 13px; }
+  .subtitle { color: #64748b; font-size: 13px; margin: 0 0 16px; }
+  .meta { display: flex; justify-content: space-between; margin-bottom: 16px; gap: 16px; flex-wrap: wrap; font-size: 13px; }
   .meta div { color: #475569; }
   .meta strong { display: block; color: #0f172a; font-size: 14px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-  td { padding: 8px 0; font-size: 14px; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 6px 0; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
   td:last-child { text-align: right; font-weight: 600; }
   .total-row td { border-top: 2px solid #0f172a; border-bottom: none; font-size: 17px; font-weight: 700; padding-top: 14px; }
   .status { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #f1f5f9; color: #334155; }
@@ -130,6 +133,8 @@ export function buildPayStatementHtml(input: PayStatementInput): string {
       <tr class="total-row"><td>Final Net Payment</td><td>${escapeHtml(formatCurrency(input.totalPay, input.currency))}</td></tr>
     </table>
 
+    ${input.agentNote ? `<p class="notes" style="white-space: pre-wrap"><strong>Notes for agent:</strong> ${escapeHtml(input.agentNote)}</p>` : ""}
+    ${input.recordId ? `<p class="notes">Record: ${escapeHtml(input.recordId)}</p>` : ""}
     <p>
       <span class="status">${escapeHtml(STATUS_LABELS[input.status])}</span>
       ${
@@ -154,6 +159,6 @@ export function openPayStatementWindow(html: string): void {
   if (!win) return;
   win.document.open();
   win.document.write(html);
-  win.document.close();
   win.onload = () => win.print();
+  win.document.close();
 }

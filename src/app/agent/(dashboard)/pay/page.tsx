@@ -1,6 +1,8 @@
+import { loadSharedPayrollData } from "@/lib/shared-payroll-data";
+import { AGENT_PAYROLL_COLUMNS, type AgentPayrollRecord } from "@/lib/shared-payroll";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmUser } from "@/lib/crm-auth";
-import { getNextPayday, PAYROLL_CURRENCY_LABELS, type PayrollRecord } from "@/lib/payroll";
+import { getNextPayday, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
 import type { HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
 import MyPayView from "@/components/payroll/MyPayView";
 import HolidayPaySection from "@/components/payroll/HolidayPaySection";
@@ -9,11 +11,9 @@ export default async function AgentPayPage() {
   const agent = await requireCrmUser();
   const supabase = await createSupabaseServerClient();
 
-  // RLS (crm_payroll_agent_select_own) restricts this to this agent's own
-  // rows regardless of the .eq() below - the filter here is just for
-  // query efficiency, not the security boundary.
+  // Shared security-invoker view preserves own-record RLS; explicit agent fields exclude internal reasons.
   const [{ data: records, error }, { data: holidayAssignments, error: holidayError }] = await Promise.all([
-    supabase.from("crm_payroll").select("*").eq("agent_id", agent.id).order("payday", { ascending: false }),
+    loadSharedPayrollData(supabase, "winsalot_payroll", AGENT_PAYROLL_COLUMNS, agent.id),
     // holiday_pay_assignments_agent_select_own RLS restricts this to this
     // agent's own rows regardless of the .eq() below - same defense-in-
     // depth pattern as the payroll query above.
@@ -41,10 +41,10 @@ export default async function AgentPayPage() {
         <div className="mt-6 space-y-6">
           <MyPayView
             companyName="Winsalot Corp."
-            crmLabel="Winsalot Growth CRM"
+            crmLabel="Winsalot Corp Payroll"
             agentName={agent.full_name}
             nextPayday={getNextPayday()}
-            records={(records ?? []) as PayrollRecord[]}
+            records={(records ?? []) as unknown as AgentPayrollRecord[]}
             currency={agent.payroll_currency}
           />
           {!holidayError && (

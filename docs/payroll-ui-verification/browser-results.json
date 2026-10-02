@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "viewports": [
+    "1440x1000",
+    "390x844"
+  ],
+  "checks": [
+    "compact register",
+    "year/period/reopened/search filters",
+    "statement dialog",
+    "audit log",
+    "print popup and PDF",
+    "no internal notes in agent or print",
+    "own agent fixture",
+    "no document overflow",
+    "no page or console errors"
+  ],
+  "scope": "Synthetic data in the actual payroll components; production routes not exercised against unapplied migration."
+}
