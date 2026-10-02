@@ -137,6 +137,8 @@ export default async function LeadgenAgentDashboardPage() {
       .from("leadgen_emails")
       .select("lead_id, status, to_email, sent_at, delivered_at, delayed_at, bounced_at, complained_at, opened_at, clicked_at, failed_at, created_at")
       .not("lead_id", "is", null)
+      // An admin "Email Client" notification is not an email to the lead.
+      .is("notification_type", null)
       .order("created_at", { ascending: false }),
     // Opportunity Finder dashboard modal (below) - the exact same rows the
     // standalone /leadgen/agent/my-opportunities page loads (RLS already

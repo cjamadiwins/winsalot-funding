@@ -43,6 +43,8 @@ export default async function LeadgenAgentLeadsPage({
         .from("leadgen_emails")
         .select("lead_id, status, created_at")
         .in("lead_id", leadIds)
+        // An admin "Email Client" notification is not an email to the lead.
+        .is("notification_type", null)
         .order("created_at", { ascending: false })
     : { data: [] as { lead_id: string | null; status: LeadgenEmailStatus }[] };
 

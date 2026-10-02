@@ -243,6 +243,10 @@ export type SendLeadgenEmailInput = {
   // the send) works correctly for any client, not just that one.
   expectedSignatureName?: string;
   attachments?: Array<{ filename: string; content: Buffer }>;
+  // Admin "Email Client" lead notification reason (leadgen_emails.
+  // notification_type). Only written when provided, so every other caller's
+  // insert is byte-for-byte what it was before the column existed.
+  notificationType?: string | null;
 };
 
 export type SendLeadgenEmailResult = { emailId: string; error?: string };
@@ -329,6 +333,7 @@ export async function sendLeadgenEmail(
       sent_by: input.sentBy,
       status: "sending",
       client_visible: input.clientVisible,
+      ...(input.notificationType ? { notification_type: input.notificationType } : {}),
     })
     .select("id")
     .single();

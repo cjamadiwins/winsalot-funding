@@ -61,7 +61,8 @@ export default async function LeadgenLeadsPage({
     // Communications tab already reads, just reduced to one status per
     // lead instead of a full history. Ordered oldest-first so the reduce
     // below keeps the last (most recent) one per lead_id.
-    admin.from("leadgen_emails").select("id, lead_id, status, created_at").not("lead_id", "is", null).order("created_at", { ascending: true }),
+    // notification_type is null = an email to the lead itself; an admin "Email Client" notification is not that lead's email status.
+    admin.from("leadgen_emails").select("id, lead_id, status, created_at").not("lead_id", "is", null).is("notification_type", null).order("created_at", { ascending: true }),
   ]);
 
   const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;

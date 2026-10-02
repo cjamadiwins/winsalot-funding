@@ -40,6 +40,9 @@ import type { DncSuppressionRow } from "@/lib/dnc-suppression";
 import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import ConsultationEmailModal, { type SendConsultationEmailResult } from "./ConsultationEmailModal";
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
+import ClientNotificationModal, { type SendClientNotificationResult } from "./ClientNotificationModal";
+import CommunicationPreferenceBanner from "./CommunicationPreferenceBanner";
+import { clientNotificationLabel } from "@/lib/leadgen-client-notification";
 import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
 import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
@@ -140,6 +143,9 @@ export type LeadDetailActions = {
   sendTeknokraftIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   sendHidebrandtIntro: (leadId: string, formData: FormData) => Promise<SendConsultationEmailResult>;
   resendEmail?: (emailId: string) => Promise<{ error?: string } | void>;
+  // Admin-only "Email Client" lead notification - only supplied by the admin
+  // lead page; the agent page never passes it, so no agent UI or action exists.
+  sendClientNotification?: (leadId: string, formData: FormData) => Promise<SendClientNotificationResult>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
   deleteLead?: (leadId: string) => Promise<{ error?: string } | void>;
@@ -268,6 +274,7 @@ export default function LeadDetailClient({
   const [showWeb6Modal, setShowWeb6Modal] = useState(false);
   const [showTeknokraftModal, setShowTeknokraftModal] = useState(false);
   const [showHidebrandtModal, setShowHidebrandtModal] = useState(false);
+  const [showClientNotifyModal, setShowClientNotifyModal] = useState(false);
   const [postSendFollowUp, setPostSendFollowUp] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -368,7 +375,12 @@ export default function LeadDetailClient({
       body: followUpBody,
     });
   }
-  const latestEmail = emails[0] ?? null;
+  // Admin "Email Client" notifications live in leadgen_emails too (so delivery
+  // tracking is shared), but they are emails TO THE CLIENT: keep them out of
+  // every prospect-facing email status/history below and list them separately.
+  const clientNotifications = emails.filter((email) => Boolean(email.notification_type));
+  const prospectEmails = emails.filter((email) => !email.notification_type);
+  const latestEmail = prospectEmails[0] ?? null;
 
   // "Send Mantra Collab Email" - fixed subject/body/one link, only ever
   // rendered/sendable for a Mantra Collab lead (see the button below).
@@ -427,7 +439,7 @@ export default function LeadDetailClient({
         : isHidebrandt
           ? "hidebrandt_intro"
           : "consultation_information";
-  const hasSentPrimaryEmail = emails.some((email) => email.template_key === primaryEmailTemplateKey);
+  const hasSentPrimaryEmail = prospectEmails.some((email) => email.template_key === primaryEmailTemplateKey);
   const primaryEmailButtonLabel = hasSentPrimaryEmail ? `Resend ${branding.clientName} Email` : `Send ${branding.clientName} Email`;
   const isCustomCampaignClient = isMantra || isWeb6 || isTeknokraft || isHidebrandt;
 
@@ -506,6 +518,8 @@ export default function LeadDetailClient({
 
       {dncSuppression && <DncWarningBanner suppression={dncSuppression} justDetected={dncJustDetected} />}
 
+      <CommunicationPreferenceBanner lead={lead} className="mt-3" />
+
       {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {successMessage && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>}
 
@@ -541,6 +555,7 @@ export default function LeadDetailClient({
         <ActionButton onClick={() => setShowFollowUpForm((v) => !v)}>{showFollowUpForm ? "Cancel Follow-up" : "Schedule Follow-up"}</ActionButton>
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
+        {isAdmin && actions.sendClientNotification && client.active && <ActionButton onClick={() => setShowClientNotifyModal(true)}>Email Client</ActionButton>}
         {isAdmin && actions.deleteLead && (
           <button
             type="button"
@@ -682,6 +697,21 @@ export default function LeadDetailClient({
             setShowHidebrandtModal(false);
             setSuccessMessage("Hidebrandt Web Services email sent.");
             setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      {showClientNotifyModal && isAdmin && actions.sendClientNotification && (
+        <ClientNotificationModal
+          lead={lead}
+          client={client}
+          onClose={() => setShowClientNotifyModal(false)}
+          onSend={(formData) => actions.sendClientNotification!(lead.id, formData)}
+          onSent={(warning) => {
+            setShowClientNotifyModal(false);
+            if (warning) setError(warning);
+            else setSuccessMessage(`${client.name} has been notified.`);
+            router.refresh();
           }}
         />
       )}
@@ -976,7 +1006,7 @@ export default function LeadDetailClient({
               )}
             </div>
           </div>
-          {emails.length === 0 ? (
+          {prospectEmails.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">No emails sent to this prospect yet.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
@@ -993,7 +1023,7 @@ export default function LeadDetailClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {emails.map((email) => {
+                  {prospectEmails.map((email) => {
                     const reason = email.status === "bounced" ? email.bounce_reason : email.status === "failed" ? email.failure_reason : null;
                     return (
                       <tr key={email.id} className="border-b border-slate-100">
@@ -1030,6 +1060,31 @@ export default function LeadDetailClient({
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {isAdmin && clientNotifications.length > 0 && (
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Client Notifications</h3>
+              <ul className="mt-2 space-y-2">
+                {clientNotifications.map((email) => {
+                  const reason = email.status === "bounced" ? email.bounce_reason : email.status === "failed" ? email.failure_reason : null;
+                  return (
+                    <li key={email.id} className="rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900">{clientNotificationLabel(email.notification_type)}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-sm font-semibold ${LEADGEN_EMAIL_STATUS_STYLES[email.status]}`}>{LEADGEN_EMAIL_STATUS_LABELS[email.status]}</span>
+                      </div>
+                      <p className="mt-1 text-slate-600">
+                        {new Date(email.created_at).toLocaleString()} · to {email.to_email}
+                      </p>
+                      <p className="mt-0.5 truncate text-slate-700" title={email.subject}>
+                        {email.subject}
+                      </p>
+                      {reason && <p className="mt-1 text-sm text-rose-600">{reason}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
         </section>

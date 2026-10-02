@@ -5,6 +5,7 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { buildLeadgenBookingEmailHtml, buildLeadgenConsultationCtaEmail, sendLeadgenEmail, type SendLeadgenEmailResult } from "@/lib/leadgen-email";
 import { isEmailDncBlocked } from "@/lib/dnc-suppression";
+import { clientNotifiedActivityNotes, isClientNotificationType, resolveClientNotificationRecipient } from "@/lib/leadgen-client-notification";
 import {
   isHidebrandtClient,
   isLeadgenAppointmentCountable,
@@ -695,4 +696,84 @@ export async function sendHidebrandtIntroEmailAction(leadId: string, formData: F
     activityType: "hidebrandt_intro_sent",
     activityLabel: "Hidebrandt Web Services intro",
   });
+}
+
+// ---------------------------------------------------------------------------
+// "Email Client" lead notification (Admin only - no agent action exists, and
+// requireLeadgenAdmin gates this server-side regardless of the UI).
+//
+// The recipient is ALWAYS resolved here from the lead's own client
+// (leadgen_leads.client_id -> leadgen_clients.contact_email); the form only
+// carries the reason, subject and body, so a crafted request can't redirect the
+// message. The send reuses sendLeadgenEmail (leadgen_emails row, Resend, webhook
+// delivery tracking). The timeline entry is written only AFTER a successful
+// send, and nothing here touches the lead's status, last contact, follow-ups or
+// appointments - it is a handoff record, not an outcome.
+// ---------------------------------------------------------------------------
+export type SendClientLeadNotificationResult = { emailId: string; error?: string; warning?: string };
+
+export async function sendClientLeadNotificationAction(leadId: string, formData: FormData): Promise<SendClientLeadNotificationResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const notificationType = String(formData.get("notification_type") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!isClientNotificationType(notificationType)) return { emailId: "", error: "Select a notification type." };
+  if (!subject) return { emailId: "", error: "A subject is required." };
+  if (!body) return { emailId: "", error: "An email body is required." };
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("id, client_id, campaign_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { emailId: "", error: "Lead not found." };
+
+  const { data: client } = await supabase
+    .from("leadgen_clients")
+    .select("id, name, active, contact_name, contact_email")
+    .eq("id", lead.client_id)
+    .maybeSingle();
+  if (!client) return { emailId: "", error: "This lead's client could not be found." };
+  if (!client.active) return { emailId: "", error: `${client.name} isn't an active client, so it can't be notified.` };
+
+  const resolved = resolveClientNotificationRecipient(client);
+  if ("error" in resolved) return { emailId: "", error: resolved.error };
+  const { recipient } = resolved;
+
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: lead.client_id,
+    campaignId: lead.campaign_id,
+    leadId,
+    templateKey: null,
+    toEmail: recipient.email,
+    toName: recipient.name,
+    subject,
+    body,
+    sentBy: adminUser.id,
+    // Addressed to the client, so it belongs in their Communications view
+    // like every other client-facing send.
+    clientVisible: true,
+    notificationType,
+  });
+
+  // A failed send keeps its leadgen_emails row (status "failed" + reason) and
+  // never gets a "Client notified" timeline entry.
+  if (result.error) return { emailId: result.emailId, error: result.error };
+
+  const { error: activityError } = await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: adminUser.id,
+    activity_type: "client_notified",
+    notes: clientNotifiedActivityNotes({
+      type: notificationType,
+      clientName: client.name,
+      toEmail: recipient.email,
+      subject,
+      sentBy: adminUser.full_name || adminUser.email,
+    }),
+  });
+
+  revalidatePath(`/leadgen/admin/leads/${leadId}`);
+  if (activityError) {
+    return { emailId: result.emailId, warning: "The email was sent and is saved in the email log, but its timeline entry could not be saved. Do not send it again." };
+  }
+  return { emailId: result.emailId };
 }
