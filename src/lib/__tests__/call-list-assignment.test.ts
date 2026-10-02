@@ -192,7 +192,7 @@ describe("Lead Gen: client and list assignments stay linked", () => {
     await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry"]);
     await saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry"]);
     expect(db.call_list_segments[0].leadgen_campaign_id).toBe("c-hid");
-    expect(db.call_list_segments[0].campaign_name).toBe("Lead Generation for Website & SEO — Pet Sitter — Niagara Falls");
+    expect(db.call_list_segments[0].campaign_name).toBe("Lead Generation for Website & SEO");
     expect(db.call_list_segment_agents.some((r) => r.agent_id === "henry")).toBe(true);
     expect(db.leadgen_campaign_agents.some((r) => r.campaign_id === "c-hid" && r.agent_id === "henry")).toBe(true);
     expect(db.call_list_leads).toEqual(preserved.leads);
