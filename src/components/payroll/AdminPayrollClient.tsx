@@ -879,24 +879,23 @@ export default function AdminPayrollClient({
       )}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-[var(--crm-surface)]" tabIndex={0} role="region" aria-label="Payroll register, scroll horizontally for all columns">
-        <table className="w-full min-w-[1450px] text-left text-xs">
-          <caption className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Payroll register · {visibleRecords.length} records · All historical periods remain available through the filters</caption>
+        <table className="w-full min-w-[1280px] text-left text-xs">
+          <caption className="px-2 py-1.5 text-left text-xs font-semibold text-slate-500">Payroll register · {visibleRecords.length} records · All historical periods remain available through the filters</caption>
           <thead className="border-y border-slate-200 bg-slate-50 text-slate-600"><tr>
-            {["Agent", "Pay Period", "Payment Date", "Regular Hours", "Gross Wage", "Internet", "Incentive / Bonus", "Other Additions", "Deductions", "Final Amount", "Method", "Status", "Statement"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 py-2 font-semibold">{label}</th>)}
+            {["Agent", "Pay Period", "Payment Date", "Regular Hours", "Gross Wage", "Internet", "Incentive / Bonus", "Other Additions", "Deductions", "Final Amount", "Method", "Status", "Statement"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-2 py-1.5 font-semibold">{label}</th>)}
           </tr></thead>
-          <tbody>{visibleRecords.map((record, index) => {
+          <tbody>{visibleRecords.map((record) => {
             const agent = agentsById.get(record.agent_id);
             const currency = record.payroll_currency ?? agent?.payroll_currency ?? "NGN";
-            const year = record.payday.slice(0, 4);
             return <tr key={record.id} onClick={() => setSelectedId(record.id)} className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-sky-50">
-              <th scope="row" className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-800">{agent?.full_name ?? "Former agent"}</th>
-              <td className="whitespace-nowrap px-3 py-2 text-slate-600">{(index === 0 || visibleRecords[index - 1].payday.slice(0, 4) !== year) && <span className="mr-2 font-semibold text-slate-800">{year}</span>}{formatPayPeriodLabel(record.pay_period_start, record.pay_period_end)}</td>
-              <td className="whitespace-nowrap px-3 py-2">{record.actual_payment_date ? formatDateShort(record.actual_payment_date) : "—"}</td>
-              <td className="px-3 py-2 tabular-nums">{record.regular_paid_hours}h</td>
-              {[record.base_pay_earned, record.internet_allowance, record.bonus_commission, record.other_additions, record.deductions, record.total_pay].map((value, i) => <td key={i} className={`whitespace-nowrap px-3 py-2 tabular-nums ${i === 5 ? "font-semibold text-slate-900" : "text-slate-600"}`}>{formatCurrency(value, currency)}</td>)}
-              <td className="whitespace-nowrap px-3 py-2">{record.payment_method ?? "—"}</td>
-              <td className="whitespace-nowrap px-3 py-2"><StatusBadge status={record.status} />{isReopened(record) && <span className="ml-1 text-amber-700">Reopened</span>}</td>
-              <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => setSelectedId(record.id)} aria-label={`View statement for ${agent?.full_name ?? "agent"}, ${formatPayPeriodLabel(record.pay_period_start, record.pay_period_end)}`} className="font-semibold text-sky-700 hover:underline">View Statement</button></td>
+              <th scope="row" className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-slate-800">{agent?.full_name ?? "Former agent"}</th>
+              <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{[record.pay_period_start, record.pay_period_end].map(formatDateShort).join(" – ")}</td>
+              <td className="whitespace-nowrap px-2 py-1.5">{record.actual_payment_date ? formatDateShort(record.actual_payment_date) : "—"}</td>
+              <td className="px-2 py-1.5 tabular-nums">{record.regular_paid_hours}h</td>
+              {[record.base_pay_earned, record.internet_allowance, record.bonus_commission, record.other_additions, record.deductions, record.total_pay].map((value, i) => <td key={i} className={`whitespace-nowrap px-2 py-1.5 tabular-nums ${i === 5 ? "font-semibold text-slate-900" : "text-slate-600"}`}>{formatCurrency(value, currency)}</td>)}
+              <td className="whitespace-nowrap px-2 py-1.5">{record.payment_method ?? "—"}</td>
+              <td className="whitespace-nowrap px-2 py-1.5"><StatusBadge status={record.status} />{isReopened(record) && <span className="ml-1 text-amber-700">Reopened</span>}</td>
+              <td className="whitespace-nowrap px-2 py-1.5"><button type="button" onClick={() => setSelectedId(record.id)} aria-label={`View statement for ${agent?.full_name ?? "agent"}, ${formatPayPeriodLabel(record.pay_period_start, record.pay_period_end)}`} className="font-semibold text-sky-700 hover:underline">View</button></td>
             </tr>;
           })}</tbody>
         </table>
