@@ -1,0 +1,18 @@
+date,user_id,name,email,type,all_calls,inbound_calls,outbound_calls,voicemails,missed,abandoned,forwarded,cancelled,minutes,acd,inbound_minutes,outbound_minutes,internal_calls,forwarding_number,desktop_app,mobile_voip,desk_phone,web_app,callbacks_cancelled,handled,answered,answered_transferred,message,spam,in_queue_voicemail,dtmf_voicemail,direct_to_voicemail,transfer_voicemail,outbound_connected,connected_transferred,transferred_out,transferred_in,dtmf_transfer,auto_transfer,router_transfer,forward_transfer,ringing_duration,avg_ringing_duration,hold_duration,avg_hold_duration,talk_duration,avg_talk_duration,rejected,ring_no_answer
+2026-09-25,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,92,0,92,0,0,0,0,15,46.2,0.6,0,46.2,1,0,0,92,0,0,0,77,0,0,0,0,0,0,0,0,77,0,0,0,0,0,0,0,0,0,0,0,46.22,0.6,0,0
+2026-09-25,4817832001675264,Winsalot Corp.,info@winsalotcorp.com,user,1,0,1,0,0,0,0,0,0.4,0.4,0,0.4,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0.37,0.37,0,0
+2026-09-25,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,76,1,75,0,1,0,0,21,24.2,0.4,0,24.2,0,0,0,70,0,5,0,54,0,0,0,0,0,0,0,0,54,0,0,0,0,0,0,0,0.04,0.04,0,0,24.29,0.45,0,0
+2026-09-26,,,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2026-09-27,,,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2026-09-28,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,43,0,43,0,0,0,0,5,19.6,0.5,0,19.6,0,0,0,43,0,0,0,38,0,0,0,0,0,0,0,0,38,0,0,0,0,0,0,0,0,0,0.11,0,19.48,0.51,0,0
+2026-09-28,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,58,2,56,0,1,0,0,6,37.5,0.7,0.1,37.4,0,0,0,57,0,0,0,51,1,0,0,0,0,0,0,0,50,0,0,0,0,0,0,0,0.35,0.18,0,0,37.48,0.73,0,0
+2026-09-29,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,93,4,89,0,2,0,0,14,36.5,0.5,0.7,35.8,0,0,0,90,0,1,0,77,2,0,0,0,0,0,0,0,75,0,0,0,0,0,0,0,1.38,0.34,0,0,36.43,0.47,0,0
+2026-09-29,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,90,3,87,0,1,0,0,18,72.4,1,1.5,70.9,0,0,0,89,0,0,0,71,2,0,0,0,0,0,0,0,69,0,0,0,0,0,0,0,0.96,0.32,0.04,0,72.33,1.02,0,0
+2026-09-30,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,101,3,98,1,1,1,0,10,82.6,0.9,1.1,81.5,0,0,0,99,0,0,0,89,1,0,0,0,0,0,0,0,88,0,0,0,0,0,0,0,0.33,0.11,0.07,0,82.49,0.93,0,0
+2026-09-30,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,95,7,88,0,2,2,0,10,36.5,0.5,1.5,35,0,0,0,89,0,2,0,81,3,0,0,0,0,0,0,0,78,0,0,0,0,0,0,0,1.36,0.19,0,0,36.56,0.45,0,0
+2026-10-01,4817832001675264,Winsalot Corp.,info@winsalotcorp.com,user,2,0,2,0,0,0,0,0,59.9,30,0,59.9,2,0,2,0,0,0,0,2,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,59.94,29.97,0,0
+2026-10-01,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,82,5,77,0,2,0,0,17,44,0.7,23.9,20.1,1,0,0,77,0,3,0,63,3,0,0,0,0,0,0,0,60,0,0,0,0,0,0,0,1.27,0.25,0,0,44.09,0.7,0,0
+2026-10-01,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,116,6,110,1,1,0,0,16,117.9,1.2,38.2,79.7,1,0,0,114,0,0,0,98,4,0,0,0,0,0,1,0,94,0,0,0,0,0,0,0,1.01,0.17,0,0,117.9,1.2,0,0
+2026-10-02,4817832001675264,Winsalot Corp.,info@winsalotcorp.com,user,1,0,1,0,0,0,0,0,3.9,3.9,0,3.9,1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,3.88,3.88,0,0
+2026-10-02,6495819145158656,Winsalot Corp.,agent@winsalotcorp.com,user,92,3,89,0,0,0,0,10,71.2,0.9,4.5,66.7,1,0,0,92,0,0,0,82,3,0,0,0,0,0,0,0,79,0,0,0,0,0,0,0,0.61,0.2,0,0,71.19,0.87,0,0
+2026-10-02,4910041876537344,Winsalot Corp.,agent2@winsalotcorp.com,user,51,0,51,0,0,0,0,3,24,0.5,0,24,0,0,0,51,0,0,0,48,0,0,0,0,0,0,0,0,48,0,0,0,0,0,0,0,0,0,0,0,23.9,0.5,0,0
