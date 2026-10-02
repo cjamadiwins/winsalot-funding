@@ -21,7 +21,7 @@ export async function deploySegment(segmentId: string, agentIds: string[], deplo
     if (!campaign || campaign.status !== "active") throw new Error("This campaign is inactive.");
     const { data: client } = await admin.from("leadgen_clients").select("id").eq("id", campaign.client_id).eq("active", true).maybeSingle();
     if (!client) throw new Error("This campaign's client is inactive.");
-    // Assigning this list also grants its selected agents access to the client campaign.
+    // Selected agents must already be assigned to the client (Agent Client Status); this never grants client access.
     await saveLeadgenSegmentAssignment(segment, segment.leadgen_campaign_id as string, agentIds, undefined, deployedBy);
   } else if (segment?.crm === "growth" && segment.growth_opportunity_type) {
     // Growth ownership is fixed to Winsalot Corp; only service and agents are assigned.

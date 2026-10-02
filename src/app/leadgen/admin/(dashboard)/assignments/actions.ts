@@ -7,7 +7,8 @@ import { listSelectableActiveClients } from "@/lib/leadgen-agent-active-client";
 import { ensureRestrictedAgentOnCampaign } from "@/lib/leadgen-campaign-assignment";
 import { assignmentWouldRestrictAgent } from "@/lib/leadgen-agent-active-client";
 import { TEST_CLIENT_LIST_MESSAGE, friendlyTestClientError, isTestOnlyCampaign } from "@/lib/leadgen-test-client-guard";
-import { buildCallListCampaignName } from "@/lib/call-list-campaign-name";
+import { buildLeadgenListCampaignName } from "@/lib/call-list-campaign-name";
+import { assertAgentsHoldClient } from "@/lib/call-list-assignment";
 
 type ActionResult = { error?: string; removedFromLists?: number; remainingLists?: number };
 
@@ -65,9 +66,10 @@ export async function setCampaignAgentAction(campaignId: string, agentId: string
   return { removedFromLists };
 }
 
-// Call List -> Agent. Adding an agent to a list also grants access to its
-// client campaign. Removing them from one list leaves their client assignment
-// and other lists alone.
+// Call List -> Agent. The agent must ALREADY be assigned to the list's client
+// (Agent Client Status) - list assignment never creates client access, so an
+// old or mistaken list assignment can't leave a client assignment behind.
+// Removing them from a list leaves their client assignment and other lists alone.
 export async function setSegmentAgentAction(segmentId: string, agentId: string, assigned: boolean): Promise<ActionResult> {
   const adminUser = await requireLeadgenAdmin();
   if (!UUID.test(segmentId) || !UUID.test(agentId)) return { error: "Invalid request." };
@@ -79,6 +81,15 @@ export async function setSegmentAgentAction(segmentId: string, agentId: string, 
   if (assigned) {
     if (!(await assertActiveAgent(db, agentId))) return { error: "That agent isn't active." };
     if (segment.leadgen_campaign_id) {
+      const { data: campaign } = await db.from("leadgen_campaigns").select("client_id").eq("id", segment.leadgen_campaign_id).maybeSingle();
+      const { data: client } = campaign ? await db.from("leadgen_clients").select("name").eq("id", campaign.client_id).maybeSingle() : { data: null };
+      if (!campaign || !client) return { error: "That list's client no longer exists." };
+      try {
+        await assertAgentsHoldClient(db, campaign.client_id as string, client.name as string, [agentId]);
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "That agent isn't assigned to this client." };
+      }
+      // Same client, only the specific campaign row (e.g. a campaign added later).
       const { error: clientError } = await db.from("leadgen_campaign_agents").upsert(
         { campaign_id: segment.leadgen_campaign_id, agent_id: agentId, assigned_by: adminUser.id },
         { onConflict: "campaign_id,agent_id", ignoreDuplicates: true },
@@ -115,21 +126,28 @@ export async function setSegmentCampaignAction(segmentId: string, campaignId: st
     if (await isTestOnlyCampaign(campaignId)) return { error: TEST_CLIENT_LIST_MESSAGE };
     const { data: client } = await db.from("leadgen_clients").select("name, active").eq("id", campaign.client_id).maybeSingle();
     if (!client?.active) return { error: "Choose an active production client." };
-    const campaignName = buildCallListCampaignName({ clientName: client.name, industry: segment.industry, location: segment.territory });
+    const campaignName = buildLeadgenListCampaignName({ clientName: client.name, industry: segment.industry, location: segment.territory });
     const { data: roster } = await db.from("call_list_segment_agents").select("agent_id").eq("segment_id", segmentId);
     if (roster?.length) {
+      // Moving a list never grants the roster access to the new client: every
+      // agent on it must already hold that client (otherwise remove them first).
+      try {
+        await assertAgentsHoldClient(db, campaign.client_id as string, client.name, roster.map((row) => row.agent_id as string));
+      } catch (err) {
+        return { error: `${err instanceof Error ? err.message : "Some agents aren't assigned to that client."} Remove them from this list or assign the client first.` };
+      }
       const { error: accessError } = await db.from("leadgen_campaign_agents").upsert(
         roster.map((row) => ({ campaign_id: campaignId, agent_id: row.agent_id, assigned_by: adminUser.id })),
         { onConflict: "campaign_id,agent_id", ignoreDuplicates: true },
       );
-      if (accessError) return { error: `Failed to update this client's agent access: ${accessError.message}` };
+      if (accessError) return { error: `Failed to update the agents' campaign access: ${accessError.message}` };
     }
     const { error } = await db.from("call_list_segments").update({ leadgen_campaign_id: campaignId, campaign_name: campaignName }).eq("id", segmentId);
     if (error) return { error: friendlyTestClientError(error.message) ?? `Failed to update the call list: ${error.message}` };
   }
 
-  // Agents on this list keep their list assignment; access to the selected
-  // campaign was added above without touching any call or lead history.
+  // Agents on this list keep their list assignment (all already hold the new
+  // client); no call or lead history is touched.
   refresh();
   return {};
 }

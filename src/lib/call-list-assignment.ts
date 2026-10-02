@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { isAgentService, serviceAllowsOpportunityType, AGENT_SERVICE_LABELS, type AgentService } from "./crm-agent-service-shared";
 import type { CallListSegmentRow } from "./call-list-types";
 import { assertProductionCampaign } from "./leadgen-test-client-guard";
-import { buildCallListCampaignName } from "./call-list-campaign-name";
+import { buildCallListCampaignName, buildLeadgenListCampaignName } from "./call-list-campaign-name";
 import { GROWTH_CALL_LIST_OWNER } from "./growth-call-list-owner";
 
 // Admin-only "Save Assignment" for a call list, shared by both CRMs' server
@@ -108,10 +108,32 @@ export async function saveGrowthSegmentAssignment(segment: CallListSegmentRow, s
 //     work for. Managed on the Admin dashboard (Agent Client Status).
 //   * List assignment (call_list_segment_agents) = which specific lists under
 //     that client the agent works. Managed here.
-// Selecting an agent on a list also ensures the matching client scope row
-// exists. Removing an agent from one list leaves any client scope and other
-// list assignments intact; RLS still requires both for list visibility.
+// A list can only be given to an agent who ALREADY holds that client (set by
+// Admin in Agent Client Status): list assignment never creates a client
+// assignment. Removing an agent from a list leaves their client assignment and
+// other lists intact; RLS still requires both for list visibility.
 // ---------------------------------------------------------------------------
+
+// Which of these agents currently hold ANY campaign row of the client - the
+// definition of "assigned to the client" used by leadgen_agent_client_allowed.
+export async function agentIdsHoldingClient(admin: ReturnType<typeof getSupabaseAdmin>, clientId: string, agentIds: string[]): Promise<Set<string>> {
+  if (agentIds.length === 0) return new Set();
+  const { data: campaigns } = await admin.from("leadgen_campaigns").select("id").eq("client_id", clientId);
+  const campaignIds = (campaigns ?? []).map((c) => c.id as string);
+  if (campaignIds.length === 0) return new Set();
+  const { data: rows } = await admin.from("leadgen_campaign_agents").select("agent_id").in("agent_id", agentIds).in("campaign_id", campaignIds);
+  return new Set((rows ?? []).map((r) => r.agent_id as string));
+}
+
+// Throws (naming the agents) unless every agent already holds the client.
+export async function assertAgentsHoldClient(admin: ReturnType<typeof getSupabaseAdmin>, clientId: string, clientName: string, agentIds: string[]): Promise<void> {
+  const holders = await agentIdsHoldingClient(admin, clientId, agentIds);
+  const missing = agentIds.filter((id) => !holders.has(id));
+  if (missing.length === 0) return;
+  const { data: users } = await admin.from("leadgen_users").select("id, full_name").in("id", missing);
+  const names = missing.map((id) => (users ?? []).find((u) => u.id === id)?.full_name ?? "An agent");
+  throw new Error(`${names.join(", ")} ${names.length === 1 ? "isn't" : "aren't"} assigned to ${clientName}. Assign the client in Agent Client Status first - assigning a list never grants client access.`);
+}
 export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, campaignId: string, agentIds: string[], selectedClientId?: string, assignedBy?: string): Promise<SaveAssignmentResult> {
   if (segment.crm !== "lead_generation") throw new Error("Call list not found.");
   const admin = getSupabaseAdmin();
@@ -129,15 +151,19 @@ export async function saveLeadgenSegmentAssignment(segment: CallListSegmentRow, 
     const activeIds = new Set((agents ?? []).map((a) => a.id as string));
     if (wanted.some((id) => !activeIds.has(id))) throw new Error("One of the selected agents isn't an active agent.");
   }
+  // List assignment never creates client access: every selected agent must
+  // already hold this client. Only then is the specific campaign row filled in
+  // (e.g. a campaign added after the client was assigned) - same client, no new access.
+  await assertAgentsHoldClient(admin, campaign.client_id as string, client.name as string, wanted);
   if (wanted.length > 0) {
     const { error } = await admin.from("leadgen_campaign_agents").upsert(
       wanted.map((agent_id) => ({ campaign_id: campaignId, agent_id, assigned_by: assignedBy ?? null })),
       { onConflict: "campaign_id,agent_id", ignoreDuplicates: true },
     );
-    if (error) throw new Error(`Failed to grant the selected agents access to this client: ${error.message}`);
+    if (error) throw new Error(`Failed to sync the selected agents' campaign access: ${error.message}`);
   }
 
-  const campaignName = buildCallListCampaignName({ clientName: client.name, industry: segment.industry, location: segment.territory });
+  const campaignName = buildLeadgenListCampaignName({ clientName: client.name, industry: segment.industry, location: segment.territory });
   if (segment.leadgen_campaign_id !== campaignId || segment.campaign_name !== campaignName) {
     // Only affects work from now on: existing call logs, appointments, emails
     // and promoted leads keep the client they were recorded under.
