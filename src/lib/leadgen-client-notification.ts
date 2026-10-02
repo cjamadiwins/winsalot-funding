@@ -56,9 +56,12 @@ export function clientGreetingName(clientName: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Prospect communication preferences, read from the lead's own notes/status.
-// Nothing is global or per-client: a preference appears only when THIS lead's
-// text says so.
+// Winsalot-side communication preferences, read from the lead's own
+// notes/status. Nothing is global or per-client: a preference appears only when
+// THIS lead's text says so. "EMAIL ONLY — DO NOT CALL" is an INTERNAL Winsalot
+// calling restriction: it is shown on the Winsalot lead page and composer, and
+// is never written into a client notification (the client decides for itself
+// how to follow up).
 // ---------------------------------------------------------------------------
 
 export type CommunicationPreferenceKind = "email_only" | "call_requested" | "specific_time";
@@ -80,21 +83,18 @@ function excerpt(text: string, index: number, length: number): string {
 
 const EMAIL_ONLY_EXPLICIT = /\be-?mail\s+only\b|\bonly\s+(?:by\s+|via\s+)?e-?mail\b|\bprefers?\s+(?:to\s+be\s+contacted\s+(?:by|via)\s+)?e-?mail\b|\bno\s+phone\s+calls?\b/i;
 const DO_NOT_CALL = /\b(?:do\s*n[o']?t|don'?t)\s+(?:call|phone)\b|\bno\s+calls?\b/i;
-// A lead who "requests a proposal via email" is asking to be answered by
-// email; treated as email-only (banner shows the note it came from).
-const EMAIL_REQUESTED = /\b(?:request|ask|want|prefer|like)\w*\b[^.\n]*\b(?:via|by|through|over)\s+e-?mail\b/i;
 const CALL_REQUESTED = /\bcall\s+(?:me|us)\s+back\b|\bcall\s+requested\b|\bplease\s+call\b|\brequests?\s+a\s+(?:phone\s+)?call\b|\bcallback\s+requested\b/i;
 const SPECIFIC_TIME =
   /\b(?:call|reach|contact|phone)\b[^.\n]*\b(?:after|before|at|between|around)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b|\b(?:mornings?|afternoons?|evenings?)\s+(?:only|preferred|are\s+best)\b/i;
 
-export const EMAIL_ONLY_LABEL = "EMAIL ONLY — DO NOT CALL";
+export const EMAIL_ONLY_LABEL = "WINSALOT: EMAIL ONLY — DO NOT CALL";
 
 export function detectCommunicationPreferences(lead: Pick<LeadgenLeadRow, "status" | "notes" | "client_notes" | "source_notes">): CommunicationPreference[] {
   const text = [lead.notes, lead.client_notes, lead.source_notes].filter((t): t is string => Boolean(t && t.trim())).join("\n");
   const found: CommunicationPreference[] = [];
 
   let emailOnly: CommunicationPreference | null = null;
-  for (const pattern of [EMAIL_ONLY_EXPLICIT, DO_NOT_CALL, EMAIL_REQUESTED]) {
+  for (const pattern of [EMAIL_ONLY_EXPLICIT, DO_NOT_CALL]) {
     const match = pattern.exec(text);
     if (match) {
       emailOnly = { kind: "email_only", label: EMAIL_ONLY_LABEL, evidence: excerpt(text, match.index, match[0].length) };
@@ -121,16 +121,19 @@ export function detectCommunicationPreferences(lead: Pick<LeadgenLeadRow, "statu
 // What the prospect asked for (proposal items), read from the lead's notes.
 // ---------------------------------------------------------------------------
 
-export type ProposalRequest = { requested: boolean; items: string[] };
+export type ProposalRequest = { requested: boolean; items: string[]; viaEmail: boolean };
 
 export function detectProposalRequest(lead: Pick<LeadgenLeadRow, "notes" | "client_notes">): ProposalRequest {
   const text = [lead.notes, lead.client_notes].filter(Boolean).join("\n");
-  if (!/\b(?:proposal|quote|quotation|estimate)\b/i.test(text)) return { requested: false, items: [] };
+  if (!/\b(?:proposal|quote|quotation|estimate)\b/i.test(text)) return { requested: false, items: [], viaEmail: false };
   const items: string[] = [];
   if (/\bscope\b/i.test(text)) items.push("Scope of work");
   if (/\b(?:costs?|pric(?:e|es|ing)|quote|budget)\b/i.test(text)) items.push("Project cost");
   if (/\b(?:duration|timeline|completion|how\s+long)\b/i.test(text)) items.push("Estimated project duration / completion timeline");
-  return { requested: true, items };
+  // "requests a detailed proposal via email" - what the PROSPECT asked for,
+  // which is fine to tell the client (unlike Winsalot's internal call rule).
+  const viaEmail = /\b(?:via|by|through|over)\s+e-?mail\b/i.test(text);
+  return { requested: true, items, viaEmail };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,12 +216,11 @@ export function buildClientNotificationDraft(input: {
   const biz = lead.business_name;
   const service = serviceLabel(client);
   const prefs = detectCommunicationPreferences(lead);
-  const emailOnly = prefs.some((p) => p.kind === "email_only");
   const proposal = detectProposalRequest(lead);
 
   const intro: Record<ClientNotificationType, string> = {
     interested_lead: `${biz} has expressed interest in ${service}.`,
-    proposal_requested: `${biz} has expressed interest in ${service} and has requested a detailed proposal${emailOnly ? " by email" : ""}.`,
+    proposal_requested: `${biz} has expressed interest in ${service} and has requested a detailed proposal${proposal.viaEmail ? " by email" : ""}.`,
     appointment_requested: `${biz} has expressed interest in ${service} and would like to schedule an appointment.`,
     callback_follow_up: `${biz} has asked for a follow-up from your team regarding ${service}.`,
     additional_information: `${biz} has expressed interest in ${service} and has requested additional information.`,
@@ -228,8 +230,9 @@ export function buildClientNotificationDraft(input: {
   const blocks: string[] = [`Hi ${clientGreetingName(client.name)} team,`, intro[type]];
 
   for (const pref of prefs) {
-    if (pref.kind === "email_only") blocks.push("Important: The prospect prefers email communication only and does not want a phone call at this stage.");
-    else if (pref.kind === "call_requested") blocks.push("Important: The prospect has asked to be called.");
+    // email_only is Winsalot's own calling rule - deliberately never included.
+    if (pref.kind === "email_only") continue;
+    if (pref.kind === "call_requested") blocks.push("Important: The prospect has asked to be called.");
     else blocks.push(`Important: The prospect has asked for a specific contact time (“${pref.evidence}”).`);
   }
 
@@ -252,7 +255,7 @@ export function buildClientNotificationDraft(input: {
   blocks.push(["Lead details:", ...detailLines].join("\n"));
 
   blocks.push(
-    `${emailOnly ? "Please follow up with the prospect directly by email." : "Please follow up with the prospect directly."} Once contact has been made, please update us on the outcome so we can keep the campaign record current.`,
+    `Please follow up with the prospect directly. Once contact has been made, please update us on the outcome so we can keep the campaign record current.`,
   );
   blocks.push("Regards,\nWinsalot Corp.");
 
