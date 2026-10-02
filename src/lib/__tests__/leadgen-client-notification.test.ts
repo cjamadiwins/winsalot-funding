@@ -28,7 +28,7 @@ const mak = {
   city: "14 Foundry Ave #216, Toronto, ON M6H 0A8, Canada General contractor",
   province: null,
   status: "Interested",
-  notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration, excluding advertising expenses.",
+  notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration, excluding advertising expenses.\n\nEMAIL ONLY — DO NOT CALL",
   client_notes: null,
   source_notes: null,
 } as unknown as LeadgenLeadRow;
@@ -49,20 +49,36 @@ describe("Mak 7even Renovations (Teknokraft) draft", () => {
       [
         "Hi Teknokraft team,",
         "Mak 7even Renovations has expressed interest in website services and has requested a detailed proposal by email.",
-        "Important: The prospect prefers email communication only and does not want a phone call at this stage.",
         "They would like the proposal to include:\n• Scope of work\n• Project cost\n• Estimated project duration / completion timeline",
         "Lead details:\nBusiness: Mak 7even Renovations\nContact: Mak\nEmail: mak7ltd@gmail.com\nPhone: +1 437 971 0790\nWebsite: mak7ltd.com\nIndustry: Renovations / General Contractor\nLocation: Toronto, ON",
-        "Please follow up with the prospect directly by email. Once contact has been made, please update us on the outcome so we can keep the campaign record current.",
+        "Please follow up with the prospect directly. Once contact has been made, please update us on the outcome so we can keep the campaign record current.",
         "Regards,\nWinsalot Corp.",
       ].join("\n\n"),
     );
   });
 
-  it("surfaces EMAIL ONLY — DO NOT CALL, quoting the lead note it came from", () => {
+  it("shows the Winsalot-side warning, quoting the lead note it came from", () => {
     const prefs = detectCommunicationPreferences(mak);
     expect(prefs).toHaveLength(1);
+    expect(EMAIL_ONLY_LABEL).toBe("WINSALOT: EMAIL ONLY — DO NOT CALL");
     expect(prefs[0].label).toBe(EMAIL_ONLY_LABEL);
-    expect(prefs[0].evidence).toContain("detailed proposal via email");
+    expect(prefs[0].evidence).toBe("EMAIL ONLY — DO NOT CALL");
+  });
+
+  it("the Teknokraft-facing handoff contains no call restriction, but still says the proposal was requested by email", () => {
+    for (const type of ["proposal_requested", "interested_lead", "callback_follow_up", "additional_information", "appointment_requested", "custom"] as const) {
+      const { subject, body } = buildClientNotificationDraft({ client: teknokraft, lead: mak, type });
+      expect(`${subject}\n${body}`).not.toMatch(/do\s*not\s*call|don'?t\s*call|email\s+only|email communication only|no phone call|prohibit|winsalot:/i);
+    }
+    const { body } = buildClientNotificationDraft({ client: teknokraft, lead: mak, type: "proposal_requested" });
+    expect(body).toContain("has requested a detailed proposal by email.");
+    expect(body).toContain("• Scope of work\n• Project cost\n• Estimated project duration / completion timeline");
+  });
+
+  it("without the explicit note, the 'via email' request alone does not trigger the internal warning", () => {
+    const withoutNote = { ...mak, notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration." } as LeadgenLeadRow;
+    expect(detectCommunicationPreferences(withoutNote)).toEqual([]);
+    expect(buildClientNotificationDraft({ client: teknokraft, lead: withoutNote, type: "proposal_requested" }).body).toContain("by email.");
   });
 });
 
@@ -134,8 +150,8 @@ describe("helpers", () => {
     expect(formatLeadPhone(null)).toBeNull();
   });
   it("detects requested proposal items only when mentioned", () => {
-    expect(detectProposalRequest({ notes: "wants a quote", client_notes: null })).toEqual({ requested: true, items: ["Project cost"] });
-    expect(detectProposalRequest({ notes: "call back", client_notes: null })).toEqual({ requested: false, items: [] });
+    expect(detectProposalRequest({ notes: "wants a quote", client_notes: null })).toEqual({ requested: true, items: ["Project cost"], viaEmail: false });
+    expect(detectProposalRequest({ notes: "call back", client_notes: null })).toEqual({ requested: false, items: [], viaEmail: false });
   });
   it("validates types and writes a clear timeline entry", () => {
     expect(isClientNotificationType("proposal_requested")).toBe(true);

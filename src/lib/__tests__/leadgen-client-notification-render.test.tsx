@@ -16,7 +16,7 @@ const mak = {
   city: "14 Foundry Ave #216, Toronto, ON M6H 0A8, Canada General contractor",
   province: null,
   status: "Interested",
-  notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration, excluding advertising expenses.",
+  notes: "The client requests a detailed proposal via email outlining the scope of work, costs, and the duration, excluding advertising expenses.\n\nEMAIL ONLY — DO NOT CALL",
   client_notes: null,
   source_notes: null,
 } as unknown as LeadgenLeadRow;
@@ -34,8 +34,15 @@ describe("Email Client composer", () => {
     }
   });
 
-  it("surfaces EMAIL ONLY — DO NOT CALL prominently", () => {
-    expect(html).toContain("EMAIL ONLY — DO NOT CALL");
+  it("surfaces the Winsalot-side warning prominently, marked internal", () => {
+    expect(html).toContain("WINSALOT: EMAIL ONLY — DO NOT CALL");
+    expect(html).toContain("not shared with the client");
+  });
+
+  it("prefilled client message carries no call restriction", () => {
+    const textarea = /<textarea[^>]*>([\s\S]*?)<\/textarea>/.exec(html)?.[1] ?? "";
+    expect(textarea).toContain("has requested a detailed proposal by email");
+    expect(textarea).not.toMatch(/do not call|email only|email communication only/i);
   });
 
   it("prefills an editable subject and body, the type list, and Send / Cancel", () => {
@@ -64,8 +71,8 @@ describe("Email Client composer", () => {
 describe("lead-page banner", () => {
   it("shows for Mak and quotes his note; renders nothing otherwise", () => {
     const html = renderToStaticMarkup(<CommunicationPreferenceBanner lead={mak} />);
-    expect(html).toContain("EMAIL ONLY — DO NOT CALL");
-    expect(html).toContain("detailed proposal via email");
+    expect(html).toContain("WINSALOT: EMAIL ONLY — DO NOT CALL");
+    expect(html).toContain("From lead note: “EMAIL ONLY — DO NOT CALL”");
     expect(renderToStaticMarkup(<CommunicationPreferenceBanner lead={{ ...mak, notes: null }} />)).toBe("");
   });
 });
