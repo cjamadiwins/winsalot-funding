@@ -18,6 +18,7 @@ import {
   STANDARD_BIWEEKLY_WAGE,
   STANDARD_PAID_HOURS,
   type PayrollAuditLogRow,
+  type PayrollEmailNotification,
   type PayrollCurrency,
   type PayrollRecord,
   type PayrollStatus,
@@ -63,6 +64,7 @@ type Props = {
   agents: Agent[];
   records: PayrollRecord[];
   auditLog: PayrollAuditLogRow[];
+  payrollEmails?: PayrollEmailNotification[];
   nextPayday: string;
   upcomingPaydays: string[];
   loadAttendanceAction: (
@@ -671,6 +673,7 @@ export default function AdminPayrollClient({
   agents,
   records,
   auditLog,
+  payrollEmails = [],
   nextPayday,
   upcomingPaydays,
   loadAttendanceAction,
@@ -1167,7 +1170,17 @@ export default function AdminPayrollClient({
                         </div>
 
                         {auditOpenId === record.id && (
-                          <AuditLogPanel entries={auditLog.filter((a) => a.payroll_id === record.id)} />
+                          <>
+                            <AuditLogPanel entries={auditLog.filter((a) => a.payroll_id === record.id)} />
+                            {payrollEmails.filter((n) => n.agent_id === record.agent_id && n.pay_period_start === record.pay_period_start && n.pay_period_end === record.pay_period_end).map((n) => (
+                              <p key={n.id} className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                                <strong>Winsalot payroll email:</strong> {n.status} · To: {n.to_email || "unavailable"}
+                                {n.resend_email_id ? ` · Resend ID: ${n.resend_email_id}` : ""}
+                                {n.error ? ` · ${n.error}` : ""}
+                                {` · Updated: ${new Date(n.status_at).toLocaleString()}`}
+                              </p>
+                            ))}
+                          </>
                         )}
                       </>
                     )}

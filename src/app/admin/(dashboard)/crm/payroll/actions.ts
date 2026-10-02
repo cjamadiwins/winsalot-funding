@@ -1,5 +1,6 @@
 "use server";
 
+import { sendPayrollPaidEmail } from "@/lib/payroll-paid-email";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
@@ -439,11 +440,16 @@ export async function markPayrollPaidAction(recordId: string, formData: FormData
   if (!actualPaymentDate) return { error: "Actual payment date is required." };
   if (!paymentMethod) return { error: "Payment method is required." };
 
-  const { error } = await supabase
+  const { data: paidRecord, error } = await supabase
     .from("crm_payroll")
     .update({ status: "paid", actual_payment_date: actualPaymentDate, payment_method: paymentMethod })
-    .eq("id", recordId);
+    .eq("id", recordId)
+    .eq("status", "approved")
+    .select("*")
+    .maybeSingle();
   if (error) return { error: `Failed to mark this payroll record as paid: ${error.message}` };
+
+  if (!paidRecord) return { error: "This record changed before payment was finalized. Refresh payroll." };
 
   await insertAuditRow(supabase, {
     payrollId: recordId,
@@ -453,6 +459,8 @@ export async function markPayrollPaidAction(recordId: string, formData: FormData
     reason: null,
     details: { actual_payment_date: actualPaymentDate, payment_method: paymentMethod },
   });
+
+  await sendPayrollPaidEmail("growth", paidRecord, admin);
 
   revalidatePath("/admin/crm/payroll");
   revalidatePath("/agent/pay");

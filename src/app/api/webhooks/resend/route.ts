@@ -173,6 +173,27 @@ export async function POST(request: NextRequest) {
   const emailId = event.data.email_id;
   const eventAt = event.created_at ?? new Date().toISOString();
 
+  // One centralized Winsalot payroll notification history, regardless of
+  // which CRM's attendance/record store contributed to the finalized pay.
+  const payrollTag = event.data.tags?.winsalot_payroll_notification;
+  const payrollQuery = admin.from("payroll_email_notifications").select("id, status_at, resend_email_id");
+  const { data: payrollEmail, error: payrollLookupError } = await (payrollTag
+    ? payrollQuery.eq("id", payrollTag)
+    : payrollQuery.eq("resend_email_id", emailId)).maybeSingle();
+  if (payrollLookupError) return NextResponse.json({ error: "Payroll email lookup failed." }, { status: 500 });
+  if (payrollEmail) {
+    if (payrollEmail.resend_email_id && payrollEmail.resend_email_id !== emailId) {
+      return NextResponse.json({ error: "Payroll provider ID mismatch." }, { status: 400 });
+    }
+    if (new Date(eventAt) >= new Date(payrollEmail.status_at)) {
+      const { data: updated, error: updateError } = await admin.from("payroll_email_notifications")
+        .update({ status, status_at: eventAt, resend_email_id: emailId, [STATUS_COLUMN[status]]: eventAt })
+        .eq("id", payrollEmail.id).eq("status_at", payrollEmail.status_at).select("id").maybeSingle();
+      if (updateError || !updated) return NextResponse.json({ error: "Payroll delivery update failed." }, { status: 500 });
+    }
+    return NextResponse.json({ received: true });
+  }
+
   // Invoice-send/reminder tracking (crm_invoice_emails, migration 0091) is
   // checked first, before falling into the crm_lead_emails/leadgen_emails
   // branches below - a completely independent tracked-email table, same
