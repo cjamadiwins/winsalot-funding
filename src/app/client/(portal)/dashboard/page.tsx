@@ -22,6 +22,7 @@ import {
 import { loadPortalReceipts } from "@/lib/crm-portal-billing";
 import { formatReceiptDate } from "@/lib/crm-receipt";
 import { computeClientDashboardSummary, ownersReachedCount } from "@/lib/client-portal-dashboard";
+import { loadClientCampaignSummary } from "@/lib/client-portal-campaign-summary-data";
 import KpiCard, { type KpiTone } from "@/components/crm-ui/KpiCard";
 import StatusBadge from "@/components/crm-ui/StatusBadge";
 
@@ -47,7 +48,8 @@ const MILESTONE_STATUS_BADGE_CLASSES: Record<LeadgenClientPaymentMilestoneRow["s
 
 function formatCampaignDate(value: string | null): string | null {
   if (!value) return null;
-  return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  // start_date is a plain date (YYYY-MM-DD); format in UTC so the day never shifts with the server's timezone.
+  return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 // Display-only formatting - leadgen_campaigns.status stays lowercase in
@@ -81,7 +83,9 @@ export default async function ClientPortalDashboardPage() {
   const allLeads = (leads ?? []) as LeadgenLeadRow[];
   const allAppointments = (appointments ?? []) as LeadgenAppointmentRow[];
   const allCampaigns = (campaigns ?? []) as LeadgenCampaignRow[];
-  const primaryCampaign = allCampaigns.find((c) => c.status === "active") ?? allCampaigns[0] ?? null;
+  // The card describes the client's overall campaign, never one call list or
+  // per-market campaign row - see client-portal-campaign-summary.ts.
+  const campaignSummary = await loadClientCampaignSummary(client, allCampaigns);
 
   // RLS (leadgen_client_payment_configs_client_select_own /
   // _milestones_client_select_own) is the actual boundary here - there is
@@ -144,69 +148,60 @@ export default async function ClientPortalDashboardPage() {
     { label: "Conversion Rate", value: `${valueByLabel.get("Conversion Rate") ?? 0}%`, tone: "indigo", icon: TrendingUp, href: "/client/reports#conversion-rate" },
   ];
 
-  const hasQualificationCriteria = (primaryCampaign?.qualification_criteria?.length ?? 0) > 0;
-  const hasSecondaryIndustries = (primaryCampaign?.secondary_industries?.length ?? 0) > 0;
+  const summaryStatusLabel = campaignSummary.status ? formatCampaignStatusLabel(campaignSummary.status) : null;
+  const campaignStartLabel = formatCampaignDate(campaignSummary.campaignStart);
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Welcome, {client.name}</h1>
       <p className="mt-1 text-sm text-slate-500">
-        {primaryCampaign ? `${primaryCampaign.name} · ${formatCampaignStatusLabel(primaryCampaign.status)}` : "Your campaign performance at a glance."}
+        {campaignSummary.campaignName && summaryStatusLabel ? `${campaignSummary.campaignName} · ${summaryStatusLabel}` : "Your campaign performance at a glance."}
       </p>
 
-      {primaryCampaign && (
+      {campaignSummary.campaignName && campaignSummary.status && summaryStatusLabel && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaign Summary</h2>
-            <StatusBadge label={formatCampaignStatusLabel(primaryCampaign.status)} className={CAMPAIGN_STATUS_BADGE_CLASSES[primaryCampaign.status]} />
-          </div>
-          <p className="mt-2 text-[15px] font-semibold text-slate-900">{primaryCampaign.name}</p>
-          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
-            {primaryCampaign.service_type && (
-              <div>
-                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Service</dt>
-                <dd className="text-slate-700">{primaryCampaign.service_type}</dd>
-              </div>
-            )}
-            {primaryCampaign.target_industry && (
-              <div>
-                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Target Industry</dt>
-                <dd className="text-slate-700">
-                  {primaryCampaign.target_industry}
-                  {hasSecondaryIndustries && <span className="text-slate-500"> (+ {primaryCampaign.secondary_industries.join(", ")})</span>}
-                </dd>
-              </div>
-            )}
-            {primaryCampaign.territory && (
-              <div>
-                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Territory</dt>
-                <dd className="text-slate-700">{primaryCampaign.territory}</dd>
-              </div>
-            )}
-            {formatCampaignDate(primaryCampaign.start_date) && (
-              <div>
-                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Start Date</dt>
-                <dd className="text-slate-700">{formatCampaignDate(primaryCampaign.start_date)}</dd>
-              </div>
-            )}
-            {primaryCampaign.assigned_team && (
+          <h2 className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-500">Campaign Summary</h2>
+          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 text-[13px] sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Campaign</dt>
+              <dd className="text-[15px] font-semibold text-slate-900">{campaignSummary.campaignName}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Status</dt>
+              <dd className="mt-0.5">
+                <StatusBadge label={summaryStatusLabel} className={CAMPAIGN_STATUS_BADGE_CLASSES[campaignSummary.status]} />
+              </dd>
+            </div>
+            {campaignSummary.assignedTeam.length > 0 && (
               <div>
                 <dt className="text-[11px] uppercase tracking-wide text-slate-400">Assigned Team</dt>
-                <dd className="text-slate-700">{primaryCampaign.assigned_team}</dd>
+                <dd className="text-slate-700">{campaignSummary.assignedTeam.join(", ")}</dd>
               </div>
             )}
-            {primaryCampaign.current_stage && (
+            {campaignSummary.targeting && (
               <div>
-                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Current Stage</dt>
-                <dd className="text-slate-700">{primaryCampaign.current_stage}</dd>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Targeting</dt>
+                <dd className="text-slate-700">{campaignSummary.targeting}</dd>
+              </div>
+            )}
+            {campaignSummary.appointmentTarget && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Appointment Target</dt>
+                <dd className="text-slate-700">{campaignSummary.appointmentTarget}</dd>
+              </div>
+            )}
+            {campaignStartLabel && (
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400">Campaign Start</dt>
+                <dd className="text-slate-700">{campaignStartLabel}</dd>
               </div>
             )}
           </dl>
-          {hasQualificationCriteria && (
+          {campaignSummary.qualificationCriteria.length > 0 && (
             <div className="mt-3 border-t border-slate-100 pt-3">
               <dt className="text-[11px] uppercase tracking-wide text-slate-400">Qualified Lead Criteria</dt>
               <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[13px] text-slate-700">
-                {primaryCampaign.qualification_criteria.map((criterion) => (
+                {campaignSummary.qualificationCriteria.map((criterion) => (
                   <li key={criterion}>{criterion}</li>
                 ))}
               </ul>
