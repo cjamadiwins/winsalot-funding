@@ -504,6 +504,7 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "opportunity_created",
   "opportunity_outcome_changed",
   "client_notified",
+  "appointment_brief_sent",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -532,6 +533,7 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   opportunity_created: "Added to pipeline",
   opportunity_outcome_changed: "Pipeline outcome updated",
   client_notified: "Client notified",
+  appointment_brief_sent: "Appointment Brief Sent",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -943,6 +945,9 @@ export type LeadgenEmailRow = {
   // Set only on an admin "Email Client" lead notification (see
   // leadgen-client-notification.ts); null/absent on every other email.
   notification_type?: string | null;
+  // Set only on a sent Appointment Brief email (see migration
+  // 20261002020000); deliberately separate from appointment_id.
+  brief_appointment_id?: string | null;
 };
 
 // The single most recent status-change timestamp across every possible

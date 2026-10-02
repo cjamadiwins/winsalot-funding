@@ -247,6 +247,10 @@ export type SendLeadgenEmailInput = {
   // notification_type). Only written when provided, so every other caller's
   // insert is byte-for-byte what it was before the column existed.
   notificationType?: string | null;
+  // Appointment Brief email -> its appointment, via leadgen_emails.
+  // brief_appointment_id (NOT appointment_id, which the appointment
+  // confirmation/reminder badges read). Only written when provided.
+  briefAppointmentId?: string | null;
 };
 
 export type SendLeadgenEmailResult = { emailId: string; error?: string };
@@ -334,6 +338,7 @@ export async function sendLeadgenEmail(
       status: "sending",
       client_visible: input.clientVisible,
       ...(input.notificationType ? { notification_type: input.notificationType } : {}),
+      ...(input.briefAppointmentId ? { brief_appointment_id: input.briefAppointmentId } : {}),
     })
     .select("id")
     .single();

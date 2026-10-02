@@ -36,7 +36,24 @@ export default function ClientBriefPanel({
         </dl>
       </section>
 
-      <OpportunitySnapshot interestLevel={brief.interest_level} primaryNeed={brief.primary_opportunity} objective={brief.recommended_objective} />
+      {(brief.primary_need || brief.main_interest) && (
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
+          {brief.primary_opportunity && (
+            <div className="flex gap-2">
+              <dt className="w-24 shrink-0 text-slate-400">Opportunity</dt>
+              <dd className="min-w-0 break-words font-medium text-slate-800">{brief.primary_opportunity}</dd>
+            </div>
+          )}
+          {brief.main_interest && (
+            <div className="flex gap-2">
+              <dt className="w-24 shrink-0 text-slate-400">Main Interest</dt>
+              <dd className="min-w-0 break-words font-medium text-slate-800">{brief.main_interest}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      <OpportunitySnapshot interestLevel={brief.interest_level} primaryNeed={brief.primary_need || brief.primary_opportunity} objective={brief.recommended_objective} />
 
       {brief.why_interested && (
         <section>

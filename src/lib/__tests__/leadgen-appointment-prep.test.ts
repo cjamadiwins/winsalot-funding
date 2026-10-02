@@ -113,7 +113,9 @@ describe("client brief isolation", () => {
       [
         "appointment_summary",
         "interest_level",
+        "main_interest",
         "next_step_note",
+        "primary_need",
         "primary_opportunity",
         "prep_status",
         "recommended_next_step",
@@ -191,23 +193,31 @@ describe("computeQualityInsights", () => {
 });
 
 describe("emails and links", () => {
-  it("brief email carries date/time, business, summary and a CTA, and no contact details", () => {
+  it("brief email carries the appointment, the prepared content and a portal CTA, and no contact details", () => {
     const body = buildBriefEmailBody({
+      recipientName: "Pat",
       clientName: "Acme",
       businessName: "Joe's Auto",
+      industry: "Auto Repair",
       appointmentDate: "2026-10-05",
-      appointmentTime: "09:00",
+      appointmentTime: "09:00:00",
       timezone: "America/Toronto",
+      summary: "Wants more inquiries.",
       primaryOpportunity: "Website redesign",
-      whyInterested: "Wants more inquiries",
-      recommendedNextStep: "Send Proposal",
+      mainInterest: null,
+      primaryNeed: "More leads",
+      recommendedObjective: "Secure a proposal opportunity",
       portalUrl: "https://leads.winsalotcorp.com/client/appointments/abc",
     });
+    expect(body.startsWith("Hi Pat,")).toBe(true);
     expect(body).toContain("Joe's Auto");
-    expect(body).toContain("2026-10-05");
-    expect(body).toContain("09:00 (America/Toronto)");
+    expect(body).toContain("Monday, October 5, 2026 at 9:00 AM (America/Toronto)");
+    expect(body).toContain("Key opportunity: Website redesign");
+    expect(body).toContain("Primary need: More leads");
+    expect(body).toContain("Recommended discussion: Secure a proposal opportunity");
     expect(body).toContain("View Appointment Brief");
     expect(body).toContain("https://leads.winsalotcorp.com/client/appointments/abc");
+    expect(body.endsWith("Regards,\nWinsalot Corp.")).toBe(true);
   });
   it("only accepts appointment-brief deep links as post-login destinations", () => {
     const id = "123e4567-e89b-12d3-a456-426614174000";
