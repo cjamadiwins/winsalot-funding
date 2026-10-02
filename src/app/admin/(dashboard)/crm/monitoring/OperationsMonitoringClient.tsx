@@ -142,7 +142,16 @@ export default function OperationsMonitoringClient({
                   <span className="text-[13px] font-semibold text-slate-700">{c.label}</span>
                   <StatusBadge status={c.status} />
                 </div>
-                <div className="mt-2 text-lg font-bold text-slate-900">{c.headline}</div>
+                <div className="mt-2 text-lg font-bold text-slate-900">
+                  {c.key === "email_sms"
+                    ? c.status === "Healthy" ? "Healthy" : `${communications.length} Recent Failures`
+                    : c.key === "stale_leads" ? `${staleLeads.length} Stale Leads`
+                    : c.key === "appointments" ? `${appointments.length} Appointments`
+                    : c.key === "agent_kpi" ? "On Track"
+                    : c.key === "data_quality" ? `${dataQuality.length} Data Quality Issues`
+                    : c.key === "client_campaigns" ? `${clientCampaigns.length} Campaigns Needing Attention`
+                    : c.headline}
+                </div>
               </button>
             ))}
           </div>
