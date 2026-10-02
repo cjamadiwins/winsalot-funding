@@ -20,7 +20,7 @@ import "server-only";
 // correct identity from day one and can never be reached by
 // getEmailSender("growth"/"funding"/"billing").
 
-export type EmailCategory = "growth" | "funding" | "billing" | "quotes";
+export type EmailCategory = "growth" | "funding" | "billing" | "payroll" | "quotes";
 
 // Every Growth CRM email is branded as the company, never a named person -
 // no agent's name may appear as the sender display name (brief: "Change
@@ -52,6 +52,8 @@ const SENDER_DEFAULTS: Record<EmailCategory, { displayName: string; address: str
   funding: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "info@winsalotcorp.com" },
   // Invoices, payment reminders, and payment receipts.
   billing: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "billing@winsalotcorp.com" },
+  // One Winsalot payroll identity, independent of either CRM.
+  payroll: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "info@winsalotcorp.com" },
   // Reserved for the retired cleaning-quote system - see module comment.
   quotes: { displayName: DEFAULT_SENDER_DISPLAY_NAME, address: "quotes@winsalotcorp.com" },
 };
@@ -61,6 +63,7 @@ const SENDER_OVERRIDE_ENV_VAR: Record<EmailCategory, string> = {
   growth: "GROWTH_EMAIL_FROM",
   funding: "FUNDING_EMAIL_FROM",
   billing: "BILLING_EMAIL_FROM",
+  payroll: "PAYROLL_EMAIL_FROM",
   quotes: "QUOTES_EMAIL_FROM",
 };
 

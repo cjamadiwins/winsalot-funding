@@ -1,5 +1,6 @@
 "use server";
 
+import { sendPayrollPaidEmail } from "@/lib/payroll-paid-email";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
@@ -428,7 +429,7 @@ export async function markLeadgenPayrollPaidAction(recordId: string, formData: F
   if (!actualPaymentDate) return { error: "Actual payment date is required." };
   if (!paymentMethod) return { error: "Payment method is required." };
 
-  const { error } = await supabase
+  const { data: paidRecord, error } = await supabase
     .from("leadgen_payroll")
     .update({
       status: "paid",
@@ -436,8 +437,13 @@ export async function markLeadgenPayrollPaidAction(recordId: string, formData: F
       payment_method: paymentMethod,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", recordId);
+    .eq("id", recordId)
+    .eq("status", "approved")
+    .select("*")
+    .maybeSingle();
   if (error) return { error: `Failed to mark this payroll record as paid: ${error.message}` };
+
+  if (!paidRecord) return { error: "This record changed before payment was finalized. Refresh payroll." };
 
   await insertAuditRow(supabase, {
     payrollId: recordId,
@@ -447,6 +453,8 @@ export async function markLeadgenPayrollPaidAction(recordId: string, formData: F
     reason: null,
     details: { actual_payment_date: actualPaymentDate, payment_method: paymentMethod },
   });
+
+  await sendPayrollPaidEmail("leadgen", paidRecord, admin);
 
   revalidatePath("/leadgen/admin/payroll");
   revalidatePath("/leadgen/agent/pay");

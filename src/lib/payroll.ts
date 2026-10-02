@@ -543,3 +543,18 @@ function isWeekday(dateIso: string): boolean {
 export function weekdaysInRange(start: string, end: string): string[] {
   return datesInRange(start, end).filter(isWeekday);
 }
+
+// Shared Winsalot notification history, independent of attendance source.
+export type PayrollEmailNotification = {
+  id: string;
+  agent_id: string;
+  pay_period_start: string;
+  pay_period_end: string;
+  source_crm: "growth" | "leadgen";
+  source_payroll_id: string;
+  status: string;
+  status_at: string;
+  to_email: string | null;
+  resend_email_id: string | null;
+  error: string | null;
+};

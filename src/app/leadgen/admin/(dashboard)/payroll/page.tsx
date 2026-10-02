@@ -1,3 +1,4 @@
+import { loadPayrollEmailNotifications } from "@/lib/payroll-paid-email";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
@@ -62,6 +63,8 @@ export default async function LeadgenAdminPayrollPage() {
     supabase.from("leadgen_clients").select("id, name").order("name"),
   ]);
 
+  const payrollEmails = await loadPayrollEmailNotifications((records ?? []) as PayrollRecord[]);
+
   const error =
     agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
     subcontractorsError ?? subcontractorPaymentsError ?? clientsError;
@@ -118,6 +121,7 @@ export default async function LeadgenAdminPayrollPage() {
               payroll_currency: a.payroll_currency,
             }))}
             records={(records ?? []) as PayrollRecord[]}
+            payrollEmails={payrollEmails}
             auditLog={(auditLog ?? []) as PayrollAuditLogRow[]}
             nextPayday={getNextPayday()}
             upcomingPaydays={getUpcomingPaydays(4)}

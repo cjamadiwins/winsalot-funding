@@ -1,3 +1,4 @@
+import { loadPayrollEmailNotifications } from "@/lib/payroll-paid-email";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import type { CrmUserRow } from "@/lib/crm-types";
@@ -52,6 +53,8 @@ export default async function AdminCrmPayrollPage() {
     supabase.from("crm_subcontractors").select("*").order("full_name"),
     supabase.from("crm_subcontractor_payments").select("*").order("period_start", { ascending: false }),
   ]);
+
+  const payrollEmails = await loadPayrollEmailNotifications((records ?? []) as PayrollRecord[]);
 
   const error =
     agentsError ?? recordsError ?? auditLogError ?? holidaysError ?? assignmentsError ??
@@ -108,6 +111,7 @@ export default async function AdminCrmPayrollPage() {
               payroll_currency: a.payroll_currency,
             }))}
             records={(records ?? []) as PayrollRecord[]}
+            payrollEmails={payrollEmails}
             auditLog={(auditLog ?? []) as PayrollAuditLogRow[]}
             nextPayday={getNextPayday()}
             upcomingPaydays={getUpcomingPaydays(4)}

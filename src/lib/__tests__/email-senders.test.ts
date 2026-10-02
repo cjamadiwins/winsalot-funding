@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getEmailReplyTo, getEmailSender, senderForOpportunityType } from "../email-senders";
 
-const OVERRIDE_VARS = ["GROWTH_EMAIL_FROM", "FUNDING_EMAIL_FROM", "BILLING_EMAIL_FROM", "QUOTES_EMAIL_FROM", "EMAIL_REPLY_TO"] as const;
+const OVERRIDE_VARS = ["GROWTH_EMAIL_FROM", "FUNDING_EMAIL_FROM", "BILLING_EMAIL_FROM", "QUOTES_EMAIL_FROM", "PAYROLL_EMAIL_FROM", "EMAIL_REPLY_TO"] as const;
 
 afterEach(() => {
   for (const key of OVERRIDE_VARS) delete process.env[key];
@@ -13,6 +13,16 @@ describe("getEmailSender", () => {
     expect(getEmailSender("funding")).toBe("Winsalot Corp. <info@winsalotcorp.com>");
     expect(getEmailSender("billing")).toBe("Winsalot Corp. <billing@winsalotcorp.com>");
     expect(getEmailSender("quotes")).toBe("Winsalot Corp. <quotes@winsalotcorp.com>");
+    expect(getEmailSender("payroll")).toBe("Winsalot Corp. <info@winsalotcorp.com>");
+  });
+
+  it("keeps the centralized payroll identity independent of either CRM sender", () => {
+    process.env.GROWTH_EMAIL_FROM = "Growth <growth@example.com>";
+    process.env.LEADGEN_EMAIL_FROM = "Leadgen <leadgen@example.com>";
+    expect(getEmailSender("payroll")).toBe("Winsalot Corp. <info@winsalotcorp.com>");
+    process.env.PAYROLL_EMAIL_FROM = "Winsalot Corp. <payroll@example.com>";
+    expect(getEmailSender("payroll")).toBe("Winsalot Corp. <payroll@example.com>");
+    delete process.env.LEADGEN_EMAIL_FROM;
   });
 
   it("never returns the quotes@ identity for growth, funding, or billing", () => {
