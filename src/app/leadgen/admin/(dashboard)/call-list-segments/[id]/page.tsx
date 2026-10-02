@@ -15,6 +15,7 @@ import SegmentPerformanceClient, { type SegmentCallLogView } from "@/components/
 import OttawaPainterTransferClient from "@/components/crm-call-list/OttawaPainterTransferClient";
 import { loadCampaignDetails } from "@/lib/leadgen-campaign-admin";
 import { resolveScriptOverride } from "@/lib/leadgen-campaign-form";
+import { WEBSITE_SEO_SERVICE_LABEL } from "@/lib/call-list-campaign-name";
 import type { CallScriptClientOption } from "@/components/leadgen/ClientCallScriptSelector";
 import {
   addSegmentLeadAction,
@@ -211,7 +212,7 @@ export default async function LeadgenCallListSegmentDetailPage({ params }: { par
       const { data: client } = await admin.from("leadgen_clients").select("id").eq("name", targetClientName).eq("active", true).maybeSingle();
       const campaignName = targetClientName === "Web6 Solutions"
         ? "Web6 Solutions – Website Design Lead Generation"
-        : "Hidebrandt Web Services – Website Services Lead Generation";
+        : WEBSITE_SEO_SERVICE_LABEL;
       const { data: campaign } = client
         ? await admin.from("leadgen_campaigns").select("id, name, status").eq("client_id", client.id).eq("name", campaignName).maybeSingle()
         : { data: null };

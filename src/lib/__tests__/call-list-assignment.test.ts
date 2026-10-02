@@ -155,10 +155,24 @@ describe("Lead Gen: client and list assignments stay linked", () => {
     expect(db.leadgen_campaign_agents).toHaveLength(3);
   });
 
-  it("adds selected agents to the chosen client scope and list roster", async () => {
-    await saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["henry", "goodness"], "hid", "admin1");
-    expect(roster()).toEqual(["goodness", "henry"]);
-    expect(db.leadgen_campaign_agents.some((r) => r.campaign_id === "c-hid" && r.agent_id === "goodness")).toBe(true);
+  it("never grants client access: an agent who doesn't hold the client is refused and nothing is created", async () => {
+    const before = structuredClone(db.leadgen_campaign_agents);
+    await expect(saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["henry", "goodness"], "hid", "admin1")).rejects.toThrow(/Goodness isn't assigned to Hidebrandt Web Services/);
+    expect(db.leadgen_campaign_agents).toEqual(before);
+    expect(roster()).toEqual([]);
+  });
+
+  it("assigns a list only to agents who already hold the client", async () => {
+    await saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid" }), "c-hid", ["henry"], "hid", "admin1");
+    expect(roster()).toEqual(["henry"]);
+    expect(db.leadgen_campaign_agents).toHaveLength(3);
+  });
+
+  it("fills in a newly added campaign for an agent who already holds the client (no new client access)", async () => {
+    db.leadgen_campaigns.push({ id: "c-hid-2", client_id: "hid", status: "active" });
+    await saveLeadgenSegmentAssignment(lg({ leadgen_campaign_id: "c-hid-2" }), "c-hid-2", ["henry"], "hid", "admin1");
+    expect(db.leadgen_campaign_agents.some((r) => r.campaign_id === "c-hid-2" && r.agent_id === "henry")).toBe(true);
+    expect(db.leadgen_campaign_agents.some((r) => r.agent_id === "goodness" && ["c-hid", "c-hid-2"].includes(r.campaign_id as string))).toBe(false);
   });
 
   it("removing an agent from one list keeps their client assignment and the other agent", async () => {
@@ -178,7 +192,7 @@ describe("Lead Gen: client and list assignments stay linked", () => {
     await saveLeadgenSegmentAssignment(lg(), "c-tek", ["henry"]);
     await saveLeadgenSegmentAssignment(lg(), "c-hid", ["henry"]);
     expect(db.call_list_segments[0].leadgen_campaign_id).toBe("c-hid");
-    expect(db.call_list_segments[0].campaign_name).toBe("Hidebrandt Web Services — Pet Sitter — Niagara Falls");
+    expect(db.call_list_segments[0].campaign_name).toBe("Lead Generation for Website & SEO — Pet Sitter — Niagara Falls");
     expect(db.call_list_segment_agents.some((r) => r.agent_id === "henry")).toBe(true);
     expect(db.leadgen_campaign_agents.some((r) => r.campaign_id === "c-hid" && r.agent_id === "henry")).toBe(true);
     expect(db.call_list_leads).toEqual(preserved.leads);
