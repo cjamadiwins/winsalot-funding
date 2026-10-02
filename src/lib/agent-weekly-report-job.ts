@@ -116,7 +116,7 @@ export function buildAgentReportSections(input: {
       status: CRM_PERFORMANCE_TIER_LABEL[crmPerformanceTier(growthScore)],
       href: GROWTH_AGENT_REPORT_URL,
       metrics: [
-        { label: "Calls completed", result: activity.calls, goal: GROWTH_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, GROWTH_DAILY_CALL_TARGET * workingDays) },
+        { label: "Calls completed (CRM call logs)", result: activity.calls, goal: GROWTH_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, GROWTH_DAILY_CALL_TARGET * workingDays) },
         { label: "Consultations booked", result: growth.consultationsBooked, goal: consultationGoal, rate: consultationRate },
         { label: "Opportunity leads added", result: growth.leadsAdded, goal: leadGoal, rate: leadRate },
         { label: "Emails sent", result: activity.emailsSent, goal: null, rate: null, informational: true },
@@ -148,7 +148,7 @@ export function buildAgentReportSections(input: {
       status: LEADGEN_PERFORMANCE_TIER_LABEL[leadgenPerformanceTier(appointmentRate)],
       href: LEADGEN_AGENT_REPORT_URL,
       metrics: [
-        { label: "Calls completed", result: activity.calls, goal: LEADGEN_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, LEADGEN_DAILY_CALL_TARGET * workingDays) },
+        { label: "Calls completed (CRM call logs)", result: activity.calls, goal: LEADGEN_DAILY_CALL_TARGET * workingDays, rate: pct(activity.calls, LEADGEN_DAILY_CALL_TARGET * workingDays) },
         { label: "Emails sent", result: activity.emailsSent, goal: emailGoal, rate: pct(activity.emailsSent, emailGoal) },
         { label: "Emails delivered", result: activity.emailsDelivered, goal: null, rate: null, informational: true },
         { label: "Email delivery rate", result: activity.emailDeliveryRate == null ? "—" : `${activity.emailDeliveryRate}%`, goal: null, rate: activity.emailDeliveryRate, informational: true },
