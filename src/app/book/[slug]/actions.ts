@@ -10,7 +10,8 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
 import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
-import { isLeadgenBrentsEssentials, isValidEmail, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus } from "@/lib/leadgen-types";
+import { isValidEmail, type LeadgenAppointmentRow, type LeadgenClientRow } from "@/lib/leadgen-types";
+import { resolveBookingCampaign } from "@/lib/leadgen-booking-campaign";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
 import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 
@@ -25,20 +26,6 @@ async function findActiveClientBySlug(
     .select("id, name, slug, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("active", true);
   return (clients ?? []).find((c) => slugifyForLeadgenBookingPath(c.name) === slug || c.slug.toLowerCase() === slug.toLowerCase()) ?? null;
-}
-
-// A booking through this built-in page should land under the client's
-// one active campaign when it has exactly one - e.g. Mantra Collab's
-// single pilot campaign - so it shows up on that campaign's dashboard
-// instead of with no campaign at all. Deliberately never applied to
-// Brent's Essentials (regardless of how many active campaigns it has),
-// so this built-in page's behavior for that client is completely
-// unchanged from before this existed. Ambiguous cases (zero or multiple
-// active campaigns) fall back to the original null, same as always.
-async function resolveDefaultCampaignId(admin: ReturnType<typeof getSupabaseAdmin>, client: Pick<LeadgenClientRow, "id" | "name" | "slug">): Promise<string | null> {
-  if (isLeadgenBrentsEssentials(client)) return null;
-  const { data: activeCampaigns } = await admin.from("leadgen_campaigns").select("id").eq("client_id", client.id).eq("status", "active");
-  return activeCampaigns && activeCampaigns.length === 1 ? (activeCampaigns[0].id as string) : null;
 }
 
 export async function bookLeadgenAppointmentAction(slug: string, formData: FormData): Promise<BookLeadgenAppointmentResult> {
@@ -75,26 +62,20 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
     return { error: "That time is no longer available. Please choose another date or time." };
   }
 
-  // Best-effort match back to an existing lead for this client by email,
-  // same rule as the Calendly webhook (src/app/api/webhooks/calendly/
-  // route.ts): the most recently created lead with a matching email
-  // that isn't already closed out.
-  let matchedLeadId: string | null = null;
-  const { data: leadCandidates } = await admin
-    .from("leadgen_leads")
-    .select("id, status")
-    .eq("client_id", client.id)
-    .ilike("email", email)
-    .order("created_at", { ascending: false });
-  const matchedLead = (leadCandidates ?? []).find((lead) => !LEADGEN_LEAD_CLOSED_STATUSES.includes(lead.status as LeadgenLeadStatus));
-  matchedLeadId = matchedLead?.id ?? null;
+  // Best-effort match back to an existing open lead for this client by exact
+  // email (same rule as the Calendly webhook), and the appointment's campaign
+  // from verified evidence only: that lead's campaign, else the client's one
+  // active campaign (never Brent's Essentials). If neither is certain the
+  // campaign stays empty and the booking appears in the Admin "Needs campaign
+  // review" queue instead of being filed under a guess.
+  const { matchedLeadId, decision } = await resolveBookingCampaign(admin, client, email);
 
   const { data: appointment, error: insertError } = await admin
     .from("leadgen_appointments")
     .insert({
       lead_id: matchedLeadId,
       client_id: client.id,
-      campaign_id: await resolveDefaultCampaignId(admin, client),
+      campaign_id: decision.campaignId,
       business_name: businessName,
       contact_name: contactName,
       phone,

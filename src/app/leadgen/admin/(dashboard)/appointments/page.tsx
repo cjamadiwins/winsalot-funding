@@ -11,7 +11,10 @@ import {
 import { fetchLeadgenBusinessAppointmentReminderStatusMap } from "@/lib/leadgen-business-appointment-reminders";
 import { deriveFeedbackStatus, summarizePrep, type FeedbackStatus } from "@/lib/leadgen-appointment-prep";
 import { fetchFeedbackRows, fetchPrepStatusMap } from "@/lib/leadgen-appointment-prep-data";
+import { appointmentNeedsCampaignReview } from "@/lib/leadgen-booking-campaign";
+import { LEADGEN_BOOKING_TIMEZONE } from "@/lib/leadgen-booking";
 import AppointmentsListClient from "./AppointmentsListClient";
+import BookingReviewQueue, { type BookingReviewItem, type NeedsCampaignAppointment } from "./BookingReviewQueue";
 
 function clientFilterRows(rows: LeadgenAppointmentRow[], clientId: string | undefined): LeadgenAppointmentRow[] {
   return clientId ? rows.filter((r) => r.client_id === clientId) : rows;
@@ -93,10 +96,44 @@ export default async function LeadgenAppointmentsPage({
     prepStatusByAppointmentId
   );
 
+  // Admin "Needs review" queue: upcoming bookings that could not be filed under a
+  // campaign from verified evidence, plus Calendly payloads that could not be
+  // matched to a client. The queue table is read defensively: until its
+  // migration is applied the query simply returns nothing.
+  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: LEADGEN_BOOKING_TIMEZONE }).format(new Date());
+  const needsCampaign: NeedsCampaignAppointment[] = appointmentRows
+    .filter((a) => appointmentNeedsCampaignReview(a, todayYmd))
+    .map((a) => ({
+      id: a.id,
+      client_id: a.client_id,
+      business_name: a.business_name,
+      contact_name: a.contact_name,
+      email: a.email,
+      appointment_date: a.appointment_date,
+      appointment_time: a.appointment_time,
+      timezone: a.timezone,
+    }));
+  const { data: queueRows } = await admin
+    .from("leadgen_booking_review_queue")
+    .select("id, created_at, reason, contact_name, contact_email, contact_phone, business_name, appointment_start, client_id")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  const clientNameById: Record<string, string> = Object.fromEntries((clients ?? []).map((c) => [c.id, c.name]));
+  const reviewCampaigns = (campaigns ?? [])
+    .filter((c) => c.status === "active" && !isHiddenLeadgenCampaignName(c.name))
+    .map((c) => ({ id: c.id, client_id: c.client_id, name: c.name }));
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900">Appointments</h1>
       <p className="mt-1 text-sm text-slate-500">Every consultation booked across every client.</p>
+
+      <BookingReviewQueue
+        needsCampaign={needsCampaign}
+        queueItems={(queueRows ?? []) as BookingReviewItem[]}
+        clientNameById={clientNameById}
+        campaigns={reviewCampaigns}
+      />
 
       <AppointmentsListClient
         appointments={(appointments ?? []) as LeadgenAppointmentRow[]}

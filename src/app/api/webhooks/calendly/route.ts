@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
-import { LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenLeadStatus, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import { type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import { resolveBookingCampaign } from "@/lib/leadgen-booking-campaign";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
 
 export const runtime = "nodejs";
@@ -103,6 +104,40 @@ function extractBusinessName(invitee: CalendlyInviteePayload): string {
   return match?.answer?.trim() || invitee.name || "Calendly booking";
 }
 
+// Retain an automated booking that can't be filed safely (no client could be
+// matched from a verified source, or the payload has no start time) in the
+// Admin review queue instead of dropping it or guessing a client/campaign.
+// Idempotent on the Calendly invitee URI. If the queue can't be written (for
+// example the table isn't there yet) this logs and the webhook still returns
+// 200, exactly as it did before the queue existed.
+async function queueForAdminReview(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  invitee: CalendlyInviteePayload,
+  reason: "client_not_matched" | "missing_start_time",
+  clientId: string | null
+): Promise<boolean> {
+  const { error } = await admin.from("leadgen_booking_review_queue").upsert(
+    {
+      source: "calendly",
+      reason,
+      external_ref: invitee.uri,
+      client_id: clientId,
+      contact_name: invitee.name ?? null,
+      contact_email: invitee.email ?? null,
+      contact_phone: invitee.text_reminder_number ?? null,
+      business_name: extractBusinessName(invitee),
+      appointment_start: invitee.scheduled_event?.start_time ?? null,
+      payload: invitee,
+    },
+    { onConflict: "source,external_ref", ignoreDuplicates: true }
+  );
+  if (error) {
+    console.error(`[calendly-webhook] Failed to queue invitee ${invitee.uri} for Admin review:`, error);
+    return false;
+  }
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   const signingKey = process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
   if (!signingKey) {
@@ -144,6 +179,14 @@ export async function POST(request: NextRequest) {
       .update({ status: "Cancelled", updated_at: new Date().toISOString() })
       .eq("calendly_invitee_uri", invitee.uri);
     if (error) console.error(`[calendly-webhook] Failed to mark invitee ${invitee.uri} cancelled:`, error);
+    // A booking still waiting in the Admin review queue that the prospect then
+    // cancelled no longer needs action (the stored payload is kept).
+    await admin
+      .from("leadgen_booking_review_queue")
+      .update({ status: "dismissed", resolved_at: new Date().toISOString(), resolution_note: "Cancelled in Calendly." })
+      .eq("source", "calendly")
+      .eq("external_ref", invitee.uri)
+      .eq("status", "pending");
     return NextResponse.json({ received: true });
   }
 
@@ -182,48 +225,40 @@ export async function POST(request: NextRequest) {
   if (!client) {
     console.error(
       `[calendly-webhook] Could not match invitee ${invitee.uri} to a client (event_type ${eventTypeUri ?? "unknown"}) - ` +
-        "set that client's Calendly Event Type URI in its Client Profile so future bookings match unambiguously. Skipping."
+        "set that client's Calendly Event Type URI in its Client Profile so future bookings match unambiguously. Queued for Admin review."
     );
-    return NextResponse.json({ received: true, matched: false });
+    const queued = await queueForAdminReview(admin, invitee, "client_not_matched", null);
+    return NextResponse.json({ received: true, matched: false, queued });
   }
 
   const timezone = invitee.timezone || "America/Toronto";
   const startTime = scheduledEvent?.start_time;
   if (!startTime) {
-    console.error(`[calendly-webhook] Missing scheduled_event.start_time for invitee ${invitee.uri} - skipping.`);
-    return NextResponse.json({ received: true, matched: true, error: "missing_start_time" });
+    console.error(`[calendly-webhook] Missing scheduled_event.start_time for invitee ${invitee.uri} - queued for Admin review.`);
+    const queued = await queueForAdminReview(admin, invitee, "missing_start_time", client.id);
+    return NextResponse.json({ received: true, matched: true, error: "missing_start_time", queued });
   }
   const { date, time } = formatInTimeZone(startTime, timezone);
 
   const joinUrl = scheduledEvent?.location?.join_url ?? null;
   const meetingType: LeadgenMeetingType = joinUrl ? "Video Call" : "Phone Call";
 
-  // Best-effort match back to an existing lead for this client by email,
-  // so a self-serve booking (via the consultation email's booking link)
-  // still advances that lead's status the same way a staff-booked
-  // appointment does. Picks the most recently created open (not already
-  // closed-out) lead with a matching email; no match just leaves the
-  // appointment lead-less, same as before.
-  let matchedLeadId: string | null = null;
-  if (invitee.email) {
-    const { data: leadCandidates } = await admin
-      .from("leadgen_leads")
-      .select("id, status")
-      .eq("client_id", client.id)
-      .ilike("email", invitee.email.trim())
-      .order("created_at", { ascending: false });
-    const matchedLead = (leadCandidates ?? []).find(
-      (lead) => !LEADGEN_LEAD_CLOSED_STATUSES.includes(lead.status as LeadgenLeadStatus)
-    );
-    matchedLeadId = matchedLead?.id ?? null;
-  }
+  // Best-effort match back to an existing open lead for this client by exact
+  // email, so a self-serve booking (via the consultation email's booking link)
+  // still advances that lead's status the same way a staff-booked appointment
+  // does; no match just leaves the appointment lead-less, same as before. The
+  // appointment's campaign comes only from verified evidence (that lead's own
+  // campaign, else the client's one active campaign); if neither is certain it
+  // stays empty and the booking shows up in the Admin "Needs campaign review"
+  // queue rather than being filed under a guessed campaign.
+  const { matchedLeadId, decision } = await resolveBookingCampaign(admin, client, invitee.email);
 
   const { data: appointment, error: insertError } = await admin
     .from("leadgen_appointments")
     .insert({
       lead_id: matchedLeadId,
       client_id: client.id,
-      campaign_id: null,
+      campaign_id: decision.campaignId,
       business_name: extractBusinessName(invitee),
       contact_name: invitee.name ?? null,
       phone: invitee.text_reminder_number ?? null,
