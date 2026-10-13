@@ -21,6 +21,7 @@ import {
   sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./actions";
+import { requestProposalAction, updateProposalStatusAction } from "./proposal-actions";
 
 const actions: LeadDetailActions = {
   updateLead: updateLeadAction,
@@ -37,6 +38,8 @@ const actions: LeadDetailActions = {
   sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
   resendEmail: resendLeadgenEmailAction,
   sendClientNotification: sendClientLeadNotificationAction,
+  requestProposal: requestProposalAction,
+  updateProposalStatus: updateProposalStatusAction,
   assignAgent: assignLeadAction,
   clearBouncedEmail: clearBouncedEmailAction,
   deleteLead: deleteLeadgenLeadAction,
@@ -118,6 +121,7 @@ export default async function LeadgenAdminLeadDetailPage({
       score={detail.score}
       dncSuppression={detail.dncSuppression}
       clientServices={clientServices}
+      proposal={detail.proposal}
     />
   );
 }

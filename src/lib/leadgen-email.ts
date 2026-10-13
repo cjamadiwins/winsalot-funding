@@ -247,13 +247,20 @@ export type SendLeadgenEmailInput = {
   // notification_type). Only written when provided, so every other caller's
   // insert is byte-for-byte what it was before the column existed.
   notificationType?: string | null;
+  // Optional idempotency key (leadgen_emails.request_key, unique when set). A
+  // second send with the same key is refused before anything reaches Resend;
+  // see DUPLICATE_SEND_ERROR. Only written when provided.
+  requestKey?: string | null;
   // Appointment Brief email -> its appointment, via leadgen_emails.
   // brief_appointment_id (NOT appointment_id, which the appointment
   // confirmation/reminder badges read). Only written when provided.
   briefAppointmentId?: string | null;
 };
 
-export type SendLeadgenEmailResult = { emailId: string; error?: string };
+export type SendLeadgenEmailResult = { emailId: string; error?: string; duplicate?: boolean };
+
+// Returned (with duplicate: true) when input.requestKey was already used.
+export const DUPLICATE_SEND_ERROR = "This email was already submitted. It has not been sent again.";
 
 // Shared by every email this CRM sends (client communications and
 // prospect/consultation emails alike) so sending, delivery tracking, and
@@ -338,12 +345,20 @@ export async function sendLeadgenEmail(
       status: "sending",
       client_visible: input.clientVisible,
       ...(input.notificationType ? { notification_type: input.notificationType } : {}),
+      ...(input.requestKey ? { request_key: input.requestKey } : {}),
       ...(input.briefAppointmentId ? { brief_appointment_id: input.briefAppointmentId } : {}),
     })
     .select("id")
     .single();
 
   if (insertError || !inserted) {
+    // Unique violation on leadgen_emails_request_key_idx: this exact send was
+    // already recorded (double click, retried request, second tab). Nothing is
+    // sent; report the original email so callers can treat it as already done.
+    if (input.requestKey && insertError?.code === "23505") {
+      const { data: original } = await supabase.from("leadgen_emails").select("id").eq("request_key", input.requestKey).maybeSingle();
+      return { emailId: (original?.id as string | undefined) ?? "", error: DUPLICATE_SEND_ERROR, duplicate: true };
+    }
     return { emailId: "", error: "Failed to save the email record." };
   }
 

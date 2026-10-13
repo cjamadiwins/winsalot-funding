@@ -110,6 +110,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       listPath="/leadgen/agent/leads"
       dncSuppression={detail.dncSuppression}
       clientServices={clientServices}
+      proposal={detail.proposal}
     />
     </>
   );

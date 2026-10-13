@@ -17,6 +17,7 @@ import {
 } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
+import type { LeadProposalRow } from "@/lib/leadgen-proposal";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -44,6 +45,9 @@ export type LeadgenLeadDetailData = {
   // Shared cross-CRM Do Not Contact restriction (crm_dnc_suppressions),
   // looked up by this lead's phone/email - null when unrestricted.
   dncSuppression: DncSuppressionRow | null;
+  // Request Proposal tracking (null = Not Requested). Read defensively: until
+  // the leadgen_lead_proposals migration is applied the query just returns nothing.
+  proposal: LeadProposalRow | null;
 };
 
 // One Lead Gen CRM lead's full detail record - the exact same query set
@@ -74,6 +78,7 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     { data: mantraCollabTemplate },
     { data: followUpTemplates },
     { data: score },
+    { data: proposal },
   ] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id
@@ -90,6 +95,7 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     admin.from("leadgen_email_templates").select("*").eq("key", "mantra_collab_intro").maybeSingle(),
     admin.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
     admin.from("leadgen_opportunity_scores").select("*").eq("lead_id", id).maybeSingle(),
+    admin.from("leadgen_lead_proposals").select("*").eq("lead_id", id).maybeSingle(),
   ]);
 
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
@@ -123,5 +129,6 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     bouncedEmails: (bouncedRows ?? []).map((r) => r.email),
     score: score as LeadgenOpportunityScoreRow | null,
     dncSuppression,
+    proposal: (proposal as LeadProposalRow | null) ?? null,
   };
 }
