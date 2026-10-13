@@ -128,3 +128,26 @@ describe("after the migration", () => {
     expect((await db.query("update leadgen_leads set status='Closed' where id='g-tek-nocamp' returning id")).rows).toHaveLength(1);
   });
 });
+
+describe("leads created through the required-campaign flow (client always comes from the campaign)", () => {
+  beforeAll(async () => {
+    await db.exec(`reset role;
+      insert into leadgen_campaign_agents values ('${tekCampaign}','${henry}');
+      insert into leadgen_leads(id, client_id, campaign_id, assigned_agent_id) values
+        ('new-henry','${tek}','${tekCampaign}','${henry}'),
+        ('new-goodness','${tek}','${tekCampaign}','${goodness}');`);
+  });
+
+  it("the new lead is visible and editable to its agent, and to Admin", async () => {
+    await asUser(henry);
+    expect(await ids("select id from leadgen_leads where id like 'new-%'")).toEqual(["new-henry"]);
+    expect((await db.query("update leadgen_leads set status='Interested' where id='new-henry' returning id")).rows).toHaveLength(1);
+    await asUser(admin);
+    expect(await ids("select id from leadgen_leads where id like 'new-%'")).toEqual(["new-goodness", "new-henry"]);
+  });
+
+  it("another agent never sees it", async () => {
+    await asUser(goodness);
+    expect(await ids("select id from leadgen_leads where id like 'new-%'")).toEqual(["new-goodness"]);
+  });
+});
