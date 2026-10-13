@@ -16,6 +16,7 @@ import {
   zonedWallTimeToUtcMs,
 } from "@/lib/leadgen-appointment-reminders";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
+import { checkAdminAppointmentCampaign } from "@/lib/leadgen-booking-campaign";
 import {
   LEADGEN_APPOINTMENT_INCENTIVE_STATUSES,
   LEADGEN_APPOINTMENT_STATUSES,
@@ -92,13 +93,23 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const agentNotes = textOrNull(formData, "appointment_notes");
   const clientVisibleNotes = textOrNull(formData, "client_visible_notes");
 
+  // A campaign is required whenever the client has an active one to choose
+  // from, and it must be one of that client's own (see checkAdminAppointmentCampaign).
+  const { data: clientCampaigns } = await getSupabaseAdmin().from("leadgen_campaigns").select("id, name, status").eq("client_id", clientId);
+  const campaignCheck = checkAdminAppointmentCampaign({
+    campaignId: String(formData.get("campaign_id") ?? ""),
+    clientCampaigns: (clientCampaigns ?? []) as { id: string; name: string; status: string }[],
+  });
+  if (!campaignCheck.ok) return { error: campaignCheck.error };
+  const campaignId = campaignCheck.campaignId;
+
   const supabase = await createSupabaseServerClient();
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({
       lead_id: leadId,
       client_id: clientId,
-      campaign_id: textOrNull(formData, "campaign_id"),
+      campaign_id: campaignId,
       business_name: businessName,
       contact_name: contactName,
       phone,
@@ -140,7 +151,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     if (client?.contact_email) {
       await sendLeadgenEmail(supabase, {
         clientId,
-        campaignId: textOrNull(formData, "campaign_id"),
+        campaignId,
         leadId,
         appointmentId: appointment.id as string,
         templateKey: null,

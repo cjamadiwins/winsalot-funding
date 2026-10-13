@@ -1,4 +1,4 @@
-import { isLeadgenBrentsEssentials, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenClientRow, type LeadgenLeadStatus } from "./leadgen-types";
+import { isHiddenLeadgenCampaignName, isLeadgenBrentsEssentials, LEADGEN_LEAD_CLOSED_STATUSES, type LeadgenClientRow, type LeadgenLeadStatus } from "./leadgen-types";
 
 // Automated bookings (the public /book/[slug] page and the Calendly webhook)
 // create appointments, not leads. An appointment's campaign decides which
@@ -66,6 +66,28 @@ export function decideBookingCampaign(input: {
     if (active.length === 0) return { campaignId: null, reason: "no_active_campaign" };
   }
   return { campaignId: null, reason: "ambiguous" };
+}
+
+// Admin "Book Appointment": a campaign is required whenever the client has an
+// active (visible) campaign to choose from, and whatever is chosen must be one
+// of that client's own active campaigns. A client with no active campaign has
+// nothing to pick, so the appointment is saved without one (it then appears in
+// the Admin "Needs review" queue until a campaign exists and is assigned).
+export const ADMIN_APPOINTMENT_CAMPAIGN_REQUIRED_MESSAGE = "Select a campaign for this appointment.";
+
+export function checkAdminAppointmentCampaign(input: {
+  campaignId: string;
+  clientCampaigns: readonly { id: string; name: string; status: string }[];
+}): { ok: true; campaignId: string | null } | { ok: false; error: string } {
+  const selectable = input.clientCampaigns.filter((c) => c.status === "active" && !isHiddenLeadgenCampaignName(c.name));
+  const campaignId = input.campaignId.trim();
+  if (campaignId) {
+    return selectable.some((c) => c.id === campaignId)
+      ? { ok: true, campaignId }
+      : { ok: false, error: "That campaign isn't an active campaign of the selected client." };
+  }
+  if (selectable.length > 0) return { ok: false, error: ADMIN_APPOINTMENT_CAMPAIGN_REQUIRED_MESSAGE };
+  return { ok: true, campaignId: null };
 }
 
 // "Needs campaign review" queue membership: an upcoming, still-booked
