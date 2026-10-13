@@ -175,7 +175,10 @@ export default function AppointmentsListClient({
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const selectedLead = selectedLeadId ? leadById.get(selectedLeadId) : null;
-  const campaignsForAddForm = campaigns.filter((c) => c.client_id === formClientId);
+  const campaignsForAddForm = campaigns.filter((c) => c.client_id === formClientId && c.status === "active");
+  // Campaign is required whenever the chosen client has an active campaign to pick.
+  const campaignRequired = campaignsForAddForm.length > 0;
+  const defaultCampaignId = campaignsForAddForm.some((c) => c.id === selectedLead?.campaign_id) ? (selectedLead?.campaign_id ?? "") : "";
 
   const visibleAppointments = useMemo(
     () => (clientFilter === "all" ? appointments : appointments.filter((a) => a.client_id === clientFilter)),
@@ -478,9 +481,13 @@ export default function AppointmentsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
-            <select name="campaign_id" defaultValue={selectedLead?.campaign_id ?? ""} className={inputClass} key={`camp-${selectedLeadId}-${formClientId}`}>
-              <option value="">No campaign</option>
+            <span className="text-sm font-semibold text-slate-600">
+              Campaign{campaignRequired ? <span className="text-red-600"> *</span> : null}
+            </span>
+            <select name="campaign_id" required={campaignRequired} defaultValue={defaultCampaignId} className={inputClass} key={`camp-${selectedLeadId}-${formClientId}`}>
+              <option value="" disabled={campaignRequired}>
+                {campaignRequired ? "Select a campaign…" : formClientId ? "No active campaigns for this client" : "Select a client first"}
+              </option>
               {campaignsForAddForm.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
