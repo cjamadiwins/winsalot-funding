@@ -21,7 +21,11 @@ type AppointmentForNotify = Pick<
   | "meeting_type"
   | "meeting_link"
   | "appointment_notes"
->;
+> & {
+  // Optional: only the Admin summary uses it, and only an explicit null (a
+  // booking that could not be filed under a campaign) adds the review line.
+  campaign_id?: string | null;
+};
 
 function appointmentSummaryLines(appt: AppointmentForNotify, clientName: string, agentName: string | null): string[] {
   return [
@@ -33,6 +37,7 @@ function appointmentSummaryLines(appt: AppointmentForNotify, clientName: string,
     `Appointment Time: ${appt.appointment_time} (${appt.timezone})`,
     `Assigned Agent: ${agentName || "Unassigned"}`,
     `Client: ${clientName}`,
+    ...(appt.campaign_id === null ? ["Campaign: not set - needs Admin review (Appointments > Needs review). Agents can't see it until a campaign is chosen."] : []),
     `Notes: ${appt.appointment_notes || "—"}`,
   ];
 }
