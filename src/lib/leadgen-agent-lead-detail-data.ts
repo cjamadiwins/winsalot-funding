@@ -16,7 +16,7 @@ import {
 } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
-import type { LeadProposalRow } from "@/lib/leadgen-proposal";
+import type { LeadProposalRow, ProposalDraftRow } from "@/lib/leadgen-proposal";
 
 export type LeadgenAgentLeadDetailData = {
   lead: LeadgenLeadRow;
@@ -46,6 +46,8 @@ export type LeadgenAgentLeadDetailData = {
   // Read-only Proposal Status (RLS: leadgen_lead_proposals_agent_select_own);
   // null = Not Requested.
   proposal: LeadProposalRow | null;
+  // Agent-prepared request awaiting Admin approval (null = none).
+  proposalDraft: ProposalDraftRow | null;
 };
 
 // One Lead Gen CRM lead's full detail record, scoped to the signed-in
@@ -77,6 +79,7 @@ export async function loadLeadgenAgentLeadDetail(id: string): Promise<LeadgenAge
     { data: followUpTemplates },
     { data: score },
     { data: proposal },
+    { data: proposalDraft },
   ] = await Promise.all([
     supabase.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id ? supabase.from("leadgen_campaigns").select("*").eq("id", lead.campaign_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -91,6 +94,7 @@ export async function loadLeadgenAgentLeadDetail(id: string): Promise<LeadgenAge
     supabase.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
     supabase.from("leadgen_opportunity_scores").select("*").eq("lead_id", id).maybeSingle(),
     supabase.from("leadgen_lead_proposals").select("*").eq("lead_id", id).maybeSingle(),
+    supabase.from("leadgen_proposal_drafts").select("*").eq("lead_id", id).maybeSingle(),
   ]);
 
   const { data: bouncedRows } = await supabase.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
@@ -122,5 +126,6 @@ export async function loadLeadgenAgentLeadDetail(id: string): Promise<LeadgenAge
     score: score as LeadgenOpportunityScoreRow | null,
     dncSuppression,
     proposal: (proposal as LeadProposalRow | null) ?? null,
+    proposalDraft: (proposalDraft as ProposalDraftRow | null) ?? null,
   };
 }

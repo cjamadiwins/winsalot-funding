@@ -507,6 +507,7 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "appointment_brief_sent",
   "proposal_requested",
   "proposal_status_changed",
+  "proposal_prepared",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -538,6 +539,7 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   appointment_brief_sent: "Appointment Brief Sent",
   proposal_requested: "Proposal requested from client",
   proposal_status_changed: "Proposal status changed",
+  proposal_prepared: "Proposal request prepared",
 };
 
 export type LeadgenLeadActivityRow = {

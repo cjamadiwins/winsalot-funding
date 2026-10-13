@@ -92,7 +92,40 @@ describe("Request Proposal composer", () => {
   });
 });
 
+describe("agent 'Prepare Proposal Request' composer", () => {
+  const html = renderToStaticMarkup(<ProposalRequestModal mode="prepare" lead={lead} client={client} proposal={null} onClose={noop} onSend={async () => ({})} onSent={noop} />);
+
+  it("saves for Admin approval, emails nothing, and does not show the client's email address", () => {
+    expect(html).toContain("Prepare Proposal Request");
+    expect(html).toContain("Nothing is emailed");
+    expect(html).toContain("Submit for Admin approval");
+    expect(html).not.toContain("shahbaz.anjum@teknokraft.ca");
+    expect(html).not.toContain("Review &amp; Send");
+  });
+
+  it("still starts from the specified subject and message, and allows saving with the placeholder", () => {
+    expect(html).toContain("Proposal Requested – Boondock Pet Resort | Teknokraft Canada Inc.");
+    expect(html).not.toContain("Replace the bracketed requirements placeholder");
+  });
+
+  it("Admin starts from the agent's prepared draft", () => {
+    const draft = { id: "d1", lead_id: lead.id, client_id: client.id, subject: "Agent subject", body: "Agent-written scope and budget.", prepared_by: "a", prepared_at: "2026-10-13T16:00:00Z", updated_at: "2026-10-13T16:00:00Z" };
+    const adminHtml = renderToStaticMarkup(<ProposalRequestModal lead={lead} client={client} proposal={null} preparedDraft={draft} onClose={noop} onSend={async () => ({})} onSent={noop} />);
+    expect(adminHtml).toContain("Agent subject");
+    expect(adminHtml).toContain("Agent-written scope and budget.");
+    expect(adminHtml).toContain("Starting from the draft prepared by an agent");
+  });
+});
+
 describe("Proposal panel", () => {
+  it("shows an awaiting-approval notice for a prepared draft without implying anything was emailed", () => {
+    const draft = { id: "d1", lead_id: "l", client_id: "c", subject: "S", body: "B", prepared_by: "a", prepared_at: "2026-10-13T16:00:00Z", updated_at: "2026-10-13T16:00:00Z" };
+    const html = renderToStaticMarkup(<ProposalPanel proposal={null} draft={draft} clientName="Teknokraft Canada Inc." />);
+    expect(html).toContain("Awaiting Admin approval");
+    expect(html).toContain("Nothing has been emailed");
+    expect(html).toContain("Not Requested");
+  });
+
   const sentEmail = { status: "delivered", to_email: "shahbaz.anjum@teknokraft.ca", sent_at: "2026-10-13T16:00:05Z", delivered_at: "2026-10-13T16:00:09Z", bounced_at: null, failed_at: null, bounce_reason: null, failure_reason: null } as unknown as LeadgenEmailRow;
 
   it("shows 'Not Requested' for a lead with no request", () => {
@@ -200,7 +233,20 @@ describe("permissions wiring", () => {
     const agentPage = read("src/app/leadgen/agent/(dashboard)/leads/[id]/page.tsx");
     expect(adminPage).toContain("requestProposal: requestProposalAction");
     expect(adminPage).toContain("updateProposalStatus: updateProposalStatusAction");
-    expect(agentPage).not.toMatch(/requestProposal|updateProposalStatus|proposal-actions/);
+    expect(agentPage).not.toMatch(/requestProposal|updateProposalStatus|admin\/\(dashboard\)/);
+    // Agents may only PREPARE (never send): their page wires the prepare action alone.
+    expect(agentPage).toContain("prepareProposal: prepareProposalRequestAction");
+    expect(read("src/app/leadgen/agent/(dashboard)/leads/[id]/proposal-actions.ts")).not.toMatch(/sendLeadgenEmail|resend/i);
+  });
+
+  it("the agent action requires an agent and checks the lead is assigned to them", () => {
+    const source = read("src/app/leadgen/agent/(dashboard)/leads/[id]/proposal-actions.ts");
+    expect(source).toContain("await requireLeadgenAgent()");
+    expect(source).toContain("lead.assigned_agent_id !== agent.id");
+  });
+
+  it("the Prepare button is for non-Admin users with the prepare action and an active client", () => {
+    expect(read("src/components/leadgen/LeadDetailClient.tsx")).toContain("!isAdmin && actions.prepareProposal && client.active");
   });
 
   it("the proposals table holds no internal notes column", () => {

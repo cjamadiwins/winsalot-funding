@@ -145,7 +145,7 @@ describe("requestProposalAction: sending", () => {
     await requestProposalAction("lead-tek", requestForm());
     expect(snapshot()).toBe(before);
     expect(db.writes.map((w) => `${w.table}.${w.op}`).sort()).toEqual(
-      ["leadgen_emails.insert", "leadgen_emails.update", "leadgen_lead_activities.insert", "leadgen_lead_proposals.insert"].sort()
+      ["leadgen_emails.insert", "leadgen_emails.update", "leadgen_lead_activities.insert", "leadgen_lead_proposals.insert", "leadgen_proposal_drafts.delete"].sort()
     );
   });
 

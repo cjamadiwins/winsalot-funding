@@ -171,6 +171,39 @@ export function validateProposalRequest(input: { subject: string; body: string }
   return null;
 }
 
+// What an AGENT may save: the same checks, except the bracketed requirements
+// placeholder is allowed - the agent drafts, Admin completes it before sending.
+export function validatePreparedProposal(input: { subject: string; body: string }): string | null {
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  if (!subject) return "A subject is required.";
+  if (!body) return "An email body is required.";
+  if (subject.length > PROPOSAL_SUBJECT_MAX) return `The subject is too long (${PROPOSAL_SUBJECT_MAX} characters max).`;
+  if (body.length > PROPOSAL_BODY_MAX) return `The message is too long (${PROPOSAL_BODY_MAX} characters max).`;
+  return null;
+}
+
+// An agent-prepared request waiting for Admin to approve and send it.
+export type ProposalDraftRow = {
+  id: string;
+  lead_id: string;
+  client_id: string;
+  subject: string;
+  body: string;
+  prepared_by: string | null;
+  prepared_at: string;
+  updated_at: string;
+};
+
+export function proposalPreparedActivityNotes(input: { clientName: string; subject: string; preparedBy: string }): string {
+  return [
+    "Proposal request prepared - awaiting Admin approval",
+    `For: ${input.clientName}`,
+    `Subject: ${input.subject}`,
+    `Prepared by ${input.preparedBy}. Nothing has been emailed; only Admin can approve and send it.`,
+  ].join("\n");
+}
+
 export const PROPOSAL_REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{16,100}$/;
 
 // One-line text for the lead's (internal) activity timeline.

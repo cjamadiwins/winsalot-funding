@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchClientServices } from "@/lib/leadgen-client-services-data";
+import { prepareProposalRequestAction } from "./proposal-actions";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
   completeFollowUpAction,
@@ -33,6 +34,7 @@ const actions: LeadDetailActions = {
   sendWeb6SolutionsIntro: sendWeb6SolutionsIntroEmailAction,
   sendTeknokraftIntro: sendTeknokraftIntroEmailAction,
   sendHidebrandtIntro: sendHidebrandtIntroEmailAction,
+  prepareProposal: prepareProposalRequestAction,
   // No resendEmail / assignAgent - agents can't resend a failed prospect
   // email (admin-only per the brief) or reassign a lead. Likewise no
   // resendAppointmentNotification / sendAppointmentReminder - those manual
@@ -111,6 +113,7 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
       dncSuppression={detail.dncSuppression}
       clientServices={clientServices}
       proposal={detail.proposal}
+        proposalDraft={detail.proposalDraft}
     />
     </>
   );

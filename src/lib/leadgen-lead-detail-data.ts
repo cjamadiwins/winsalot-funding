@@ -17,7 +17,7 @@ import {
 } from "@/lib/leadgen-types";
 import { fetchLeadgenAppointmentReminderStatusMap, fetchLeadgenAppointmentSmsReminderStatusMap } from "@/lib/leadgen-appointment-reminders";
 import { checkDncSuppression, type DncSuppressionRow } from "@/lib/dnc-suppression";
-import type { LeadProposalRow } from "@/lib/leadgen-proposal";
+import type { LeadProposalRow, ProposalDraftRow } from "@/lib/leadgen-proposal";
 
 const DEACTIVATED_TEST_AGENT_EMAIL = "test-agent@winsalotcorp.com";
 
@@ -48,6 +48,8 @@ export type LeadgenLeadDetailData = {
   // Request Proposal tracking (null = Not Requested). Read defensively: until
   // the leadgen_lead_proposals migration is applied the query just returns nothing.
   proposal: LeadProposalRow | null;
+  // Agent-prepared request awaiting Admin approval (null = none).
+  proposalDraft: ProposalDraftRow | null;
 };
 
 // One Lead Gen CRM lead's full detail record - the exact same query set
@@ -79,6 +81,7 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     { data: followUpTemplates },
     { data: score },
     { data: proposal },
+    { data: proposalDraft },
   ] = await Promise.all([
     admin.from("leadgen_clients").select("*").eq("id", lead.client_id).maybeSingle(),
     lead.campaign_id
@@ -96,6 +99,7 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     admin.from("leadgen_email_templates").select("*").eq("active", true).ilike("key", "%follow%up%").order("name"),
     admin.from("leadgen_opportunity_scores").select("*").eq("lead_id", id).maybeSingle(),
     admin.from("leadgen_lead_proposals").select("*").eq("lead_id", id).maybeSingle(),
+    admin.from("leadgen_proposal_drafts").select("*").eq("lead_id", id).maybeSingle(),
   ]);
 
   const { data: bouncedRows } = await admin.from("leadgen_bounced_emails").select("email").is("cleared_at", null);
@@ -130,5 +134,6 @@ export async function loadLeadgenLeadDetail(id: string): Promise<LeadgenLeadDeta
     score: score as LeadgenOpportunityScoreRow | null,
     dncSuppression,
     proposal: (proposal as LeadProposalRow | null) ?? null,
+    proposalDraft: (proposalDraft as ProposalDraftRow | null) ?? null,
   };
 }

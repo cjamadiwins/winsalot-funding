@@ -7,6 +7,7 @@ import {
   isProposalStatus,
   proposalStatusLabel,
   type LeadProposalRow,
+  type ProposalDraftRow,
   type ProposalStatus,
 } from "@/lib/leadgen-proposal";
 import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailRow } from "@/lib/leadgen-types";
@@ -22,11 +23,14 @@ function formatDate(value: string | null | undefined): string | null {
 // email details.
 export default function ProposalPanel({
   proposal,
+  draft = null,
   requestEmail,
   clientName,
   onUpdateStatus,
 }: {
   proposal: LeadProposalRow | null;
+  // Agent-prepared request awaiting Admin approval (shown to Admin and the assigned agent).
+  draft?: ProposalDraftRow | null;
   // Latest proposal-request email for this lead (Admin view only).
   requestEmail?: LeadgenEmailRow | null;
   clientName: string;
@@ -64,6 +68,12 @@ export default function ProposalPanel({
         </p>
       ) : (
         <p className="mt-2 text-sm text-slate-500">No proposal has been requested from {clientName} for this lead yet.</p>
+      )}
+
+      {draft && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
+          <span className="font-semibold">Awaiting Admin approval</span> — a proposal request was prepared {formatDate(draft.prepared_at)}. Nothing has been emailed to {clientName} yet.
+        </p>
       )}
 
       {requestEmail && (

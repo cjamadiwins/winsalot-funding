@@ -116,6 +116,10 @@ export async function requestProposalAction(leadId: string, formData: FormData):
         status_updated_by: adminUser.id,
       });
 
+  // The request is out, so any agent-prepared draft awaiting approval is done.
+  // (Best effort: the email, status and timeline above are the record.)
+  await admin.from("leadgen_proposal_drafts").delete().eq("lead_id", leadId);
+
   const { error: activityError } = await supabase.from("leadgen_lead_activities").insert({
     lead_id: leadId,
     agent_id: adminUser.id,

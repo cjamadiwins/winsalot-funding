@@ -122,6 +122,7 @@ export default async function LeadgenAdminLeadDetailPage({
       dncSuppression={detail.dncSuppression}
       clientServices={clientServices}
       proposal={detail.proposal}
+        proposalDraft={detail.proposalDraft}
     />
   );
 }

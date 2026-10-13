@@ -16,13 +16,15 @@
 --  2. leadgen_emails.request_key (+ partial unique index) - an idempotency key
 --     the composer generates per send, so a double click / retried request can
 --     never create or send a second email.
---  3. leadgen_lead_activities.activity_type - allow 'proposal_requested' and
---     'proposal_status_changed' (the constraint below is the CURRENT production
---     list plus those two values).
---  4. set_leadgen_client_activity_summary() - both new activities are internal
+--  2b. leadgen_proposal_drafts - agent-prepared requests awaiting Admin approval
+--     (agents prepare; only Admin approves and sends).
+--  3. leadgen_lead_activities.activity_type - allow 'proposal_requested',
+--     'proposal_status_changed' and 'proposal_prepared' (the constraint below is the CURRENT production
+--     list plus those three values).
+--  4. set_leadgen_client_activity_summary() - all three new activities are internal
 --     handoff entries, kept private exactly like 'client_notified' (otherwise
 --     they would fall into the ELSE branch and be mirrored to the client portal).
---     Body is the current production definition with those two values added to
+--     Body is the current production definition with those three values added to
 --     the internal list.
 --
 -- Additive only: no existing row, column, policy, grant or function is removed
@@ -97,6 +99,47 @@ grant all on table public.leadgen_lead_proposals to service_role;
 comment on table public.leadgen_lead_proposals is
   'Proposal Status per lead for the Request Proposal feature. One row per lead. Written only via service_role server actions after an Admin check; clients can read only their own client''s requested proposals. Holds no internal notes.';
 
+-- Agent-prepared proposal requests awaiting Admin approval. An agent can prepare
+-- (draft) a request for a lead assigned to them, but only Admin can approve and
+-- send it to the client. ONE draft per lead. Deliberately a separate table with
+-- NO client policy: a draft is internal until Admin sends it, and it must never
+-- be readable through the client-visible leadgen_lead_proposals rows.
+create table if not exists public.leadgen_proposal_drafts (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null unique references public.leadgen_leads(id) on delete cascade,
+  client_id uuid not null references public.leadgen_clients(id) on delete cascade,
+  subject text not null,
+  body text not null,
+  prepared_by uuid references public.leadgen_users(id) on delete set null,
+  prepared_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.leadgen_proposal_drafts enable row level security;
+
+drop policy if exists "leadgen_proposal_drafts_admin_select" on public.leadgen_proposal_drafts;
+create policy "leadgen_proposal_drafts_admin_select"
+  on public.leadgen_proposal_drafts for select
+  using (public.leadgen_user_role(auth.uid()) = 'admin');
+
+drop policy if exists "leadgen_proposal_drafts_agent_select_own" on public.leadgen_proposal_drafts;
+create policy "leadgen_proposal_drafts_agent_select_own"
+  on public.leadgen_proposal_drafts for select
+  using (
+    public.leadgen_user_role(auth.uid()) = 'agent'
+    and exists (
+      select 1 from public.leadgen_leads l
+      where l.id = leadgen_proposal_drafts.lead_id and l.assigned_agent_id = auth.uid()
+    )
+  );
+
+revoke all on table public.leadgen_proposal_drafts from anon, authenticated;
+grant select on table public.leadgen_proposal_drafts to authenticated;
+grant all on table public.leadgen_proposal_drafts to service_role;
+
+comment on table public.leadgen_proposal_drafts is
+  'Agent-prepared Request Proposal drafts awaiting Admin approval. One per lead. Written only via service_role server actions (agent must be assigned to the lead); readable by Admin and the assigned agent only - never by clients. Removed when Admin sends the request.';
+
 -- Double-send protection for the proposal request email.
 alter table public.leadgen_emails
   add column if not exists request_key text;
@@ -119,7 +162,7 @@ alter table public.leadgen_lead_activities
       'mantra_collab_intro_sent', 'web6_solutions_intro_sent', 'teknokraft_intro_sent', 'hidebrandt_intro_sent',
       'opportunity_created', 'opportunity_outcome_changed',
       'client_notified', 'appointment_brief_sent',
-      'proposal_requested', 'proposal_status_changed'
+      'proposal_requested', 'proposal_status_changed', 'proposal_prepared'
     ]::text[]));
 
 create or replace function public.set_leadgen_client_activity_summary()
@@ -128,7 +171,7 @@ language plpgsql
 set search_path to 'public'
 as $function$
 begin
-  if new.activity_type in ('note', 'lead_assigned', 'lead_reassigned', 'client_notified', 'proposal_requested', 'proposal_status_changed') then
+  if new.activity_type in ('note', 'lead_assigned', 'lead_reassigned', 'client_notified', 'proposal_requested', 'proposal_status_changed', 'proposal_prepared') then
     new.client_visible := false;
     new.client_summary := null;
     return new;

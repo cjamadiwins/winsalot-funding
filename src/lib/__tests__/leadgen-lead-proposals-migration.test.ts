@@ -167,7 +167,7 @@ describe("double-send key on emails", () => {
 describe("activity types stay internal", () => {
   it("accepts the two new types and every existing one, and still rejects unknown ones", async () => {
     await db.exec("reset role");
-    for (const type of ["proposal_requested", "proposal_status_changed", "client_notified", "appointment_brief_sent", "call"]) {
+    for (const type of ["proposal_requested", "proposal_status_changed", "proposal_prepared", "client_notified", "appointment_brief_sent", "call"]) {
       await db.exec(`insert into leadgen_lead_activities(lead_id, activity_type) values ('${leadTek}','${type}')`);
     }
     await expect(db.query(`insert into leadgen_lead_activities(lead_id, activity_type) values ('${leadTek}','proposal_sent')`)).rejects.toThrow(/check/);
@@ -181,9 +181,51 @@ describe("activity types stay internal", () => {
     const byType = Object.fromEntries(rows.map((r) => [r.activity_type, r]));
     expect(byType.proposal_requested).toMatchObject({ client_visible: false, client_summary: null });
     expect(byType.proposal_status_changed).toMatchObject({ client_visible: false, client_summary: null });
+    expect(byType.proposal_prepared).toMatchObject({ client_visible: false, client_summary: null });
     expect(byType.client_notified).toMatchObject({ client_visible: false });
     expect(byType.note).toMatchObject({ client_visible: false });
     expect(byType.call).toMatchObject({ client_visible: true, client_summary: "Call completed." });
     expect(byType.appointment_brief_sent).toMatchObject({ client_visible: true, client_summary: "Appointment brief sent." });
+  });
+});
+
+describe("agent-prepared drafts (RLS)", () => {
+  beforeAll(async () => {
+    await db.exec(`reset role; insert into leadgen_proposal_drafts(lead_id, client_id, subject, body, prepared_by) values
+      ('${leadTek}','${tek}','S1','B1','${henry}'),('${leadHid}','${hid}','S2','B2','${goodness}')`);
+  });
+  const drafts = async () => (await db.query<{ lead_id: string }>("select lead_id from leadgen_proposal_drafts")).rows.map((r) => r.lead_id).sort();
+
+  it("Admin sees every draft", async () => {
+    await asUser(admin);
+    expect(await drafts()).toEqual([leadHid, leadTek].sort());
+  });
+  it("an agent sees only drafts on their OWN assigned leads - never another agent's", async () => {
+    await asUser(henry);
+    expect(await drafts()).toEqual([leadTek]);
+    await asUser(goodness);
+    expect(await drafts()).toEqual([leadHid]);
+    await asUser(otherAgent);
+    expect(await drafts()).toEqual([]);
+  });
+  it("clients (any client, active or not) and anonymous users cannot see drafts", async () => {
+    for (const user of [clientTekUser, clientHidUser, clientInactiveUser]) {
+      await asUser(user);
+      expect(await drafts()).toEqual([]);
+    }
+    await db.exec("reset role; set role anon");
+    await expect(db.query("select * from leadgen_proposal_drafts")).rejects.toThrow(/permission denied/);
+  });
+  it("no signed-in role can write a draft directly (writes go through the server action)", async () => {
+    for (const user of [admin, henry, goodness]) {
+      await asUser(user);
+      await expect(db.query(`insert into leadgen_proposal_drafts(lead_id, client_id, subject, body) values ('${leadTekReset}','${tek}','x','y')`)).rejects.toThrow(/permission denied/);
+      await expect(db.query("update leadgen_proposal_drafts set body = 'hacked'")).rejects.toThrow(/permission denied/);
+      await expect(db.query("delete from leadgen_proposal_drafts")).rejects.toThrow(/permission denied/);
+    }
+  });
+  it("one draft per lead", async () => {
+    await db.exec("reset role");
+    await expect(db.query(`insert into leadgen_proposal_drafts(lead_id, client_id, subject, body) values ('${leadTek}','${tek}','x','y')`)).rejects.toThrow(/unique/);
   });
 });

@@ -7,8 +7,10 @@ import {
   buildProposalRequestDraft,
   hasActiveProposalRequest,
   proposalStatusLabel,
+  validatePreparedProposal,
   validateProposalRequest,
   type LeadProposalRow,
+  type ProposalDraftRow,
 } from "@/lib/leadgen-proposal";
 import type { LeadgenClientRow, LeadgenLeadRow } from "@/lib/leadgen-types";
 
@@ -41,10 +43,17 @@ function Info({ label, value }: { label: string; value: string | null }) {
 // on the server for the actual send, so it can never be the prospect or typed
 // in. Subject and body are prefilled from the lead and fully editable; sending
 // needs an explicit confirmation step.
+//
+// mode "prepare" (agents): the same composer, but it only SAVES the request for
+// Admin approval - nothing is emailed, the client's address isn't shown, and the
+// placeholder may stay. mode "send" (Admin): approves and sends, starting from
+// the agent's prepared draft when there is one.
 export default function ProposalRequestModal({
   lead,
   client,
   proposal,
+  preparedDraft = null,
+  mode = "send",
   onClose,
   onSend,
   onSent,
@@ -52,11 +61,14 @@ export default function ProposalRequestModal({
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
   proposal: LeadProposalRow | null;
+  preparedDraft?: ProposalDraftRow | null;
+  mode?: "send" | "prepare";
   onClose: () => void;
   onSend: (formData: FormData) => Promise<RequestProposalSendResult>;
   onSent: (warning?: string) => void;
 }) {
-  const draft = useMemo(() => buildProposalRequestDraft({ client, lead }), [client, lead]);
+  const prepare = mode === "prepare";
+  const draft = useMemo(() => (preparedDraft ? { subject: preparedDraft.subject, body: preparedDraft.body } : buildProposalRequestDraft({ client, lead })), [client, lead, preparedDraft]);
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [step, setStep] = useState<"edit" | "confirm">("edit");
@@ -69,9 +81,9 @@ export default function ProposalRequestModal({
   const inFlight = useRef(false);
 
   const recipient = resolveClientNotificationRecipient(client);
-  const recipientError = "error" in recipient ? recipient.error : null;
-  const alreadyRequested = hasActiveProposalRequest(proposal);
-  const validationError = validateProposalRequest({ subject, body });
+  const recipientError = !prepare && "error" in recipient ? recipient.error : null;
+  const alreadyRequested = !prepare && hasActiveProposalRequest(proposal);
+  const validationError = prepare ? validatePreparedProposal({ subject, body }) : validateProposalRequest({ subject, body });
   const hasPlaceholder = body.includes(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
   const canContinue = !recipientError && !validationError && (!alreadyRequested || acknowledged);
 
@@ -107,12 +119,12 @@ export default function ProposalRequestModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Request Proposal"
+        aria-label={prepare ? "Prepare Proposal Request" : "Request Proposal"}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-bold text-slate-900">Request Proposal</h2>
+          <h2 className="text-[17px] font-bold text-slate-900">{prepare ? "Prepare Proposal Request" : "Request Proposal"}</h2>
           <button type="button" onClick={onClose} disabled={submitting} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 disabled:opacity-50">
             ✕
           </button>
@@ -120,17 +132,25 @@ export default function ProposalRequestModal({
 
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-slate-200 p-3.5 text-[13px] sm:grid-cols-3">
           <Info label="To (client)" value={client.contact_name ? `${client.name} (${client.contact_name})` : client.name} />
-          <Info label="Client email" value={"recipient" in recipient ? recipient.recipient.email : null} />
+          {!prepare && <Info label="Client email" value={"recipient" in recipient ? recipient.recipient.email : null} />}
           <Info label="Proposal status" value={proposalStatusLabel(proposal?.status)} />
           <Info label="Prospect" value={lead.business_name} />
           <Info label="Prospect contact" value={lead.contact_name} />
           <Info label="Prospect email" value={lead.email} />
         </dl>
 
+        {prepare ? (
+          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[13px] text-slate-600">
+            This saves the request for Admin to review. <span className="font-semibold">Nothing is emailed</span> until an Admin approves and sends it to {client.name}.
+            {preparedDraft ? " Saving replaces the draft already prepared for this lead." : ""}
+          </p>
+        ) : (
         <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[13px] text-slate-600">
           This is sent to <span className="font-semibold">{client.name}</span> — never to the prospect — and also appears in the client&apos;s portal under Communications. Sending it does not
           mark the proposal as sent to the prospect.
+          {preparedDraft ? " Starting from the draft prepared by an agent." : ""}
         </p>
+        )}
 
         {recipientError && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">{recipientError}</p>}
 
@@ -160,22 +180,22 @@ export default function ProposalRequestModal({
               <textarea value={body} onChange={(e) => setBody(e.target.value)} className={`${inputClass} min-h-[360px] resize-y font-mono text-sm`} />
             </label>
 
-            {hasPlaceholder && (
+            {hasPlaceholder && !prepare && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 Replace the bracketed requirements placeholder with the prospect&apos;s verified requirements, scope, budget and timeline before sending.
               </p>
             )}
-            {!hasPlaceholder && validationError && <p className="text-sm font-medium text-rose-600">{validationError}</p>}
+            {(prepare || !hasPlaceholder) && validationError && <p className="text-sm font-medium text-rose-600">{validationError}</p>}
             {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3 pt-1">
               <button
                 type="button"
-                disabled={!canContinue}
-                onClick={() => setStep("confirm")}
+                disabled={!canContinue || submitting}
+                onClick={() => (prepare ? void handleConfirmSend() : setStep("confirm"))}
                 className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Review &amp; Send
+                {prepare ? (submitting ? "Saving…" : "Submit for Admin approval") : "Review & Send"}
               </button>
               <button type="button" onClick={onClose} className="text-sm font-semibold text-slate-500 hover:text-slate-700">
                 Cancel
