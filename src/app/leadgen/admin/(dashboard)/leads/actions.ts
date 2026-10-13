@@ -4,15 +4,22 @@ import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { parseLeadsCsv } from "@/lib/leadgen-csv";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { resolveNewLeadCampaign } from "@/lib/leadgen-new-lead-campaign";
 
 type ActionResult = { error?: string };
 
 export async function createLeadAction(formData: FormData): Promise<ActionResult & { leadId?: string }> {
   const adminUser = await requireLeadgenAdmin();
   const businessName = String(formData.get("business_name") ?? "").trim();
-  const clientId = String(formData.get("client_id") ?? "").trim();
+  const submittedClientId = String(formData.get("client_id") ?? "").trim();
   if (!businessName) return { error: "Business name is required." };
-  if (!clientId) return { error: "Select a client." };
+  if (!submittedClientId) return { error: "Select a client." };
+
+  // A new lead needs an active campaign; its client always comes from it.
+  const resolved = await resolveNewLeadCampaign(getSupabaseAdmin(), { campaignId: String(formData.get("campaign_id") ?? ""), submittedClientId });
+  if (!resolved.ok) return { error: resolved.error };
+  const { clientId, campaignId } = resolved;
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -20,7 +27,7 @@ export async function createLeadAction(formData: FormData): Promise<ActionResult
     .insert({
       business_name: businessName,
       client_id: clientId,
-      campaign_id: String(formData.get("campaign_id") ?? "").trim() || null,
+      campaign_id: campaignId,
       industry: String(formData.get("industry") ?? "").trim() || null,
       contact_name: String(formData.get("contact_name") ?? "").trim() || null,
       decision_maker_name: String(formData.get("decision_maker_name") ?? "").trim() || null,
@@ -49,14 +56,18 @@ export async function createLeadAction(formData: FormData): Promise<ActionResult
 export async function uploadLeadsCsvAction(formData: FormData): Promise<ActionResult & { imported?: number; skipped?: string[] }> {
   const adminUser = await requireLeadgenAdmin();
 
-  const clientId = String(formData.get("client_id") ?? "").trim();
-  const campaignId = String(formData.get("campaign_id") ?? "").trim() || null;
+  const submittedClientId = String(formData.get("client_id") ?? "").trim();
   const defaultLeadSource = String(formData.get("lead_source") ?? "").trim() || null;
   const file = formData.get("file");
 
-  if (!clientId) return { error: "Select which client these leads belong to." };
+  if (!submittedClientId) return { error: "Select which client these leads belong to." };
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file to upload." };
   if (file.size > 5 * 1024 * 1024) return { error: "The file is too large (5MB max)." };
+
+  // Imported leads are new leads too: an active campaign is required.
+  const resolved = await resolveNewLeadCampaign(getSupabaseAdmin(), { campaignId: String(formData.get("campaign_id") ?? ""), submittedClientId });
+  if (!resolved.ok) return { error: resolved.error };
+  const { clientId, campaignId } = resolved;
 
   const text = await file.text();
   const { rows, errors } = parseLeadsCsv(text);

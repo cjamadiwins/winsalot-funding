@@ -123,7 +123,7 @@ export default function LeadsListClient({
   // that form's Campaign field offers, so a campaign from a different
   // client can never be picked for this lead (see campaignsForAddForm).
   const [addFormClientId, setAddFormClientId] = useState(validInitialClient !== "all" ? validInitialClient : "");
-  const campaignsForAddForm = campaigns.filter((c) => c.client_id === addFormClientId);
+  const campaignsForAddForm = campaigns.filter((c) => c.client_id === addFormClientId && c.status === "active");
   const [agentFilter, setAgentFilter] = useState(
     initialAgentFilter && (initialAgentFilter === "unassigned" || agents.some((a) => a.id === initialAgentFilter))
       ? initialAgentFilter
@@ -298,9 +298,13 @@ export default function LeadsListClient({
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
-            <select name="campaign_id" className={inputClass} defaultValue="" key={addFormClientId}>
-              <option value="">No campaign</option>
+            <span className="text-sm font-semibold text-slate-600">
+              Campaign<span className="text-red-600"> *</span>
+            </span>
+            <select name="campaign_id" required className={inputClass} defaultValue="" key={addFormClientId}>
+              <option value="" disabled>
+                {addFormClientId && campaignsForAddForm.length === 0 ? "No active campaigns for this client" : "Select a campaign…"}
+              </option>
               {campaignsForAddForm.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -666,7 +670,7 @@ function CsvUploadForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [clientId, setClientId] = useState("");
 
-  const campaignsForClient = campaigns.filter((c) => c.client_id === clientId);
+  const campaignsForClient = campaigns.filter((c) => c.client_id === clientId && c.status === "active");
 
   return (
     <form
@@ -701,9 +705,13 @@ function CsvUploadForm({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Campaign (optional)</span>
-        <select name="campaign_id" className={inputClass} defaultValue="">
-          <option value="">No campaign</option>
+        <span className="text-sm font-semibold text-slate-600">
+          Campaign<span className="text-red-600"> *</span>
+        </span>
+        <select name="campaign_id" required className={inputClass} defaultValue="" key={clientId}>
+          <option value="" disabled>
+            {clientId && campaignsForClient.length === 0 ? "No active campaigns for this client" : "Select a campaign…"}
+          </option>
           {campaignsForClient.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

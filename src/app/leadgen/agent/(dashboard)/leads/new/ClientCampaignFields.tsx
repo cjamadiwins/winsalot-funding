@@ -8,9 +8,10 @@ const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text
 // Client and Campaign fields need to live together in one client component
 // because the Campaign options depend on which Client is currently
 // selected - a client-scoped select can't be reactive from a plain server-
-// rendered <select>. Switching clients always resets the Campaign field
-// back to "No campaign" (via the `key={clientId}` remount below) rather
-// than leaving a stale selection from another client's campaign list.
+// rendered <select>. Campaign is required (every new lead belongs to an
+// active, assigned campaign). Switching clients always resets the Campaign
+// field to its "Select a campaign…" placeholder (via the `key={clientId}`
+// remount below) rather than leaving a stale selection from another client.
 export default function ClientCampaignFields({
   clients,
   campaigns,
@@ -47,9 +48,13 @@ export default function ClientCampaignFields({
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Campaign</span>
-        <select name="campaign_id" className={inputClass} defaultValue="" key={clientId}>
-          <option value="">No campaign</option>
+        <span className="text-sm font-semibold text-slate-600">
+          Campaign<span className="text-red-600"> *</span>
+        </span>
+        <select name="campaign_id" required className={inputClass} defaultValue="" key={clientId}>
+          <option value="" disabled>
+            {clientId && campaignsForClient.length === 0 ? "No active campaigns assigned to you" : "Select a campaign…"}
+          </option>
           {campaignsForClient.map((campaign) => (
             <option key={campaign.id} value={campaign.id}>
               {campaign.name}

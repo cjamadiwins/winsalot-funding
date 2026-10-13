@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getAgentAssignedClientIds } from "@/lib/leadgen-campaign-assignment";
+import { resolveNewLeadCampaign } from "@/lib/leadgen-new-lead-campaign";
 import { checkDncSuppression } from "@/lib/dnc-suppression";
 
 function textOrNull(formData: FormData, key: string): string | null {
@@ -15,24 +15,22 @@ export async function createAgentLeadAction(formData: FormData) {
   const agent = await requireLeadgenAgent();
 
   const businessName = String(formData.get("business_name") ?? "").trim();
-  const clientId = String(formData.get("client_id") ?? "").trim();
+  const submittedClientId = String(formData.get("client_id") ?? "").trim();
 
-  if (!businessName || !clientId) {
+  if (!businessName || !submittedClientId) {
     redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("Business name and client are required.")}`);
   }
 
   const admin = getSupabaseAdmin();
-  const { data: activeClient } = await admin.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
-  if (!activeClient) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("This client is inactive.")}`);
-  // Server-side: agents may only add leads for clients Admin has assigned to them.
-  if (!(await getAgentAssignedClientIds(agent.id)).includes(clientId)) {
-    redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("That client isn't assigned to you.")}`);
-  }
-  const campaignId = textOrNull(formData, "campaign_id");
-  if (campaignId) {
-    const { data: campaign } = await admin.from("leadgen_campaigns").select("id").eq("id", campaignId).eq("client_id", clientId).eq("status", "active").maybeSingle();
-    if (!campaign) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent("This campaign is not available.")}`);
-  }
+  // Server-side: a new lead needs an active campaign Admin has assigned to
+  // this agent, and its client always comes from that campaign.
+  const resolved = await resolveNewLeadCampaign(admin, {
+    campaignId: String(formData.get("campaign_id") ?? ""),
+    submittedClientId,
+    agentId: agent.id,
+  });
+  if (!resolved.ok) redirect(`/leadgen/agent/leads/new?error=${encodeURIComponent(resolved.error)}`);
+  const { clientId, campaignId } = resolved;
   const { data: lead, error } = await admin
     .from("leadgen_leads")
     .insert({
