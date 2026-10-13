@@ -6,7 +6,7 @@
 export type Row = Record<string, unknown>;
 export type Write = { table: string; op: "insert" | "upsert" | "update" | "delete"; values?: Row | Row[]; matched?: Row[] };
 
-export function createFakeDb(initial: Record<string, Row[]> = {}, options: { failTables?: string[]; defaults?: Record<string, Row> } = {}) {
+export function createFakeDb(initial: Record<string, Row[]> = {}, options: { failTables?: string[]; defaults?: Record<string, Row>; uniques?: Record<string, string[]> } = {}) {
   const tables: Record<string, Row[]> = {};
   for (const [name, rows] of Object.entries(initial)) tables[name] = rows.map((r) => ({ ...r }));
   const writes: Write[] = [];
@@ -44,6 +44,9 @@ export function createFakeDb(initial: Record<string, Row[]> = {}, options: { fai
               continue;
             }
           }
+          // Unique columns (each individually unique when non-null), like a unique index.
+          const clash = (options.uniques?.[table] ?? []).find((column) => values[column] != null && rows.some((r) => r[column] === values[column]));
+          if (op === "insert" && clash) return { data: null, error: { code: "23505", message: `duplicate key value violates unique constraint on ${table}.${clash}` } };
           const row: Row = { id: `${table}-${++sequence}`, created_at: new Date().toISOString(), ...(options.defaults?.[table] ?? {}), ...values };
           rows.push(row);
           affected.push(row);
@@ -103,6 +106,10 @@ export function createFakeDb(initial: Record<string, Row[]> = {}, options: { fai
       },
       neq: (column: string, value: unknown) => {
         filters.push((r) => r[column] !== value);
+        return builder;
+      },
+      in: (column: string, values: unknown[]) => {
+        filters.push((r) => values.includes(r[column]));
         return builder;
       },
       is: (column: string, value: unknown) => {

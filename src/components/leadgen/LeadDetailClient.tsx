@@ -41,6 +41,9 @@ import DncBadge, { DncWarningBanner } from "@/components/crm-ui/DncBadge";
 import ConsultationEmailModal, { type SendConsultationEmailResult } from "./ConsultationEmailModal";
 import ConsultationInvitationModal from "./ConsultationInvitationModal";
 import ClientNotificationModal, { type SendClientNotificationResult } from "./ClientNotificationModal";
+import ProposalRequestModal, { type RequestProposalSendResult } from "./ProposalRequestModal";
+import ProposalPanel from "./ProposalPanel";
+import type { LeadProposalRow, ProposalDraftRow, ProposalStatus } from "@/lib/leadgen-proposal";
 import CommunicationPreferenceBanner from "./CommunicationPreferenceBanner";
 import ClientServicesButton from "./client-services/ClientServicesButton";
 import type { ClientServiceRow } from "@/lib/leadgen-client-services";
@@ -148,6 +151,12 @@ export type LeadDetailActions = {
   // Admin-only "Email Client" lead notification - only supplied by the admin
   // lead page; the agent page never passes it, so no agent UI or action exists.
   sendClientNotification?: (leadId: string, formData: FormData) => Promise<SendClientNotificationResult>;
+  // Admin-only "Request Proposal" (email the lead's CLIENT) and manual Proposal
+  // Status change - same pattern: never passed from the agent page.
+  requestProposal?: (leadId: string, formData: FormData) => Promise<RequestProposalSendResult>;
+  updateProposalStatus?: (leadId: string, status: ProposalStatus) => Promise<{ error?: string } | void>;
+  // Agent: prepare a proposal request for Admin approval (never sends).
+  prepareProposal?: (leadId: string, formData: FormData) => Promise<RequestProposalSendResult>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
   clearBouncedEmail?: (email: string) => Promise<{ error?: string } | void>;
   deleteLead?: (leadId: string) => Promise<{ error?: string } | void>;
@@ -194,6 +203,8 @@ export default function LeadDetailClient({
   onBack,
   callListSegmentName = null,
   clientServices,
+  proposal = null,
+  proposalDraft = null,
 }: {
   lead: LeadgenLeadRow;
   client: LeadgenClientRow;
@@ -262,6 +273,10 @@ export default function LeadDetailClient({
   // The lead's client's active Products, Services & Pricing (read-only
   // reference). Optional: when omitted or empty the button simply isn't shown.
   clientServices?: ClientServiceRow[];
+  // Request Proposal tracking for this lead (null = Not Requested). Optional so
+  // the Opportunity Finder modal, which doesn't load it, keeps compiling.
+  proposal?: LeadProposalRow | null;
+  proposalDraft?: ProposalDraftRow | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -281,6 +296,7 @@ export default function LeadDetailClient({
   const [showTeknokraftModal, setShowTeknokraftModal] = useState(false);
   const [showHidebrandtModal, setShowHidebrandtModal] = useState(false);
   const [showClientNotifyModal, setShowClientNotifyModal] = useState(false);
+  const [showProposalModal, setShowProposalModal] = useState(false);
   const [postSendFollowUp, setPostSendFollowUp] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -562,6 +578,12 @@ export default function LeadDetailClient({
         <ActionButton onClick={() => setShowAppointmentForm((v) => !v)}>{showAppointmentForm ? "Cancel" : "Book Appointment"}</ActionButton>
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
         {isAdmin && actions.sendClientNotification && client.active && <ActionButton onClick={() => setShowClientNotifyModal(true)}>Email Client</ActionButton>}
+        {isAdmin && actions.requestProposal && client.active && (
+          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Review & Send Proposal Request" : "Request Proposal"}</ActionButton>
+        )}
+        {!isAdmin && actions.prepareProposal && client.active && (
+          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Edit Proposal Request" : "Prepare Proposal Request"}</ActionButton>
+        )}
         {clientServices && <ClientServicesButton clientName={client.name} services={clientServices} />}
         {isAdmin && actions.deleteLead && (
           <button
@@ -704,6 +726,56 @@ export default function LeadDetailClient({
             setShowHidebrandtModal(false);
             setSuccessMessage("Hidebrandt Web Services email sent.");
             setPostSendFollowUp(true);
+          }}
+        />
+      )}
+
+      <ProposalPanel
+        proposal={proposal}
+        draft={proposalDraft}
+        requestEmail={isAdmin ? (emails.find((email) => email.notification_type === "proposal_requested") ?? null) : null}
+        clientName={client.name}
+        onUpdateStatus={
+          isAdmin && actions.updateProposalStatus
+            ? async (status) => {
+                const result = await actions.updateProposalStatus!(lead.id, status);
+                router.refresh();
+                return result;
+              }
+            : undefined
+        }
+      />
+
+      {showProposalModal && isAdmin && actions.requestProposal && (
+        <ProposalRequestModal
+          lead={lead}
+          client={client}
+          proposal={proposal}
+          preparedDraft={proposalDraft}
+          onClose={() => setShowProposalModal(false)}
+          onSend={(formData) => actions.requestProposal!(lead.id, formData)}
+          onSent={(warning) => {
+            setShowProposalModal(false);
+            if (warning) setError(warning);
+            else setSuccessMessage(`Proposal request sent to ${client.name}.`);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {showProposalModal && !isAdmin && actions.prepareProposal && (
+        <ProposalRequestModal
+          mode="prepare"
+          lead={lead}
+          client={client}
+          proposal={proposal}
+          preparedDraft={proposalDraft}
+          onClose={() => setShowProposalModal(false)}
+          onSend={(formData) => actions.prepareProposal!(lead.id, formData)}
+          onSent={() => {
+            setShowProposalModal(false);
+            setSuccessMessage("Proposal request saved for Admin approval. Nothing was emailed.");
+            router.refresh();
           }}
         />
       )}

@@ -19,6 +19,7 @@ import { computeLeadgenAgentPerformance, leadgenDateKey, leadgenPerformanceTier,
 import KpiCard from "@/components/crm-ui/KpiCard";
 import ResultsByAgentChart from "./ResultsByAgentChart";
 import TodaysAppointmentsCard, { type TodaysAppointmentRow } from "./TodaysAppointmentsCard";
+import ProposalDashboardSection from "./ProposalDashboardSection";
 import DialpadDashboardPreview from "@/components/dialpad/DialpadDashboardPreview";
 import { loadDialpadDashboardData, ensureLatestDialpadReportImported } from "@/lib/dialpad-report-data";
 import { effectiveOpportunityCategory, opportunityPriorityLevel, OPPORTUNITY_CATEGORY_KPI_TONE } from "@/lib/opportunity-finder";
@@ -581,6 +582,8 @@ export default async function LeadgenAdminDashboardPage() {
         summaries={dialpadData.summaries}
         fullReportHref="/leadgen/admin/dialpad"
       />
+
+      <ProposalDashboardSection />
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-[var(--crm-surface)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-purple-700">Results by Client</h2>

@@ -505,6 +505,9 @@ export const LEADGEN_ACTIVITY_TYPES = [
   "opportunity_outcome_changed",
   "client_notified",
   "appointment_brief_sent",
+  "proposal_requested",
+  "proposal_status_changed",
+  "proposal_prepared",
 ] as const;
 
 export type LeadgenActivityType = (typeof LEADGEN_ACTIVITY_TYPES)[number];
@@ -534,6 +537,9 @@ export const LEADGEN_ACTIVITY_TYPE_LABELS: Record<LeadgenActivityType, string> =
   opportunity_outcome_changed: "Pipeline outcome updated",
   client_notified: "Client notified",
   appointment_brief_sent: "Appointment Brief Sent",
+  proposal_requested: "Proposal requested from client",
+  proposal_status_changed: "Proposal status changed",
+  proposal_prepared: "Proposal request prepared",
 };
 
 export type LeadgenLeadActivityRow = {
@@ -945,6 +951,9 @@ export type LeadgenEmailRow = {
   // Set only on an admin "Email Client" lead notification (see
   // leadgen-client-notification.ts); null/absent on every other email.
   notification_type?: string | null;
+  // Idempotency key for sends that must never go out twice (the Request
+  // Proposal email); null/absent on every other email.
+  request_key?: string | null;
   // Set only on a sent Appointment Brief email (see migration
   // 20261002020000); deliberately separate from appointment_id.
   brief_appointment_id?: string | null;
