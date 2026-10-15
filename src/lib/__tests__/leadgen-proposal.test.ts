@@ -6,6 +6,7 @@ import {
   buildProposalRequestSubject,
   formatProposalPhone,
   formatProposalWebsite,
+  formatProposalAddress,
   hasActiveProposalRequest,
   isProposalStatus,
   nextStatusAfterRequest,
@@ -196,6 +197,124 @@ describe("proposal brief: the generated request for a specific prospect", () => 
     expect(supportsProposalBrief({ slug: "teknokraft-canada" })).toBe(true);
     expect(supportsProposalBrief({ slug: "hidebrandt-web-services" })).toBe(true);
     expect(supportsProposalBrief({ slug: "acme-roofing" })).toBe(false);
+  });
+});
+
+describe("second Teknokraft prospect: Imperial Pest Control (services not confirmed)", () => {
+  const tek = { name: "Teknokraft Canada Inc.", slug: "teknokraft-canada" } as LeadgenClientRow;
+  const imperial = {
+    business_name: "Imperial Pest Control",
+    contact_name: "Ramish",
+    industry: null,
+    email: "info@imperialpestcontrol.ca",
+    phone: "416-744-0102",
+    website: "https://imperialpestcontrol.ca",
+    street_address: "2001 Albion Rd #1",
+    city: "Etobicoke",
+    province: "Ontario",
+    postal_code: "M9W 6V6",
+    notes: "INTERNAL remark that must never appear",
+    client_notes: "The manager specifically requested a proposal and indicated he would contact us after reviewing it.",
+  } as unknown as LeadgenLeadRow;
+  const embark = {
+    business_name: "emBARK Pet Transport",
+    contact_name: "Matt",
+    industry: null,
+    email: "info@embarkpettransport.com",
+    phone: "+1 343-887-9858",
+    website: "https://www.embarkpettransport.com",
+    notes: null,
+    client_notes: null,
+  } as unknown as LeadgenLeadRow;
+  const note = "The decision-maker has asked for a proposal and will contact us after reviewing it.";
+  const draft = buildProposalRequestDraft({
+    client: tek,
+    lead: imperial,
+    brief: { decisionMaker: "Ramish", services: ["seo", "website_improvements", "rebranding"], servicesConfirmed: false, prospectNote: note },
+  });
+
+  it("is addressed to Teknokraft, names Ramish as the decision-maker, and carries the complete contact information", () => {
+    expect(draft.subject).toBe("Proposal Requested – Imperial Pest Control | Teknokraft Canada Inc.");
+    expect(draft.body).toContain("Hello Teknokraft Team,");
+    expect(draft.body).toContain("Business Name: Imperial Pest Control");
+    expect(draft.body).toContain("Decision-Maker: Ramish");
+    expect(draft.body).toContain("Ramish is the decision-maker for this proposal");
+    expect(draft.body).toContain("Email: info@imperialpestcontrol.ca");
+    expect(draft.body).toContain("Phone: +1 416-744-0102");
+    expect(draft.body).toContain("Website: https://imperialpestcontrol.ca");
+    expect(draft.body).toContain("Address: 2001 Albion Rd #1, Etobicoke, Ontario M9W 6V6");
+    expect(draft.body).toContain(`What the prospect told us: ${note}`);
+  });
+
+  it("does NOT present SEO, website improvements or rebranding as confirmed requirements", () => {
+    expect(draft.body).not.toContain("Services requested");
+    expect(draft.body).not.toContain("Possible additional service");
+    expect(draft.body).toContain("has not confirmed which services it needs");
+    expect(draft.body).toContain("They are not confirmed requirements");
+    const possibilities = draft.body.split("not confirmed requirements:")[1].split("What we are asking")[0];
+    expect(possibilities).toContain("- Search Engine Optimization (SEO)");
+    expect(possibilities).toContain("- Website improvements (functionality, user experience and customer inquiries)");
+    expect(possibilities).toContain("- Website rebranding to modernize the company’s online presence");
+    expect(draft.body).toContain("It does not approve any project or confirm any service");
+    // none of the confirmed-service phrasing from the first prospect's request leaks in
+    expect(draft.body).not.toContain("to improve Google search visibility and attract potential customers");
+    expect(draft.body).not.toContain("is not an approved project");
+  });
+
+  it("asks Teknokraft to review the website, recommend suitable solutions, and give recommended services, pricing, deliverables and timelines", () => {
+    expect(draft.body).toContain("Review the prospect’s existing website and recommend suitable digital solutions.");
+    expect(draft.body).toContain("or others you consider more appropriate");
+    expect(draft.body).toContain("Your recommended services, and why you recommend each one.");
+    expect(draft.body).toContain("Estimated pricing for each recommended service, based on your own review.");
+    expect(draft.body).toContain("The deliverables included in each recommended service.");
+    expect(draft.body).toContain("Implementation timelines.");
+  });
+
+  it("invents no price, ranking guarantee or result, has no placeholder, and never copies the lead's notes", () => {
+    expect(draft.body).not.toMatch(/[$€£]\s?\d|\d\s?(?:USD|CAD|dollars)/i);
+    expect(draft.body).not.toMatch(/\b(?:#1|number one|first page|page one)\b|we (?:guarantee|promise)|will (?:rank|increase|double|triple)/i);
+    expect(draft.body).not.toContain("[Insert");
+    expect(draft.body).not.toContain("INTERNAL remark");
+    expect(draft.body).not.toContain("indicated he would contact");
+    expect(validateProposalRequest(draft)).toBeNull();
+  });
+
+  it("the prospect's note is optional, whitespace-normalised, and absent when empty", () => {
+    const without = buildProposalRequestDraft({ client: tek, lead: imperial, brief: { decisionMaker: "Ramish", services: ["seo"], servicesConfirmed: false } });
+    expect(without.body).not.toContain("What the prospect told us");
+    const messy = buildProposalRequestDraft({ client: tek, lead: imperial, brief: { decisionMaker: "Ramish", services: ["seo"], servicesConfirmed: false, prospectNote: "  Wants\n a   proposal. " } });
+    expect(messy.body).toContain("What the prospect told us: Wants a proposal.");
+  });
+
+  it("keeps the two Teknokraft prospects completely separate: nothing from one appears in the other", () => {
+    const first = buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: ["seo", "website_improvements", "rebranding"], assignedAgent: "Henry Osuji" } });
+    expect(first.body).toContain("Decision-Maker: Matt");
+    expect(first.body).toContain("Services requested:");
+    expect(first.body).toContain("Possible additional service (not approved):");
+    for (const mine of ["Imperial", "Ramish", "imperialpestcontrol", "416-744-0102", "Albion", "Etobicoke"]) expect(first.body + first.subject).not.toContain(mine);
+    for (const theirs of ["emBARK", "Matt", "embarkpettransport", "343-887-9858", "Henry Osuji"]) expect(draft.body + draft.subject).not.toContain(theirs);
+  });
+
+  it("a confirmed brief (the first prospect's flow) is unchanged by the new option", () => {
+    const explicit = buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: ["seo"], servicesConfirmed: true } });
+    const implicit = buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: ["seo"] } });
+    expect(explicit).toEqual(implicit);
+    expect(implicit.body).toContain("Services requested:");
+  });
+});
+
+describe("formatProposalAddress", () => {
+  it("joins the street, city, province and postal code (Canadian style) and omits what is missing", () => {
+    expect(formatProposalAddress({ street_address: "2001 Albion Rd #1", city: "Etobicoke", province: "Ontario", postal_code: "M9W 6V6" })).toBe("2001 Albion Rd #1, Etobicoke, Ontario M9W 6V6");
+    expect(formatProposalAddress({ city: "Etobicoke", province: "ON" })).toBe("Etobicoke, ON");
+    expect(formatProposalAddress({})).toBeNull();
+    expect(formatProposalAddress({ street_address: "  ", city: null })).toBeNull();
+  });
+
+  it("does not repeat a street, province or postal code that an imported full-address city already contains", () => {
+    expect(formatProposalAddress({ street_address: "2001 Albion Rd #1", city: "2001 Albion Rd #1, Etobicoke, ON M9W 6V6, Canada", province: "ON", postal_code: "M9W 6V6" })).toBe(
+      "2001 Albion Rd #1, Etobicoke, ON M9W 6V6, Canada"
+    );
   });
 });
 

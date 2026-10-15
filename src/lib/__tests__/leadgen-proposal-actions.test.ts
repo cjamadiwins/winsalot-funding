@@ -421,3 +421,110 @@ describe("saveProposalDraftAction: Admin saves a generated request as a draft", 
     expect(JSON.stringify(db.tables.leadgen_lead_proposals)).toBe(proposalsBefore);
   });
 });
+
+
+describe("two Teknokraft prospects stay separate (emBARK Pet Transport and Imperial Pest Control)", () => {
+  const BRIEF_NOTE = "The decision-maker has asked for a proposal and will contact us after reviewing it.";
+  function addProspects() {
+    db.tables.leadgen_leads.push(
+      { id: "lead-embark", client_id: TEK, campaign_id: "tek-pest", assigned_agent_id: HENRY, business_name: "emBARK Pet Transport", contact_name: "Matt", status: "Interested", email: "info@embarkpettransport.com", phone: "+1 343-887-9858", website: "https://www.embarkpettransport.com", notes: "INTERNAL embark remark" },
+      {
+        id: "lead-imperial",
+        client_id: TEK,
+        campaign_id: "tek-pest",
+        assigned_agent_id: HENRY,
+        business_name: "Imperial Pest Control",
+        contact_name: "Ramish",
+        status: "Interested",
+        email: "info@imperialpestcontrol.ca",
+        phone: "416-744-0102",
+        website: "https://imperialpestcontrol.ca",
+        street_address: "2001 Albion Rd #1",
+        city: "Etobicoke",
+        province: "Ontario",
+        postal_code: "M9W 6V6",
+        notes: "INTERNAL imperial remark",
+        client_notes: "The manager specifically requested a proposal and indicated he would contact us after reviewing it.",
+      }
+    );
+  }
+  const tek = () => db.tables.leadgen_clients[0] as never;
+  const leadRow = (id: string) => db.tables.leadgen_leads.find((l) => l.id === id) as unknown as LeadgenLeadRow;
+  const embarkDraft = () => buildProposalRequestDraft({ client: tek(), lead: leadRow("lead-embark"), brief: { decisionMaker: "Matt", services: ["seo", "website_improvements", "rebranding"], assignedAgent: "Henry Osuji" } });
+  const imperialDraft = () =>
+    buildProposalRequestDraft({ client: tek(), lead: leadRow("lead-imperial"), brief: { decisionMaker: "Ramish", services: ["seo", "website_improvements", "rebranding"], servicesConfirmed: false, prospectNote: BRIEF_NOTE } });
+  const asForm = (draft: { subject: string; body: string }, extra: Record<string, string> = {}) => form({ subject: draft.subject, body: draft.body, ...extra });
+
+  it("each prospect gets its own draft, and saving drafts changes no proposal status and sends nothing", async () => {
+    addProspects();
+    expect((await saveProposalDraftAction("lead-embark", asForm(embarkDraft()))).error).toBeUndefined();
+    expect((await saveProposalDraftAction("lead-imperial", asForm(imperialDraft()))).error).toBeUndefined();
+    expect(resendSend).not.toHaveBeenCalled();
+    expect(db.tables.leadgen_lead_proposals).toHaveLength(0);
+    const drafts = db.tables.leadgen_proposal_drafts;
+    expect(drafts).toHaveLength(2);
+    const embark = drafts.find((d) => d.lead_id === "lead-embark")!;
+    const imperial = drafts.find((d) => d.lead_id === "lead-imperial")!;
+    expect(String(embark.subject)).toContain("emBARK Pet Transport");
+    expect(String(imperial.subject)).toContain("Imperial Pest Control");
+    for (const mine of ["Imperial", "Ramish", "imperialpestcontrol", "416-744-0102"]) expect(String(embark.body)).not.toContain(mine);
+    for (const theirs of ["emBARK", "Matt", "embarkpettransport", "343-887-9858", "Henry Osuji"]) expect(String(imperial.body)).not.toContain(theirs);
+  });
+
+  it("saving one prospect's draft again replaces only that prospect's draft", async () => {
+    addProspects();
+    await saveProposalDraftAction("lead-embark", asForm(embarkDraft()));
+    await saveProposalDraftAction("lead-imperial", asForm(imperialDraft()));
+    const embarkBefore = JSON.stringify(db.tables.leadgen_proposal_drafts.find((d) => d.lead_id === "lead-embark"));
+    await saveProposalDraftAction("lead-imperial", asForm({ ...imperialDraft(), body: imperialDraft().body + "\n\nPlease also note the manager prefers email." }));
+    expect(db.tables.leadgen_proposal_drafts).toHaveLength(2);
+    expect(JSON.stringify(db.tables.leadgen_proposal_drafts.find((d) => d.lead_id === "lead-embark"))).toBe(embarkBefore);
+  });
+
+  it("sending Imperial's request emails Teknokraft once, sets ONLY Imperial's status after the send, and leaves emBARK's draft, status and timeline alone", async () => {
+    addProspects();
+    await saveProposalDraftAction("lead-embark", asForm(embarkDraft()));
+    await saveProposalDraftAction("lead-imperial", asForm(imperialDraft()));
+    expect(db.tables.leadgen_lead_proposals).toHaveLength(0); // still no status before any send
+    const embarkTimelineBefore = JSON.stringify(db.tables.leadgen_lead_activities.filter((a) => a.lead_id === "lead-embark"));
+
+    const result = await requestProposalAction("lead-imperial", asForm(imperialDraft(), { request_key: newKey() }));
+    expect(result.error).toBeUndefined();
+
+    expect(resendSend).toHaveBeenCalledTimes(1);
+    const sent = resendSend.mock.calls[0][0];
+    expect(sent.to).toBe("shahbaz.anjum@teknokraft.ca");
+    expect(sent.subject).toBe("Proposal Requested – Imperial Pest Control | Teknokraft Canada Inc.");
+    expect(sent.text).toContain("Decision-Maker: Ramish");
+    expect(sent.text).toContain("Address: 2001 Albion Rd #1, Etobicoke, Ontario M9W 6V6");
+    expect(sent.text).toContain("not confirmed requirements");
+    for (const theirs of ["emBARK", "Matt", "embarkpettransport"]) expect(JSON.stringify(sent)).not.toContain(theirs);
+    for (const internal of ["INTERNAL imperial remark", "INTERNAL embark remark", "indicated he would contact"]) expect(JSON.stringify(sent)).not.toContain(internal);
+
+    expect(db.tables.leadgen_lead_proposals).toHaveLength(1);
+    expect(db.tables.leadgen_lead_proposals[0]).toMatchObject({ lead_id: "lead-imperial", status: "proposal_requested", request_count: 1 });
+    expect(db.tables.leadgen_proposal_drafts.map((d) => d.lead_id)).toEqual(["lead-embark"]);
+    expect(JSON.stringify(db.tables.leadgen_lead_activities.filter((a) => a.lead_id === "lead-embark"))).toBe(embarkTimelineBefore);
+    const imperialTimeline = db.tables.leadgen_lead_activities.filter((a) => a.lead_id === "lead-imperial").map((a) => a.activity_type);
+    expect(imperialTimeline).toEqual(["proposal_prepared", "proposal_requested"]);
+  });
+
+  it("each prospect's emails are tracked against its own lead, and a request for one is not blocked by the other", async () => {
+    addProspects();
+    await requestProposalAction("lead-embark", asForm(embarkDraft(), { request_key: newKey() }));
+    const second = await requestProposalAction("lead-imperial", asForm(imperialDraft(), { request_key: newKey() })); // no confirm_resend needed: a different lead
+    expect(second.error).toBeUndefined();
+    expect(resendSend).toHaveBeenCalledTimes(2);
+    const emails = db.tables.leadgen_emails;
+    expect(emails.map((e) => e.lead_id).sort()).toEqual(["lead-embark", "lead-imperial"]);
+    expect(db.tables.leadgen_lead_proposals.map((p) => [p.lead_id, p.status, p.request_count]).sort()).toEqual([
+      ["lead-embark", "proposal_requested", 1],
+      ["lead-imperial", "proposal_requested", 1],
+    ]);
+    // and a repeat for Imperial alone is still refused without confirmation, leaving emBARK untouched
+    const repeat = await requestProposalAction("lead-imperial", asForm(imperialDraft(), { request_key: newKey() }));
+    expect(repeat.error).toMatch(/already emailed/);
+    expect(resendSend).toHaveBeenCalledTimes(2);
+    expect(db.tables.leadgen_lead_proposals.find((p) => p.lead_id === "lead-embark")).toMatchObject({ request_count: 1 });
+  });
+});

@@ -94,6 +94,10 @@ export default function ProposalRequestModal({
   const showBrief = supportsProposalBrief(client);
   const [decisionMaker, setDecisionMaker] = useState(lead.contact_name ?? "");
   const [services, setServices] = useState<ProposalServiceKey[]>(["seo", "website_improvements"]);
+  // Confirmed (default): the prospect asked for these services. Unticked: the prospect only asked for a
+  // proposal, so Teknokraft is asked to RECOMMEND and the services are worded as possibilities.
+  const [servicesConfirmed, setServicesConfirmed] = useState(true);
+  const [prospectNote, setProspectNote] = useState("");
   const [generatedNote, setGeneratedNote] = useState<string | null>(null);
   // Synchronous re-entrancy guard: state updates are async, so two quick clicks
   // could both pass a `submitting` check; a ref cannot.
@@ -108,7 +112,7 @@ export default function ProposalRequestModal({
 
   function generateFromDetails() {
     if (services.length === 0) return;
-    const generated = buildProposalRequestDraft({ client, lead, brief: { decisionMaker, services, assignedAgent: assignedAgentName } });
+    const generated = buildProposalRequestDraft({ client, lead, brief: { decisionMaker, services, servicesConfirmed, prospectNote, assignedAgent: assignedAgentName } });
     setSubject(generated.subject);
     setBody(generated.body);
     setError(null);
@@ -229,8 +233,15 @@ export default function ProposalRequestModal({
               <span className="text-sm font-semibold text-slate-600">Decision-maker</span>
               <input value={decisionMaker} onChange={(e) => setDecisionMaker(e.target.value)} placeholder="Who decides on the proposal" className={inputClass} />
             </label>
+            <label className="mt-3 flex items-start gap-2 text-sm text-slate-800">
+              <input type="checkbox" checked={servicesConfirmed} onChange={(e) => setServicesConfirmed(e.target.checked)} className="mt-0.5" />
+              <span>
+                <span className="font-semibold">The prospect asked for these services.</span> Untick this if they only asked for a proposal: {client.name} will then be asked to review the website and
+                recommend, and the ticked areas are listed only as possibilities, not requirements.
+              </span>
+            </label>
             <div className="mt-3 space-y-1.5">
-              <p className="text-sm font-semibold text-slate-600">Services the prospect asked about</p>
+              <p className="text-sm font-semibold text-slate-600">{servicesConfirmed ? "Services the prospect asked about" : "Areas for " + client.name + " to assess (not confirmed)"}</p>
               {PROPOSAL_SERVICES.map((service) => (
                 <label key={service.key} className="flex items-start gap-2 text-sm text-slate-800">
                   <input
@@ -243,6 +254,17 @@ export default function ProposalRequestModal({
                 </label>
               ))}
             </div>
+            <label className="mt-3 flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-slate-600">What the prospect said (optional)</span>
+              <textarea
+                value={prospectNote}
+                onChange={(e) => setProspectNote(e.target.value)}
+                maxLength={500}
+                placeholder="e.g. The decision-maker has asked for a proposal and will contact us after reviewing it."
+                className={`${inputClass} min-h-[64px] resize-y`}
+              />
+              <span className="text-xs text-slate-500">Included in the email exactly as typed. The lead&apos;s internal notes are never copied.</span>
+            </label>
             <p className="mt-2 text-xs text-slate-500">
               Rebranding is always worded as a possible additional service, not an approved project. No prices, ranking guarantees or results are added: {client.name} provides the estimates.
             </p>

@@ -138,6 +138,7 @@ export const PROPOSAL_SERVICES = [
   {
     key: "seo",
     label: "Search Engine Optimization (SEO)",
+    possible: "Search Engine Optimization (SEO)",
     listed: "Search Engine Optimization (SEO) to improve Google search visibility and attract potential customers.",
     ask: "Review the prospect’s existing website and recommend an appropriate SEO strategy.",
     optional: false,
@@ -145,6 +146,7 @@ export const PROPOSAL_SERVICES = [
   {
     key: "website_improvements",
     label: "Website functionality, user experience and customer inquiries",
+    possible: "Website improvements (functionality, user experience and customer inquiries)",
     listed: "Recommendations to improve the website’s functionality, user experience and the customer inquiries it generates.",
     ask: "Recommend improvements to the website’s functionality, user experience and customer inquiries.",
     optional: false,
@@ -152,6 +154,7 @@ export const PROPOSAL_SERVICES = [
   {
     key: "rebranding",
     label: "Website rebranding (possible additional service, not approved)",
+    possible: "Website rebranding to modernize the company’s online presence",
     listed: "Website rebranding to modernize the company’s online presence. This is a possible additional service only; it is not an approved project.",
     ask: "Outline website rebranding separately as an optional add-on, with its own estimate, deliverables and timeline.",
     optional: true,
@@ -168,9 +171,44 @@ export type ProposalBrief = {
   // The person who decides on the prospect's side (shown as "Decision-Maker").
   decisionMaker?: string | null;
   services: readonly ProposalServiceKey[];
+  // true (default): the prospect asked for these services. false: the prospect asked for a
+  // proposal but has not said what it needs - the services are then listed only as
+  // possibilities for the client to assess, never as confirmed requirements.
+  servicesConfirmed?: boolean;
+  // What the prospect actually said, typed by Admin (never copied from the lead's notes).
+  prospectNote?: string | null;
   // The Winsalot agent who generated the lead, so the client knows who to reply about.
   assignedAgent?: string | null;
 };
+
+// The prospect's address from the lead's own fields. Imported leads sometimes carry the whole address
+// in `city`, so a part that repeats another (the street inside the city, or the postal code twice)
+// is not printed twice.
+export function formatProposalAddress(lead: Partial<Pick<LeadgenLeadRow, "street_address" | "city" | "province" | "postal_code">>): string | null {
+  const clean = (value: string | null | undefined) => value?.trim().replace(/\s+/g, " ") || "";
+  const street = clean(lead.street_address);
+  const city = clean(lead.city);
+  const province = clean(lead.province);
+  const postal = clean(lead.postal_code);
+  const lower = (value: string) => value.toLowerCase();
+  const parts: string[] = [];
+  const add = (value: string) => {
+    if (value && !parts.some((part) => lower(part).includes(lower(value)))) parts.push(value);
+  };
+  // Replace a part that is contained in the one being added, e.g. a street inside a full-address city.
+  const addFull = (value: string) => {
+    if (!value) return;
+    for (let i = parts.length - 1; i >= 0; i--) if (lower(value).includes(lower(parts[i]))) parts.splice(i, 1);
+    add(value);
+  };
+  addFull(street);
+  addFull(city);
+  // "Etobicoke, Ontario M9W 6V6": province and postal code share one part (Canadian style).
+  const has = (value: string) => parts.some((part) => lower(part).includes(lower(value)));
+  const tail = [province && !has(province) ? province : "", postal && !has(postal) ? postal : ""].filter(Boolean).join(" ");
+  if (tail) parts.push(tail);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
 
 // The brief form is offered only for the website-services clients.
 export function supportsProposalBrief(client: Pick<LeadgenClientRow, "slug">): boolean {
@@ -179,7 +217,8 @@ export function supportsProposalBrief(client: Pick<LeadgenClientRow, "slug">): b
 
 export function buildProposalRequestDraft(input: {
   client: Pick<LeadgenClientRow, "name" | "slug">;
-  lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website" | "notes" | "client_notes">;
+  lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website" | "notes" | "client_notes"> &
+    Partial<Pick<LeadgenLeadRow, "street_address" | "city" | "province" | "postal_code">>;
   // Optional. Without it (or with no service chosen) the original request is produced unchanged.
   brief?: ProposalBrief;
 }): { subject: string; body: string } {
@@ -214,7 +253,8 @@ export function buildProposalRequestDraft(input: {
 
 function buildBriefBody(input: {
   client: Pick<LeadgenClientRow, "name" | "slug">;
-  lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website">;
+  lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website"> &
+    Partial<Pick<LeadgenLeadRow, "street_address" | "city" | "province" | "postal_code">>;
   brief: ProposalBrief;
   services: readonly (typeof PROPOSAL_SERVICES)[number][];
 }): string {
@@ -232,9 +272,12 @@ function buildBriefBody(input: {
     `Email: ${lead.email?.trim() || notProvided}`,
     `Phone: ${formatProposalPhone(lead.phone) ?? notProvided}`,
     `Website: ${formatProposalWebsite(lead.website) ?? notProvided}`,
+    ...(formatProposalAddress(lead) ? [`Address: ${formatProposalAddress(lead)}`] : []),
     ...(lead.industry?.trim() ? [`Industry: ${lead.industry.trim()}`] : []),
     ...(brief.assignedAgent?.trim() ? [`Winsalot Agent: ${brief.assignedAgent.trim()}`] : []),
   ].join("\n");
+
+  if (brief.servicesConfirmed === false) return buildUnconfirmedBody({ clientName, details, decisionMaker, services, brief });
 
   const requested = [
     "Services requested:",
@@ -291,6 +334,43 @@ export function validatePreparedProposal(input: { subject: string; body: string 
   if (subject.length > PROPOSAL_SUBJECT_MAX) return `The subject is too long (${PROPOSAL_SUBJECT_MAX} characters max).`;
   if (body.length > PROPOSAL_BODY_MAX) return `The message is too long (${PROPOSAL_BODY_MAX} characters max).`;
   return null;
+}
+
+// The prospect asked for a proposal but has not said which services it needs: the client is asked to
+// review the website and RECOMMEND. The services below are possibilities, never requirements.
+function buildUnconfirmedBody(input: {
+  clientName: string;
+  details: string;
+  decisionMaker: string | null;
+  services: readonly (typeof PROPOSAL_SERVICES)[number][];
+  brief: ProposalBrief;
+}): string {
+  const { clientName, details, decisionMaker, services, brief } = input;
+  const note = brief.prospectNote?.trim().replace(/\s+/g, " ") ?? "";
+  return [
+    `Hello ${clientName} Team,`,
+    "We have a prospective customer who has asked for a proposal. Please review the details below and let us know whether you can prepare one.",
+    `Prospect details\n${details}`,
+    decisionMaker ? `${decisionMaker} is the decision-maker for this proposal, so please address the proposal to ${decisionMaker}.` : "",
+    note ? `What the prospect told us: ${note}` : "",
+    [
+      "The prospect has asked for a proposal but has not confirmed which services it needs. The areas below are possibilities for you to assess. They are not confirmed requirements:",
+      ...services.map((service) => `- ${service.possible}`),
+    ].join("\n"),
+    [
+      `What we are asking ${clientName} to provide:`,
+      "- Review the prospect’s existing website and recommend suitable digital solutions. These may include the areas above, or others you consider more appropriate.",
+      "- Your recommended services, and why you recommend each one.",
+      "- Estimated pricing for each recommended service, based on your own review.",
+      "- The deliverables included in each recommended service.",
+      "- Implementation timelines.",
+    ].join("\n"),
+    "This request is for a proposal only. It does not approve any project or confirm any service, and it does not commit Winsalot Corp. or the prospect to any price, scope, ranking or result. Please base every estimate on your own review of the website, and do not guarantee specific search rankings or results.",
+    "Kindly confirm when the proposal is ready so we can coordinate the next steps.",
+    PROPOSAL_SIGNATURE,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 // An agent-prepared request waiting for Admin to approve and send it.
