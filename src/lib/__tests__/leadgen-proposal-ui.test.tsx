@@ -68,6 +68,18 @@ describe("Generate Proposal Request composer: details, draft and re-send safegua
     expect(adminHtml).toContain("Generate draft");
   });
 
+  it("lets Admin say the services are NOT confirmed, and add what the prospect said", () => {
+    expect(adminHtml).toContain("The prospect asked for these services.");
+    expect(adminHtml).toContain("Untick this if they only asked for a proposal");
+    expect(adminHtml).toContain("listed only as possibilities, not requirements");
+    expect(adminHtml).toContain("What the prospect said (optional)");
+    expect(adminHtml).toContain("The lead&#x27;s internal notes are never copied.");
+    // the confirmed switch starts ticked, so the first prospect's flow is unchanged
+    const confirmed = adminHtml.slice(adminHtml.lastIndexOf("<label", adminHtml.indexOf("The prospect asked for these services.")), adminHtml.indexOf("The prospect asked for these services."));
+    expect(confirmed).toContain('type="checkbox"');
+    expect(confirmed).toContain('checked=""');
+  });
+
   it("does not show the website-services details for other clients, and the generic request is unchanged", () => {
     const html = renderToStaticMarkup(<ProposalRequestModal lead={lead} client={acme} proposal={null} onClose={noop} onSend={async () => ({})} onSent={noop} />);
     expect(html).not.toContain("Generate from details");
