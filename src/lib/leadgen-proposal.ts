@@ -126,13 +126,69 @@ function proposalRequirements(lead: Pick<LeadgenLeadRow, "notes" | "client_notes
   return PROPOSAL_REQUIREMENTS_PLACEHOLDER;
 }
 
+// ---------------------------------------------------------------------------
+// Proposal brief: what the prospect actually asked for
+// ---------------------------------------------------------------------------
+
+// For website-services clients (Teknokraft, Hidebrandt, Web6) the request can be
+// built from a short brief - who decides, which services were asked about - so
+// the client receives a specific, professional request instead of a generic one.
+// Rebranding is deliberately an OPTIONAL, UNAPPROVED add-on: the email says so.
+export const PROPOSAL_SERVICES = [
+  {
+    key: "seo",
+    label: "Search Engine Optimization (SEO)",
+    listed: "Search Engine Optimization (SEO) to improve Google search visibility and attract potential customers.",
+    ask: "Review the prospect’s existing website and recommend an appropriate SEO strategy.",
+    optional: false,
+  },
+  {
+    key: "website_improvements",
+    label: "Website functionality, user experience and customer inquiries",
+    listed: "Recommendations to improve the website’s functionality, user experience and the customer inquiries it generates.",
+    ask: "Recommend improvements to the website’s functionality, user experience and customer inquiries.",
+    optional: false,
+  },
+  {
+    key: "rebranding",
+    label: "Website rebranding (possible additional service, not approved)",
+    listed: "Website rebranding to modernize the company’s online presence. This is a possible additional service only; it is not an approved project.",
+    ask: "Outline website rebranding separately as an optional add-on, with its own estimate, deliverables and timeline.",
+    optional: true,
+  },
+] as const;
+
+export type ProposalServiceKey = (typeof PROPOSAL_SERVICES)[number]["key"];
+
+export function isProposalServiceKey(value: string): value is ProposalServiceKey {
+  return PROPOSAL_SERVICES.some((service) => service.key === value);
+}
+
+export type ProposalBrief = {
+  // The person who decides on the prospect's side (shown as "Decision-Maker").
+  decisionMaker?: string | null;
+  services: readonly ProposalServiceKey[];
+  // The Winsalot agent who generated the lead, so the client knows who to reply about.
+  assignedAgent?: string | null;
+};
+
+// The brief form is offered only for the website-services clients.
+export function supportsProposalBrief(client: Pick<LeadgenClientRow, "slug">): boolean {
+  return isWebsiteServicesClient(client);
+}
+
 export function buildProposalRequestDraft(input: {
   client: Pick<LeadgenClientRow, "name" | "slug">;
   lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website" | "notes" | "client_notes">;
+  // Optional. Without it (or with no service chosen) the original request is produced unchanged.
+  brief?: ProposalBrief;
 }): { subject: string; body: string } {
-  const { client, lead } = input;
+  const { client, lead, brief } = input;
   const notProvided = "Not provided";
   const field = (value: string | null | undefined) => value?.trim() || notProvided;
+
+  const services = PROPOSAL_SERVICES.filter((service) => brief?.services.includes(service.key));
+  if (brief && services.length > 0) return { subject: buildProposalRequestSubject(lead, client), body: buildBriefBody({ client, lead, brief, services }) };
 
   const body = [
     `Hello ${clientGreetingName(client.name)} Team,`,
@@ -154,6 +210,60 @@ export function buildProposalRequestDraft(input: {
   ].join("\n\n");
 
   return { subject: buildProposalRequestSubject(lead, client), body };
+}
+
+function buildBriefBody(input: {
+  client: Pick<LeadgenClientRow, "name" | "slug">;
+  lead: Pick<LeadgenLeadRow, "business_name" | "contact_name" | "industry" | "email" | "phone" | "website">;
+  brief: ProposalBrief;
+  services: readonly (typeof PROPOSAL_SERVICES)[number][];
+}): string {
+  const { client, lead, brief, services } = input;
+  const notProvided = "Not provided";
+  const clientName = clientGreetingName(client.name);
+  const decisionMaker = brief.decisionMaker?.trim() || lead.contact_name?.trim() || null;
+  const required = services.filter((service) => !service.optional);
+  const optional = services.filter((service) => service.optional);
+
+  const details = [
+    `Business Name: ${lead.business_name.trim()}`,
+    `Decision-Maker: ${decisionMaker ?? notProvided}`,
+    ...(lead.contact_name?.trim() && decisionMaker && lead.contact_name.trim() !== decisionMaker ? [`Other Contact: ${lead.contact_name.trim()}`] : []),
+    `Email: ${lead.email?.trim() || notProvided}`,
+    `Phone: ${formatProposalPhone(lead.phone) ?? notProvided}`,
+    `Website: ${formatProposalWebsite(lead.website) ?? notProvided}`,
+    ...(lead.industry?.trim() ? [`Industry: ${lead.industry.trim()}`] : []),
+    ...(brief.assignedAgent?.trim() ? [`Winsalot Agent: ${brief.assignedAgent.trim()}`] : []),
+  ].join("\n");
+
+  const requested = [
+    "Services requested:",
+    ...required.map((service, index) => `${index + 1}. ${service.listed}`),
+    ...(optional.length > 0 ? ["", "Possible additional service (not approved):", ...optional.map((service, index) => `${required.length + index + 1}. ${service.listed}`)] : []),
+  ].join("\n");
+
+  const asks = [
+    `What we are asking ${clientName} to provide:`,
+    ...required.map((service) => `- ${service.ask}`),
+    "- Estimated pricing for each service, based on your own review.",
+    "- The deliverables included in each service.",
+    "- Implementation timelines.",
+    ...optional.map((service) => `- ${service.ask}`),
+  ].join("\n");
+
+  return [
+    `Hello ${clientName} Team,`,
+    "We have a prospective customer who has asked for a proposal. Please review the details below and let us know whether you can prepare one.",
+    `Prospect details\n${details}`,
+    decisionMaker ? `${decisionMaker} is the decision-maker for this proposal, so please address the proposal to ${decisionMaker}.` : "",
+    requested,
+    asks,
+    "This request is for a proposal only. It does not approve any project, and it does not commit Winsalot Corp. or the prospect to any price, scope, ranking or result. Please base every estimate on your own review of the website, and do not guarantee specific search rankings or results.",
+    "Kindly confirm when the proposal is ready so we can coordinate the next steps.",
+    PROPOSAL_SIGNATURE,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 // Server- and UI-side check of what Admin is about to send. A message that still
@@ -201,6 +311,16 @@ export function proposalPreparedActivityNotes(input: { clientName: string; subje
     `For: ${input.clientName}`,
     `Subject: ${input.subject}`,
     `Prepared by ${input.preparedBy}. Nothing has been emailed; only Admin can approve and send it.`,
+  ].join("\n");
+}
+
+// Admin saved a request as a draft (without sending). Internal timeline only.
+export function proposalDraftSavedActivityNotes(input: { clientName: string; subject: string; savedBy: string }): string {
+  return [
+    "Proposal request draft saved - awaiting Admin review",
+    `For: ${input.clientName}`,
+    `Subject: ${input.subject}`,
+    `Saved by ${input.savedBy} (Admin). Proposal status: Draft (not sent). Nothing has been emailed.`,
   ].join("\n");
 }
 

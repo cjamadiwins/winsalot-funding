@@ -11,9 +11,11 @@ import {
   nextStatusAfterRequest,
   proposalStatusLabel,
   summarizeProposals,
+  supportsProposalBrief,
+  validatePreparedProposal,
   validateProposalRequest,
 } from "../leadgen-proposal";
-import type { LeadgenLeadRow } from "../leadgen-types";
+import type { LeadgenClientRow, LeadgenLeadRow } from "../leadgen-types";
 
 const teknokraft = { name: "Teknokraft Canada Inc.", slug: "teknokraft-canada" };
 const boondock = {
@@ -104,6 +106,96 @@ describe("proposal request email draft", () => {
     expect(draft.body).not.toContain(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
     expect(draft.body).not.toContain("Secret internal remark");
     expect(validateProposalRequest(draft)).toBeNull();
+  });
+});
+
+describe("proposal brief: the generated request for a specific prospect", () => {
+  const tek = { name: "Teknokraft Canada Inc.", slug: "teknokraft-canada" } as LeadgenClientRow;
+  const embark = {
+    business_name: "emBARK Pet Transport",
+    contact_name: "Matt",
+    industry: null,
+    email: "info@embarkpettransport.com",
+    phone: "+1 343-887-9858",
+    website: "https://www.embarkpettransport.com",
+    notes: "INTERNAL remark that must never appear",
+    client_notes: null,
+  } as unknown as LeadgenLeadRow;
+  const full = buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: ["seo", "website_improvements", "rebranding"], assignedAgent: "Henry Osuji" } });
+
+  it("addresses Teknokraft and names Matt as the decision-maker, with every contact detail", () => {
+    expect(full.subject).toBe("Proposal Requested – emBARK Pet Transport | Teknokraft Canada Inc.");
+    expect(full.body).toContain("Hello Teknokraft Team,");
+    expect(full.body).toContain("Business Name: emBARK Pet Transport");
+    expect(full.body).toContain("Decision-Maker: Matt");
+    expect(full.body).toContain("Matt is the decision-maker for this proposal");
+    expect(full.body).toContain("Email: info@embarkpettransport.com");
+    expect(full.body).toContain("Phone: +1 343-887-9858");
+    expect(full.body).toContain("Website: https://www.embarkpettransport.com");
+    expect(full.body).toContain("Winsalot Agent: Henry Osuji");
+  });
+
+  it("lists SEO and the website improvements as requested, and rebranding only as a possible, unapproved add-on", () => {
+    expect(full.body).toContain("1. Search Engine Optimization (SEO) to improve Google search visibility and attract potential customers.");
+    expect(full.body).toContain("2. Recommendations to improve the website’s functionality, user experience and the customer inquiries it generates.");
+    const [requested, additional] = full.body.split("Possible additional service (not approved):");
+    expect(requested).not.toMatch(/rebrand/i);
+    expect(additional).toContain("3. Website rebranding to modernize the company’s online presence.");
+    expect(additional).toContain("it is not an approved project");
+  });
+
+  it("asks Teknokraft to review the website, recommend an SEO strategy, and give pricing, deliverables and timelines", () => {
+    expect(full.body).toContain("Review the prospect’s existing website and recommend an appropriate SEO strategy.");
+    expect(full.body).toContain("Recommend improvements to the website’s functionality, user experience and customer inquiries.");
+    expect(full.body).toContain("Estimated pricing for each service");
+    expect(full.body).toContain("The deliverables included in each service.");
+    expect(full.body).toContain("Implementation timelines.");
+    expect(full.body).toContain("Outline website rebranding separately as an optional add-on");
+    // The optional ask comes after the core asks.
+    expect(full.body.indexOf("Implementation timelines.")).toBeLessThan(full.body.indexOf("Outline website rebranding"));
+  });
+
+  it("never invents a price, guarantees a ranking or promises a result", () => {
+    expect(full.body).not.toMatch(/[$€£]\s?\d|\d\s?(?:USD|CAD|dollars)/i);
+    expect(full.body).not.toMatch(/\b(?:#1|number one|first page|top of google|page one)\b/i);
+    expect(full.body).not.toMatch(/we (?:guarantee|promise)|will (?:rank|increase|double|triple)|guaranteed (?:to|results)/i);
+    expect(full.body).toContain("does not commit Winsalot Corp. or the prospect to any price, scope, ranking or result");
+    expect(full.body).toContain("do not guarantee specific search rankings or results");
+  });
+
+  it("has no bracketed placeholder, never copies internal notes, and is ready for review and sending", () => {
+    expect(full.body).not.toContain("[Insert");
+    expect(full.body).not.toContain("INTERNAL remark");
+    expect(validateProposalRequest(full)).toBeNull();
+    expect(validatePreparedProposal(full)).toBeNull();
+  });
+
+  it("leaves rebranding out entirely when it was not selected, and still asks for pricing, deliverables and timelines", () => {
+    const seoOnly = buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: ["seo"] } });
+    expect(seoOnly.body).not.toMatch(/rebrand/i);
+    expect(seoOnly.body).not.toContain("Possible additional service");
+    expect(seoOnly.body).not.toContain("Winsalot Agent:");
+    expect(seoOnly.body).toContain("Implementation timelines.");
+  });
+
+  it("falls back to the lead's contact when no decision-maker is typed, and says so plainly when neither exists", () => {
+    expect(buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "  ", services: ["seo"] } }).body).toContain("Decision-Maker: Matt");
+    const none = buildProposalRequestDraft({ client: tek, lead: { ...embark, contact_name: null } as LeadgenLeadRow, brief: { services: ["seo"] } });
+    expect(none.body).toContain("Decision-Maker: Not provided");
+    expect(none.body).not.toContain("is the decision-maker for this proposal");
+  });
+
+  it("without a brief (or with no service chosen) the original request is produced unchanged for every lead", () => {
+    const original = buildProposalRequestDraft({ client: tek, lead: embark });
+    expect(buildProposalRequestDraft({ client: tek, lead: embark, brief: { decisionMaker: "Matt", services: [] } })).toEqual(original);
+    expect(original.body).toContain("Contact Person: Matt");
+    expect(original.body).toContain(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
+  });
+
+  it("offers the brief only for the website-services clients", () => {
+    expect(supportsProposalBrief({ slug: "teknokraft-canada" })).toBe(true);
+    expect(supportsProposalBrief({ slug: "hidebrandt-web-services" })).toBe(true);
+    expect(supportsProposalBrief({ slug: "acme-roofing" })).toBe(false);
   });
 });
 

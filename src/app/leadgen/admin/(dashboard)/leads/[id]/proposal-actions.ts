@@ -8,10 +8,13 @@ import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { resolveClientNotificationRecipient } from "@/lib/leadgen-client-notification";
 import {
   PROPOSAL_REQUEST_KEY_PATTERN,
+  hasActiveProposalRequest,
   isProposalStatus,
   nextStatusAfterRequest,
+  proposalDraftSavedActivityNotes,
   proposalRequestedActivityNotes,
   proposalStatusChangedActivityNotes,
+  validatePreparedProposal,
   validateProposalRequest,
   type LeadProposalRow,
   type ProposalStatus,
@@ -25,6 +28,11 @@ import {
 // carries the subject, body and a one-time send key, so a crafted request can't
 // redirect the message to the prospect or anyone else. The send reuses
 // sendLeadgenEmail (leadgen_emails row, Resend, webhook delivery tracking).
+//
+// No duplicate emails: a send needs a fresh one-time key (a double click or a
+// retried request can never email twice) AND, when this lead already has an
+// emailed request, an explicit confirm_resend=yes - checked HERE, not just in the
+// form, so a second tab or a stale page cannot email the client again by accident.
 //
 // Order matters: the proposal status and the timeline entry are written only
 // AFTER the email was accepted, and the status only ever becomes "Proposal
@@ -60,6 +68,20 @@ export async function requestProposalAction(leadId: string, formData: FormData):
   const resolved = resolveClientNotificationRecipient(client);
   if ("error" in resolved) return { emailId: "", error: resolved.error };
   const { recipient } = resolved;
+
+  // The same one-time key again (double click, retried request, second tab): the first
+  // send already happened, so this is the quiet "duplicate" answer, not a new request.
+  const { data: sameKey } = await supabase.from("leadgen_emails").select("id").eq("request_key", requestKey).maybeSingle();
+  if (sameKey) return { emailId: (sameKey as { id: string }).id, duplicate: true };
+
+  // An already-emailed request is never repeated unless the Admin said so.
+  const { data: priorProposal } = await getSupabaseAdmin().from("leadgen_lead_proposals").select("status, request_count").eq("lead_id", leadId).maybeSingle();
+  if (hasActiveProposalRequest(priorProposal as { status: string; request_count: number } | null) && String(formData.get("confirm_resend") ?? "") !== "yes") {
+    return {
+      emailId: "",
+      error: `A proposal request for this lead was already emailed to ${client.name}, so nothing was sent. Open Generate Proposal Request again and confirm that you want to email them again.`,
+    };
+  }
 
   const result = await sendLeadgenEmail(supabase, {
     clientId: lead.client_id,
@@ -145,6 +167,46 @@ export async function requestProposalAction(leadId: string, formData: FormData):
     };
   }
   return { emailId: result.emailId };
+}
+
+// Admin SAVES a request as a draft for review - never emails and never changes the
+// Proposal Status. The one draft per lead is shared with the agent flow (an agent's
+// prepared request is replaced by Admin's saved edit, and vice versa), and it is
+// cleared when the request is actually sent. The only trace outside the draft is
+// an internal timeline entry; nothing the client can see is written.
+export async function saveProposalDraftAction(leadId: string, formData: FormData): Promise<ActionResult> {
+  const adminUser = await requireLeadgenAdmin();
+  const supabase = await createSupabaseServerClient();
+
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  // A draft may still hold the [Insert ...] placeholder; sending is what requires it resolved.
+  const validationError = validatePreparedProposal({ subject, body });
+  if (validationError) return { error: validationError };
+
+  const { data: lead } = await supabase.from("leadgen_leads").select("id, client_id").eq("id", leadId).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  const { data: client } = await supabase.from("leadgen_clients").select("id, name, active").eq("id", lead.client_id).maybeSingle();
+  if (!client) return { error: "This lead's client could not be found." };
+  if (!client.active) return { error: `${client.name} isn't an active client, so a proposal can't be requested from it.` };
+
+  const now = new Date().toISOString();
+  const { error } = await getSupabaseAdmin()
+    .from("leadgen_proposal_drafts")
+    .upsert({ lead_id: leadId, client_id: lead.client_id, subject, body, prepared_by: adminUser.id, prepared_at: now, updated_at: now }, { onConflict: "lead_id" });
+  if (error) return { error: "Failed to save the proposal request draft." };
+
+  await supabase.from("leadgen_lead_activities").insert({
+    lead_id: leadId,
+    agent_id: adminUser.id,
+    activity_type: "proposal_prepared",
+    notes: proposalDraftSavedActivityNotes({ clientName: client.name, subject, savedBy: adminUser.full_name || adminUser.email }),
+  });
+
+  revalidatePath(`/leadgen/admin/leads/${leadId}`);
+  revalidatePath("/leadgen/admin");
+  return {};
 }
 
 // Admin sets the Proposal Status by hand (In Preparation, Proposal Sent,
