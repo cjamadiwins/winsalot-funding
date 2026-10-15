@@ -155,6 +155,8 @@ export type LeadDetailActions = {
   // Status change - same pattern: never passed from the agent page.
   requestProposal?: (leadId: string, formData: FormData) => Promise<RequestProposalSendResult>;
   updateProposalStatus?: (leadId: string, status: ProposalStatus) => Promise<{ error?: string } | void>;
+  // Admin: save the generated request as a draft for review (never emails).
+  saveProposalDraft?: (leadId: string, formData: FormData) => Promise<{ error?: string }>;
   // Agent: prepare a proposal request for Admin approval (never sends).
   prepareProposal?: (leadId: string, formData: FormData) => Promise<RequestProposalSendResult>;
   assignAgent?: (leadId: string, agentId: string | null) => Promise<{ error?: string } | void>;
@@ -579,10 +581,10 @@ export default function LeadDetailClient({
         <ActionButton onClick={() => setEditing((v) => !v)}>{editing ? "Cancel Edit" : "Edit Lead"}</ActionButton>
         {isAdmin && actions.sendClientNotification && client.active && <ActionButton onClick={() => setShowClientNotifyModal(true)}>Email Client</ActionButton>}
         {isAdmin && actions.requestProposal && client.active && (
-          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Review & Send Proposal Request" : "Request Proposal"}</ActionButton>
+          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Review & Send Proposal Request" : "Generate Proposal Request"}</ActionButton>
         )}
         {!isAdmin && actions.prepareProposal && client.active && (
-          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Edit Proposal Request" : "Prepare Proposal Request"}</ActionButton>
+          <ActionButton onClick={() => setShowProposalModal(true)}>{proposalDraft ? "Edit Proposal Request" : "Generate Proposal Request"}</ActionButton>
         )}
         {clientServices && <ClientServicesButton clientName={client.name} services={clientServices} />}
         {isAdmin && actions.deleteLead && (
@@ -752,8 +754,15 @@ export default function LeadDetailClient({
           client={client}
           proposal={proposal}
           preparedDraft={proposalDraft}
+          assignedAgentName={assignedAgentName}
           onClose={() => setShowProposalModal(false)}
           onSend={(formData) => actions.requestProposal!(lead.id, formData)}
+          onSaveDraft={actions.saveProposalDraft ? (formData) => actions.saveProposalDraft!(lead.id, formData) : undefined}
+          onDraftSaved={() => {
+            setShowProposalModal(false);
+            setSuccessMessage("Proposal request saved as a draft. Nothing was emailed.");
+            router.refresh();
+          }}
           onSent={(warning) => {
             setShowProposalModal(false);
             if (warning) setError(warning);
@@ -770,6 +779,7 @@ export default function LeadDetailClient({
           client={client}
           proposal={proposal}
           preparedDraft={proposalDraft}
+          assignedAgentName={assignedAgentName}
           onClose={() => setShowProposalModal(false)}
           onSend={(formData) => actions.prepareProposal!(lead.id, formData)}
           onSent={() => {

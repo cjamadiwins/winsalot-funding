@@ -20,7 +20,7 @@ vi.mock("../supabase-server", () => ({ createSupabaseServerClient: async () => d
 vi.mock("../supabase-admin", () => ({ getSupabaseAdmin: () => db.client }));
 vi.mock("../resend", () => ({ getResendClient: () => ({ emails: { send: (...args: unknown[]) => resendSend(...args) } }) }));
 
-import { requestProposalAction, updateProposalStatusAction } from "../../app/leadgen/admin/(dashboard)/leads/[id]/proposal-actions";
+import { requestProposalAction, saveProposalDraftAction, updateProposalStatusAction } from "../../app/leadgen/admin/(dashboard)/leads/[id]/proposal-actions";
 import { PROPOSAL_REQUIREMENTS_PLACEHOLDER, buildProposalRequestDraft } from "../leadgen-proposal";
 import type { LeadgenLeadRow } from "../leadgen-types";
 
@@ -235,9 +235,23 @@ describe("requestProposalAction: duplicate-send protection", () => {
     expect(db.tables.leadgen_lead_proposals[0].request_count).toBe(1);
   });
 
-  it("a deliberate second request (new key) is a real second request", async () => {
+  it("a second request for a lead that was already emailed is refused unless the Admin confirms the re-send", async () => {
     await requestProposalAction("lead-tek", requestForm());
+    const refused = await requestProposalAction("lead-tek", requestForm()); // a fresh key, e.g. a second tab or a stale page
+    expect(refused.error).toMatch(/already emailed to Teknokraft Canada Inc\., so nothing was sent/);
+    expect(refused.duplicate).toBeUndefined();
+    expect(resendSend).toHaveBeenCalledTimes(1);
+    expect(db.tables.leadgen_emails).toHaveLength(1);
+    expect(db.tables.leadgen_lead_proposals[0].request_count).toBe(1);
+    expect(db.tables.leadgen_lead_activities).toHaveLength(1);
+    // anything other than an explicit "yes" is still a refusal
+    expect((await requestProposalAction("lead-tek", requestForm({ confirm_resend: "true" }))).error).toBeTruthy();
+    expect(resendSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("a deliberate second request (new key, confirmed) is a real second request", async () => {
     await requestProposalAction("lead-tek", requestForm());
+    await requestProposalAction("lead-tek", requestForm({ confirm_resend: "yes" }));
     expect(resendSend).toHaveBeenCalledTimes(2);
     expect(db.tables.leadgen_emails).toHaveLength(2);
     expect(db.tables.leadgen_lead_proposals).toHaveLength(1);
@@ -285,7 +299,7 @@ describe("proposal status progression", () => {
   it("a request after 'In Preparation' or 'Proposal Sent' never regresses the status", async () => {
     for (const status of ["in_preparation", "proposal_sent", "accepted"]) {
       seed({ leadgen_lead_proposals: [{ id: "p1", lead_id: "lead-tek", client_id: TEK, campaign_id: "tek-pest", status, request_count: 1, first_requested_at: "2026-10-01T00:00:00Z", status_updated_at: "2026-10-01T00:00:00Z" }] });
-      await requestProposalAction("lead-tek", requestForm());
+      await requestProposalAction("lead-tek", requestForm({ confirm_resend: "yes" }));
       expect(db.tables.leadgen_lead_proposals[0]).toMatchObject({ status, request_count: 2 });
     }
   });
@@ -293,7 +307,7 @@ describe("proposal status progression", () => {
   it("a new request after 'Declined' or 'Not Requested' starts again at 'Proposal Requested'", async () => {
     for (const status of ["declined", "not_requested"]) {
       seed({ leadgen_lead_proposals: [{ id: "p1", lead_id: "lead-tek", client_id: TEK, campaign_id: "tek-pest", status, request_count: 1 }] });
-      await requestProposalAction("lead-tek", requestForm());
+      await requestProposalAction("lead-tek", requestForm({ confirm_resend: "yes" }));
       expect(db.tables.leadgen_lead_proposals[0]).toMatchObject({ status: "proposal_requested", request_count: 2 });
     }
   });
@@ -337,5 +351,73 @@ describe("updateProposalStatusAction", () => {
     const before = snapshot();
     await updateProposalStatusAction("lead-tek", "in_preparation");
     expect(snapshot()).toBe(before);
+  });
+});
+
+
+describe("saveProposalDraftAction: Admin saves a generated request as a draft", () => {
+  const draftForm = (overrides: Record<string, string> = {}, base = completedDraft()) => form({ subject: base.subject, body: base.body, ...overrides });
+
+  it("saves the draft, sends NOTHING and leaves the Proposal Status alone", async () => {
+    const result = await saveProposalDraftAction("lead-tek", draftForm());
+    expect(result.error).toBeUndefined();
+    expect(resendSend).not.toHaveBeenCalled();
+    expect(db.tables.leadgen_emails).toHaveLength(0);
+    expect(db.tables.leadgen_lead_proposals).toHaveLength(0);
+    expect(db.tables.leadgen_proposal_drafts).toHaveLength(1);
+    expect(db.tables.leadgen_proposal_drafts[0]).toMatchObject({ lead_id: "lead-tek", client_id: TEK, prepared_by: ADMIN.id });
+  });
+
+  it("records the draft and its status in the lead's internal timeline only", async () => {
+    await saveProposalDraftAction("lead-tek", draftForm());
+    expect(db.tables.leadgen_lead_activities).toHaveLength(1);
+    const entry = db.tables.leadgen_lead_activities[0];
+    expect(entry).toMatchObject({ lead_id: "lead-tek", activity_type: "proposal_prepared" });
+    expect(String(entry.notes)).toContain("Proposal request draft saved - awaiting Admin review");
+    expect(String(entry.notes)).toContain("For: Teknokraft Canada Inc.");
+    expect(String(entry.notes)).toContain("Proposal status: Draft (not sent). Nothing has been emailed.");
+  });
+
+  it("keeps one draft per lead: saving again replaces it, and a draft may still carry the [Insert …] placeholder", async () => {
+    await saveProposalDraftAction("lead-tek", draftForm());
+    const withPlaceholder = buildProposalRequestDraft({ client: db.tables.leadgen_clients[0] as never, lead: db.tables.leadgen_leads[0] as unknown as LeadgenLeadRow });
+    expect(withPlaceholder.body).toContain(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
+    expect((await saveProposalDraftAction("lead-tek", draftForm({}, withPlaceholder))).error).toBeUndefined();
+    expect(db.tables.leadgen_proposal_drafts).toHaveLength(1);
+    expect(db.tables.leadgen_proposal_drafts[0].body).toContain(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
+  });
+
+  it("sending later clears the draft, sends once, and the status becomes Proposal Requested", async () => {
+    await saveProposalDraftAction("lead-tek", draftForm());
+    const sent = await requestProposalAction("lead-tek", requestForm());
+    expect(sent.error).toBeUndefined();
+    expect(resendSend).toHaveBeenCalledTimes(1);
+    expect(db.tables.leadgen_proposal_drafts).toHaveLength(0);
+    expect(db.tables.leadgen_lead_proposals[0]).toMatchObject({ status: "proposal_requested", request_count: 1 });
+  });
+
+  it("refuses empty fields, an unknown lead and an inactive client, and writes nothing", async () => {
+    expect((await saveProposalDraftAction("lead-tek", draftForm({ subject: " " }))).error).toBeTruthy();
+    expect((await saveProposalDraftAction("lead-tek", draftForm({ body: "" }))).error).toBeTruthy();
+    expect((await saveProposalDraftAction("nope", draftForm())).error).toBe("Lead not found.");
+    expect((await saveProposalDraftAction("lead-off", draftForm())).error).toMatch(/isn't an active client/);
+    expect(db.tables.leadgen_proposal_drafts ?? []).toHaveLength(0);
+    expect(db.tables.leadgen_lead_activities).toHaveLength(0);
+  });
+
+  it("is Admin only: a non-admin session is rejected before anything is read or written", async () => {
+    requireAdmin.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    await expect(saveProposalDraftAction("lead-tek", draftForm())).rejects.toThrow();
+    expect(db.tables.leadgen_proposal_drafts ?? []).toHaveLength(0);
+    expect(resendSend).not.toHaveBeenCalled();
+  });
+
+  it("changes nothing about the lead, its follow-ups, appointments, assignments or other leads' proposals", async () => {
+    seed({ leadgen_lead_proposals: [{ id: "p-hid", lead_id: "lead-hid", client_id: HID, status: "proposal_sent", request_count: 1 }] });
+    const before = snapshot();
+    const proposalsBefore = JSON.stringify(db.tables.leadgen_lead_proposals);
+    await saveProposalDraftAction("lead-tek", draftForm());
+    expect(snapshot()).toBe(before);
+    expect(JSON.stringify(db.tables.leadgen_lead_proposals)).toBe(proposalsBefore);
   });
 });

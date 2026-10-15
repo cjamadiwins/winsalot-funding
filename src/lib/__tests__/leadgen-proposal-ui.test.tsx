@@ -46,6 +46,60 @@ const proposalRow = (overrides: Partial<LeadProposalRow> = {}): LeadProposalRow 
   ...overrides,
 });
 
+describe("Generate Proposal Request composer: details, draft and re-send safeguards", () => {
+  const acme = { id: "client-acme", name: "Acme Roofing Ltd.", slug: "acme-roofing", active: true, contact_name: null, contact_email: "hello@acmeroofing.ca" } as LeadgenClientRow;
+  const adminHtml = renderToStaticMarkup(
+    <ProposalRequestModal lead={lead} client={client} proposal={null} assignedAgentName="Henry Osuji" onClose={noop} onSend={async () => ({})} onSaveDraft={async () => ({})} onDraftSaved={noop} onSent={noop} />
+  );
+
+  it("is titled Generate Proposal Request and offers Save as draft next to Review & Send for Admin", () => {
+    expect(adminHtml).toContain('aria-label="Generate Proposal Request"');
+    expect(adminHtml).toContain("Review &amp; Send");
+    expect(adminHtml).toContain("Save as draft");
+  });
+
+  it("offers the decision-maker and the services (SEO, website improvements, rebranding as unapproved) for Teknokraft", () => {
+    expect(adminHtml).toContain("Generate from details");
+    expect(adminHtml).toContain("Decision-maker");
+    expect(adminHtml).toContain("Search Engine Optimization (SEO)");
+    expect(adminHtml).toContain("Website functionality, user experience and customer inquiries");
+    expect(adminHtml).toContain("Website rebranding (possible additional service, not approved)");
+    expect(adminHtml).toContain("No prices, ranking guarantees or results are added");
+    expect(adminHtml).toContain("Generate draft");
+  });
+
+  it("does not show the website-services details for other clients, and the generic request is unchanged", () => {
+    const html = renderToStaticMarkup(<ProposalRequestModal lead={lead} client={acme} proposal={null} onClose={noop} onSend={async () => ({})} onSent={noop} />);
+    expect(html).not.toContain("Generate from details");
+    expect(html).toContain("Hello Acme Roofing Team,");
+  });
+
+  it("agents still only prepare for approval: no Save as draft, no client email address", () => {
+    const html = renderToStaticMarkup(<ProposalRequestModal mode="prepare" lead={lead} client={client} proposal={null} onClose={noop} onSend={async () => ({})} onSent={noop} />);
+    expect(html).toContain("Submit for Admin approval");
+    expect(html).not.toContain("Save as draft");
+    expect(html).not.toContain("shahbaz.anjum@teknokraft.ca");
+  });
+
+  it("warns and requires acknowledgement before emailing a client again, and tells the server it was confirmed", () => {
+    const html = renderToStaticMarkup(<ProposalRequestModal lead={lead} client={client} proposal={proposalRow()} onClose={noop} onSend={async () => ({})} onSent={noop} />);
+    expect(html).toContain("A proposal was already requested for this lead");
+    expect(html).toContain("will be emailed again");
+    expect(readFileSync("src/components/leadgen/ProposalRequestModal.tsx", "utf8")).toContain('formData.set("confirm_resend", "yes")');
+  });
+
+  it("the Lead page button reads Generate Proposal Request and an Admin draft shows as awaiting review", () => {
+    const detail = readFileSync("src/components/leadgen/LeadDetailClient.tsx", "utf8");
+    expect(detail).toContain('"Review & Send Proposal Request" : "Generate Proposal Request"');
+    expect(detail).toContain("saveProposalDraft");
+    const panel = renderToStaticMarkup(
+      <ProposalPanel proposal={null} draft={{ id: "d1", lead_id: "lead-1", client_id: "client-tek", subject: "s", body: "b", prepared_by: "admin-1", prepared_at: "2026-10-14T16:00:00Z", updated_at: "2026-10-14T16:00:00Z" }} clientName="Teknokraft Canada Inc." />
+    );
+    expect(panel).toContain("Awaiting Admin approval");
+    expect(panel).toContain("Nothing has been emailed to Teknokraft Canada Inc. yet.");
+  });
+});
+
 describe("Request Proposal composer", () => {
   const html = renderToStaticMarkup(<ProposalRequestModal lead={lead} client={client} proposal={null} onClose={noop} onSend={async () => ({})} onSent={noop} />);
 
@@ -220,7 +274,7 @@ describe("permissions wiring", () => {
 
   it("both server actions require an Admin before doing anything", () => {
     const source = read("src/app/leadgen/admin/(dashboard)/leads/[id]/proposal-actions.ts");
-    expect(source.match(/const adminUser = await requireLeadgenAdmin\(\);/g)).toHaveLength(2);
+    expect(source.match(/const adminUser = await requireLeadgenAdmin\(\);/g)).toHaveLength(3);
     expect(source.indexOf("requireLeadgenAdmin()")).toBeLessThan(source.indexOf("createSupabaseServerClient()"));
   });
 
@@ -233,6 +287,7 @@ describe("permissions wiring", () => {
     const agentPage = read("src/app/leadgen/agent/(dashboard)/leads/[id]/page.tsx");
     expect(adminPage).toContain("requestProposal: requestProposalAction");
     expect(adminPage).toContain("updateProposalStatus: updateProposalStatusAction");
+    expect(adminPage).toContain("saveProposalDraft: saveProposalDraftAction");
     expect(agentPage).not.toMatch(/requestProposal|updateProposalStatus|admin\/\(dashboard\)/);
     // Agents may only PREPARE (never send): their page wires the prepare action alone.
     expect(agentPage).toContain("prepareProposal: prepareProposalRequestAction");

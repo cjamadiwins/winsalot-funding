@@ -21,7 +21,7 @@ import {
   sendHidebrandtIntroEmailAction,
   updateLeadAction,
 } from "./actions";
-import { requestProposalAction, updateProposalStatusAction } from "./proposal-actions";
+import { requestProposalAction, saveProposalDraftAction, updateProposalStatusAction } from "./proposal-actions";
 
 const actions: LeadDetailActions = {
   updateLead: updateLeadAction,
@@ -39,6 +39,7 @@ const actions: LeadDetailActions = {
   resendEmail: resendLeadgenEmailAction,
   sendClientNotification: sendClientLeadNotificationAction,
   requestProposal: requestProposalAction,
+  saveProposalDraft: saveProposalDraftAction,
   updateProposalStatus: updateProposalStatusAction,
   assignAgent: assignLeadAction,
   clearBouncedEmail: clearBouncedEmailAction,

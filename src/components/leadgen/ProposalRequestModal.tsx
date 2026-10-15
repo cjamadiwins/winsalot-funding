@@ -4,13 +4,16 @@ import { useMemo, useRef, useState } from "react";
 import { resolveClientNotificationRecipient } from "@/lib/leadgen-client-notification";
 import {
   PROPOSAL_REQUIREMENTS_PLACEHOLDER,
+  PROPOSAL_SERVICES,
   buildProposalRequestDraft,
   hasActiveProposalRequest,
   proposalStatusLabel,
+  supportsProposalBrief,
   validatePreparedProposal,
   validateProposalRequest,
   type LeadProposalRow,
   type ProposalDraftRow,
+  type ProposalServiceKey,
 } from "@/lib/leadgen-proposal";
 import type { LeadgenClientRow, LeadgenLeadRow } from "@/lib/leadgen-types";
 
@@ -47,15 +50,23 @@ function Info({ label, value }: { label: string; value: string | null }) {
 // mode "prepare" (agents): the same composer, but it only SAVES the request for
 // Admin approval - nothing is emailed, the client's address isn't shown, and the
 // placeholder may stay. mode "send" (Admin): approves and sends, starting from
-// the agent's prepared draft when there is one.
+// the agent's prepared draft when there is one - or saves its own draft.
+//
+// For website-services clients a "Generate from details" section builds the
+// request from the decision-maker and the services the prospect asked about
+// (rebranding is always worded as a possible, unapproved add-on). Generating only
+// fills the form: nothing is saved or emailed until a button below is pressed.
 export default function ProposalRequestModal({
   lead,
   client,
   proposal,
   preparedDraft = null,
   mode = "send",
+  assignedAgentName = null,
   onClose,
   onSend,
+  onSaveDraft,
+  onDraftSaved,
   onSent,
 }: {
   lead: LeadgenLeadRow;
@@ -63,8 +74,12 @@ export default function ProposalRequestModal({
   proposal: LeadProposalRow | null;
   preparedDraft?: ProposalDraftRow | null;
   mode?: "send" | "prepare";
+  assignedAgentName?: string | null;
   onClose: () => void;
   onSend: (formData: FormData) => Promise<RequestProposalSendResult>;
+  // Admin only: save the request as a draft without emailing anything.
+  onSaveDraft?: (formData: FormData) => Promise<{ error?: string }>;
+  onDraftSaved?: () => void;
   onSent: (warning?: string) => void;
 }) {
   const prepare = mode === "prepare";
@@ -76,6 +91,10 @@ export default function ProposalRequestModal({
   const [error, setError] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [requestKey, setRequestKey] = useState(newRequestKey);
+  const showBrief = supportsProposalBrief(client);
+  const [decisionMaker, setDecisionMaker] = useState(lead.contact_name ?? "");
+  const [services, setServices] = useState<ProposalServiceKey[]>(["seo", "website_improvements"]);
+  const [generatedNote, setGeneratedNote] = useState<string | null>(null);
   // Synchronous re-entrancy guard: state updates are async, so two quick clicks
   // could both pass a `submitting` check; a ref cannot.
   const inFlight = useRef(false);
@@ -87,6 +106,39 @@ export default function ProposalRequestModal({
   const hasPlaceholder = body.includes(PROPOSAL_REQUIREMENTS_PLACEHOLDER);
   const canContinue = !recipientError && !validationError && (!alreadyRequested || acknowledged);
 
+  function generateFromDetails() {
+    if (services.length === 0) return;
+    const generated = buildProposalRequestDraft({ client, lead, brief: { decisionMaker, services, assignedAgent: assignedAgentName } });
+    setSubject(generated.subject);
+    setBody(generated.body);
+    setError(null);
+    setStep("edit");
+    setGeneratedNote("Draft generated from the details above. Review and edit it below; nothing has been saved or emailed.");
+  }
+
+  async function handleSaveDraft() {
+    if (inFlight.current || !onSaveDraft || validatePreparedProposal({ subject, body })) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set("subject", subject);
+      formData.set("body", body);
+      const result = await onSaveDraft(formData);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onDraftSaved?.();
+    } catch {
+      setError("Something went wrong saving the draft. Try again.");
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
   async function handleConfirmSend() {
     if (inFlight.current || !canContinue) return;
     inFlight.current = true;
@@ -97,6 +149,8 @@ export default function ProposalRequestModal({
       formData.set("subject", subject);
       formData.set("body", body);
       formData.set("request_key", requestKey);
+      // The server refuses a second email for a lead that already has one unless told so.
+      if (alreadyRequested && acknowledged) formData.set("confirm_resend", "yes");
       const result = await onSend(formData);
       if (result.error) {
         setError(result.error);
@@ -119,12 +173,12 @@ export default function ProposalRequestModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={prepare ? "Prepare Proposal Request" : "Request Proposal"}
+        aria-label={prepare ? "Prepare Proposal Request" : "Generate Proposal Request"}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--crm-surface)] p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-bold text-slate-900">{prepare ? "Prepare Proposal Request" : "Request Proposal"}</h2>
+          <h2 className="text-[17px] font-bold text-slate-900">{prepare ? "Prepare Proposal Request" : "Generate Proposal Request"}</h2>
           <button type="button" onClick={onClose} disabled={submitting} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 disabled:opacity-50">
             ✕
           </button>
@@ -168,6 +222,42 @@ export default function ProposalRequestModal({
           </div>
         )}
 
+        {showBrief && step === "edit" && (
+          <fieldset className="mt-4 rounded-lg border border-slate-200 p-3.5">
+            <legend className="px-1 text-sm font-semibold text-slate-700">Generate from details</legend>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-slate-600">Decision-maker</span>
+              <input value={decisionMaker} onChange={(e) => setDecisionMaker(e.target.value)} placeholder="Who decides on the proposal" className={inputClass} />
+            </label>
+            <div className="mt-3 space-y-1.5">
+              <p className="text-sm font-semibold text-slate-600">Services the prospect asked about</p>
+              {PROPOSAL_SERVICES.map((service) => (
+                <label key={service.key} className="flex items-start gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={services.includes(service.key)}
+                    onChange={(e) => setServices((current) => (e.target.checked ? [...current, service.key] : current.filter((key) => key !== service.key)))}
+                    className="mt-0.5"
+                  />
+                  <span>{service.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Rebranding is always worded as a possible additional service, not an approved project. No prices, ranking guarantees or results are added: {client.name} provides the estimates.
+            </p>
+            <button
+              type="button"
+              disabled={services.length === 0 || submitting}
+              onClick={generateFromDetails}
+              className="mt-3 rounded-full border border-sky-600 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Generate draft
+            </button>
+            {generatedNote && <p className="mt-2 text-sm text-emerald-700">{generatedNote}</p>}
+          </fieldset>
+        )}
+
         {step === "edit" ? (
           <div className="mt-4 space-y-3">
             <label className="flex flex-col gap-1.5">
@@ -197,6 +287,16 @@ export default function ProposalRequestModal({
               >
                 {prepare ? (submitting ? "Saving…" : "Submit for Admin approval") : "Review & Send"}
               </button>
+              {!prepare && onSaveDraft && (
+                <button
+                  type="button"
+                  disabled={submitting || Boolean(validatePreparedProposal({ subject, body }))}
+                  onClick={handleSaveDraft}
+                  className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? "Saving…" : "Save as draft"}
+                </button>
+              )}
               <button type="button" onClick={onClose} className="text-sm font-semibold text-slate-500 hover:text-slate-700">
                 Cancel
               </button>
