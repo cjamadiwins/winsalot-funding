@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { loadPaidHolidaysForPayroll, paidHolidayDates, type PaidHolidayForPayroll } from "./payroll-holiday-data";
 import {
   mergeAttendanceSources,
   SPAN_LOOKBACK_DAYS,
@@ -23,6 +24,10 @@ export type PayrollAttendanceLoad = {
   scheduledStartTime: string | null;
   sourceCounts: Record<AttendanceSource, number>;
   duplicatesRemoved: number;
+  // Approved paid holidays landing in this payroll (read by the same stable
+  // agent id), and the weekdays among them inside the pay period.
+  paidHolidays: PaidHolidayForPayroll[];
+  holidayDates: string[];
 };
 
 function utcDayOffset(isoDate: string, days: number, endOfDay = false): string {
@@ -34,7 +39,8 @@ function utcDayOffset(isoDate: string, days: number, endOfDay = false): string {
 export async function loadPayrollAttendance(
   agentId: string,
   periodStart: string,
-  periodEnd: string
+  periodEnd: string,
+  payday: string
 ): Promise<{ error?: string; data?: PayrollAttendanceLoad }> {
   const db = getSupabaseAdmin();
   // Padded by a day each side for the UTC/Toronto boundary (exact per-day
@@ -43,15 +49,17 @@ export async function loadPayrollAttendance(
   const from = utcDayOffset(periodStart, -SPAN_LOOKBACK_DAYS);
   const to = utcDayOffset(periodEnd, 1, true);
 
-  const [growth, leadgen, growthUser, leadgenUser] = await Promise.all([
+  const [growth, leadgen, growthUser, leadgenUser, holidayLoad] = await Promise.all([
     db.from("agent_attendance").select("*").eq("agent_id", agentId).gte("clock_in", from).lte("clock_in", to).order("clock_in", { ascending: true }),
     db.from("leadgen_agent_attendance").select("*").eq("agent_id", agentId).gte("clock_in", from).lte("clock_in", to).order("clock_in", { ascending: true }),
     db.from("crm_users").select("scheduled_start_time").eq("id", agentId).maybeSingle(),
     db.from("leadgen_users").select("scheduled_start_time").eq("id", agentId).maybeSingle(),
+    loadPaidHolidaysForPayroll(db, agentId, payday),
   ]);
 
   if (growth.error) return { error: `Failed to load Growth CRM attendance: ${growth.error.message}` };
   if (leadgen.error) return { error: `Failed to load Lead Generation CRM attendance: ${leadgen.error.message}` };
+  if (holidayLoad.error) return { error: holidayLoad.error };
 
   const growthRows = (growth.data ?? []) as PayrollShiftRow[];
   const leadgenRows = (leadgen.data ?? []) as PayrollShiftRow[];
@@ -68,6 +76,8 @@ export async function loadPayrollAttendance(
       scheduledStartTime: leadgenUser.data?.scheduled_start_time ?? growthUser.data?.scheduled_start_time ?? null,
       sourceCounts: { growth: growthRows.length, leadgen: leadgenRows.length },
       duplicatesRemoved: merged.duplicatesRemoved.length,
+      paidHolidays: holidayLoad.holidays ?? [],
+      holidayDates: paidHolidayDates(holidayLoad.holidays ?? [], periodStart, periodEnd),
     },
   };
 }

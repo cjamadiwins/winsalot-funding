@@ -18,7 +18,7 @@
 import type { AgentAttendanceRow } from "./crm-types";
 import { addDays, crmDateKey } from "./crm-performance";
 import { SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
-import { analyzePayPeriod, type FlaggedShift, type SourcedShiftRow } from "./payroll-attendance";
+import { analyzePayPeriod, holidayWageOffsetHours, type FlaggedShift, type SourcedShiftRow } from "./payroll-attendance";
 
 export const CRM_ATTENDANCE_TIMEZONE = "America/Toronto";
 export const CRM_ATTENDANCE_TIMEZONE_LABEL = "ET";
@@ -212,6 +212,10 @@ export type PayPeriodAttendanceSummary = {
   // counted missed - an admin must resolve them.
   reviewDates: string[];
   flaggedShifts: FlaggedShift[];
+  // Approved paid-holiday weekdays in the period (all of them / the ones not
+  // worked). An unworked paid holiday is not a missed day.
+  holidayDates: string[];
+  holidayOffDates: string[];
   // A weekday currently mid-shift (Clocked In, today only).
   openTodayDate: string | null;
 };
@@ -230,6 +234,12 @@ export type PayPeriodHourlySummary = {
   // The most the unresolved review days could add if an admin confirms each
   // as one standard shift. Never derived from elapsed time.
   reviewMaxPaidHours: number;
+  // Unworked approved paid holidays: paid through holiday pay, so they are
+  // NOT worked hours and NOT unpaid. holidayWageOffsetHours is the part of
+  // the period's wage those days stand for (7.5h each), which holiday pay
+  // replaces so the day is paid once.
+  holidayOffDates: string[];
+  holidayWageOffsetHours: number;
   openTodayDate: string | null;
 };
 
@@ -237,9 +247,10 @@ export function buildPayPeriodAttendanceSummary(
   rows: SourcedShiftRow[],
   periodStart: string,
   periodEnd: string,
-  todayKey: string
+  todayKey: string,
+  paidHolidayDates: readonly string[] = []
 ): PayPeriodAttendanceSummary {
-  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, null, attendanceDateKey);
+  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, null, attendanceDateKey, paidHolidayDates);
   return {
     periodStart,
     periodEnd,
@@ -249,6 +260,8 @@ export function buildPayPeriodAttendanceSummary(
     flaggedDates: a.flaggedDates,
     reviewDates: a.reviewDates,
     flaggedShifts: a.flaggedShifts,
+    holidayDates: a.holidayDates,
+    holidayOffDates: a.holidayOffDates,
     openTodayDate: a.openTodayDate,
   };
 }
@@ -258,9 +271,10 @@ export function buildPayPeriodHourlySummary(
   periodStart: string,
   periodEnd: string,
   todayKey: string,
-  scheduledStartTime: string | null
+  scheduledStartTime: string | null,
+  paidHolidayDates: readonly string[] = []
 ): PayPeriodHourlySummary {
-  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, scheduledStartTime, attendanceDateKey);
+  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, scheduledStartTime, attendanceDateKey, paidHolidayDates);
   return {
     periodStart,
     periodEnd,
@@ -273,6 +287,8 @@ export function buildPayPeriodHourlySummary(
     reviewDates: a.reviewDates,
     flaggedShifts: a.flaggedShifts,
     reviewMaxPaidHours: (a.reviewDates.length * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60,
+    holidayOffDates: a.holidayOffDates,
+    holidayWageOffsetHours: holidayWageOffsetHours(a.holidayOffDates.length),
     openTodayDate: a.openTodayDate,
   };
 }

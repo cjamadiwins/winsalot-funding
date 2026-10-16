@@ -12,7 +12,6 @@ function shift(inIso: string, outIso: string | null, extra: Partial<PayrollShift
     break1_start: null, break1_end: null, lunch_start: null, lunch_end: null, break2_start: null, break2_end: null, ...extra,
   };
 }
-const WEEK = ["2026-10-05", "2026-10-09"] as const; // Mon-Fri
 
 describe("irregularShiftReasons", () => {
   it("accepts a normal 8h shift and a normal overnight shift", () => {
@@ -125,5 +124,44 @@ describe("analyzePayPeriod", () => {
     const withLunch = shift("2026-10-05T13:00:00Z", "2026-10-05T21:00:00Z", { lunch_start: "2026-10-05T17:00:00Z", lunch_end: "2026-10-05T17:30:00Z" });
     const a = analyze([withLunch]);
     expect(a.regularPaidMinutes).toBe(450); // 480 - 30 lunch
+  });
+});
+
+describe("analyzePayPeriod with approved paid holidays", () => {
+  const analyze = (rows: PayrollShiftRow[], holidays: string[]) => analyzePayPeriod(rows, "2026-10-05", "2026-10-11", "2026-10-20", null, key, holidays);
+  const normal = (d: string) => shift(`2026-10-${d}T14:00:00Z`, `2026-10-${d}T21:30:00Z`);
+
+  it("an unworked paid holiday is not missed, not unpaid, and not worked", () => {
+    const a = analyze([normal("05"), normal("07"), normal("08"), normal("09")], ["2026-10-06"]);
+    expect(a.holidayDates).toEqual(["2026-10-06"]);
+    expect(a.holidayOffDates).toEqual(["2026-10-06"]);
+    expect(a.missedDates).toEqual([]);
+    expect(a.daysPresent).toBe(4);
+    expect(a.unpaidMinutes).toBe(0);
+    expect(a.regularPaidMinutes).toBe(4 * 450);
+  });
+  it("the same day without the holiday is a full unpaid missed day", () => {
+    const a = analyze([normal("05"), normal("07"), normal("08"), normal("09")], []);
+    expect(a.missedDates).toEqual(["2026-10-06"]);
+    expect(a.unpaidMinutes).toBe(450);
+  });
+  it("a holiday that was worked counts as worked and is not an off day", () => {
+    const a = analyze([normal("05"), normal("06")], ["2026-10-06"]);
+    expect(a.holidayDates).toEqual(["2026-10-06"]);
+    expect(a.holidayOffDates).toEqual([]);
+    expect(a.daysPresent).toBe(2);
+  });
+  it("a flagged long record covering the holiday does not turn it into a review day or hours worked", () => {
+    const long = shift("2026-10-05T14:00:00Z", "2026-10-08T14:00:00Z");
+    const a = analyze([long], ["2026-10-06"]);
+    expect(a.reviewDates).not.toContain("2026-10-06");
+    expect(a.holidayOffDates).toContain("2026-10-06");
+    expect(a.regularPaidMinutes).toBe(0);
+    expect(a.flaggedShifts).toHaveLength(1);
+  });
+  it("a holiday on a weekend adds nothing", () => {
+    const a = analyze([normal("05")], ["2026-10-10"]);
+    expect(a.holidayDates).toEqual([]);
+    expect(a.holidayOffDates).toEqual([]);
   });
 });

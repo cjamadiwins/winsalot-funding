@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   calculateFinalPay,
+  calculateGrossWageEarnings,
   FIXED_INTERNET_ALLOWANCE,
   formatAmountInputDisplay,
   formatCurrency,
@@ -60,8 +61,12 @@ type HourlySummary = {
   reviewDates?: string[];
   flaggedShifts?: FlaggedShiftView[];
   reviewMaxPaidHours?: number;
+  holidayOffDates?: string[];
+  holidayWageOffsetHours?: number;
   openTodayDate: string | null;
 };
+// An approved paid holiday landing in this payroll.
+type HolidayItemView = { name: string; date: string; effectiveAmount: number };
 
 // Irregular records (forgotten clock-out, overnight / multi-day) are never
 // counted as worked time automatically - they are listed for admin review.
@@ -90,7 +95,7 @@ type Props = {
   loadAttendanceAction: (
     agentId: string,
     payday: string
-  ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary; sourceInfo?: AttendanceSourceInfo }>;
+  ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary; sourceInfo?: AttendanceSourceInfo; holidays?: HolidayItemView[] }>;
   loadHolidayPayAction: (
     agentId: string,
     payday: string
@@ -186,6 +191,12 @@ function PayrollFormFields({
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
   const [hourlyAttendance, setHourlyAttendance] = useState<HourlySummary | null>(null);
   const [attendanceSources, setAttendanceSources] = useState<AttendanceSourceInfo | null>(null);
+  // Approved paid holidays (and the hours of wage they replace) found for this
+  // agent + pay period. A holiday that was not worked is paid via Holiday Pay
+  // instead of the period wage, so the day is paid once.
+  const [holidayItems, setHolidayItems] = useState<HolidayItemView[]>([]);
+  const [holidayOffDates, setHolidayOffDates] = useState<string[]>([]);
+  const [holidayOffHours, setHolidayOffHours] = useState(0);
   // Only the latest Refresh may write results: switching agent/payday while a
   // request is in flight must never let a stale response overwrite the form.
   const attendanceRequestId = useRef(0);
@@ -228,7 +239,14 @@ function PayrollFormFields({
       setAttendance(result.summary);
       setHourlyAttendance(result.hourlySummary);
       setAttendanceSources(result.sourceInfo ?? null);
+      const holidays = result.holidays ?? [];
+      setHolidayItems(holidays);
+      setHolidayOffDates(result.hourlySummary.holidayOffDates ?? []);
+      setHolidayOffHours(result.hourlySummary.holidayWageOffsetHours ?? 0);
       setField("daysPresent", String(result.summary.daysPresent));
+      if (holidays.length > 0) {
+        setField("holidayPay", String(Math.round(holidays.reduce((sum, h) => sum + h.effectiveAmount, 0) * 100) / 100));
+      }
       setValues((v) => {
         const approved = Number(v.approvedPaidDays) || 0;
         // Missed days are weekdays with NO attendance at all. Days that are
@@ -313,7 +331,12 @@ function PayrollFormFields({
   const standardPaidHours = Number(values.standardPaidHours) || 0;
   const totalPayableDays = daysPresent + approvedPaidDays;
   const rate = hourlyRate(standardBiweeklyWage, standardPaidHours);
-  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
+  // Same rule the server applies on save: wage for unworked paid holidays is
+  // replaced by holiday pay (7.5h each), so those days are not paid twice.
+  const basePayEarned =
+    holidayOffHours > 0 && standardPaidHours > 0
+      ? calculateGrossWageEarnings(standardBiweeklyWage, Math.max(0, standardPaidHours - holidayOffHours), standardPaidHours)
+      : Math.round(standardBiweeklyWage * 100) / 100;
   const finalPay = calculateFinalPay({
     basePayEarned,
     internetAllowance: Number(values.internetAllowance) || 0,
@@ -413,6 +436,25 @@ function PayrollFormFields({
                   counted present nor deducted as missed. If you confirm them as worked, they could add up to{" "}
                   {(hourlyAttendance.reviewMaxPaidHours ?? 0).toFixed(1)} paid hours - adjust Days Present / hours above only after verifying with the agent.
                 </p>
+              </div>
+            )}
+            {holidayItems.length > 0 && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
+                <p className="font-semibold">Approved paid holiday{holidayItems.length === 1 ? "" : "s"} in this period</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {holidayItems.map((h) => (
+                    <li key={`${h.date}-${h.name}`}>
+                      {formatDateShort(h.date)} - {h.name}: holiday pay {formatCurrency(h.effectiveAmount, currency)}
+                      {holidayOffDates.includes(h.date) ? " (not worked)" : " (worked)"}
+                    </li>
+                  ))}
+                </ul>
+                {holidayOffHours > 0 && (
+                  <p className="mt-1">
+                    Unworked holiday days are not missed days, not unpaid, and not counted as hours worked. Their {holidayOffHours.toFixed(1)}h of wage is
+                    replaced by holiday pay, so base wages below are {formatCurrency(basePayEarned, currency)} and the day is paid once.
+                  </p>
+                )}
               </div>
             )}
             {attendance.openTodayDate && <p>Agent is currently clocked in today - today&apos;s shift is not included until clock-out; Refresh afterwards.</p>}

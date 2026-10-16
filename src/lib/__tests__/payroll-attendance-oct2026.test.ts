@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPayPeriodAttendanceSummary as growthSummary, buildPayPeriodHourlySummary as growthHourly } from "../crm-attendance-report";
 import { buildPayPeriodAttendanceSummary as leadgenSummary, buildPayPeriodHourlySummary as leadgenHourly } from "../leadgen-attendance-report";
-import { calculateFinalPay, FIXED_INTERNET_ALLOWANCE, getPayPeriodForPayday, hourlyRate, STANDARD_BIWEEKLY_WAGE, STANDARD_PAID_HOURS } from "../payroll";
+import { calculateFinalPay, calculateGrossWageEarnings, FIXED_INTERNET_ALLOWANCE, getPayPeriodForPayday, hourlyRate, STANDARD_BIWEEKLY_WAGE, STANDARD_PAID_HOURS } from "../payroll";
 import { GOODNESS_ROWS, HENRY_ROWS } from "./fixtures/payroll-oct-2026-attendance";
 
 // October 3-16, 2026 pay period for the two agents whose payroll showed
@@ -89,6 +89,79 @@ describe("both CRMs calculate identically", () => {
   it("the attendance summary and hourly summary agree on days present", () => {
     for (const rows of [GOODNESS_ROWS, HENRY_ROWS]) {
       expect(leadgenSummary(rows, start, end, TODAY).daysPresent).toBe(leadgenHourly(rows, start, end, TODAY, null).daysPresent);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------
+// Oct 12, 2026 (Thanksgiving) approved as a paid statutory holiday for both
+// agents, paid at the regular daily rate (50,000 / 10 = 5,000), not worked.
+// ---------------------------------------------------------------------
+const HOLIDAYS = ["2026-10-12"];
+const HOLIDAY_PAY = 5000;
+
+function holidayFigures(rows: typeof HENRY_ROWS) {
+  const hourly = leadgenHourly(rows, start, end, TODAY, null, HOLIDAYS);
+  const deductions = Math.round(hourly.unpaidHours * RATE * 100) / 100;
+  const base = calculateGrossWageEarnings(STANDARD_BIWEEKLY_WAGE, STANDARD_PAID_HOURS - hourly.holidayWageOffsetHours, STANDARD_PAID_HOURS);
+  const finalPay = calculateFinalPay({ basePayEarned: base, internetAllowance: FIXED_INTERNET_ALLOWANCE, incentiveBonus: 0, otherAdditions: 0, holidayPay: HOLIDAY_PAY, deductions });
+  return { hourly, deductions, base, finalPay };
+}
+
+describe("Oct 12 approved paid holiday", () => {
+  const g = holidayFigures(GOODNESS_ROWS);
+  const h = holidayFigures(HENRY_ROWS);
+
+  it("is not a missed day or unpaid time, and not hours worked", () => {
+    for (const f of [g, h]) {
+      expect(f.hourly.holidayOffDates).toEqual(["2026-10-12"]);
+      expect(f.hourly.holidayWageOffsetHours).toBe(7.5);
+      expect(f.hourly.missedDays).toBe(f === g ? 0 : 1); // Henry's remaining miss is Oct 5
+      expect(f.hourly.reviewDates).not.toContain("2026-10-12");
+    }
+    // worked hours are unchanged by the holiday
+    expect(g.hourly.regularPaidHours).toBeCloseTo(56.96, 2);
+    expect(h.hourly.regularPaidHours).toBeCloseTo(23.61, 2);
+  });
+
+  it("Goodness: holiday pay replaces the day's wage; only worked-day shortfall is deducted", () => {
+    expect(g.hourly.unpaidHours).toBeCloseTo(3.04, 2); // 8 worked days, 8 x 7.5h = 60h scheduled, 56.96h paid
+    expect(g.base).toBe(45000);
+    expect(g.deductions).toBe(2029.35);
+    expect(g.base + HOLIDAY_PAY + FIXED_INTERNET_ALLOWANCE).toBe(75000); // gross
+    expect(g.finalPay).toBe(72970.65);
+  });
+
+  it("Henry: same rule; flagged days stay for review but Oct 12 no longer does", () => {
+    expect(h.hourly.reviewDates).toEqual(["2026-10-07", "2026-10-09", "2026-10-15"]);
+    expect(h.hourly.reviewMaxPaidHours).toBe(22.5);
+    // Unpaid = Oct 5 (missed, 7.5h) + shortfall on his 4 verified shifts (6.39h).
+    expect(h.hourly.unpaidHours).toBeCloseTo(13.89, 2);
+    expect(h.base).toBe(45000);
+    expect(h.deductions).toBe(9257.32);
+    expect(h.finalPay).toBe(65742.68);
+  });
+
+  it("the holiday is paid exactly once for each agent", () => {
+    // Goodness: Oct 12 was previously deducted as a missed day -> +5,000.
+    expect(Math.round((g.finalPay - figures(GOODNESS_ROWS).finalPay) * 100) / 100).toBe(5000);
+    // Henry: Oct 12 sat inside a flagged record and was never deducted (his
+    // full wage already covered it) -> net unchanged, now shown as holiday pay.
+    expect(Math.round((h.finalPay - figures(HENRY_ROWS).finalPay) * 100) / 100).toBe(0);
+  });
+
+  it("a holiday that WAS worked is paid as worked (no wage offset)", () => {
+    const worked = [...GOODNESS_ROWS, { ...GOODNESS_ROWS[3], id: "g-1012", clock_in: "2026-10-12T14:00:00.000Z", clock_out: "2026-10-12T21:00:00.000Z", total_minutes: 420 }];
+    const hourly = leadgenHourly(worked, start, end, TODAY, null, HOLIDAYS);
+    expect(hourly.holidayOffDates).toEqual([]);
+    expect(hourly.holidayWageOffsetHours).toBe(0);
+    expect(hourly.daysPresent).toBe(9);
+  });
+
+  it("Growth and Lead Gen builders agree with the holiday applied", () => {
+    for (const rows of [GOODNESS_ROWS, HENRY_ROWS]) {
+      expect(growthHourly(rows, start, end, TODAY, null, HOLIDAYS)).toEqual(leadgenHourly(rows, start, end, TODAY, null, HOLIDAYS));
+      expect(growthSummary(rows, start, end, TODAY, HOLIDAYS)).toEqual(leadgenSummary(rows, start, end, TODAY, HOLIDAYS));
     }
   });
 });

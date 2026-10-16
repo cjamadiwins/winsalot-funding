@@ -13,6 +13,10 @@
 //  - Paid minutes are capped at the 450-minute schedule per weekday, and the
 //    shortfall is computed per day, so a duplicate or split day can neither
 //    double-pay nor double-deduct.
+//  - An approved paid holiday that was not worked is its own kind of day: it
+//    is not a missed day, creates no unpaid shortfall, and adds no worked
+//    hours. Its day's wage is carried by holiday pay instead (see
+//    holidayWageOffsetHours), so the day is paid once, never twice.
 // Nothing here writes to, or alters, any attendance record.
 
 import {
@@ -100,6 +104,9 @@ export function mergeAttendanceSources<T extends SourcedShiftRow>(groups: { sour
 // both CRM tables and how many same-shift copies were collapsed.
 export type PayrollAttendanceSourceInfo = { growthRows: number; leadgenRows: number; duplicatesRemoved: number };
 
+// A paid holiday inside the pay period, as shown to the admin beside the figures.
+export type PayrollHolidayItem = { name: string; date: string; effectiveAmount: number };
+
 export type FlaggedShift = {
   id: string;
   source?: AttendanceSource;
@@ -123,10 +130,12 @@ export type PayPeriodAnalysis = {
   weekdayCount: number;
   days: { dateKey: string; isWeekday: boolean; status: PayrollDayStatus | null; minutes: number }[];
   daysPresent: number; // weekdays with at least one verified, completed shift
-  missedDates: string[]; // weekdays with no attendance at all (and not covered by a flagged record)
+  missedDates: string[]; // weekdays with no attendance at all (and not covered by a flagged record or a paid holiday)
   reviewDates: string[]; // weekdays only evidenced by a flagged record, or covered by one
   flaggedDates: string[]; // clock-in with no clock-out on an earlier day
   openTodayDate: string | null;
+  holidayDates: string[]; // approved paid-holiday weekdays in the period
+  holidayOffDates: string[]; // ...of which the agent did not work (paid via holiday pay)
   regularPaidMinutes: number;
   unpaidMinutes: number;
   flaggedShifts: FlaggedShift[];
@@ -158,8 +167,10 @@ export function analyzePayPeriod(
   periodEnd: string,
   todayKey: string,
   scheduledStartTime: string | null,
-  dateKey: (iso: string) => string
+  dateKey: (iso: string) => string,
+  paidHolidayDates: readonly string[] = []
 ): PayPeriodAnalysis {
+  const holidaySet = new Set(paidHolidayDates);
   // Calendar days each flagged record runs across (after its own clock-in day).
   const flaggedShifts: FlaggedShift[] = [];
   const coveredByFlagged = new Set<string>();
@@ -198,6 +209,8 @@ export function analyzePayPeriod(
   const missedDates: string[] = [];
   const reviewDates: string[] = [];
   const flaggedDates: string[] = [];
+  const holidayDates: string[] = [];
+  const holidayOffDates: string[] = [];
   let openTodayDate: string | null = null;
   let daysPresent = 0;
   let weekdayCount = 0;
@@ -211,13 +224,16 @@ export function analyzePayPeriod(
       continue;
     }
     weekdayCount++;
+    const isHoliday = holidaySet.has(key);
+    if (isHoliday) holidayDates.push(key);
 
     const sessions = rows
       .filter((r) => dateKey(r.clock_in) === key)
       .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
 
     if (sessions.length === 0) {
-      if (coveredByFlagged.has(key)) reviewDates.push(key);
+      if (isHoliday) holidayOffDates.push(key);
+      else if (coveredByFlagged.has(key)) reviewDates.push(key);
       else {
         missedDates.push(key);
         unpaidMinutes += FULL_DAY_SHORTFALL_MINUTES;
@@ -242,7 +258,10 @@ export function analyzePayPeriod(
     const verified = completed.filter((r) => !isFlagged(r));
     if (verified.length === 0) {
       const hasFlagged = completed.some((r) => flaggedIds.has(r.id) || isFlagged(r));
-      if (hasFlagged) reviewDates.push(key);
+      // On a paid holiday there is nothing to resolve for pay: the holiday is
+      // paid either way and the unverified record is never counted as worked.
+      if (isHoliday) holidayOffDates.push(key);
+      else if (hasFlagged) reviewDates.push(key);
       days.push({ dateKey: key, isWeekday: true, status: hasFlagged ? "Incomplete" : openStatus, minutes: 0 });
       continue;
     }
@@ -270,8 +289,16 @@ export function analyzePayPeriod(
     reviewDates,
     flaggedDates,
     openTodayDate,
+    holidayDates,
+    holidayOffDates,
     regularPaidMinutes,
     unpaidMinutes,
     flaggedShifts,
   };
+}
+
+// Hours of the period's wage that an unworked approved paid holiday replaces
+// with holiday pay: one scheduled 7.5h shift per such day.
+export function holidayWageOffsetHours(holidayOffDayCount: number): number {
+  return (holidayOffDayCount * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60;
 }

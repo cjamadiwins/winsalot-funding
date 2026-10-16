@@ -6,7 +6,9 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import type { LeadgenUserRow } from "@/lib/leadgen-types";
 import { loadPayrollAttendance } from "@/lib/payroll-attendance-data";
-import type { PayrollAttendanceSourceInfo } from "@/lib/payroll-attendance";
+import { isPaidHoliday } from "@/lib/payroll-holiday-data";
+import { computeHolidayAdjustedBase, holidayPayShortfallMessage } from "@/lib/payroll-holiday-basis";
+import type { PayrollAttendanceSourceInfo, PayrollHolidayItem } from "@/lib/payroll-attendance";
 import {
   attendanceDateKey,
   buildPayPeriodAttendanceSummary,
@@ -77,7 +79,7 @@ function parseNonNegativeAmount(formData: FormData, key: string): number | null 
 export async function loadLeadgenAttendanceSummaryAction(
   agentId: string,
   payday: string
-): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary; hourlySummary?: PayPeriodHourlySummary; sourceInfo?: PayrollAttendanceSourceInfo }> {
+): Promise<{ error?: string; summary?: PayPeriodAttendanceSummary; hourlySummary?: PayPeriodHourlySummary; sourceInfo?: PayrollAttendanceSourceInfo; holidays?: PayrollHolidayItem[] }> {
   await requireLeadgenAdmin();
 
   if (!agentId || !payday) return { error: "Agent and payday are required." };
@@ -85,15 +87,16 @@ export async function loadLeadgenAttendanceSummaryAction(
   const { start, end } = getPayPeriodForPayday(payday);
   // Shared with the Growth CRM: same agent id, BOTH attendance tables, same
   // calculation - so the two CRMs always produce identical figures.
-  const loaded = await loadPayrollAttendance(agentId, start, end);
+  const loaded = await loadPayrollAttendance(agentId, start, end, payday);
   if (loaded.error || !loaded.data) return { error: loaded.error ?? "Failed to load attendance." };
 
   const todayKey = attendanceDateKey(new Date().toISOString());
-  const { rows, scheduledStartTime, sourceCounts, duplicatesRemoved } = loaded.data;
+  const { rows, scheduledStartTime, sourceCounts, duplicatesRemoved, paidHolidays, holidayDates } = loaded.data;
   return {
-    summary: buildPayPeriodAttendanceSummary(rows, start, end, todayKey),
-    hourlySummary: buildPayPeriodHourlySummary(rows, start, end, todayKey, scheduledStartTime),
+    summary: buildPayPeriodAttendanceSummary(rows, start, end, todayKey, holidayDates),
+    hourlySummary: buildPayPeriodHourlySummary(rows, start, end, todayKey, scheduledStartTime, holidayDates),
     sourceInfo: { growthRows: sourceCounts.growth, leadgenRows: sourceCounts.leadgen, duplicatesRemoved },
+    holidays: paidHolidays.filter(isPaidHoliday).map((h) => ({ name: h.name, date: h.date, effectiveAmount: h.effectiveAmount })),
   };
 }
 
@@ -143,7 +146,11 @@ export async function createLeadgenPayrollAction(formData: FormData): Promise<Ac
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
+  const basis = await computeHolidayAdjustedBase({ agentId, payday, standardBiweeklyWage, standardPaidHours });
+  if (basis.error || !basis.result) return { error: basis.error ?? "Could not check holidays for this pay period." };
+  const holidayShortfall = holidayPayShortfallMessage(basis.result, holidayPay);
+  if (holidayShortfall) return { error: holidayShortfall };
+  const basePayEarned = basis.result.basePayEarned;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const supabase = await createSupabaseServerClient();
@@ -276,7 +283,11 @@ export async function updateLeadgenPayrollAction(recordId: string, formData: For
   }
 
   const totalPayableDays = daysPresent + approvedPaidDays;
-  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
+  const basis = await computeHolidayAdjustedBase({ agentId: existing.agent_id, payday, standardBiweeklyWage, standardPaidHours });
+  if (basis.error || !basis.result) return { error: basis.error ?? "Could not check holidays for this pay period." };
+  const holidayShortfall = holidayPayShortfallMessage(basis.result, holidayPay);
+  if (holidayShortfall) return { error: holidayShortfall };
+  const basePayEarned = basis.result.basePayEarned;
   const { start, end } = getPayPeriodForPayday(payday);
 
   const { error } = await supabase
