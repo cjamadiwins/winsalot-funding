@@ -81,7 +81,25 @@ export async function reopenPayrollAction(recordId: string, formData: FormData) 
 }
 
 export async function createPayrollAction(formData: FormData) {
-  const source = await authorized(await sourceForAgent(String(formData.get("agent_id") ?? "")));
+  const agentId = String(formData.get("agent_id") ?? "");
+  const payday = String(formData.get("payday") ?? "").trim();
+  // An agent who works in both CRMs can have payroll rows in either table,
+  // and each table only enforces uniqueness on its own. Check the shared view
+  // so one pay period can never be calculated or paid twice.
+  if (agentId && payday) {
+    const db = await createSupabaseServerClient();
+    const { data: existing, error } = await db
+      .from("winsalot_payroll")
+      .select("status, source_crm")
+      .eq("agent_id", agentId)
+      .eq("payday", payday)
+      .neq("status", "cancelled");
+    if (error) return { error: `Could not check for an existing payroll record: ${error.message}` };
+    if (existing && existing.length > 0) {
+      return { error: `A ${existing[0].status} payroll record for this agent and payday already exists (${existing[0].source_crm === "growth" ? "Growth CRM" : "Lead Generation CRM"}). Open that record to edit it instead of creating a duplicate.` };
+    }
+  }
+  const source = await authorized(await sourceForAgent(agentId, payday || undefined));
   if (!source) return denied;
   const result = await (source === "growth" ? growth.createPayrollAction : leadgen.createLeadgenPayrollAction)(formData);
   if (!result.error) refreshSharedPayroll();
