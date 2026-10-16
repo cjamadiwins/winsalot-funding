@@ -22,6 +22,7 @@ import {
   HOLIDAY_PAYMENT_TYPES,
   type HolidayPaymentType,
 } from "./holiday-pay";
+import { holidayAssignmentOwnerFilter } from "./payroll-holiday-data";
 
 export type HolidayCrm = "growth" | "leadgen";
 
@@ -552,8 +553,13 @@ export async function loadHolidayPaySummaryAction(
   if (!agentId || !payday) return { error: "Agent and payday are required." };
 
   const supabase = await createSupabaseServerClient();
-  const agentColumn = crm === "growth" ? "crm_user_id" : "leadgen_user_id";
   const usersTable = crm === "growth" ? "crm_users" : "leadgen_users";
+  // Match the assignment by the agent's stable user id in EITHER CRM column:
+  // people who work in both CRMs share one id, and the assignment may have
+  // been recorded under the other CRM (the payroll workflow routes by
+  // payroll record, not by where the holiday was assigned).
+  const ownerFilter = holidayAssignmentOwnerFilter(agentId);
+  if (!ownerFilter) return { error: "Invalid agent." };
 
   // Holiday pay is always shown in the agent's own payroll currency, never
   // the (now vestigial) holidays.currency column - see payroll.ts's
@@ -565,7 +571,7 @@ export async function loadHolidayPaySummaryAction(
     supabase
       .from("holiday_pay_assignments")
       .select("effective_amount, holidays!inner(name, payment_type, payroll_period_payday, deleted_at)")
-      .eq(agentColumn, agentId)
+      .or(ownerFilter)
       .eq("status", "assigned")
       .eq("holidays.payroll_period_payday", payday)
       .is("holidays.deleted_at", null),

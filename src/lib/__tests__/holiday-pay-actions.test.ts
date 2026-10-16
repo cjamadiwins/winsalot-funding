@@ -42,7 +42,7 @@ function createMockSupabase(responsesByTable: Record<string, QueryResponse[]>) {
   function makeChain(response: QueryResponse) {
     const resolved = { data: response.data ?? null, error: response.error ?? null };
     const chain: Record<string, unknown> = {};
-    for (const method of ["select", "eq", "in", "not", "is", "order", "insert", "update", "delete"]) {
+    for (const method of ["select", "eq", "in", "not", "is", "or", "order", "insert", "update", "delete"]) {
       chain[method] = vi.fn(() => chain);
     }
     chain.maybeSingle = vi.fn(() => Promise.resolve(resolved));

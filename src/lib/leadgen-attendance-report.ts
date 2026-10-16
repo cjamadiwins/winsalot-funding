@@ -19,7 +19,8 @@
 
 import type { LeadgenAgentAttendanceRow } from "./leadgen-types";
 import { addDays, leadgenDateKey, leadgenMondayOf, leadgenWeekRangeLabel } from "./leadgen-performance";
-import { computeShiftPayBreakdown, FULL_DAY_SHORTFALL_MINUTES, SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
+import { SCHEDULED_PAID_MINUTES_PER_SHIFT } from "./attendance-pay";
+import { analyzePayPeriod, holidayWageOffsetHours, type FlaggedShift, type SourcedShiftRow } from "./payroll-attendance";
 
 export const LEADGEN_ATTENDANCE_TIMEZONE = "America/Toronto";
 export const LEADGEN_ATTENDANCE_TIMEZONE_LABEL = "ET";
@@ -151,131 +152,102 @@ export type PayPeriodAttendanceDay = {
   minutes: number;
 };
 
+// Both payroll summaries below are thin views over analyzePayPeriod
+// (src/lib/payroll-attendance.ts), the one shared implementation used by the
+// Growth AND Lead Generation CRMs - they cannot drift apart. They are only a
+// *suggested* starting point for the admin's payroll form; every count can be
+// overridden before saving, and a saved record never changes retroactively.
 export type PayPeriodAttendanceSummary = {
   periodStart: string;
   periodEnd: string;
   days: PayPeriodAttendanceDay[]; // every calendar day in the period, in order
   weekdayCount: number; // standard working days suggestion (Mon-Fri only)
-  daysPresent: number; // weekdays with a completed (clocked out) session
-  // Weekdays with a clock-in but no clock-out that isn't today's still-live
-  // session - "Flag attendance records with a clock-in but no clock-out
-  // for admin review."
+  daysPresent: number; // weekdays with a verified, completed (clocked out) shift
+  // Weekdays with a clock-in but no clock-out that isn't today's live session.
   flaggedDates: string[];
-  // A weekday currently mid-shift (Clocked In, today only) - informational,
-  // not flagged as a problem and not yet counted present.
+  // Weekdays only evidenced by an irregular record (e.g. a forgotten
+  // clock-out spanning days), or covered by one. Not counted present, not
+  // counted missed - an admin must resolve them.
+  reviewDates: string[];
+  flaggedShifts: FlaggedShift[];
+  // Approved paid-holiday weekdays in the period (all of them / the ones not
+  // worked). An unworked paid holiday is not a missed day.
+  holidayDates: string[];
+  holidayOffDates: string[];
+  // A weekday currently mid-shift (Clocked In, today only).
   openTodayDate: string | null;
 };
 
-export function buildPayPeriodAttendanceSummary(
-  rows: LeadgenAgentAttendanceRow[],
-  periodStart: string,
-  periodEnd: string,
-  todayKey: string
-): PayPeriodAttendanceSummary {
-  const days: PayPeriodAttendanceDay[] = [];
-  for (let dateKey = periodStart; dateKey <= periodEnd; dateKey = addDays(dateKey, 1)) {
-    const [y, m, d] = dateKey.split("-").map(Number);
-    const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday .. 6 = Saturday
-    const entry = buildDayEntry(rows, dateKey, todayKey);
-    days.push({ dateKey, isWeekday: dow !== 0 && dow !== 6, status: entry.status, minutes: entry.minutes });
-  }
-
-  const weekdays = days.filter((d) => d.isWeekday);
-
-  return {
-    periodStart,
-    periodEnd,
-    days,
-    weekdayCount: weekdays.length,
-    daysPresent: weekdays.filter((d) => d.status === "Clocked Out" || d.status === "Admin Clock-Out").length,
-    flaggedDates: weekdays.filter((d) => d.status === "Incomplete").map((d) => d.dateKey),
-    openTodayDate: weekdays.find((d) => d.status === "Clocked In")?.dateKey ?? null,
-  };
-}
-
-// Per-weekday hourly breakdown of an agent's attendance across a pay
-// period - the hourly counterpart of buildPayPeriodAttendanceSummary
-// above, used the same way: only ever a *suggested* starting point for
-// the admin's payroll form (src/app/leadgen/admin/(dashboard)/payroll/
-// actions.ts), never auto-applied. `regularPaidHours`/`unpaidHours` are
-// raw attendance-only figures - they don't yet know about approved
-// leave, which the payroll action layers on separately (exactly how the
-// existing day-count suggestion already defers to approved_paid_days).
 export type PayPeriodHourlySummary = {
   periodStart: string;
   periodEnd: string;
   scheduledPaidHours: number; // weekday count x 7.5
-  regularPaidHours: number; // sum of each weekday's paid working minutes / 60
-  unpaidHours: number; // sum of shortfall minutes (late/early/excess-break/missed-day) / 60
+  regularPaidHours: number; // verified paid working minutes / 60
+  unpaidHours: number; // shortfall on verified days + fully missed days / 60
   daysPresent: number;
   missedDays: number; // weekdays with no attendance session at all
   flaggedDates: string[]; // weekdays with a clock-in but no clock-out
+  reviewDates: string[];
+  flaggedShifts: FlaggedShift[];
+  // The most the unresolved review days could add if an admin confirms each
+  // as one standard shift. Never derived from elapsed time.
+  reviewMaxPaidHours: number;
+  // Unworked approved paid holidays: paid through holiday pay, so they are
+  // NOT worked hours and NOT unpaid. holidayWageOffsetHours is the part of
+  // the period's wage those days stand for (7.5h each), which holiday pay
+  // replaces so the day is paid once.
+  holidayOffDates: string[];
+  holidayWageOffsetHours: number;
   openTodayDate: string | null;
 };
 
-export function buildPayPeriodHourlySummary(
-  rows: LeadgenAgentAttendanceRow[],
+export function buildPayPeriodAttendanceSummary(
+  rows: SourcedShiftRow[],
   periodStart: string,
   periodEnd: string,
   todayKey: string,
-  scheduledStartTime: string | null
-): PayPeriodHourlySummary {
-  let regularPaidMinutes = 0;
-  let unpaidMinutes = 0;
-  let daysPresent = 0;
-  let missedDays = 0;
-  const flaggedDates: string[] = [];
-  let openTodayDate: string | null = null;
-  let weekdayCount = 0;
-
-  for (let dateKey = periodStart; dateKey <= periodEnd; dateKey = addDays(dateKey, 1)) {
-    const [y, m, d] = dateKey.split("-").map(Number);
-    const dow = new Date(y, m - 1, d).getDay();
-    if (dow === 0 || dow === 6) continue;
-    weekdayCount++;
-
-    const daySessions = rows
-      .filter((r) => attendanceDateKey(r.clock_in) === dateKey)
-      .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
-
-    if (daySessions.length === 0) {
-      missedDays++;
-      unpaidMinutes += FULL_DAY_SHORTFALL_MINUTES;
-      continue;
-    }
-
-    const openSession = daySessions.find((r) => !r.clock_out);
-    if (openSession) {
-      if (attendanceDateKey(openSession.clock_in) === todayKey) {
-        openTodayDate = dateKey;
-      } else {
-        flaggedDates.push(dateKey);
-      }
-    }
-
-    const completedSessions = daySessions.filter((r) => r.clock_out);
-    if (completedSessions.length === 0) {
-      continue;
-    }
-
-    daysPresent++;
-    for (const session of completedSessions) {
-      const breakdown = computeShiftPayBreakdown(session, scheduledStartTime);
-      regularPaidMinutes += breakdown.paidWorkingMinutes;
-      unpaidMinutes += breakdown.shortfallMinutes;
-    }
-  }
-
+  paidHolidayDates: readonly string[] = []
+): PayPeriodAttendanceSummary {
+  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, null, attendanceDateKey, paidHolidayDates);
   return {
     periodStart,
     periodEnd,
-    scheduledPaidHours: (weekdayCount * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60,
-    regularPaidHours: regularPaidMinutes / 60,
-    unpaidHours: unpaidMinutes / 60,
-    daysPresent,
-    missedDays,
-    flaggedDates,
-    openTodayDate,
+    days: a.days,
+    weekdayCount: a.weekdayCount,
+    daysPresent: a.daysPresent,
+    flaggedDates: a.flaggedDates,
+    reviewDates: a.reviewDates,
+    flaggedShifts: a.flaggedShifts,
+    holidayDates: a.holidayDates,
+    holidayOffDates: a.holidayOffDates,
+    openTodayDate: a.openTodayDate,
+  };
+}
+
+export function buildPayPeriodHourlySummary(
+  rows: SourcedShiftRow[],
+  periodStart: string,
+  periodEnd: string,
+  todayKey: string,
+  scheduledStartTime: string | null,
+  paidHolidayDates: readonly string[] = []
+): PayPeriodHourlySummary {
+  const a = analyzePayPeriod(rows, periodStart, periodEnd, todayKey, scheduledStartTime, attendanceDateKey, paidHolidayDates);
+  return {
+    periodStart,
+    periodEnd,
+    scheduledPaidHours: (a.weekdayCount * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60,
+    regularPaidHours: a.regularPaidMinutes / 60,
+    unpaidHours: a.unpaidMinutes / 60,
+    daysPresent: a.daysPresent,
+    missedDays: a.missedDates.length,
+    flaggedDates: a.flaggedDates,
+    reviewDates: a.reviewDates,
+    flaggedShifts: a.flaggedShifts,
+    reviewMaxPaidHours: (a.reviewDates.length * SCHEDULED_PAID_MINUTES_PER_SHIFT) / 60,
+    holidayOffDates: a.holidayOffDates,
+    holidayWageOffsetHours: holidayWageOffsetHours(a.holidayOffDates.length),
+    openTodayDate: a.openTodayDate,
   };
 }
 

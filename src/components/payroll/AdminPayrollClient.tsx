@@ -1,8 +1,9 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   calculateFinalPay,
+  calculateGrossWageEarnings,
   FIXED_INTERNET_ALLOWANCE,
   formatAmountInputDisplay,
   formatCurrency,
@@ -57,8 +58,30 @@ type HourlySummary = {
   daysPresent: number;
   missedDays: number;
   flaggedDates: string[];
+  reviewDates?: string[];
+  flaggedShifts?: FlaggedShiftView[];
+  reviewMaxPaidHours?: number;
+  holidayOffDates?: string[];
+  holidayWageOffsetHours?: number;
   openTodayDate: string | null;
 };
+// An approved paid holiday landing in this payroll.
+type HolidayItemView = { name: string; date: string; effectiveAmount: number };
+
+// Irregular records (forgotten clock-out, overnight / multi-day) are never
+// counted as worked time automatically - they are listed for admin review.
+type FlaggedShiftView = {
+  id: string;
+  dateKey: string;
+  clockIn: string;
+  clockOut: string;
+  clockOutDateKey: string;
+  elapsedMinutes: number;
+  reasons: string[];
+  maxPayableMinutesIfConfirmed: number;
+  coveredWeekdays: string[];
+};
+type AttendanceSourceInfo = { growthRows: number; leadgenRows: number; duplicatesRemoved: number };
 
 type Props = {
   companyName: string;
@@ -72,7 +95,7 @@ type Props = {
   loadAttendanceAction: (
     agentId: string,
     payday: string
-  ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary }>;
+  ) => Promise<{ error?: string; summary?: AttendanceSummary; hourlySummary?: HourlySummary; sourceInfo?: AttendanceSourceInfo; holidays?: HolidayItemView[] }>;
   loadHolidayPayAction: (
     agentId: string,
     payday: string
@@ -167,6 +190,16 @@ function PayrollFormFields({
   const [values, setValues] = useState<FormValues>(defaultFormValues(record));
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
   const [hourlyAttendance, setHourlyAttendance] = useState<HourlySummary | null>(null);
+  const [attendanceSources, setAttendanceSources] = useState<AttendanceSourceInfo | null>(null);
+  // Approved paid holidays (and the hours of wage they replace) found for this
+  // agent + pay period. A holiday that was not worked is paid via Holiday Pay
+  // instead of the period wage, so the day is paid once.
+  const [holidayItems, setHolidayItems] = useState<HolidayItemView[]>([]);
+  const [holidayOffDates, setHolidayOffDates] = useState<string[]>([]);
+  const [holidayOffHours, setHolidayOffHours] = useState(0);
+  // Only the latest Refresh may write results: switching agent/payday while a
+  // request is in flight must never let a stale response overwrite the form.
+  const attendanceRequestId = useRef(0);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [confirmApprovedEdit, setConfirmApprovedEdit] = useState(false);
@@ -193,20 +226,33 @@ function PayrollFormFields({
 
   async function handleLoadAttendance() {
     if (!agentId || !payday) return;
+    const requestId = ++attendanceRequestId.current;
     setLoadingAttendance(true);
     setAttendanceError(null);
     try {
       const result = await loadAttendanceAction(agentId, payday);
+      if (requestId !== attendanceRequestId.current) return;
       if (result.error || !result.summary || !result.hourlySummary) {
         setAttendanceError(result.error ?? "Failed to load attendance.");
         return;
       }
       setAttendance(result.summary);
       setHourlyAttendance(result.hourlySummary);
+      setAttendanceSources(result.sourceInfo ?? null);
+      const holidays = result.holidays ?? [];
+      setHolidayItems(holidays);
+      setHolidayOffDates(result.hourlySummary.holidayOffDates ?? []);
+      setHolidayOffHours(result.hourlySummary.holidayWageOffsetHours ?? 0);
       setField("daysPresent", String(result.summary.daysPresent));
+      if (holidays.length > 0) {
+        setField("holidayPay", String(Math.round(holidays.reduce((sum, h) => sum + h.effectiveAmount, 0) * 100) / 100));
+      }
       setValues((v) => {
         const approved = Number(v.approvedPaidDays) || 0;
-        const suggestedAbsence = Math.max(result.summary!.weekdayCount - result.summary!.daysPresent - approved, 0);
+        // Missed days are weekdays with NO attendance at all. Days that are
+        // flagged for review, still in progress, or have an open clock-in are
+        // not absences and are never auto-deducted.
+        const suggestedAbsence = Math.max(result.hourlySummary!.missedDays - approved, 0);
         const approvedLeaveHours = Number(v.approvedPaidLeaveHours) || 0;
         const suggestedUnpaidHours = Math.max(0, result.hourlySummary!.unpaidHours - approvedLeaveHours);
         const wage = Number(v.standardBiweeklyWage) || STANDARD_BIWEEKLY_WAGE;
@@ -222,7 +268,7 @@ function PayrollFormFields({
         };
       });
     } finally {
-      setLoadingAttendance(false);
+      if (requestId === attendanceRequestId.current) setLoadingAttendance(false);
     }
   }
 
@@ -285,7 +331,12 @@ function PayrollFormFields({
   const standardPaidHours = Number(values.standardPaidHours) || 0;
   const totalPayableDays = daysPresent + approvedPaidDays;
   const rate = hourlyRate(standardBiweeklyWage, standardPaidHours);
-  const basePayEarned = Math.round(standardBiweeklyWage * 100) / 100;
+  // Same rule the server applies on save: wage for unworked paid holidays is
+  // replaced by holiday pay (7.5h each), so those days are not paid twice.
+  const basePayEarned =
+    holidayOffHours > 0 && standardPaidHours > 0
+      ? calculateGrossWageEarnings(standardBiweeklyWage, Math.max(0, standardPaidHours - holidayOffHours), standardPaidHours)
+      : Math.round(standardBiweeklyWage * 100) / 100;
   const finalPay = calculateFinalPay({
     basePayEarned,
     internetAllowance: Number(values.internetAllowance) || 0,
@@ -364,7 +415,56 @@ function PayrollFormFields({
                 review before finalizing.
               </p>
             )}
-            {attendance.openTodayDate && <p>Agent is currently clocked in today.</p>}
+            {hourlyAttendance.flaggedShifts && hourlyAttendance.flaggedShifts.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                <p className="font-semibold">
+                  ⚠ {hourlyAttendance.flaggedShifts.length} irregular attendance record
+                  {hourlyAttendance.flaggedShifts.length === 1 ? "" : "s"} - NOT counted as worked time
+                </p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {hourlyAttendance.flaggedShifts.map((shift) => (
+                    <li key={shift.id}>
+                      Clocked in {formatDateShort(shift.dateKey)}, out {formatDateShort(shift.clockOutDateKey)} -{" "}
+                      {Math.floor(shift.elapsedMinutes / 60)}h {shift.elapsedMinutes % 60}m elapsed
+                      {shift.coveredWeekdays.length > 0 && <> (also spans {shift.coveredWeekdays.map((d) => formatDateShort(d)).join(", ")})</>}. A single shift can pay at most{" "}
+                      {shift.maxPayableMinutesIfConfirmed / 60}h.
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1">
+                  Needs review: {(hourlyAttendance.reviewDates ?? []).map((d) => formatDateShort(d)).join(", ") || "none"}. These days are neither
+                  counted present nor deducted as missed. If you confirm them as worked, they could add up to{" "}
+                  {(hourlyAttendance.reviewMaxPaidHours ?? 0).toFixed(1)} paid hours - adjust Days Present / hours above only after verifying with the agent.
+                </p>
+              </div>
+            )}
+            {holidayItems.length > 0 && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
+                <p className="font-semibold">Approved paid holiday{holidayItems.length === 1 ? "" : "s"} in this period</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {holidayItems.map((h) => (
+                    <li key={`${h.date}-${h.name}`}>
+                      {formatDateShort(h.date)} - {h.name}: holiday pay {formatCurrency(h.effectiveAmount, currency)}
+                      {holidayOffDates.includes(h.date) ? " (not worked)" : " (worked)"}
+                    </li>
+                  ))}
+                </ul>
+                {holidayOffHours > 0 && (
+                  <p className="mt-1">
+                    Unworked holiday days are not missed days, not unpaid, and not counted as hours worked. Their {holidayOffHours.toFixed(1)}h of wage is
+                    replaced by holiday pay, so base wages below are {formatCurrency(basePayEarned, currency)} and the day is paid once.
+                  </p>
+                )}
+              </div>
+            )}
+            {attendance.openTodayDate && <p>Agent is currently clocked in today - today&apos;s shift is not included until clock-out; Refresh afterwards.</p>}
+            {attendanceSources && (
+              <p className="text-slate-500">
+                Attendance read by employee ID from both CRMs: {attendanceSources.leadgenRows} Lead Gen + {attendanceSources.growthRows} Growth record
+                {attendanceSources.leadgenRows + attendanceSources.growthRows === 1 ? "" : "s"}
+                {attendanceSources.duplicatesRemoved > 0 ? `; ${attendanceSources.duplicatesRemoved} duplicate${attendanceSources.duplicatesRemoved === 1 ? "" : "s"} counted once` : ""}.
+              </p>
+            )}
             <p>Hours and the attendance deduction below were calculated automatically. Admin can review and adjust before saving.</p>
           </div>
         )}
@@ -699,7 +799,9 @@ export default function AdminPayrollClient({
   const [auditOpenId, setAuditOpenId] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [periodFilter, setPeriodFilter] = useState<string>(records[0]?.payday ?? "all");
+  // Start on the current pay period - the same one the Add form defaults to -
+  // not merely the latest saved record, so the list and the form agree.
+  const [periodFilter, setPeriodFilter] = useState<string>(nextPayday);
   const [yearFilter, setYearFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -722,11 +824,11 @@ export default function AdminPayrollClient({
 
   const agentsById = new Map(agents.map((a) => [a.id, a]));
   const periods = useMemo(
-    () => Array.from(new Set(records.map((r) => r.payday))).sort((a, b) => (a < b ? 1 : -1)),
-    [records]
+    () => Array.from(new Set([nextPayday, ...records.map((r) => r.payday)])).sort((a, b) => (a < b ? 1 : -1)),
+    [records, nextPayday]
   );
 
-  const currentPeriod = periods.includes(nextPayday) ? nextPayday : periods[0];
+  const currentPeriod = nextPayday;
   const years = [...new Set(records.map(r => r.payday.slice(0, 4)))].sort().reverse();
   const visibleRecords = records.filter(r => {
     if (agentFilter !== "all" && r.agent_id !== agentFilter) return false;
@@ -846,7 +948,7 @@ export default function AdminPayrollClient({
             <option value="previous">Previous pay periods</option>
             {periods.map((payday) => (
               <option key={payday} value={payday}>
-                {payday === currentPeriod ? "Current · " : ""}{formatPayPeriodLabel(records.find(r => r.payday === payday)!.pay_period_start, records.find(r => r.payday === payday)!.pay_period_end)}
+                {payday === currentPeriod ? "Current · " : ""}{formatPayPeriodLabel(getPayPeriodForPayday(payday).start, getPayPeriodForPayday(payday).end)}
               </option>
             ))}
           </select>
