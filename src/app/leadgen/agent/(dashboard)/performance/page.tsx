@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
@@ -71,7 +72,9 @@ export default async function LeadgenAgentPerformancePage() {
     // Calls KPI + "Calls Today/This Week" drill-down source of truth - RLS
     // (leadgen_call_logs_agent_select_own) already scopes this to the
     // signed-in agent's own rows.
-    supabase.from("leadgen_call_logs").select("id, agent_id, created_at, business_name, phone, outcome, notes, client_id").eq("agent_id", agent.id),
+    fetchAllRows((from, to) =>
+      supabase.from("leadgen_call_logs").select("id, agent_id, created_at, business_name, phone, outcome, notes, client_id").eq("agent_id", agent.id).order("created_at").order("id").range(from, to)
+    ),
     // Emails Today/This Week/Delivered/Bounced/Failed drill-down source of
     // truth - the existing Resend-backed email log, filtered to emails this
     // agent actually sent.

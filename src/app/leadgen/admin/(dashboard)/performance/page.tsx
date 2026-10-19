@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import Link from "next/link";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -91,7 +92,9 @@ export default async function LeadgenAdminPerformancePage() {
     // Calls KPI + "Calls Today/This Week" drill-down source of truth - see
     // leadgen-agent-kpi.ts's header comment for why this reuses the
     // existing Call Log table rather than a new manual counter.
-    admin.from("leadgen_call_logs").select("id, agent_id, created_at, business_name, phone, outcome, notes, client_id"),
+    fetchAllRows((from, to) =>
+      admin.from("leadgen_call_logs").select("id, agent_id, created_at, business_name, phone, outcome, notes, client_id").order("created_at").order("id").range(from, to)
+    ),
     // Emails KPI + Emails Today/This Week/Delivered/Bounced/Failed
     // drill-down source of truth - one broad read, filtered/derived
     // multiple ways below (sent-only for the KPI counts, any-lead for the

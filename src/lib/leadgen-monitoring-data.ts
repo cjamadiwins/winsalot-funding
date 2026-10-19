@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchAllRows } from "./fetch-all-rows";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   businessDaysSince,
@@ -223,7 +224,9 @@ export async function fetchCallKpiAgents(admin: SupabaseClient): Promise<CallKpi
 
   const sevenDaysAgo = windowCutoffIso(7);
   const [{ data: callLogs }, { data: emails }, { data: followUps }] = await Promise.all([
-    admin.from("leadgen_call_logs").select("agent_id, created_at").gte("created_at", sevenDaysAgo),
+    fetchAllRows<{ agent_id: string; created_at: string }>((from, to) =>
+      admin.from("leadgen_call_logs").select("agent_id, created_at").gte("created_at", sevenDaysAgo).order("created_at").order("id").range(from, to)
+    ),
     admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").gte("sent_at", sevenDaysAgo),
     admin.from("leadgen_followups").select("agent_id, status, completed_at").gte("completed_at", sevenDaysAgo),
   ]);

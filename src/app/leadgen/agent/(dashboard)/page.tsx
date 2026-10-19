@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
 import { Users, Clock, AlertTriangle, UserCheck } from "lucide-react";
@@ -321,7 +322,9 @@ export default async function LeadgenAgentDashboardPage() {
   // this agent's own records only.
   const myOperationsAlerts = await fetchAgentOperationsAlerts(supabase, agent.id);
   const [{ data: myCallLogs }, { data: myEmails }, { data: myFollowUps }] = await Promise.all([
-    supabase.from("leadgen_call_logs").select("agent_id, created_at").eq("agent_id", agent.id),
+    fetchAllRows<{ agent_id: string; created_at: string }>((from, to) =>
+      supabase.from("leadgen_call_logs").select("agent_id, created_at").eq("agent_id", agent.id).order("created_at").order("id").range(from, to)
+    ),
     supabase.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").eq("sent_by", agent.id),
     supabase.from("leadgen_followups").select("agent_id, status, completed_at").eq("agent_id", agent.id),
   ]);

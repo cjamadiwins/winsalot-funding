@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchAllRows } from "./fetch-all-rows";
 
 import { getEmailReplyTo, getEmailSender } from "./email-senders";
 import { getResendClient } from "./resend";
@@ -74,8 +75,12 @@ export async function runAgentMonthlyReportJob(options: { dryRun?: boolean; now?
     admin.from("leadgen_users").select("id, full_name, email").eq("role", "agent").eq("active", true).neq("email", DEACTIVATED_TEST_AGENT_EMAIL),
     getCrmPerformanceRecords(),
     admin.from("leadgen_appointments").select("id, lead_id, business_name, contact_name, appointment_date, appointment_time, status, created_at, booking_agent_id"),
-    admin.from("crm_call_logs").select("agent_id, created_at"),
-    admin.from("leadgen_call_logs").select("agent_id, created_at"),
+    fetchAllRows<{ agent_id: string; created_at: string }>((from, to) =>
+      admin.from("crm_call_logs").select("agent_id, created_at").order("created_at").order("id").range(from, to)
+    ),
+    fetchAllRows<{ agent_id: string; created_at: string }>((from, to) =>
+      admin.from("leadgen_call_logs").select("agent_id, created_at").order("created_at").order("id").range(from, to)
+    ),
     admin.from("leadgen_emails").select("sent_by, sent_at, delivered_at, bounced_at, failed_at").not("sent_by", "is", null),
     admin.from("leadgen_followups").select("agent_id, scheduled_at, status"),
     admin.from("leadgen_leads").select("assigned_agent_id, status, created_at"),
