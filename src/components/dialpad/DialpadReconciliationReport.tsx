@@ -32,6 +32,7 @@ function signed(value: number | null) {
 }
 
 function dialpadCell(row: RowFigures, comparable: boolean, value: number) {
+  if (comparable && row.status === "before_crm") return `${row.dialpadBeforeCrm} (before CRM)`;
   return comparable && row.coveredDays > 0 ? value : "—";
 }
 
@@ -83,7 +84,7 @@ export default function DialpadReconciliationReport({
         <p className="mt-1 flex items-start gap-2 text-sm text-[var(--color-text-muted)]">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Read-only report for {crmLabel} administrators. It compares Dialpad&apos;s outbound call counts with calls logged in both the Lead Generation and
+            Read-only report for {crmLabel}{" "}administrators. It compares Dialpad&apos;s outbound call counts with calls logged in both the Lead Generation and
             Growth CRMs. It never creates or changes call records, outcomes, leads or follow-ups.
           </span>
         </p>
@@ -169,7 +170,8 @@ export default function DialpadReconciliationReport({
         <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            {report.totals.dialpadBeforeCrm} Dialpad outbound calls pre-date each agent&apos;s first CRM call log (before call logging started). They are shown
+            {report.totals.dialpadBeforeCrm}{" "}
+            Dialpad outbound calls pre-date each agent&apos;s first CRM call log (before call logging started). They are shown
             as &ldquo;Dialpad only&rdquo; and are not counted as missing.
           </span>
         </div>
@@ -293,7 +295,8 @@ export default function DialpadReconciliationReport({
             Matching individual calls needs the Dialpad API, which is a separate decision.
           </li>
           <li>
-            <strong>Outbound vs. CRM.</strong> The CRM Call Log records outbound call attempts, so it is compared with Dialpad&apos;s outbound count. Differences
+            <strong>Outbound vs. CRM.</strong>{" "}
+            The CRM Call Log records outbound call attempts, so it is compared with Dialpad&apos;s outbound count. Differences
             within max(3 calls, 5%) are shown as Matched. Agents can also log calls on a different day or in the other CRM, so weekly and agent totals are more
             reliable than single days.
           </li>
