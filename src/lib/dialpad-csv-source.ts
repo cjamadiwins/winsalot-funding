@@ -55,12 +55,15 @@ function periodFromFileName(fileName: string): { periodStart: string; periodEnd:
 // more recent filename date. A filename this codebase can't confidently
 // parse a period from is skipped rather than guessed at, so one oddly
 // named file can never silently outrank a real, parseable one.
-export function findLatestDialpadUserStatisticsCsv(directory: string = process.cwd()): DialpadCsvCandidate | null {
+// Every valid User Statistics CSV in the directory, unsorted. Used by the
+// read-only reconciliation report, which needs all of them (not just the
+// latest) and de-duplicates overlapping days itself.
+export function listDialpadUserStatisticsCsvs(directory: string = process.cwd()): DialpadCsvCandidate[] {
   let entries: string[];
   try {
     entries = readdirSync(directory);
   } catch {
-    return null;
+    return [];
   }
 
   const candidates: DialpadCsvCandidate[] = [];
@@ -71,6 +74,11 @@ export function findLatestDialpadUserStatisticsCsv(directory: string = process.c
     if (!period) continue;
     candidates.push({ fileName, filePath: path.join(directory, fileName), ...period });
   }
+  return candidates;
+}
+
+export function findLatestDialpadUserStatisticsCsv(directory: string = process.cwd()): DialpadCsvCandidate | null {
+  const candidates = listDialpadUserStatisticsCsvs(directory);
   if (candidates.length === 0) return null;
 
   candidates.sort((a, b) => {

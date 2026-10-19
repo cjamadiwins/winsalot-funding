@@ -60,6 +60,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Performance", href: "/admin/crm/performance", icon: <BarChart3 /> },
   { label: "Call Logs", href: "/admin/crm/performance/call-notes", icon: <PhoneCall /> },
   { label: "Dialpad Performance", href: "/admin/crm/dialpad", icon: <PhoneCall /> },
+  { label: "Dialpad Reconciliation", href: "/admin/crm/dialpad/reconciliation", icon: <PhoneCall /> },
   { label: "Incentives", href: "/admin/crm/incentives", icon: <Gift /> },
   { label: "Attendance", href: "/admin/crm/attendance", icon: <Clock /> },
   { label: "Leave Requests", href: "/admin/crm/leave-requests", icon: <CalendarOff /> },
