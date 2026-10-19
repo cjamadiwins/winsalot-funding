@@ -16,7 +16,7 @@ declare
 begin
  select id into strict v_client from public.leadgen_clients where name = 'Teknokraft Canada Inc.' and active and not is_internal_test;
  select id into strict v_agent from public.leadgen_users where lower(email) = 'ogbonnagoodness44@gmail.com' and role = 'agent' and active;
- select id into strict v_admin from public.leadgen_users where lower(email) = 'cjamadiwins@gmail.com' and role = 'admin' and active;
+ select id into strict v_admin from public.leadgen_users where lower(email) = 'info@winsalotcorp.com' and role = 'admin' and active;
  -- An existing assignment is required. Never guess or replace the other campaign.
  if not exists(select 1 from public.leadgen_campaign_agents a join public.leadgen_campaigns c on c.id=a.campaign_id where a.agent_id=v_agent and c.client_id<>v_client) then
    raise exception 'Expected Goodness existing other-client assignment; review roster before import';
@@ -56,7 +56,7 @@ begin
    end if;
    v_review := r.review<>'';
    v_segment_name := 'Teknokraft Roofing — ' || case when v_review then 'Admin Review' when r.opportunity='rebranding' then 'Website Rebranding' when r.opportunity='new_website' then 'New Website' else 'Website Verification Needed' end;
-   select id into v_segment from public.call_list_segments where crm='lead_generation' and name=v_segment_name;
+   select id into v_segment from public.call_list_segments where crm='lead_generation' and leadgen_campaign_id=v_campaign and source_file_name=/*SOURCE_FILENAME*/ and (name=v_segment_name or starts_with(name,v_segment_name || ' (segment ') or starts_with(name,v_segment_name || ' — '));
    if v_segment is null then
      insert into public.call_list_segments(crm,name,campaign_name,industry,territory,source_file_name,source_file_type,total_uploaded_rows,leadgen_campaign_id,status,deployed_at,deployed_by,created_by)
      values('lead_generation',v_segment_name,'Teknokraft — Toronto / GTA Roofing','Roofing Contractors','Toronto / GTA',/*SOURCE_FILENAME*/,'csv',(select count(*) from roofing_source),v_campaign,case when v_review then 'draft' else 'active' end,case when not v_review then now() end,case when not v_review then v_admin end,v_admin) returning id into v_segment;
@@ -72,7 +72,7 @@ begin
    values(v_segment,r.n,coalesce(nullif(r.business_name,''),'Business name verification needed'),r.contact_name,r.phone,r.email,r.website,r.street_address,r.city,r.province,r.postal_code,r.country,r.industry,
      case when v_review then r.review else 'LeadSwift roofing prospect. Website redesign / mobile optimization / SEO / rebranding / conversion improvements; new website / SEO setup / online lead generation / Google Business Profile services after website verification.' end,
      r.source || jsonb_build_object('website_opportunity',r.opportunity,'website_verification','unverified','review_reason',r.review),
-     exists(select 1 from public.crm_dnc_suppressions d where d.status='active' and d.removed_at is null and ((d.block_phone and r.phone_key<>'' and right(d.normalized_phone,10)=r.phone_key) or (d.block_email and r.email is not null and lower(d.normalized_email)=lower(r.email)))),
+     exists(select 1 from public.crm_dnc_suppressions d where d.status='active' and d.removed_at is null and ((d.block_phone and r.phone_key<>'' and right(d.normalized_phone,10)=r.phone_key) or (d.block_email and r.email is not null and lower(d.email)=lower(r.email)))),
      case when not v_review then v_agent end,v_admin);
    insert into roofing_import_result values(r.n,case when v_review then 'admin_review' else r.opportunity end,null);
  end loop;

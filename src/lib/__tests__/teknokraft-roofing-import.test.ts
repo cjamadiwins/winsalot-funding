@@ -19,12 +19,14 @@ const schema = `
  create table leadgen_campaigns(id uuid primary key default gen_random_uuid(),client_id uuid references leadgen_clients,name text,status text,target_industry text,territory text,service_type text,description text,created_by uuid);
  create table leadgen_campaign_agents(campaign_id uuid references leadgen_campaigns,agent_id uuid,assigned_by uuid,primary key(campaign_id,agent_id));
  create table call_list_segments(id uuid primary key default gen_random_uuid(),crm text,name text,campaign_name text,industry text,territory text,source_file_name text,source_file_type text,total_uploaded_rows integer,leadgen_campaign_id uuid references leadgen_campaigns,status text,deployed_at timestamptz,deployed_by uuid,created_by uuid,unique(crm,name));
+ create function rename_segment() returns trigger language plpgsql as $$ begin new.name := new.name || ' — Goodness Ugbana'; return new; end $$;
+ create trigger production_name_suffix before insert on call_list_segments for each row execute function rename_segment();
  create table call_list_segment_agents(segment_id uuid references call_list_segments,agent_id uuid,primary key(segment_id,agent_id));
  create table call_list_leads(id uuid primary key default gen_random_uuid(),segment_id uuid references call_list_segments,source_row_number integer,business_name text,contact_name text,phone text,email text,website text,street_address text,city text,province text,postal_code text,country text,industry text,notes text,extra_fields jsonb,dnc_flag boolean,assigned_agent_id uuid,created_by uuid);
  create table leadgen_leads(id uuid primary key default gen_random_uuid(),client_id uuid,business_name text,phone text,email text,website text,city text);
- create table crm_dnc_suppressions(status text,removed_at timestamptz,block_phone boolean,block_email boolean,normalized_phone text,normalized_email text);
+ create table crm_dnc_suppressions(status text,removed_at timestamptz,block_phone boolean,block_email boolean,normalized_phone text,email text);
  insert into leadgen_clients values('${tek}','Teknokraft Canada Inc.',true,false),('${hide}','Hidebrandt',true,false);
- insert into leadgen_users values('${good}','ogbonnagoodness44@gmail.com','agent',true,'${oldCampaign}'),('${admin}','cjamadiwins@gmail.com','admin',true,null);
+ insert into leadgen_users values('${good}','ogbonnagoodness44@gmail.com','agent',true,'${oldCampaign}'),('${admin}','info@winsalotcorp.com','admin',true,null);
  insert into leadgen_campaigns(id,client_id,name,status) values('${oldCampaign}','${hide}','Existing','active');
  insert into leadgen_campaign_agents values('${oldCampaign}','${good}','${admin}');
  insert into call_list_segments(id,crm,name,leadgen_campaign_id,status) values('${oldSegment}','lead_generation','Existing List','${oldCampaign}','active');
@@ -80,6 +82,7 @@ describe.sequential("roofing import transaction", () => {
         "select * from call_list_leads where source_row_number is not null order by source_row_number",
       )
     ).rows;
+    expect((await db.query("select id from call_list_segments where source_file_name='roofing.csv'")).rows).toHaveLength(3);
     expect(imported.map((r) => r.business_name)).toEqual([
       "Roof One",
       "Roof Blank",
