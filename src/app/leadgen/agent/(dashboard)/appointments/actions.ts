@@ -47,18 +47,31 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const supabase = await createSupabaseServerClient();
   const { data: activeClient } = await supabase.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
   if (!activeClient) return { error: "This client is inactive." };
-  // Attribution follows the lead (which follows its call list): an
-  // appointment for a lead can only be booked under that lead's own client.
+  // Resolve attribution from the authorized prospect, never from a stale form.
+  let campaignId = textOrNull(formData, "campaign_id");
   if (leadId) {
-    const { data: leadRow } = await supabase.from("leadgen_leads").select("client_id").eq("id", leadId).maybeSingle();
-    if (leadRow && leadRow.client_id !== clientId) return { error: "This lead belongs to a different client. Open the lead to book under the correct client." };
+    const { data: leadRow, error: leadError } = await supabase.from("leadgen_leads").select("client_id, campaign_id, assigned_agent_id").eq("id", leadId).maybeSingle();
+    if (leadError || !leadRow || leadRow.assigned_agent_id !== agent.id) return { error: "This lead is not assigned to you." };
+    if (leadRow.client_id !== clientId) return { error: "This lead belongs to a different client. Open the lead to book under the correct client." };
+    if (campaignId && campaignId !== leadRow.campaign_id) return { error: "The selected campaign does not match this lead." };
+    campaignId = leadRow.campaign_id;
+  }
+  if (campaignId) {
+    const [{ data: campaign, error: campaignError }, { data: assignment, error: assignmentError }] = await Promise.all([
+      supabase.from("leadgen_campaigns").select("client_id, status").eq("id", campaignId).maybeSingle(),
+      supabase.from("leadgen_campaign_agents").select("campaign_id").eq("campaign_id", campaignId).eq("agent_id", agent.id).maybeSingle(),
+    ]);
+    if (campaignError || assignmentError || !assignment || !campaign || campaign.client_id !== clientId || campaign.status !== "active") return { error: "This active campaign is not assigned to you for this client." };
+  } else if (!leadId) {
+    return { error: "Select an assigned campaign or book from an assigned lead." };
   }
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({
       lead_id: leadId,
       client_id: clientId,
-      campaign_id: textOrNull(formData, "campaign_id"),
+      campaign_id: campaignId,
+      booking_agent_id: agent.id,
       business_name: businessName,
       contact_name: contactName,
       phone,
@@ -72,7 +85,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
       timezone,
       meeting_type: meetingType,
       meeting_link: meetingLink,
-      assigned_specialist_id: textOrNull(formData, "assigned_specialist_id") ?? agent.id,
+      assigned_specialist_id: agent.id,
       appointment_notes: appointmentNotes,
       created_by: agent.id,
     })
@@ -131,6 +144,8 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     );
   }
 
+  revalidatePath("/leadgen/agent", "layout");
+  revalidatePath("/leadgen/admin/campaign-workspace");
   revalidatePath("/leadgen/agent/appointments");
   if (leadId) revalidatePath(`/leadgen/agent/leads/${leadId}`);
   return {};

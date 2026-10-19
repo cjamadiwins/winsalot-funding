@@ -33,6 +33,7 @@ import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZ
 
 const NAV_ITEMS: CrmNavItem[] = [
   { label: "Dashboard", href: "/leadgen/agent", icon: <LayoutDashboard /> },
+  { label: "Campaign Workspace", href: "/leadgen/agent/campaigns", icon: <Target /> },
   { label: "My Leads", href: "/leadgen/agent/leads", icon: <Users /> },
   { label: "My Opportunities", href: "/leadgen/agent/my-opportunities", icon: <Target /> },
   { label: "My Call Lists", href: "/leadgen/agent/call-list-segments", icon: <Table2 /> },

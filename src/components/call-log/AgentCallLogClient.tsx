@@ -29,6 +29,7 @@ type Props = {
   records: CallLogRow[];
   createAction: (formData: FormData) => Promise<ActionResult>;
   businessClientField: BusinessClientField;
+  campaignOptions?: { id: string; name: string; clientId: string }[];
 };
 
 const inputClass =
@@ -36,10 +37,11 @@ const inputClass =
 
 const DEFAULT_DNC_REASON = "Requested Do Not Call during outbound call";
 
-export default function AgentCallLogClient({ crmLabel, records, createAction, businessClientField }: Props) {
+export default function AgentCallLogClient({ crmLabel, records, createAction, businessClientField, campaignOptions }: Props) {
   const [outcome, setOutcome] = useState<CallLogOutcome>("No Answer");
   const defaultClientId = businessClientField.mode === "select" ? (businessClientField.defaultId ?? null) : null;
   const [clientId, setClientId] = useState<string | null>(defaultClientId);
+  const [campaignId, setCampaignId] = useState("");
   const automaticNote = CALL_LOG_AUTOMATIC_NOTES[outcome];
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,10 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       setError("Select a Business / Client.");
       return;
     }
+    if (campaignOptions && !campaignId) {
+      setError("Select a campaign for this client.");
+      return;
+    }
     startTransition(async () => {
       const result = await createAction(formData);
       if (result.error) {
@@ -102,7 +108,7 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
       }
       setSaved(true);
       setOutcome("No Answer");
-      setClientId(defaultClientId);
+      if (!campaignOptions) setClientId(defaultClientId);
       setBusinessName("");
       setPhone("");
       setDncReason(DEFAULT_DNC_REASON);
@@ -167,11 +173,19 @@ export default function AgentCallLogClient({ crmLabel, records, createAction, bu
               placeholder="Search clients…"
               options={businessClientField.options.map((client) => ({ value: client.id, label: client.name }))}
               value={clientId}
-              onChange={setClientId}
+              onChange={(id) => { setClientId(id); setCampaignId(""); }}
             />
           )}
           <input type="hidden" name="client_id" value={clientId ?? ""} />
         </div>
+
+        {campaignOptions && <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Campaign *
+          <select name="campaign_id" required value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className={`${inputClass} mt-1`}>
+            <option value="">Select an assigned campaign</option>
+            {campaignOptions.filter((c) => c.clientId === clientId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>}
 
         <fieldset className="mt-4">
           <legend className="text-xs font-semibold uppercase tracking-wide text-slate-500">Call Result</legend>

@@ -15,17 +15,17 @@ export default async function LeadgenAgentAppointmentsPage({
   searchParams,
 }: {
   // Set by the agent dashboard's "My Results by Client" section.
-  searchParams: Promise<{ client?: string }>;
+  searchParams: Promise<{ client?: string; campaign?: string }>;
 }) {
   await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
-  const { client } = await searchParams;
+  const { client, campaign } = await searchParams;
   const { data: appointments } = await supabase
     .from("leadgen_appointments")
     .select("*")
     .order("appointment_date", { ascending: false });
 
-  const rows = (appointments ?? []) as LeadgenAppointmentRow[];
+  const rows = ((appointments ?? []) as LeadgenAppointmentRow[]).filter((a) => !campaign || a.campaign_id === campaign);
   const leadIds = Array.from(new Set(rows.map((appt) => appt.lead_id).filter((id): id is string => !!id)));
 
   const [{ data: leads }, { data: appointmentEmails }, { data: clients }] = await Promise.all([

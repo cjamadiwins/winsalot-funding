@@ -1,3 +1,4 @@
+import { workspaceCampaigns } from "@/lib/leadgen-campaign-workspace";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -33,6 +34,7 @@ export default async function LeadgenAgentCallLogPage() {
   // client is the pre-selected default (calls from a call list never come
   // through here - they always use the list's own client).
   const [assignedClientIds, activeClient] = await Promise.all([getAgentAssignedClientIds(agent.id), getAgentActiveClient(agent.id)]);
+  const campaignOptions = await workspaceCampaigns(supabase, agent.id);
   const clientOptions = (clients ?? []).filter((c) => assignedClientIds.includes(c.id));
 
   const records: CallLogRow[] = ((data ?? []) as unknown as LeadgenCallLogRecord[]).map(
@@ -47,6 +49,7 @@ export default async function LeadgenAgentCallLogPage() {
       crmLabel="Lead Generation CRM"
       records={records}
       createAction={createLeadgenCallLogAction}
+      campaignOptions={campaignOptions.map((c) => ({ id: c.id, name: c.name, clientId: c.client_id }))}
       businessClientField={{ mode: "select", options: clientOptions.map((c) => ({ id: c.id, name: c.name })), defaultId: clientOptions.some((c) => c.id === activeClient?.clientId) ? activeClient!.clientId : null }}
     />
   );

@@ -41,6 +41,14 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
     return { error: "That client isn't assigned to you. Ask Admin to assign it, or work it from an assigned call list." };
   }
 
+  const campaignId = String(formData.get("campaign_id") ?? "").trim() || null;
+  if (!campaignId) return { error: "Select an assigned campaign for this client." };
+  if (campaignId) {
+    const { data: assignment, error: assignmentError } = await supabase.from("leadgen_campaign_agents").select("campaign_id").eq("agent_id", agent.id).eq("campaign_id", campaignId).maybeSingle();
+    const { data: campaign, error: campaignError } = await supabase.from("leadgen_campaigns").select("client_id, status").eq("id", campaignId).maybeSingle();
+    if (assignmentError || campaignError || !assignment || !campaign || campaign.client_id !== clientId || campaign.status !== "active") return { error: "Select an active campaign assigned to you for this client." };
+  }
+
   const { error } = await supabase.from("leadgen_call_logs").insert({
     agent_id: agent.id,
     business_name: businessName,
@@ -48,6 +56,7 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
     outcome,
     notes,
     client_id: clientId,
+    campaign_id: campaignId,
   });
 
   if (error) return { error: `Failed to save the call: ${error.message}` };
@@ -72,12 +81,16 @@ export async function createLeadgenCallLogAction(formData: FormData): Promise<Ac
       channels: ["phone"],
     });
     if ("error" in suppression) {
+      revalidatePath("/leadgen/agent", "layout");
+      revalidatePath("/leadgen/admin/campaign-workspace");
       revalidatePath("/leadgen/agent/call-log");
       revalidatePath("/leadgen/admin/performance/call-notes");
       return { error: `Call saved, but adding to the Do Not Contact list failed: ${suppression.error}` };
     }
   }
 
+  revalidatePath("/leadgen/agent", "layout");
+  revalidatePath("/leadgen/admin/campaign-workspace");
   revalidatePath("/leadgen/agent/call-log");
   revalidatePath("/leadgen/admin/performance/call-notes");
   return {};

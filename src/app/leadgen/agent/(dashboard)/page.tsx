@@ -1,3 +1,4 @@
+import { workspaceCampaigns } from "@/lib/leadgen-campaign-workspace";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import PhoneReputationComplianceCard from "@/components/crm-ui/PhoneReputationComplianceCard";
 import Link from "next/link";
@@ -72,6 +73,7 @@ export default async function LeadgenAgentDashboardPage() {
   const agentDisplayName = agent.full_name.trim() || "Winsalot Agent";
   const supabase = await createSupabaseServerClient();
   const admin = getSupabaseAdmin();
+  const campaignOptionsPromise = workspaceCampaigns(supabase, agent.id);
 
   const { weekStart, weekEnd } = leadgenCurrentIncentiveWeek();
   const monthStart = monthStartOfWeek(weekStart);
@@ -163,7 +165,7 @@ export default async function LeadgenAgentDashboardPage() {
     loadWebsiteTraining(false, agent.id),
   ]);
 
-  const scriptSessions = await loadAgentScriptSessions(supabase, agent.id);
+  const [scriptSessions, campaignOptions] = await Promise.all([loadAgentScriptSessions(supabase, agent.id), campaignOptionsPromise]);
 
   const myLeads = (leads ?? []) as LeadgenLeadRow[];
   const performance = computeLeadgenAgentPerformance((appointments ?? []) as LeadgenPerformanceAppointment[], agent.id);
@@ -355,7 +357,17 @@ export default async function LeadgenAgentDashboardPage() {
       <p className="mt-1 text-sm text-slate-500">{myLeads.length} leads assigned to you.</p>
 
       <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Your Clients</h2>
+        <form action="/leadgen/agent/campaigns" className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+        <label htmlFor="dashboard-campaign" className="grid gap-1 font-semibold text-purple-800">Switch client / campaign
+          <select id="dashboard-campaign" name="campaign" className="max-w-full rounded-lg border bg-white p-2">
+            <option value="">All authorized campaigns</option>
+            {campaignOptions.map((c) => <option key={c.id} value={c.id}>{c.clientName} — {c.name}</option>)}
+          </select>
+        </label>
+        <button className="rounded-lg bg-purple-700 px-4 py-2 font-semibold text-white">Open campaign</button>
+      </form>
+
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-700">Your Clients</h2>
         <p className="mt-1 text-lg font-bold text-slate-900">
           Primary: {activeClient ? activeClient.clientName : "Not selected"}
         </p>
