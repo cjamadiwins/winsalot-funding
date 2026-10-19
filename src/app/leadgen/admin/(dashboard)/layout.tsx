@@ -32,6 +32,7 @@ import { signOutLeadgenAction, markNotificationReadAction, markAllNotificationsR
 import { getUserTimeZonePreferences, saveUserTimeZonePreferences, resetUserTimeZonePreferences } from "@/lib/user-time-zone-preferences";
 
 const NAV_ITEMS: CrmNavItem[] = [
+  { label: "Campaign Workspace", href: "/leadgen/admin/campaign-workspace", icon: <Target /> },
   { label: "Dashboard", href: "/leadgen/admin", icon: <LayoutDashboard /> },
   { label: "Operations Monitoring", href: "/leadgen/admin/monitoring", icon: <ShieldAlert /> },
   { label: "Clients", href: "/leadgen/admin/clients", icon: <Building2 /> },

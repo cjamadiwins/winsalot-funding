@@ -96,7 +96,7 @@ export async function promoteToLeadgenLead(callListLeadId: string, promotedBy: s
   const normalizedEmail = normalizeDncEmail(lead.email);
   const businessKey = normalizeBusinessKey(lead.business_name, lead.city);
 
-  const { data: existingRows } = await admin.from("leadgen_leads").select("id, business_name, phone, email, city").eq("client_id", campaign.client_id);
+  const { data: existingRows } = await admin.from("leadgen_leads").select("id, business_name, phone, email, city").eq("client_id", campaign.client_id).eq("campaign_id", segment.leadgen_campaign_id);
   const existing = (existingRows ?? []).find((row) => {
     const phone = normalizePhoneNumber(row.phone as string | null);
     if (normalizedPhone && phone === normalizedPhone) return true;

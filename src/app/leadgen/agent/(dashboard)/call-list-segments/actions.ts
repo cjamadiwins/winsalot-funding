@@ -88,11 +88,17 @@ export async function logCallListCallAction(leadId: string, formData: FormData):
       channels: ["phone"],
     });
     if ("error" in suppression) {
+      revalidatePath("/leadgen/agent", "layout");
+      revalidatePath("/leadgen/admin/campaign-workspace");
+      revalidatePath("/leadgen/admin/call-logs");
       revalidatePath(`/leadgen/agent/call-list-segments/${lead.segment_id}`);
       return { error: `Call saved, but adding to the Do Not Contact list failed: ${suppression.error}` };
     }
   }
 
+  revalidatePath("/leadgen/agent", "layout");
+  revalidatePath("/leadgen/admin/campaign-workspace");
+  revalidatePath("/leadgen/admin/call-logs");
   revalidatePath(`/leadgen/agent/call-list-segments/${lead.segment_id}`);
   revalidatePath("/leadgen/admin/performance/call-notes");
   return {};

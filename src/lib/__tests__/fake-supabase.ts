@@ -26,6 +26,7 @@ export function createFakeDb(initial: Record<string, Row[]> = {}, options: { fai
     let orderColumn: string | null = null;
     let ascending = true;
     let max: number | null = null;
+    let offset = 0;
     const filters: ((row: Row) => boolean)[] = [];
 
     async function execute(mode: "many" | "single" | "maybe") {
@@ -66,7 +67,7 @@ export function createFakeDb(initial: Record<string, Row[]> = {}, options: { fai
           const column = orderColumn;
           affected = [...affected].sort((a, b) => (String(a[column] ?? "") < String(b[column] ?? "") ? -1 : 1) * (ascending ? 1 : -1));
         }
-        if (max !== null) affected = affected.slice(0, max);
+        if (max !== null) affected = affected.slice(offset, offset + max);
       }
 
       const wantsRows = op === "select" || returning;
@@ -124,6 +125,20 @@ export function createFakeDb(initial: Record<string, Row[]> = {}, options: { fai
       order: (column: string, opts?: { ascending?: boolean }) => {
         orderColumn = column;
         ascending = opts?.ascending !== false;
+        return builder;
+      },
+      range: (from: number, to: number) => {
+        offset = from;
+        max = to - from + 1;
+        return builder;
+      },
+      or: (expression: string) => {
+        const alternatives = expression.split(",").map((part) => {
+          const [column, operator, ...rest] = part.split(".");
+          if (operator !== "eq") throw new Error("Fake DB only supports or equality");
+          return (row: Row) => row[column] === rest.join(".");
+        });
+        filters.push((row) => alternatives.some((test) => test(row)));
         return builder;
       },
       limit: (count: number) => {

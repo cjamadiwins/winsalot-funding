@@ -34,7 +34,7 @@ export function parseCsvRows(text: string): string[][] {
       continue;
     }
 
-    if (char === '"') {
+    if (char === '"' && field.length === 0) {
       inQuotes = true;
     } else if (char === ",") {
       row.push(field);
