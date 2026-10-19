@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireLeadgenAgent } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import AgentCallLogClient from "@/components/call-log/AgentCallLogClient";
@@ -15,11 +16,14 @@ export default async function LeadgenAgentCallLogPage() {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
   const [{ data }, { data: clients }] = await Promise.all([
-    supabase
-      .from("leadgen_call_logs")
-      .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_visible_note, client_id, leadgen_clients(name)")
-      .order("created_at", { ascending: false })
-      .limit(100),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("leadgen_call_logs")
+        .select("id, created_at, agent_id, business_name, phone, outcome, notes, client_visible_note, client_id, leadgen_clients(name)")
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     supabase.from("leadgen_clients").select("id, name").eq("active", true).order("name"),
   ]);
 

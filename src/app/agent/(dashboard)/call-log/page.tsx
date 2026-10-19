@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireCrmUser } from "@/lib/crm-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import AgentCallLogClient from "@/components/call-log/AgentCallLogClient";
@@ -9,11 +10,14 @@ type CrmCallLogRecord = Omit<CallLogRow, "businessClient"> & { business_client_n
 export default async function GrowthAgentCallLogPage() {
   await requireCrmUser();
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("crm_call_logs")
-    .select("id, created_at, agent_id, business_name, phone, outcome, notes, business_client_name")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const { data } = await fetchAllRows((from, to) =>
+    supabase
+      .from("crm_call_logs")
+      .select("id, created_at, agent_id, business_name, phone, outcome, notes, business_client_name")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+  );
 
   const records: CallLogRow[] = ((data ?? []) as CrmCallLogRecord[]).map(({ business_client_name, ...rest }) => ({
     ...rest,
