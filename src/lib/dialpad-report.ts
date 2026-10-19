@@ -368,6 +368,43 @@ export function extractDateRangeFromCsv(csv: string): { periodStart: string; per
   return periodStart && periodEnd ? { periodStart, periodEnd } : null;
 }
 
+// One Dialpad User Statistics row per agent per day, kept at day level so
+// overlapping weekly exports can be de-duplicated by (agent, date) instead of
+// by guessing between weekly totals. `dates` lists every date the file
+// contains - including the blank-identity placeholder rows Dialpad emits for
+// days with no activity - because those rows are what prove a day was
+// actually covered by the export.
+export type DialpadDailyRow = {
+  date: string;
+  agentName: string;
+  agentEmail: string | null;
+  totalCalls: number;
+  outboundCalls: number;
+  inboundCalls: number;
+};
+
+export function parseDialpadDailyCsv(csv: string): { rows: DialpadDailyRow[]; dates: string[] } {
+  const records = toRecords(csv);
+  const rows: DialpadDailyRow[] = [];
+  const dates = new Set<string>();
+  records.forEach((record) => {
+    const date = valueFor(record, HEADER_ALIASES.startedAt).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    dates.add(date);
+    if (!isAgentRow(record) || !hasIdentity(record)) return;
+    const agentEmail = valueFor(record, HEADER_ALIASES.agentEmail).toLowerCase() || null;
+    rows.push({
+      date,
+      agentName: valueFor(record, HEADER_ALIASES.agentName) || agentEmail || "Unknown Dialpad user",
+      agentEmail,
+      totalCalls: numberValue(valueFor(record, HEADER_ALIASES.totalCalls)),
+      outboundCalls: numberValue(valueFor(record, HEADER_ALIASES.placedCalls)),
+      inboundCalls: numberValue(valueFor(record, HEADER_ALIASES.inboundCalls)),
+    });
+  });
+  return { rows, dates: [...dates].sort() };
+}
+
 export function formatDialpadDuration(seconds: number) {
   const rounded = Math.max(0, Math.round(seconds));
   const hours = Math.floor(rounded / 3600);
