@@ -1,0 +1,56 @@
+# Encrypted nightly logical backup of the Business Finance Supabase database.
+#
+# STATUS: INACTIVE BY DESIGN. Two independent locks keep it off:
+#   1. The `schedule:` trigger below is commented out.
+#   2. Scheduled runs also require the repository VARIABLE BACKUP_ENABLED=true.
+# Follow docs/backup-and-restore.md (secrets, offline key, test restore) before
+# removing either lock. Manual runs (workflow_dispatch) are allowed so the
+# procedure can be tested first.
+#
+# Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#   SUPABASE_DB_URL        session-pooler connection string
+#   BACKUP_AGE_PUBLIC_KEY  age PUBLIC key(s) only - never the private key
+name: Nightly database backup
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "17 7 * * *"   # 07:17 UTC daily (off-peak, off the :00 mark)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.event_name == 'workflow_dispatch' || vars.BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/backup
+      - name: Install PostgreSQL 17 client and age
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Create encrypted backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_AGE_PUBLIC_KEY: ${{ secrets.BACKUP_AGE_PUBLIC_KEY }}
+          OUT_DIR: backup-out
+        run: bash scripts/backup/backup.sh
+      - name: Upload encrypted backup (30-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: winsalot-db-backup-${{ github.run_id }}
+          path: backup-out/*
+          retention-days: 30
+          if-no-files-found: error
