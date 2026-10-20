@@ -88,6 +88,15 @@ async function handleSessionGate(
     return response;
   }
 
+  // Server Actions are never redirected or blocked here (every branch below
+  // returns `response` untouched for them - each action authenticates itself
+  // through the require*() gates, which also refresh an expiring session and
+  // may set cookies from an action). The Auth-server lookup below would only
+  // add one network round trip per action, which adds up for the background
+  // check-ins (attendance and script-status) that fire every 30-60 seconds
+  // for every clocked-in agent.
+  if (isServerAction) return response;
+
   const supabase = createServerClient(supabaseUrl, anonKey, {
     cookieOptions: { name: authCookieName(host) },
     cookies: {
