@@ -151,7 +151,7 @@ Postgres with stand-ins for the Supabase-managed pieces: 199 tables, 406 row-sec
 (`scripts/backup/rehearsal/`), then backs it up, restores it into a second empty database and compares. Result:
 0 restore errors, every table count inside the recorded window, and identical content hashes for the 22
 business-critical tables, all row-security policies, function code, function and table permissions and login
-emails. **Not yet exercised:** a real run against the live database through the pooler, and a restore into a
+emails. `scripts/backup/rehearsal/run-security-rehearsal.sh` runs the whole thing in one command (about 10 seconds, entirely local), including applying and rolling back the pending security SQL on the restored copy. **Not yet exercised:** a real run against the live database through the pooler, and a restore into a
 plain Postgres 17 image.
 
 ## Disaster recovery order of operations
