@@ -8,7 +8,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // this, without polling so often it adds meaningful load. Runs on every
 // agent-area page (mounted once in the agent layout), not just the
 // dashboard, so "meaningful CRM activity" is tracked app-wide.
-const POLL_INTERVAL_MS = 30_000;
+//
+// Each check-in is a Server Action that costs roughly 4-5 Supabase
+// requests (session check, user lookup, open shift, optional update), so
+// this interval is one of the largest drivers of monthly request volume.
+// 60s keeps every threshold above accurate to within a minute (the
+// shortest is the 5-minute break-overdue grace).
+const POLL_INTERVAL_MS = 60_000;
 
 // "Meaningful CRM activity" = mouse or keyboard interaction, or any
 // normal use of the app (opening a lead, saving a call outcome, etc.) -
