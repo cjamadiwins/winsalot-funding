@@ -1,4 +1,4 @@
--- Rollback for 20261020120000_security_revoke_unneeded_function_execute.sql.
+-- Rollback for 20261020120000_security_revoke_unneeded_function_execute.sql (now in supabase/pending-approval/ until approved).
 -- Restores the exact EXECUTE grants recorded from production before the change
 -- (captured 2026-10-20). Not applied automatically: it lives outside
 -- supabase/migrations on purpose. Run it manually only if the migration causes a

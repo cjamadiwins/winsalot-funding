@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-// Rehearses supabase/migrations/20261020120000_security_revoke_unneeded_function_execute.sql
+// Rehearses supabase/pending-approval/20261020120000_security_revoke_unneeded_function_execute.sql
 // on a throwaway in-memory Postgres. The function bodies below are copied
 // verbatim from the production definitions (pg_get_functiondef, 2026-10-20);
 // the tables are minimal stand-ins with just the columns those bodies touch.
@@ -13,7 +13,7 @@ import { join } from "node:path";
 // crm_subcontractor_visible_clients.
 
 const MIGRATION = "20261020120000_security_revoke_unneeded_function_execute.sql";
-const migration = readFileSync(`supabase/migrations/${MIGRATION}`, "utf8");
+const migration = readFileSync(`supabase/pending-approval/${MIGRATION}`, "utf8");
 const rollback = readFileSync(`supabase/rollbacks/20261020120000_security_revoke_unneeded_function_execute_rollback.sql`, "utf8");
 
 const REVOKED_FROM_ANON = [
