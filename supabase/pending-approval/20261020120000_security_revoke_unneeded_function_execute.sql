@@ -42,7 +42,15 @@ revoke execute on function public.leadgen_conversions_ensure_for_appointment() f
 revoke execute on function public.winsalot_chat_enforce_edit_or_soft_delete_only() from public, anon, authenticated;
 revoke execute on function public.winsalot_chat_enforce_soft_delete_only() from public, anon, authenticated;
 revoke execute on function public.winsalot_dm_touch_conversation() from public, anon, authenticated;
-revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+-- Created by the Supabase platform (not by this repository's migrations), so only
+-- touch it where it exists (it does in production; a rebuilt dev/test database may not have it).
+do $$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end
+$$;
 
 -- Self-check: abort (rolling the whole migration back) if anything is still
 -- callable by the roles it was meant to lock out, or if a role that must keep
@@ -60,8 +68,7 @@ declare
     'public.leadgen_conversions_ensure_for_appointment()',
     'public.winsalot_chat_enforce_edit_or_soft_delete_only()',
     'public.winsalot_chat_enforce_soft_delete_only()',
-    'public.winsalot_dm_touch_conversation()',
-    'public.rls_auto_enable()'
+    'public.winsalot_dm_touch_conversation()'
   ];
   must_be_closed_to_authenticated text[] := array[
     'public.claim_due_crm_marketing_enrollments(integer)',
@@ -71,10 +78,15 @@ declare
     'public.leadgen_conversions_ensure_for_appointment()',
     'public.winsalot_chat_enforce_edit_or_soft_delete_only()',
     'public.winsalot_chat_enforce_soft_delete_only()',
-    'public.winsalot_dm_touch_conversation()',
-    'public.rls_auto_enable()'
+    'public.winsalot_dm_touch_conversation()'
   ];
 begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    if has_function_privilege('anon', 'public.rls_auto_enable()', 'EXECUTE')
+       or has_function_privilege('authenticated', 'public.rls_auto_enable()', 'EXECUTE') then
+      raise exception 'anon or authenticated can still execute public.rls_auto_enable()';
+    end if;
+  end if;
   foreach fn in array must_be_closed_to_anon loop
     if has_function_privilege('anon', fn, 'EXECUTE') then
       raise exception 'anon can still execute %', fn;

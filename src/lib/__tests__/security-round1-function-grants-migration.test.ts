@@ -183,9 +183,14 @@ describe("migration", () => {
 
   it("only changes privileges: no table, row or policy statements", () => {
     const body = migration.replace(/--.*$/gm, "");
-    const withoutSelfCheck = body.slice(0, body.indexOf("do $$"));
-    expect(body.slice(body.indexOf("do $$"))).not.toMatch(/\b(drop|truncate|delete|update|insert|grant|revoke)\b/i);
-    const statements = withoutSelfCheck.split(";").map((s) => s.trim()).filter(Boolean);
+    const selfCheckAt = body.indexOf("declare\n  fn text;");
+    const grantsPart = body.slice(0, body.lastIndexOf("do $$", selfCheckAt));
+    const selfCheck = body.slice(body.lastIndexOf("do $$", selfCheckAt));
+    expect(selfCheck).not.toMatch(/\b(drop|truncate|delete|update|insert|grant|revoke)\b/i);
+    // The only DO block allowed among the grants is the guarded rls_auto_enable revoke.
+    const guarded = /do \$\$\s*begin\s*if to_regprocedure\('public\.rls_auto_enable\(\)'\) is not null then\s*revoke execute on function public\.rls_auto_enable\(\) from public, anon, authenticated;\s*end if;\s*end\s*\$\$;/i;
+    expect(grantsPart).toMatch(guarded);
+    const statements = grantsPart.replace(guarded, "").split(";").map((s) => s.trim()).filter(Boolean);
     for (const s of statements) expect(s).toMatch(/^revoke execute on function /i);
     expect(body).not.toMatch(/\b(drop|truncate|delete|update|insert)\b/i);
   });
@@ -297,8 +302,18 @@ describe("migration", () => {
   it("abort path: the self-check fails loudly if a grant slips through", async () => {
     await asSuper();
     await db.exec("grant execute on function public.rls_auto_enable() to anon");
-    await expect(db.exec(migration.slice(migration.indexOf("do $$")))).rejects.toThrow(/anon can still execute/);
+    await expect(db.exec(migration.slice(migration.lastIndexOf("do $$")))).rejects.toThrow(/can still execute/);
     await db.exec(migration);
+  });
+});
+
+describe("rebuilt dev/test databases", () => {
+  it("applies cleanly, and rolls back cleanly, where the platform function rls_auto_enable does not exist", async () => {
+    await asSuper();
+    await db.exec("drop event trigger ensure_rls; drop function public.rls_auto_enable();");
+    await db.exec(migration);
+    await db.exec(rollback);
+    expect((await db.query("select to_regprocedure('public.rls_auto_enable()') as f")).rows[0]).toEqual({ f: null });
   });
 });
 

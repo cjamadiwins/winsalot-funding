@@ -19,4 +19,10 @@ grant execute on function public.leadgen_conversions_ensure_for_appointment() to
 grant execute on function public.winsalot_chat_enforce_edit_or_soft_delete_only() to public, anon, authenticated;
 grant execute on function public.winsalot_chat_enforce_soft_delete_only() to public, anon, authenticated;
 grant execute on function public.winsalot_dm_touch_conversation() to public, anon, authenticated;
-grant execute on function public.rls_auto_enable() to public, anon, authenticated;
+do $$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    grant execute on function public.rls_auto_enable() to public, anon, authenticated;
+  end if;
+end
+$$;

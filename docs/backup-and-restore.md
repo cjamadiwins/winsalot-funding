@@ -142,10 +142,17 @@ functions, indexes, triggers) match what was recorded at backup time. A plain Po
 Supabase-only pieces, so a handful of `pg_restore` error headlines about missing roles/extensions can
 appear; they are listed (names only, never row data) and do not affect the data comparison.
 
-`scripts/backup/test-local.sh` rehearses the entire procedure offline on a synthetic database (backup,
-encryption, restore, comparison, wrong-key, tampered-file and unsafe-target checks). It passed before this
-was handed over. **Not yet exercised:** a real run against the live database through the pooler, and a
-restore into a plain Postgres 17 image.
+`scripts/backup/test-local.sh` rehearses the entire procedure offline on a small synthetic database (backup,
+encryption, restore, comparison, missing-critical-table, wrong-key, tampered-file and unsafe-target checks).
+
+The stronger rehearsal rebuilds the **full real schema** locally (all 245 repository migrations on a throwaway
+Postgres with stand-ins for the Supabase-managed pieces: 199 tables, 406 row-security policies, 110 functions,
+596 indexes, 96 triggers, close to production's 199 / 408 / 112 / 596 / 97), fills it with clearly fake rows
+(`scripts/backup/rehearsal/`), then backs it up, restores it into a second empty database and compares. Result:
+0 restore errors, every table count inside the recorded window, and identical content hashes for the 22
+business-critical tables, all row-security policies, function code, function and table permissions and login
+emails. **Not yet exercised:** a real run against the live database through the pooler, and a restore into a
+plain Postgres 17 image.
 
 ## Disaster recovery order of operations
 
@@ -169,3 +176,27 @@ restore into a plain Postgres 17 image.
   size and multiply by 30. If you outgrow it, shorten retention rather than buying storage.
 - Artifacts expire automatically after 30 days; storage accounting can lag by several hours.
 - Confirm your GitHub plan and limits under GitHub -> Settings -> Billing and plans.
+
+## Retention and access strategy
+
+| Layer | Holds | Kept for | Who can open it |
+|---|---|---|---|
+| Supabase daily backups (Pro) | Whole project, restored in place from the dashboard | 7 days | Project owners in the Supabase dashboard |
+| Nightly encrypted artifact (private repo) | Public + auth + storage metadata + private + migration history, plus a row-count manifest | 30 days, rolling (GitHub deletes expired artifacts automatically; 90 days is the maximum GitHub allows) | Only someone holding the offline age private key |
+| Monthly keepsake (optional, manual) | One downloaded artifact per month, stored in your password manager's file storage or an encrypted drive | As long as you choose (suggest 12 months) | Same key, plus wherever you store the file |
+
+Access restrictions: the backup repository is private with you as the only collaborator; two-factor authentication
+on your GitHub account; Actions secrets can only be read by workflows in that repository; the database login in
+`SUPABASE_DB_URL` should be the read-only role described above; the age private key is never online. Database
+dumps and keys never go into git: the backup repository's `.gitignore` and its secret-scan workflow block
+`*.age`, `*.pgdump`, key files and connection strings.
+
+## Credentials: where they live (choose one)
+
+- **Mode A - GitHub encrypted secrets (default, convenient).** The connection string and the public key are stored in
+  GitHub's encrypted secret store of the *private* backup repository only; they are never in a file, a commit, a
+  log or a report. This does put one database credential in GitHub's secret store - hence the read-only role.
+- **Mode B - nothing in GitHub at all.** Run `scripts/backup/backup.sh` yourself from a trusted computer on a
+  schedule (for example macOS `launchd` or Linux `cron`), with the same two values in that computer's environment.
+  The encrypted file lands on that machine; copy it to storage you control. Trade-off: it only runs while the
+  computer is on and you must monitor it.

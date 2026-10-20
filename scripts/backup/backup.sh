@@ -8,6 +8,10 @@
 #                           matching private key(s) must NEVER be stored in
 #                           GitHub or this repo.
 #   OUT_DIR                 output directory (default: backup-out)
+#   CRITICAL_TABLES         optional space-separated schema.table list that MUST be
+#                           present in the dump (default: the leads, appointments, call
+#                           logs, agent assignments, client campaigns, payroll, lending
+#                           and login tables). The backup fails if any is missing.
 #
 # Output: $OUT_DIR/winsalot-db-<UTC timestamp>.tar.age (+ .sha256)
 #   The tarball holds the pg_dump archive, a row-count/structure manifest and
@@ -62,18 +66,28 @@ for s in public auth storage private supabase_migrations; do
 done
 [ "${#schema_args[@]}" -gt 0 ] || fail "no schemas found to dump"
 
+# Manifest: exact row counts per table + object counts. Counts only, no data.
+# The live database keeps changing while the dump runs, so row counts are taken
+# just before and just after it; a correct restore must land between the two.
+count_rows() {
+  psql_q -F $'\t' -c "
+    select 'rows', n.nspname || '.' || c.relname,
+           (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', n.nspname, c.relname), false, true, '')))[1]::text
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where c.relkind in ('r','p') and n.nspname in ('public','auth','storage','private','supabase_migrations')
+    order by 2" > "$1"
+}
+count_rows "$WORK/rows.before"
+
 pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --compress=6 \
   "${schema_args[@]}" --file="$WORK/db.pgdump"
 
-# Manifest: exact row counts per table + object counts. Counts only, no data.
+count_rows "$WORK/rows.after"
+# rows <TAB> table <TAB> lowest count seen <TAB> highest count seen
+awk -F'\t' 'NR==FNR { before[$2] = $3; next } { lo = before[$2]; hi = $3; if (lo == "") lo = hi; if (lo + 0 > hi + 0) { t = lo; lo = hi; hi = t } print "rows\t" $2 "\t" lo "\t" hi }' \
+  "$WORK/rows.before" "$WORK/rows.after" > "$WORK/manifest.tsv"
 psql_q -F $'\t' -c "
-  select 'rows', n.nspname || '.' || c.relname,
-         (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', n.nspname, c.relname), false, true, '')))[1]::text
-  from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where c.relkind in ('r','p') and n.nspname in ('public','auth','storage','private','supabase_migrations')
-  order by 2" > "$WORK/manifest.tsv"
-psql_q -F $'\t' -c "
-  select 'structure', k, v from (values
+  select 'structure', k, v, v from (values
     ('public_tables', (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))),
     ('public_tables_rls_on', (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and c.relrowsecurity)),
     ('public_policies', (select count(*) from pg_policies where schemaname='public')),
@@ -81,6 +95,14 @@ psql_q -F $'\t' -c "
     ('public_indexes', (select count(*) from pg_indexes where schemaname='public')),
     ('public_triggers', (select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal))
   ) s(k, v) order by k" >> "$WORK/manifest.tsv"
+
+CRITICAL_TABLES="${CRITICAL_TABLES:-public.leadgen_leads public.crm_leads public.crm_opportunities public.call_list_leads public.call_list_segments public.call_list_segment_agents public.winsalot_appointments public.leadgen_appointments public.crm_call_logs public.leadgen_call_logs public.leadgen_campaigns public.leadgen_clients public.leadgen_campaign_agents public.crm_clients public.crm_agent_service_assignments public.crm_payroll public.leadgen_payroll public.agent_attendance public.leadgen_agent_attendance public.crm_lending_partners public.crm_users public.leadgen_users auth.users}"
+missing=0; present=0
+for tbl in $CRITICAL_TABLES; do
+  if grep -q -F "$(printf 'rows\t%s\t' "$tbl")" "$WORK/manifest.tsv"; then present=$((present + 1)); else missing=$((missing + 1)); echo "backup: critical table missing from backup: $tbl" >&2; fi
+done
+[ "$missing" -eq 0 ] || fail "$missing critical table(s) missing - refusing to produce an incomplete backup"
+echo "backup: critical tables present: $present/$present"
 
 if [ "$(psql_q -c "select to_regclass('cron.job') is not null")" = "t" ]; then
   psql_q -F $'\t' -c "select jobname, schedule, active, command from cron.job order by jobid" > "$WORK/cron-jobs.tsv"

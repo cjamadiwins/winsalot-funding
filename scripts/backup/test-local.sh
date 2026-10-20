@@ -32,7 +32,7 @@ grant select on crm_users to authenticated;
 create function public.helper() returns int language sql as 'select 1';
 SQL
 KEYDIR="$T/keys"; mkdir -p "$KEYDIR"; age-keygen -o "$KEYDIR/id.txt" 2>"$KEYDIR/pub.txt"; PUB="$(sed -E 's/.*(age1[0-9a-z]+).*/\1/' "$KEYDIR/pub.txt")"
-export SUPABASE_DB_URL="$SRC" BACKUP_AGE_PUBLIC_KEY="$PUB" OUT_DIR="$T/out"
+export SUPABASE_DB_URL="$SRC" BACKUP_AGE_PUBLIC_KEY="$PUB" OUT_DIR="$T/out" CRITICAL_TABLES="public.crm_users public.leadgen_call_logs public.crm_payroll auth.users"
 echo "== 1. backup"; "$HERE/backup.sh"
 BUNDLE="$(ls "$T"/out/*.tar.age)"
 echo "== 2. plaintext must not be present in the encrypted bundle"
@@ -40,6 +40,8 @@ if grep -aq "a@example.invalid" "$BUNDLE" || grep -aq "PGDMP" "$BUNDLE"; then ec
 echo "== 3. restore + compare"; RESTORE_DB_URL="$DST" "$HERE/verify-restore.sh" "$BUNDLE" "$KEYDIR/id.txt"
 echo "== 4. private key as recipient is rejected"
 if BACKUP_AGE_PUBLIC_KEY="$(grep AGE-SECRET-KEY "$KEYDIR/id.txt")" "$HERE/backup.sh" 2>"$T/e"; then echo "FAIL: accepted private key"; exit 1; else cat "$T/e"; fi
+echo "== 4b. a missing critical table is rejected"
+if CRITICAL_TABLES="public.crm_users public.table_that_does_not_exist" "$HERE/backup.sh" 2>"$T/e"; then echo "FAIL: incomplete backup accepted"; exit 1; else cat "$T/e"; fi
 echo "== 5. missing secrets are rejected"
 if env -u SUPABASE_DB_URL "$HERE/backup.sh" 2>"$T/e"; then echo "FAIL"; exit 1; else cat "$T/e"; fi
 echo "== 6. wrong key cannot decrypt"

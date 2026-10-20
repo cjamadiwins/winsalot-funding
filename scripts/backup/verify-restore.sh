@@ -53,7 +53,10 @@ end \$\$;
 create schema if not exists extensions;
 create extension if not exists \"uuid-ossp\" with schema extensions;
 create extension if not exists pgcrypto with schema extensions;
-create extension if not exists btree_gist with schema extensions;" >/dev/null 2>"$WORK/ext.err" || true
+create extension if not exists btree_gist with schema extensions;
+create extension if not exists pg_trgm with schema extensions;
+create extension if not exists citext with schema extensions;
+create extension if not exists unaccent with schema extensions;" >/dev/null 2>"$WORK/ext.err" || true
 
 # The dump recreates the public schema, so start from a clean slate (the target
 # was verified empty above).
@@ -83,8 +86,24 @@ psql_t -F $'\t' -c "
     ('public_triggers', (select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal))
   ) s(k, v) order by k" >> "$WORK/restored.tsv"
 
-if diff <(sort "$WORK/manifest.tsv") <(sort "$WORK/restored.tsv") > "$WORK/diff.txt"; then
-  echo "verify-restore: PASS - every table row count and object count matches the manifest ($(grep -c '^rows' "$WORK/manifest.tsv") tables)"
+# Every business-critical table recorded at backup time must exist in the restore.
+crit_missing=0
+while IFS=$'\t' read -r kind tbl _; do
+  [ "$kind" = "rows" ] || continue
+  grep -q -F "$(printf 'rows\t%s\t' "$tbl")" "$WORK/restored.tsv" || { crit_missing=$((crit_missing + 1)); echo "verify-restore: table missing after restore: $tbl"; }
+done < "$WORK/manifest.tsv"
+[ "$crit_missing" -eq 0 ] || { echo "verify-restore: FAIL - $crit_missing table(s) missing after restore"; exit 2; }
+
+# Row counts must fall inside the window recorded around the dump (the database
+# was live); structural counts must match exactly. Only names and counts print.
+if awk -F'\t' '
+    NR == FNR { lo[$1 FS $2] = $3; hi[$1 FS $2] = $4; next }
+    { key = $1 FS $2; seen[key] = 1
+      if (!(key in lo)) { printf "unexpected in restore: %s\n", $2; bad++; next }
+      if ($3 + 0 < lo[key] + 0 || $3 + 0 > hi[key] + 0) { printf "mismatch: %s restored=%s expected %s..%s\n", $2, $3, lo[key], hi[key]; bad++ } }
+    END { for (k in lo) if (!(k in seen)) { split(k, p, FS); printf "missing from restore: %s\n", p[2]; bad++ }
+          exit (bad > 0) }' "$WORK/manifest.tsv" "$WORK/restored.tsv" > "$WORK/diff.txt"; then
+  echo "verify-restore: PASS - every table row count is within the recorded window and every object count matches ($(grep -c '^rows' "$WORK/manifest.tsv") tables)"
 else
   echo "verify-restore: FAIL - differences from the manifest (table/object names and counts only):"
   head -40 "$WORK/diff.txt" | cut -c1-200
