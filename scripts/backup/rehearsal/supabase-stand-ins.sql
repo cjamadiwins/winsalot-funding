@@ -1,3 +1,4 @@
+-- LOCAL REHEARSAL ONLY. Never run against a real project.
 -- Minimal stand-ins for the Supabase-managed pieces the migrations assume (local rehearsal only)
 do $$ begin
  perform 1;
@@ -24,6 +25,13 @@ create function auth.jwt() returns jsonb language sql stable as $$ select coales
 create function auth.email() returns text language sql stable as $$ select auth.jwt()->>'email' $$;
 grant usage on schema auth to anon, authenticated, service_role, supabase_auth_admin;
 grant select on auth.users to authenticated, service_role;
+create schema if not exists cron;
+create table cron.job(jobid bigserial primary key, schedule text, command text, nodename text default 'localhost', nodeport int default 5432, database text default current_database(), username text default 'postgres', active boolean default true, jobname text);
+create function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as $$ insert into cron.job(jobname, schedule, command) values (job_name, schedule, command) returning jobid $$;
+create function cron.schedule(schedule text, command text) returns bigint language sql as $$ insert into cron.job(schedule, command) values (schedule, command) returning jobid $$;
+create function cron.unschedule(job_name text) returns boolean language sql as $$ delete from cron.job where jobname = job_name returning true $$;
+create schema if not exists net;
+create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000) returns bigint language sql as $$ select 1::bigint $$;
 create schema vault;
 create table vault.secrets(id uuid primary key default gen_random_uuid(), name text, secret text);
 create view vault.decrypted_secrets as select id, name, secret as decrypted_secret from vault.secrets;
