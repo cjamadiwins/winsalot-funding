@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local backup rehearsal output - never commit backups, even encrypted
+backup-out/
