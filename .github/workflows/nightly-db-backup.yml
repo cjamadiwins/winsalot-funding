@@ -1,11 +1,14 @@
 # Encrypted nightly logical backup of the Business Finance Supabase database.
 #
-# STATUS: INACTIVE BY DESIGN. Two independent locks keep it off:
+# STATUS: INACTIVE BY DESIGN. Three independent locks keep it off:
 #   1. The `schedule:` trigger below is commented out.
 #   2. Scheduled runs also require the repository VARIABLE BACKUP_ENABLED=true.
+#   3. It refuses to run in a PUBLIC repository (anyone signed in to GitHub can
+#      download a public repository's artifacts). Copy it to a private
+#      repository - see docs/backup-and-restore.md - before using it.
 # Follow docs/backup-and-restore.md (secrets, offline key, test restore) before
-# removing either lock. Manual runs (workflow_dispatch) are allowed so the
-# procedure can be tested first.
+# removing any lock. Manual runs (workflow_dispatch) are allowed in the private
+# repository so the procedure can be tested first.
 #
 # Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
 #   SUPABASE_DB_URL        session-pooler connection string
@@ -25,8 +28,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  refuse-public-repository:
+    if: github.repository_visibility == 'public'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "::error::Refusing to run: this repository is public, so its artifacts are downloadable by anyone signed in to GitHub. Copy this workflow and scripts/backup to a PRIVATE repository (docs/backup-and-restore.md)."
+          exit 1
   backup:
-    if: github.event_name == 'workflow_dispatch' || vars.BACKUP_ENABLED == 'true'
+    if: github.repository_visibility != 'public' && (github.event_name == 'workflow_dispatch' || vars.BACKUP_ENABLED == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

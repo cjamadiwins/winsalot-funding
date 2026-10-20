@@ -3,14 +3,36 @@
 Two layers protect the database:
 
 1. **Supabase daily backups** (Pro plan, 7-day retention, restore from the dashboard).
-2. **Encrypted nightly off-site backup** (this document): `scripts/backup/backup.sh`, run by
-   `.github/workflows/nightly-db-backup.yml`, stored as a private GitHub Actions artifact for 30 days.
+2. **Encrypted nightly off-site backup** (this document): `scripts/backup/backup.sh`, run by a GitHub
+   Actions workflow, stored as an encrypted artifact for 30 days.
 
-Nothing here enables PITR or any paid Supabase feature.
+Nothing here enables PITR or any paid Supabase or GitHub feature.
 
-> **Status: the workflow is inactive by design.** The `schedule:` trigger is commented out and
-> scheduled runs also require the repository variable `BACKUP_ENABLED=true`. Do not unlock either
-> until every step in "Activation checklist" is done.
+> **Status: inactive by design.** The workflow can only run manually, its schedule is commented out,
+> scheduled runs also need the repository variable `BACKUP_ENABLED=true`, and it **refuses to run in a
+> public repository** (see next section). Do not unlock any of this until every step in "Activation
+> checklist" is done.
+
+## Where it must run: a PRIVATE repository, not this one
+
+`cjamadiwins/winsalot-funding` is a **public** repository. In a public repository anyone signed in to
+GitHub can download workflow artifacts, so 30 days of copies of your whole database (even encrypted)
+would be publicly downloadable. Encryption protects them today, but you would be relying on one key
+forever: if the private key ever leaked, every copy could be opened by anyone. A private repository
+removes that risk. The workflow therefore has a hard guard (`github.repository_visibility`) and
+fails with a clear message if it is run in a public repository.
+
+Set it up like this (about 10 minutes, free):
+
+1. GitHub -> **New repository** -> name it e.g. `winsalot-db-backups` -> **Private** -> create it empty.
+2. Copy exactly these into the new repository (keeping the paths):
+   `scripts/backup/backup.sh`, `scripts/backup/verify-restore.sh`, `.github/workflows/nightly-db-backup.yml`.
+   Reviewing and copying the files (instead of fetching them from the public repository at run time)
+   means nobody can change the code that handles your secrets by editing the public repository.
+3. Add the secrets and run it **there** (below). Keep write access to that repository limited to you.
+
+(Alternative: make `winsalot-funding` itself private. That is a larger decision - it also affects who
+can see the application code and how Vercel connects - so it is not assumed here.)
 
 ## What is (and is not) in a backup
 
@@ -30,57 +52,77 @@ ends. Logs contain sizes, counts and timestamps only.
 Backups are encrypted to an **age public key**. Only the matching **private key** can open them.
 
 - Generate the key pair **on your own computer**, not in GitHub or any cloud tool:
-  `age-keygen -o winsalot-backup-key.txt` (prints the public key, `age1...`, to the terminal).
-- **The private key never goes into GitHub, the repo, chat, or an email.** Put it in your password
-  manager *and* a second offline location (for example a printed copy in a safe). Losing it means
-  every backup is unrecoverable; leaking it means every backup can be read.
-- Only the **public** key (`age1...`) is stored in GitHub, as the secret `BACKUP_AGE_PUBLIC_KEY`.
-  `backup.sh` refuses to run if that value is a private key.
+  `age-keygen -o winsalot-backup-key.txt`. It prints the public key (`age1...`) to the terminal; the
+  file holds the private key (`AGE-SECRET-KEY-...`).
+- **The private key never goes into GitHub, any repository, chat, or email.** Put it in your password
+  manager *and* a second offline location (for example a printed copy in a safe). Losing it means every
+  backup is unrecoverable; leaking it means every backup can be read.
+- Only the **public** key (`age1...`) is stored in GitHub. `backup.sh` refuses to run if that value is a
+  private key.
 - Optional second holder: put two public keys in the secret, separated by a comma. Either private key
   can then open every backup.
-- Rotation: generate a new pair, update the secret, keep the old private key for as long as old
-  artifacts (30 days) exist.
+- Rotation: generate a new pair, update the secret, keep the old private key as long as old artifacts
+  (30 days) exist.
 
-## Configure the GitHub secrets securely
+## The two GitHub secrets (exactly)
 
-1. **Database connection string.** Supabase dashboard -> project *Business Finance* -> **Connect**
-   -> **Session pooler** (GitHub runners cannot use the direct IPv6-only address). Copy the
-   `postgresql://postgres.<ref>:<password>@...pooler.supabase.com:5432/postgres` string.
-   Enter your database password in place of the placeholder yourself; do not paste it into chat,
-   issues, commits or documents. If you do not have the database password, reset it under
-   Project settings -> Database *(this changes the password the apps' direct DB connections use, if
-   any - the apps in this repo talk to Supabase through the API keys, but confirm before resetting)*.
-2. GitHub -> repository **Settings -> Secrets and variables -> Actions -> New repository secret**
-   - `SUPABASE_DB_URL` = the string from step 1
-   - `BACKUP_AGE_PUBLIC_KEY` = the `age1...` public key
-3. Use *repository secrets*, not variables. Secret values are masked in logs and cannot be read back
-   through the GitHub UI or API after saving.
-4. Restrict who can change workflows and secrets (Settings -> Collaborators / branch protection on
-   `main`). Anyone who can edit a workflow on a branch that is allowed to use secrets could exfiltrate
-   them, so keep write access to people you trust.
-5. Never run this against a database you do not own, and never put either secret in a workflow
-   `echo`, `env` dump or debug step.
+| Secret name | What it contains | Where it comes from |
+|---|---|---|
+| `SUPABASE_DB_URL` | The **Session pooler** connection string, `postgresql://postgres.<project-ref>:<password>@aws-<n>-<region>.pooler.supabase.com:5432/postgres` | Supabase dashboard -> project *Business Finance* -> **Connect** -> **Session pooler** |
+| `BACKUP_AGE_PUBLIC_KEY` | The age **public** key, one line starting `age1` (two keys comma-separated if you want a second holder) | Printed by `age-keygen` on your computer |
 
-Optional hardening (needs a separate production approval, so it is not part of this change): create a
-dedicated read-only database role for backups instead of using the `postgres` user in
-`SUPABASE_DB_URL`.
+Why the session pooler: GitHub Actions runners are IPv4-only and the direct database address is IPv6-only
+unless you buy Supabase's paid IPv4 add-on. The shared session pooler is IPv4, included on every project
+at no extra cost, and supports `pg_dump`.
+
+### Step by step
+
+1. **Generate the key (your computer).** Install `age` (macOS `brew install age`; Windows
+   `winget install FiloSottile.age`; Linux `apt install age`), then run
+   `age-keygen -o winsalot-backup-key.txt`. Copy the line beginning `Public key: age1...` (only the
+   `age1...` part). Store `winsalot-backup-key.txt` in your password manager and a second offline place.
+2. **Get the connection string.** Supabase dashboard -> Business Finance -> **Connect** (top bar) ->
+   method **Session pooler**. Copy the string. It contains the placeholder `[YOUR-PASSWORD]`.
+3. **Put your database password in yourself**, in a private text editor - never in chat, email, an issue,
+   or a document. If you do not know the database password, you can reset it at Project settings ->
+   Database. Resetting briefly drops direct and pooled database connections; the two CRMs only use the
+   Supabase API keys (their Vercel settings contain no database password), so they are not affected, but
+   do it outside working hours. Avoid resetting if you already know the password.
+4. **Add the secrets.** In the **private backup repository**: Settings -> Secrets and variables ->
+   Actions -> **New repository secret**. Add `SUPABASE_DB_URL` (paste the finished string) and
+   `BACKUP_AGE_PUBLIC_KEY` (paste the `age1...` line). Use *Secrets*, not *Variables*. GitHub masks secret
+   values in logs and never shows them again after saving.
+5. **Lock down the repository.** Settings -> Collaborators: only you. Settings -> Actions -> General ->
+   leave "Fork pull request workflows" at the default (secrets are never passed to forks).
+6. Do **not** set the `BACKUP_ENABLED` variable and do not uncomment the schedule yet.
+
+### Recommended hardening (needs your separate approval - not part of this change, untested)
+
+Instead of the `postgres` user, give the backup its own read-only database login so a leaked secret could
+not change data. In the Supabase SQL editor, type your own new password where shown:
+`create role backup_reader login password '<choose-a-strong-password>'; grant pg_read_all_data to backup_reader;`
+and use `postgresql://backup_reader.<project-ref>:<that-password>@...` in `SUPABASE_DB_URL`. Because this
+creates a production role, it must be approved and tested with a manual run before nightly use.
 
 ## Activation checklist
 
-1. Generate the key pair offline and store the private key in two places.
-2. Add the two secrets above.
-3. Run the workflow **manually** (Actions -> Nightly database backup -> Run workflow). Confirm the job
-   is green and an artifact `winsalot-db-backup-<id>` appears with a `.tar.age` and `.sha256`.
-4. Download the artifact and run a **restore test on your own machine** (next section). It must PASS.
-5. Only then: set the repository variable `BACKUP_ENABLED=true` **and** uncomment the `schedule:`
-   block in the workflow (a workflow change that needs your approval/merge).
-6. Calendar a monthly restore test. GitHub emails you when a scheduled run fails; also glance at the
+1. Private backup repository created and files copied (above).
+2. Key pair generated offline, private key stored in two places.
+3. The two secrets added.
+4. Run the workflow **manually** (Actions -> Nightly database backup -> Run workflow). The job must be
+   green and an artifact `winsalot-db-backup-<id>` must appear containing a `.tar.age` and `.sha256`. Note
+   the file size.
+5. Download it and run the **restore test on your own machine** (next section). It must print PASS.
+6. Only then: set repository variable `BACKUP_ENABLED=true` **and** uncomment the `schedule:` block (a
+   change you make or approve yourself).
+7. Calendar a monthly restore test. GitHub emails you when a scheduled run fails; also glance at the
    Actions tab weekly for the first month.
 
 ## Restore test (safe, isolated, never touches production)
 
 Needs Docker or any local Postgres 15+ and the `age` tool. The target must be an **empty scratch
-database on your own computer**; the script refuses non-local or Supabase targets.
+database on your own computer**; the script refuses non-local or Supabase targets and refuses a database
+that already has tables.
 
 ```bash
 # 1. Throwaway Postgres (example with Docker; any local empty database works)
@@ -101,14 +143,14 @@ Supabase-only pieces, so a handful of `pg_restore` error headlines about missing
 appear; they are listed (names only, never row data) and do not affect the data comparison.
 
 `scripts/backup/test-local.sh` rehearses the entire procedure offline on a synthetic database (backup,
-encryption, restore, comparison, wrong-key, tampered-file and unsafe-target checks). It was run
-successfully before this was handed over.
+encryption, restore, comparison, wrong-key, tampered-file and unsafe-target checks). It passed before this
+was handed over. **Not yet exercised:** a real run against the live database through the pooler, and a
+restore into a plain Postgres 17 image.
 
 ## Disaster recovery order of operations
 
 1. **Prefer Supabase's own dashboard restore** (Database -> Backups) for a full in-place recovery - it
-   restores everything including Vault and Realtime configuration. Note the project is offline while
-   it runs.
+   restores everything including Vault and Realtime configuration. The project is offline while it runs.
 2. Use the encrypted off-site backup when the project or its daily backups are unavailable, or to
    recover individual tables: decrypt, restore into a scratch database, then copy only the needed rows.
 3. After rebuilding a project from the off-site backup: re-enter the 6 Vault secrets, re-create the
@@ -117,10 +159,13 @@ successfully before this was handed over.
 
 ## Cost and limits
 
-- **GitHub Actions:** about 2-3 minutes per run, roughly 60-90 minutes/month. Private repositories on
-  the Free plan include 2,000 minutes/month. *Confirm your GitHub plan.*
-- **Artifact storage:** shares the plan's storage quota (500 MB on Free). The database is 48 MB; a
-  compressed, encrypted dump is expected to be a few MB, so 30 daily copies should be well under the
-  quota. **This is an estimate** - check the size of the first manual run and multiply by 30.
-- **Supabase:** no charge. The dump is a read-only snapshot of a 48 MB database.
+- **Paid services needed: none.** Private-repository GitHub Actions includes 2,000 minutes/month on the
+  Free plan (this job uses about 2-3 minutes a night, roughly 60-90 a month) and 500 MB of
+  artifact/package storage. The shared session pooler and `pg_dump` cost nothing on Supabase. `age` and
+  the PostgreSQL client are free packages. No Supabase IPv4 add-on, PITR, compute upgrade or Vercel
+  change is involved.
+- **Watch item:** artifact storage. The database is 48 MB; a compressed encrypted dump is expected to be
+  a few MB, so 30 daily copies should fit well within 500 MB. That is an estimate - check the first run's
+  size and multiply by 30. If you outgrow it, shorten retention rather than buying storage.
 - Artifacts expire automatically after 30 days; storage accounting can lag by several hours.
+- Confirm your GitHub plan and limits under GitHub -> Settings -> Billing and plans.
