@@ -1,5 +1,5 @@
 import "server-only";
-import { isGrowthCrmHost } from "./hosts";
+import { isGrowthCrmHost, isLeadGenHost } from "./hosts";
 
 // Winsalot Growth CRM's real canonical production domain (src/lib/
 // hosts.ts). Used below as a hard safety net, not just a placeholder -
@@ -18,6 +18,31 @@ const GROWTH_CRM_CANONICAL_SITE_URL = "https://growth.winsalotcorp.com";
 // facing reschedule/cancel link alike, since every one of them is built
 // from getSiteUrl() below. Reject this specific known-bad value outright
 // rather than trusting whatever is currently saved in Vercel.
+// Lead Gen CRM's canonical production domain (src/lib/hosts.ts).
+const LEAD_GEN_CANONICAL_SITE_URL = "https://leads.winsalotcorp.com";
+
+// The host of the deployment currently running this code. Both CRMs are built
+// from this one codebase; the Vercel project name prefix tells them apart.
+function deploymentHost(): string {
+  return process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || "";
+}
+
+function isLeadGenDeployment(): boolean {
+  const host = deploymentHost();
+  return host !== "" && isLeadGenHost(host);
+}
+
+// The real custom domain of the CRM this production deployment belongs to,
+// or null outside production (previews must keep using their own URL) or
+// when the deployment is not recognizable.
+function canonicalProductionSiteUrl(): string | null {
+  if (process.env.VERCEL_ENV !== "production") return null;
+  const host = deploymentHost();
+  if (isLeadGenHost(host)) return LEAD_GEN_CANONICAL_SITE_URL;
+  if (isGrowthCrmHost(host)) return GROWTH_CRM_CANONICAL_SITE_URL;
+  return null;
+}
+
 const RETIRED_SITE_URL_HOSTS = new Set(["cleaning.winsalotcorp.com", "www.cleaning.winsalotcorp.com"]);
 
 // Rejects an explicit NEXT_PUBLIC_SITE_URL that is malformed or points at
@@ -36,6 +61,15 @@ function sanitizeExplicitSiteUrl(explicit: string, context: string): string | nu
   if (RETIRED_SITE_URL_HOSTS.has(host)) {
     console.error(
       `[${context}] NEXT_PUBLIC_SITE_URL is set to the retired ${host} - ignoring it. Correct this in Vercel Project Settings -> Environment Variables (Production), then redeploy - the fix does not take effect until a new deployment is built.`
+    );
+    return null;
+  }
+  // Each CRM must link to itself. A Growth CRM domain saved on the Lead Gen
+  // project sent Lead Gen links (notification "Open in CRM", invites and
+  // password resets) to a host that redirects every /leadgen path away.
+  if (isLeadGenDeployment() && isGrowthCrmHost(host)) {
+    console.error(
+      `[${context}] NEXT_PUBLIC_SITE_URL is set to the Growth CRM domain ${host} on the Lead Gen CRM - ignoring it. Correct this in Vercel Project Settings -> Environment Variables (Production), then redeploy.`
     );
     return null;
   }
@@ -70,6 +104,10 @@ export function getSiteUrl(): string {
     console.warn(`[getSiteUrl] No usable NEXT_PUBLIC_SITE_URL - using ${GROWTH_CRM_CANONICAL_SITE_URL} instead of the ambiguous ${vercelUrl}.`);
     return GROWTH_CRM_CANONICAL_SITE_URL;
   }
+  if (vercelUrl && isLeadGenHost(vercelUrl)) {
+    const canonical = canonicalProductionSiteUrl();
+    if (canonical) return canonical;
+  }
   if (vercelUrl) return `https://${vercelUrl}`;
 
   return "http://localhost:3000";
@@ -102,6 +140,11 @@ export function getAuthRedirectBaseUrl(): string {
     const sanitized = sanitizeExplicitSiteUrl(explicit, "getAuthRedirectBaseUrl");
     if (sanitized) return sanitized;
   }
+
+  // In production the invite/reset link must land on the CRM's real domain,
+  // not on a build-specific *.vercel.app hostname. Previews keep VERCEL_URL.
+  const canonical = canonicalProductionSiteUrl();
+  if (canonical) return canonical;
 
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
 
