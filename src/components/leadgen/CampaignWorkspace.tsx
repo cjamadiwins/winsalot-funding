@@ -112,7 +112,7 @@ export default function CampaignWorkspace({
               </tr>
             </thead>
             <tbody>
-              {data.leads.map((l) => (
+              {data.leads.slice(0, 500).map((l) => (
                 <tr key={l.id} className="border-t">
                   <td className="p-2">
                     <Link
@@ -134,6 +134,12 @@ export default function CampaignWorkspace({
               ))}
             </tbody>
           </table>
+          {data.leads.length > 500 && (
+            <p className="p-2 text-sm text-slate-600">
+              Showing the first 500 of {data.leads.length} leads. Open a call
+              list above to see every lead.
+            </p>
+          )}
         </div>
       </section>
       <section>
