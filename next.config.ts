@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // route (findLatestDialpadUserStatisticsCsv, src/lib/dialpad-csv-source.ts).
   outputFileTracingIncludes: {
     "/**": ["./*.csv"],
+    // Blank lender application forms served by admin-gated route handlers.
+    "/admin/crm/lending-partners/canacap/application": ["./lender-forms/**/*.pdf"],
   },
 };
 
