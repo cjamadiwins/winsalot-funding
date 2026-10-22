@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { getUserWithRetry } from "@/lib/get-user-with-retry";
 import { LEAD_GEN_HOSTS, isLeadGenHost, isGrowthCrmHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
@@ -102,7 +102,7 @@ async function handleSessionGate(
     },
   });
 
-  const { data } = await getUserWithTimeout(supabase, pathname);
+  const { data } = await getUserWithRetry(supabase, pathname);
 
   if (!data.user && !isPublicPath) {
     if (isServerAction) return response;
@@ -127,34 +127,6 @@ async function handleSessionGate(
   }
 
   return response;
-}
-
-const GET_USER_TIMEOUT_MS = 8000;
-
-async function getUserWithTimeout(
-  supabase: SupabaseClient,
-  pathname: string
-): Promise<{ data: { user: User | null } }> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), GET_USER_TIMEOUT_MS);
-  });
-
-  try {
-    const result = await Promise.race([supabase.auth.getUser(), timeout]);
-    if (result === "timeout") {
-      console.error(
-        `[proxy:getUserWithTimeout] supabase.auth.getUser() did not respond within ${GET_USER_TIMEOUT_MS}ms for ${pathname} - treating as no session.`
-      );
-      return { data: { user: null } };
-    }
-    return result;
-  } catch (error) {
-    console.error(`[proxy:getUserWithTimeout] supabase.auth.getUser() threw for ${pathname} - treating as no session.`, error);
-    return { data: { user: null } };
-  } finally {
-    clearTimeout(timer!);
-  }
 }
 
 export const config = {
