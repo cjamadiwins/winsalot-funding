@@ -104,6 +104,15 @@ export default function LendingPartnerProfileClient({
 
       {error && <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
 
+      {/canacap/i.test(partner.company_name) && (
+        <Link
+          href="/admin/crm/lending-partners/canacap"
+          className="mt-4 inline-block rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+        >
+          CanaCap Financing Application
+        </Link>
+      )}
+
       {editing ? (
         <form
           action={(fd) => run(() => updateAction(partner.id, fd), () => setEditing(false))}
