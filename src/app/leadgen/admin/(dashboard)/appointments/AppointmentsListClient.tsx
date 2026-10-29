@@ -26,6 +26,8 @@ import {
 } from "@/lib/leadgen-types";
 import type { LeadgenImmediateConfirmationStatusEntry, LeadgenImmediateSmsConfirmationStatusEntry } from "@/lib/leadgen-appointment-reminders";
 import AppointmentEmailActions from "@/components/leadgen/AppointmentEmailActions";
+import SalesConversionControl from "@/components/leadgen/SalesConversionControl";
+import { saleConfirmationState, type SalesBonusRow } from "@/lib/sales-bonus";
 import AppointmentEmailConfirmModal from "@/components/leadgen/AppointmentEmailConfirmModal";
 import AppointmentPrepModal from "./AppointmentPrepModal";
 import { FeedbackStatusBadge, PrepStatusBadge } from "@/components/leadgen/appointment-prep/PrepStatusBadge";
@@ -69,6 +71,8 @@ export default function AppointmentsListClient({
   initialClientFilter,
   initialOpenAdd,
   viewingClientName,
+  salesBonusProgramClientIds = [],
+  salesBonuses = [],
 }: {
   appointments: LeadgenAppointmentRow[];
   clients: LeadgenClientRow[];
@@ -116,6 +120,11 @@ export default function AppointmentsListClient({
   initialOpenAdd?: boolean;
   // Display name for the "Viewing X" banner when scoped to one client.
   viewingClientName?: string | null;
+  // Sales Conversion Bonus: clients with an active program, and the live
+  // bonuses already created, so each card can offer "Confirm Sale" (or show
+  // that the sale is already confirmed).
+  salesBonusProgramClientIds?: string[];
+  salesBonuses?: Pick<SalesBonusRow, "id" | "appointment_id" | "lead_id" | "agent_payment_status">[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -709,6 +718,17 @@ export default function AppointmentsListClient({
                         Reject
                       </button>
                     )}
+                  </div>
+                )}
+
+                {salesBonusProgramClientIds.includes(appt.client_id) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">Sales Bonus:</span>
+                    <SalesConversionControl
+                      appointmentId={appt.id}
+                      agentName={agentNameById?.[appt.booking_agent_id ?? ""]}
+                      state={saleConfirmationState(appt, new Set(salesBonusProgramClientIds), salesBonuses)}
+                    />
                   </div>
                 )}
 

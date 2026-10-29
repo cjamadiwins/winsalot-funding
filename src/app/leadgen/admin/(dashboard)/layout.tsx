@@ -42,6 +42,7 @@ const NAV_ITEMS: CrmNavItem[] = [
   { label: "Client Assignments", href: "/leadgen/admin/assignments", icon: <Link2 /> },
   { label: "Appointments", href: "/leadgen/admin/appointments", icon: <CalendarCheck /> },
   { label: "Conversions", href: "/leadgen/admin/conversions", icon: <TrendingUp /> },
+  { label: "Sales Bonuses", href: "/leadgen/admin/sales-bonuses", icon: <Gift /> },
   { label: "Performance", href: "/leadgen/admin/performance", icon: <BarChart3 /> },
   { label: "Call Logs", href: "/leadgen/admin/performance/call-notes", icon: <PhoneCall /> },
   { label: "Dialpad Performance", href: "/leadgen/admin/dialpad", icon: <PhoneCall /> },

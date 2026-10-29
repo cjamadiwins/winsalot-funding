@@ -1,5 +1,7 @@
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { loadSalesBonusPrograms, loadSalesBonuses } from "@/lib/sales-bonus-data";
 import { isHiddenLeadgenCampaignName, type LeadgenAppointmentRow, type LeadgenCampaignRow, type LeadgenClientRow, type LeadgenEmailRow, type LeadgenLeadRow, type LeadgenUserRow } from "@/lib/leadgen-types";
 import {
   fetchLeadgenAppointmentReminderSettings,
@@ -52,6 +54,11 @@ export default async function LeadgenAppointmentsPage({
     admin.from("leadgen_emails").select("*").not("appointment_id", "is", null).order("created_at", { ascending: false }),
     fetchLeadgenAppointmentReminderSettings(admin),
   ]);
+
+  // Sales Conversion Bonus state, read through the admin's own session (RLS).
+  // Failures degrade to "no Confirm Sale control" rather than breaking the page.
+  const sessionDb = await createSupabaseServerClient();
+  const [salesBonusPrograms, { data: salesBonusRows }] = await Promise.all([loadSalesBonusPrograms(sessionDb), loadSalesBonuses(sessionDb)]);
 
   const viewingClient = client ? (clients ?? []).find((c) => c.id === client) ?? null : null;
 
@@ -156,6 +163,8 @@ export default async function LeadgenAppointmentsPage({
         initialClientFilter={client}
         initialOpenAdd={openAdd === "1"}
         viewingClientName={viewingClient?.name ?? null}
+        salesBonusProgramClientIds={salesBonusPrograms.map((p) => p.client_id)}
+        salesBonuses={salesBonusRows}
       />
     </div>
   );
