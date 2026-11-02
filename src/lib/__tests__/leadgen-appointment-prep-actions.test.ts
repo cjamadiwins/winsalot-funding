@@ -92,6 +92,8 @@ const savedBrief = {
   client_id: "client-1",
   ...{ why_interested: "Wants more inquiries", primary_opportunity: "Website redesign", talking_points: ["x"], suggested_questions: ["q"] },
   prep_status: "brief_ready",
+  // Admin has approved this brief (required before sending).
+  reviewed_at: "2026-10-01T12:00:00Z",
 };
 const clientRow = { id: "client-1", name: "Acme", contact_name: "Pat", contact_email: "pat@acme.test", appointment_notification_emails: null };
 
@@ -110,6 +112,20 @@ describe("Admin permissions", () => {
     await expect(sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail)).rejects.toThrow("NEXT_REDIRECT");
     await expect(previewAppointmentBriefEmailAction("appt-1", completeForm)).rejects.toThrow("NEXT_REDIRECT");
     expect(adminDb.from).not.toHaveBeenCalled();
+    expect(sendLeadgenEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendAppointmentBriefAction - Admin approval gate", () => {
+  it("does not email an unreviewed brief", async () => {
+    adminDb = createMockSupabase({
+      leadgen_appointments: [{ data: futureAppointment }],
+      leadgen_appointment_briefs: [{ data: null }, { data: { ...savedBrief, reviewed_at: null } }],
+      leadgen_appointment_admin_notes: [{ error: null }],
+      leadgen_clients: [{ data: clientRow }],
+    });
+    const result = await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
+    expect(result.error).toMatch(/reviewed/i);
     expect(sendLeadgenEmailMock).not.toHaveBeenCalled();
   });
 });

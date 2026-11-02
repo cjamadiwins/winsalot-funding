@@ -161,6 +161,11 @@ export type AppointmentBriefRow = {
   sent_at: string | null;
   sent_by: string | null;
   viewed_at: string | null;
+  // Added by migration 20261102000000 (null/undefined on older briefs).
+  generated_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  brief_template?: string | null;
   created_at: string;
   updated_at: string;
 };
