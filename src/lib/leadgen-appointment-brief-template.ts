@@ -21,48 +21,64 @@ export type BriefTemplateFields = {
 };
 
 export const WEBSITE_REDESIGN_OBJECTIVES = [
-  "Modern, professional design that reflects the quality of the company's construction work",
-  "Mobile-friendly layout that works on phones, tablets and desktops",
-  "Clear navigation so visitors find services, projects and contact details quickly",
-  "Clear descriptions of each construction service offered",
-  "Contact forms and quotation request forms that turn visits into inquiries",
+  "Modernize the company's website",
+  "Improve visual appearance and branding",
+  "Improve mobile responsiveness",
+  "Make navigation easier for visitors",
+  "Introduce stronger calls to action to encourage inquiries and conversions",
 ] as const;
 
+// Human Search Optimization (HSO) is Hidebrandt Web Services' own service -
+// it is deliberately not described as conventional SEO.
 export const HSO_OBJECTIVES = [
-  "Help the business attract relevant potential customers",
-  "Improve online discovery by people searching for construction services",
-  "Generate more qualified inquiries, not just more traffic",
-  "Align website content with what real customers search for and need",
+  "Improve how potential customers discover the business online",
+  "Optimize website content around customer search behaviour and intent",
+  "Help attract relevant visitors and qualified business inquiries",
+  "Improve the customer journey from discovery to contacting the business",
+  "Complement the redesigned website with lead-generation-focused content",
 ] as const;
 
 export const COMBINED_SOLUTION_SUMMARY =
-  "An integrated website improvement and lead-generation solution: the redesigned website gives visitors a clear, trustworthy place to learn about services and request a quote, and Human Search Optimization brings relevant potential customers to it. Together they turn online discovery into qualified inquiries.";
+  "Website Redesign and Human Search Optimization work as one lead-generation approach. HSO helps the right potential customers find the business and shapes content around what they search for and why. The redesigned website then gives those visitors a modern, mobile-friendly, easy-to-navigate experience with clear calls to action, so interest turns into inquiries. Each supports the other: discovery without a strong website loses visitors, and a strong website without discovery is rarely seen. No pricing, lead volumes or results are assumed or promised in this brief; scope is confirmed during the consultation.";
 
 export const EXPECTED_OUTCOMES = [
-  "Agree on the website redesign scope and priority pages",
-  "Confirm how Human Search Optimization fits the business's target customers and service area",
-  "Agree on next steps: proposal or quote, timeline and any information needed from the prospect",
+  "Confirm the prospect's goals, priorities and the pages or services that matter most",
+  "Agree how website redesign and HSO fit together for the business's target customers",
+  "Agree the next step, timeline and any information needed from the prospect",
+] as const;
+
+export const RECOMMENDED_NEXT_STEPS = [
+  "Summarize what was discussed and confirm the priorities with the prospect",
+  "Prepare a proposal covering website redesign and HSO once scope is confirmed",
+  "Collect any outstanding information (current website, services, target areas)",
+  "Schedule a follow-up consultation to review the proposal",
 ] as const;
 
 export function buildWebsiteHsoTemplate(input: { businessName: string; contactName: string | null }): BriefTemplateFields {
   const who = input.contactName?.trim() || "the owner";
   return {
-    why_interested: `${who} is interested in a modern, mobile-friendly website with clear service descriptions and quotation requests, together with Human Search Optimization to attract relevant customers and generate more qualified inquiries.`,
+    why_interested: `${who} is interested in improving ${input.businessName}'s online presence, attracting more potential customers and generating qualified business leads, through two services: Website Redesign and Human Search Optimization (HSO).`,
     primary_opportunity: "Website redesign + Human Search Optimization",
     main_interest: "Website Redesign / Human Search Optimization (HSO)",
-    primary_need: "Generate more qualified inquiries through a better website and improved online discovery",
+    primary_need: "Improve online presence and generate qualified business leads",
     interest_level: "High",
     recommended_objective: "Understand project scope and secure a proposal opportunity",
-    talking_points: [...WEBSITE_REDESIGN_OBJECTIVES.slice(0, 3), HSO_OBJECTIVES[0], COMBINED_SOLUTION_SUMMARY.split(":")[0]].join("\n"),
+    talking_points: [
+      "Website redesign: modern look and branding, mobile-friendly, easier navigation, stronger calls to action",
+      "HSO: help the right potential customers discover the business and reach out",
+      "Content built around customer search behaviour and intent",
+      "Improving the customer journey from discovery to contacting the business",
+      "How redesign and HSO work together to attract and convert potential customers",
+    ].join("\n"),
     suggested_questions: [
-      `What do you like and dislike about ${input.businessName}'s current website?`,
-      "Which construction services bring you the most profitable work?",
-      "What types of customers and project sizes do you most want to attract?",
-      "Which areas or cities do you serve?",
-      "How do customers currently find you, and how many inquiries do you receive each month?",
-      "What is your preferred timeline and budget range for the project?",
+      "What do you like and dislike about your current website, and how do you see it representing your brand?",
+      "What do you want visitors to do on the website, and how do they contact you today?",
+      "Who are your ideal customers, and which services or project types matter most?",
+      "How do potential customers find you now, and what do they search for?",
+      "How many inquiries do you receive today, and how many are the right fit?",
+      "What timeline do you have in mind, and what else should we know before proposing a plan?",
     ].join("\n"),
     recommended_next_step: "Send Proposal",
-    next_step_note: "Confirm scope, timeline and budget, then send a combined website redesign + HSO proposal.",
+    next_step_note: "Confirm scope and timeline, then send a combined website redesign + HSO proposal.",
   };
 }

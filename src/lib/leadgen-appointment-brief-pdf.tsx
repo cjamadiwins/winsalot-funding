@@ -8,6 +8,7 @@ import {
   COMBINED_SOLUTION_SUMMARY,
   EXPECTED_OUTCOMES,
   HSO_OBJECTIVES,
+  RECOMMENDED_NEXT_STEPS,
   WEBSITE_REDESIGN_OBJECTIVES,
 } from "./leadgen-appointment-brief-template";
 
@@ -80,7 +81,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
   const { brief } = input;
   const isWebsiteHso = brief.brief_template === BRIEF_TEMPLATE_WEBSITE_HSO;
-  const summary = (brief.appointment_summary ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const norm = (text: string) => text.replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim().toLowerCase();
+  const why = norm(brief.why_interested ?? "");
+  // The generated summary opens with the "why interested" sentence, which is
+  // already printed above it - don't show it twice.
+  const summary = (brief.appointment_summary ?? "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p && norm(p) !== why);
   const requirements = [brief.main_interest, brief.primary_need].filter((v): v is string => Boolean(v?.trim()));
 
   return (
@@ -109,12 +117,12 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
             <Field label="Date & time" value={formatAppointmentWhen(input.appointmentDate, input.appointmentTime, input.timezone)} />
             <Field label="Meeting type" value={input.meetingType} />
             <Field label="Winsalot specialist" value={input.agentName} />
-            <Field label="Prepared for" value={input.clientName} />
+            <Field label="Service provider" value={input.clientName} />
           </View>
         </Section>
 
         {(brief.why_interested || summary.length > 0) && (
-          <Section title="Customer Requirements">
+          <Section title="Customer Requirements & Expressed Interests">
             {brief.why_interested && <Text style={styles.body}>{brief.why_interested}</Text>}
             {requirements.length > 0 && <Bullets items={requirements} />}
             {summary.map((p, i) => (
@@ -159,6 +167,12 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
             </Text>
           )}
         </Section>
+
+        {isWebsiteHso && (
+          <Section title="Recommended Next Steps After the Consultation">
+            <Bullets items={RECOMMENDED_NEXT_STEPS} />
+          </Section>
+        )}
 
         <Text style={styles.footer} fixed>{BRIEF_PREPARED_BY} · info@winsalotcorp.com · winsalotcorp.com</Text>
       </Page>
