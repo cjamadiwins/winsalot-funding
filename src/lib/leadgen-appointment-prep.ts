@@ -577,6 +577,7 @@ export function buildBriefEmailBody(input: {
     ...bodyParagraphs,
     ...(highlights.length ? [highlights.join("\n")] : []),
     details.join("\n"),
+    "A PDF copy of the brief is attached.",
     `${BRIEF_LINK_MARKER} (sign in to the Winsalot Client Portal):\n${input.portalUrl}`,
     "Regards,\nWinsalot Corp.",
   ];
