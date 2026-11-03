@@ -9,6 +9,7 @@
 
 import type { LeadgenClientRow } from "@/lib/leadgen-types";
 import { isWebsiteServicesCampaign, renderWebsiteServicesOpening } from "@/lib/leadgen-website-script";
+import { callGuideToText, getCallGuide, renderGuideLine, type CallGuide } from "@/lib/leadgen-call-guide";
 
 export type LeadgenCallScriptClientFields = Pick<
   LeadgenClientRow,
@@ -58,6 +59,13 @@ export type LeadgenBuiltCallScript = {
   // override) shown after the standard approved opening instead of
   // replacing it. Null everywhere else.
   adminScript?: string | null;
+  // Set for the clients that use the interactive call guide (Hidebrandt,
+  // Teknokraft). The panels render the guide instead of the static blocks;
+  // fullText is the same guide as plain text, so copied and displayed
+  // wording always match.
+  guide?: CallGuide | null;
+  // The agent name the script was built for (used by the interactive guide).
+  agentName?: string;
   // The complete, read-aloud script (opening + if-interested + closing,
   // or the full override) - what "Copy Script" copies.
   fullText: string;
@@ -79,6 +87,9 @@ export function buildLeadgenCallScript(input: {
   // Website-services campaigns use the one standard approved opening.
   // Defaults to detecting it from the client.
   websiteServices?: boolean;
+  // Services the client has Admin-approved for qualification. Only used to
+  // decide whether the guide asks the e-commerce question.
+  approvedServices?: string[];
 }): LeadgenBuiltCallScript {
   const agentName = input.agentName.trim() || PLACEHOLDER_AGENT_NAME;
   const prospectName = input.prospectBusinessName?.trim() || PLACEHOLDER_PROSPECT_NAME;
@@ -89,6 +100,29 @@ export function buildLeadgenCallScript(input: {
   const notes = input.client.call_script_notes?.trim() || null;
 
   const override = input.client.call_script_override?.trim();
+
+  // Hidebrandt / Teknokraft: the approved website-service guide replaces the
+  // generic opening. Everything else falls through unchanged.
+  const guide = getCallGuide(clientName);
+  if (guide) {
+    const closingRaw = input.client.call_script_closing?.trim() || null;
+    const closing = closingRaw ? substitutePlaceholders(closingRaw, vars) : null;
+    const adminScript = override ? substitutePlaceholders(override, vars) : null;
+    const offersEcommerce = input.approvedServices ? input.approvedServices.includes("ecommerce") : undefined;
+    const guideText = callGuideToText(guide, input.agentName, { offersEcommerce });
+    return {
+      isCustomOverride: false,
+      opening: guide.opening.map((line) => renderGuideLine(line, input.agentName)),
+      ifInterested: guide.ifInterested,
+      closing,
+      notes,
+      adminScript,
+      guide,
+      agentName: input.agentName.trim(),
+      fullText: [guideText, closing, adminScript].filter(Boolean).join("\n\n"),
+    };
+  }
+
   const websiteServices = input.websiteServices ?? isWebsiteServicesCampaign({ clientName, services: input.client.call_script_services });
   if (websiteServices) {
     const opening = renderWebsiteServicesOpening(input.agentName.trim(), clientName);

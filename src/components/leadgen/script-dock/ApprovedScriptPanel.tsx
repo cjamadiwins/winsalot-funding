@@ -6,6 +6,7 @@ import { buildLeadgenCallScript } from "@/lib/leadgen-call-script";
 import { buildWebsiteServicesScript, websiteServicesScriptToText } from "@/lib/leadgen-website-script";
 import type { ScriptSessionPayload } from "@/lib/leadgen-script-session-types";
 import ClientCallScriptPanel from "../ClientCallScriptPanel";
+import { getCallGuide } from "@/lib/leadgen-call-guide";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -21,6 +22,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // hard-coded per client.
 export default function ApprovedScriptPanel({ payload, agentName }: { payload: ScriptSessionPayload; agentName: string }) {
   const [copied, setCopied] = useState(false);
+
+  // Hidebrandt / Teknokraft use the interactive call guide; its copy button
+  // copies the identical text that is displayed.
+  if (getCallGuide(payload.clientName)) {
+    return <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName, client: payload.client })} compact />;
+  }
 
   if (!payload.websiteServices) {
     return <ClientCallScriptPanel script={buildLeadgenCallScript({ agentName, client: payload.client, websiteServices: false })} compact />;

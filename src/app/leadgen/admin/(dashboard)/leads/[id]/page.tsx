@@ -106,6 +106,7 @@ export default async function LeadgenAdminLeadDetailPage({
           initial={qualificationPanel.qualification}
           preliminaryCategory={qualificationPanel.preliminaryCategory}
           appointments={qualificationPanel.appointments}
+          agentName={detail.assignedAgentName || ""}
         />
       )}
     <LeadDetailClient

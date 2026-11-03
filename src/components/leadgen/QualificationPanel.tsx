@@ -17,6 +17,8 @@ import {
   type QualificationOutcome,
 } from "@/lib/leadgen-qualification";
 import { resubmitAppointmentForApprovalAction, saveQualificationAction } from "@/app/leadgen/qualification-actions";
+import { getCallGuide } from "@/lib/leadgen-call-guide";
+import InteractiveCallGuide from "./InteractiveCallGuide";
 
 type PanelAppointment = { id: string; appointment_date: string; appointment_time: string; qc_status: string; qc_admin_feedback: string | null; qc_rejection_reason: string | null };
 
@@ -27,6 +29,8 @@ type Props = {
   initial: (QualificationAnswers & { outcome: QualificationOutcome; category: QualificationCategory | null; category_source: "auto_preliminary" | "agent_verified" }) | null;
   preliminaryCategory: QualificationCategory;
   appointments: PanelAppointment[];
+  // Logged-in user's name, used to fill [Agent Name] in the call guide.
+  agentName?: string;
 };
 
 function Choice<T extends string>({ name, value, options, onChange }: { name: string; value: T | null; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
@@ -55,7 +59,8 @@ const YES_NO_UNSURE = [
 // this client actually offers, the filtering category (preliminary until the
 // agent submits), and the approval status of any appointment for this lead.
 // The database enforces the same rules - this only gives earlier feedback.
-export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments }: Props) {
+export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments, agentName = "" }: Props) {
+  const callGuide = getCallGuide(clientName);
   const [answers, setAnswers] = useState<QualificationAnswers>(() => (initial ? { ...EMPTY_ANSWERS, ...initial } : EMPTY_ANSWERS));
   const [outcome, setOutcome] = useState<QualificationOutcome>(initial?.outcome ?? "draft");
   const [savedCategory, setSavedCategory] = useState<{ label: string; verified: boolean } | null>(
@@ -131,6 +136,22 @@ export default function QualificationPanel({ leadId, clientName, approvedService
             </li>
           ))}
         </ul>
+      )}
+
+      {callGuide && (
+        <div className="mt-4">
+          <InteractiveCallGuide
+            guide={callGuide}
+            agentName={agentName}
+            approvedServices={approvedServices}
+            value={answers}
+            onChange={(patch) => setAnswers((prev) => ({ ...prev, ...patch }))}
+            onMarkNotQualified={() => save("not_qualified")}
+            pending={pending}
+            compact
+          />
+          <p className="mt-1.5 text-[11.5px] text-slate-500">Answers in the guide fill the same questions below. Nothing is saved until you use a save button.</p>
+        </div>
       )}
 
       <div className="mt-4 grid gap-4">

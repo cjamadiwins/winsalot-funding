@@ -168,7 +168,7 @@ export async function loadAppointmentQualityData(admin: SupabaseClient): Promise
     const ids = Array.from(gatedClientIds);
     const [calls, quals, allAppts, conversions] = await Promise.all([
       fetchAll<Record<string, unknown>>((from, to) => admin.from("leadgen_call_logs").select("client_id, agent_id, call_list_lead_id, phone, business_name").in("client_id", ids).range(from, to)),
-      fetchAll<Record<string, unknown>>((from, to) => admin.from("leadgen_lead_qualifications").select("client_id, agent_id, outcome").in("client_id", ids).range(from, to)),
+      fetchAll<Record<string, unknown>>((from, to) => admin.from("leadgen_lead_qualifications").select("client_id, agent_id, outcome, lead_gen_only").in("client_id", ids).range(from, to)),
       fetchAll<Record<string, unknown>>((from, to) => admin.from("leadgen_appointments").select("id, client_id, assigned_specialist_id, booking_agent_id, qc_status, status, qc_rejection_reason").in("client_id", ids).range(from, to)),
       fetchAll<Record<string, unknown>>((from, to) => admin.from("leadgen_conversions").select("appointment_id, conversion_status, client_id").in("client_id", ids).range(from, to)),
     ]);
@@ -176,7 +176,7 @@ export async function loadAppointmentQualityData(admin: SupabaseClient): Promise
       clients: settings.filter((s) => s.enabled).map((s) => ({ id: s.clientId, name: s.clientName })),
       agents: (users ?? []).filter((u) => u.role === "agent").map((u) => ({ id: u.id as string, name: (u.full_name as string) || (u.email as string) })),
       calls: calls.map((c) => ({ client_id: c.client_id as string, agent_id: (c.agent_id as string | null) ?? null, contact_key: ((c.call_list_lead_id as string | null) ?? (c.phone as string | null) ?? (c.business_name as string | null) ?? "unknown").toString() })),
-      qualifications: quals.map((q) => ({ client_id: q.client_id as string, agent_id: (q.agent_id as string | null) ?? null, outcome: q.outcome as string })),
+      qualifications: quals.map((q) => ({ client_id: q.client_id as string, agent_id: (q.agent_id as string | null) ?? null, outcome: q.outcome as string, lead_gen_only: Boolean(q.lead_gen_only) })),
       appointments: allAppts.map((a) => ({ id: a.id as string, client_id: a.client_id as string, agent_id: ((a.assigned_specialist_id as string | null) ?? (a.booking_agent_id as string | null)) ?? null, qc_status: (a.qc_status as string) ?? "not_required", status: a.status as string, qc_rejection_reason: (a.qc_rejection_reason as string | null) ?? null })),
       conversions: conversions.map((c) => ({ appointment_id: (c.appointment_id as string | null) ?? null, conversion_status: c.conversion_status as string })),
     });
