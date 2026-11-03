@@ -1,3 +1,4 @@
+import { AWAITING_APPROVAL_MESSAGE, isClientNotifiable } from "./leadgen-qualification";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendLeadgenEmail } from "./leadgen-email";
@@ -125,6 +126,7 @@ export async function sendLeadgenAppointmentEmail(
   const { data: apptRow } = await supabase.from("leadgen_appointments").select("*").eq("id", appointmentId).maybeSingle();
   if (!apptRow) return { error: "Appointment not found." };
   const appointment = apptRow as LeadgenAppointmentRow;
+  if (!isClientNotifiable(appointment.qc_status)) return { error: AWAITING_APPROVAL_MESSAGE };
 
   const { recipientEmail, recipientName, businessName, clientName } = await resolveAppointmentEmailRecipient(supabase, appointment);
 

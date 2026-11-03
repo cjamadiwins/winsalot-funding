@@ -8,6 +8,7 @@ import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notific
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
 import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
+import { checkQualificationForBooking, isAwaitingApproval } from "@/lib/leadgen-appointment-qc";
 
 type ActionResult = { error?: string; message?: string };
 
@@ -65,9 +66,17 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   } else if (!leadId) {
     return { error: "Select an assigned campaign or book from an assigned lead." };
   }
+  // Appointment Quality Control: for a gated client the appointment is only
+  // accepted for a lead with a recorded, still-valid "Qualified" qualification.
+  // The database independently forces such an appointment to start in
+  // "awaiting Admin approval", so nothing below can skip the review.
+  const qualificationGate = await checkQualificationForBooking(supabase, { clientId, leadId });
+  if (qualificationGate.required && !qualificationGate.ok) return { error: qualificationGate.error };
+
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({
+      ...(qualificationGate.required ? { qualification_id: qualificationGate.qualificationId } : {}),
       lead_id: leadId,
       client_id: clientId,
       campaign_id: campaignId,
@@ -95,16 +104,20 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   if (error || !appointment) return { error: "Failed to book the appointment." };
 
   if (leadId) {
+    // While the appointment awaits Admin approval the client must not see it:
+    // the lead's visible status stays as is and the timeline entry is an
+    // internal note. Approval sets the status and writes the normal
+    // client-visible "appointment_booked" entry (releaseHeldAppointmentNotifications).
     await supabase
       .from("leadgen_leads")
-      .update({ status: "Appointment booked", last_contacted_at: new Date().toISOString() })
+      .update({ ...(qualificationGate.required ? {} : { status: "Appointment booked" }), last_contacted_at: new Date().toISOString() })
       .eq("id", leadId);
     await supabase.from("leadgen_lead_activities").insert({
       lead_id: leadId,
       agent_id: agent.id,
-      activity_type: "appointment_booked",
+      activity_type: qualificationGate.required ? "note" : "appointment_booked",
       call_outcome: "Appointment booked",
-      notes: `Appointment booked for ${appointmentDate} ${appointmentTime} by ${agent.full_name || agent.email}.`,
+      notes: `Appointment booked for ${appointmentDate} ${appointmentTime} by ${agent.full_name || agent.email}.${qualificationGate.required ? " Submitted for Admin approval - the client and prospect are not notified until it is approved." : ""}`,
     });
   }
 
@@ -113,16 +126,19 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     .select("id, name, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("id", clientId)
     .maybeSingle();
-  await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {
-    table: "leadgen_appointment_sms_reminders",
-    appointmentId: appointment.id as string,
-    leadId,
-    scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(appointmentDate, appointmentTime, timezone)).toISOString(),
-    timezone,
-    prospectPhone: phone,
-    prospectConsent: isValidMobileNumber(phone),
-    businessName: clientForNotify?.name ?? "our team",
-  });
+  // Held back while the appointment awaits Admin approval; released on approval.
+  if (!(await isAwaitingApproval(getSupabaseAdmin(), appointment.id as string))) {
+    await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {
+      table: "leadgen_appointment_sms_reminders",
+      appointmentId: appointment.id as string,
+      leadId,
+      scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(appointmentDate, appointmentTime, timezone)).toISOString(),
+      timezone,
+      prospectPhone: phone,
+      prospectConsent: isValidMobileNumber(phone),
+      businessName: clientForNotify?.name ?? "our team",
+    });
+  }
   if (clientForNotify) {
     await notifyOfNewLeadgenAppointment(
       {
@@ -148,5 +164,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   revalidatePath("/leadgen/admin/campaign-workspace");
   revalidatePath("/leadgen/agent/appointments");
   if (leadId) revalidatePath(`/leadgen/agent/leads/${leadId}`);
-  return {};
+  revalidatePath("/leadgen/agent/appointment-approvals");
+  revalidatePath("/leadgen/admin/appointment-quality");
+  return qualificationGate.required ? { message: "Submitted for Admin approval. The client and the prospect are not notified until it is approved." } : {};
 }

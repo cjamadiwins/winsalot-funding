@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { isAwaitingApproval } from "@/lib/leadgen-appointment-qc";
 import { isLeadgenBookingSlotOffered, LEADGEN_BOOKING_TIMEZONE, normalizeLeadgenAppointmentTime, slugifyForLeadgenBookingPath } from "@/lib/leadgen-booking";
 import { isValidEmail, type LeadgenAppointmentRow, type LeadgenClientRow } from "@/lib/leadgen-types";
 import { resolveBookingCampaign } from "@/lib/leadgen-booking-campaign";
@@ -107,30 +108,35 @@ export async function bookLeadgenAppointmentAction(slug: string, formData: FormD
     return { error: "Failed to book the appointment. Please try again." };
   }
 
+  // Self-booked appointments for a gated client wait for Admin approval: nothing the client can see changes yet.
+  const heldForApproval = await isAwaitingApproval(admin, appointment.id as string);
   if (matchedLeadId) {
     await admin
       .from("leadgen_leads")
-      .update({ status: "Appointment booked", last_contacted_at: new Date().toISOString() })
+      .update({ ...(heldForApproval ? {} : { status: "Appointment booked" }), last_contacted_at: new Date().toISOString() })
       .eq("id", matchedLeadId);
     await admin.from("leadgen_lead_activities").insert({
       lead_id: matchedLeadId,
       agent_id: null,
-      activity_type: "appointment_booked",
+      activity_type: heldForApproval ? "note" : "appointment_booked",
       call_outcome: "Appointment booked",
       notes: `Appointment self-booked via the built-in booking page for ${date} ${time} (${LEADGEN_BOOKING_TIMEZONE}).`,
     });
   }
 
-  await sendImmediateAppointmentConfirmation(admin, {
-    table: "leadgen_appointment_sms_reminders",
-    appointmentId: appointment.id as string,
-    leadId: matchedLeadId,
-    scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(date, time, LEADGEN_BOOKING_TIMEZONE)).toISOString(),
-    timezone: LEADGEN_BOOKING_TIMEZONE,
-    prospectPhone: phone,
-    prospectConsent: isValidMobileNumber(phone),
-    businessName: client.name,
-  });
+  // Held back while the appointment awaits Admin approval; released on approval.
+  if (!heldForApproval) {
+    await sendImmediateAppointmentConfirmation(admin, {
+      table: "leadgen_appointment_sms_reminders",
+      appointmentId: appointment.id as string,
+      leadId: matchedLeadId,
+      scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(date, time, LEADGEN_BOOKING_TIMEZONE)).toISOString(),
+      timezone: LEADGEN_BOOKING_TIMEZONE,
+      prospectPhone: phone,
+      prospectConsent: isValidMobileNumber(phone),
+      businessName: client.name,
+    });
+  }
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
 

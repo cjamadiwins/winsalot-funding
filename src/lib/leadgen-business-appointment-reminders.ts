@@ -1,3 +1,4 @@
+import { isClientNotifiable } from "./leadgen-qualification";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
@@ -338,6 +339,8 @@ export async function runLeadgenBusinessAppointmentReminderJob(options?: { dryRu
 
   for (const appt of rows) {
     if (!activeClientIds.has(appt.client_id)) continue;
+    // Appointment Quality Control: no reminder to the prospect or the client while the appointment awaits Admin approval or was rejected.
+    if (!isClientNotifiable(appt.qc_status)) continue;
     const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
     if (scheduledMs <= nowMs) continue; // must still be in the future
 

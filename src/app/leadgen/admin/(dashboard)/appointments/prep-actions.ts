@@ -35,6 +35,8 @@ import { BRIEF_TEMPLATE_WEBSITE_HSO } from "@/lib/leadgen-appointment-brief-temp
 import { renderBriefPdfAttachment } from "@/lib/leadgen-appointment-brief-pdf-data";
 import { createHash } from "node:crypto";
 import { fetchBrief, fetchClientPortalLogins, fetchSdrCallNotes } from "@/lib/leadgen-appointment-prep-data";
+import { loadQualificationBriefLines } from "@/lib/leadgen-appointment-qc";
+import { AWAITING_APPROVAL_MESSAGE, isClientNotifiable } from "@/lib/leadgen-qualification";
 
 type ActionResult = { error?: string; message?: string };
 
@@ -264,6 +266,7 @@ export async function previewAppointmentBriefEmailAction(appointmentId: string, 
   if (!appointment) return { error: "Appointment not found." };
   if (!isPreparableAppointment(appointment)) return { error: "Cancelled or replaced appointments can't be prepared." };
   if (hasAppointmentPassed(appointment)) return { error: "This appointment has already taken place - there is nothing left to prepare." };
+  if (!isClientNotifiable(appointment.qc_status)) return { error: AWAITING_APPROVAL_MESSAGE };
 
   const fields = {
     why_interested: trimmedOrNull(input.why_interested, BRIEF_LIMITS.why),
@@ -305,6 +308,7 @@ export async function previewAppointmentBriefEmailAction(appointmentId: string, 
         primaryNeed: trimmedOrNull(input.primary_need, BRIEF_LIMITS.need),
         recommendedObjective: trimmedOrNull(input.recommended_objective, BRIEF_LIMITS.objective),
         portalUrl,
+        qualificationLines: await loadQualificationBriefLines(admin, appointment),
       }),
     },
   };
@@ -329,6 +333,7 @@ export async function sendAppointmentBriefAction(
   if (!appointment) return { error: "Appointment not found." };
   if (!isPreparableAppointment(appointment)) return { error: "Cancelled or replaced appointments can't be prepared." };
   if (hasAppointmentPassed(appointment)) return { error: "This appointment has already taken place - there is nothing left to prepare." };
+  if (!isClientNotifiable(appointment.qc_status)) return { error: AWAITING_APPROVAL_MESSAGE };
 
   const subject = String(email?.subject ?? "").trim().slice(0, 200);
   const body = String(email?.body ?? "").trim().slice(0, 8000);

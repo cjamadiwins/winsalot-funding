@@ -29,6 +29,8 @@ export type BriefPdfInput = {
   meetingType: string | null;
   agentName: string | null;
   brief: AppointmentBriefRow;
+  // Appointment Quality Control summary lines (first line is the heading/verification label).
+  qualificationLines?: string[] | null;
 };
 
 const styles = StyleSheet.create({
@@ -120,6 +122,15 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
             <Field label="Service provider" value={input.clientName} />
           </View>
         </Section>
+
+        {input.qualificationLines && input.qualificationLines.length > 1 && (
+          <Section title="Qualification Summary">
+            <Text style={styles.body}>{input.qualificationLines[0]}</Text>
+            {input.qualificationLines.slice(1).map((line, index) => (
+              <Text key={index} style={styles.body}>{line}</Text>
+            ))}
+          </Section>
+        )}
 
         {(brief.why_interested || summary.length > 0) && (
           <Section title="Customer Requirements & Expressed Interests">

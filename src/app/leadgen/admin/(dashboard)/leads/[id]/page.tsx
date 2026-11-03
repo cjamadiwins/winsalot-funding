@@ -3,6 +3,8 @@ import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { loadLeadgenLeadDetail } from "@/lib/leadgen-lead-detail-data";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { fetchClientServices } from "@/lib/leadgen-client-services-data";
+import QualificationPanel from "@/components/leadgen/QualificationPanel";
+import { loadQualificationPanelData } from "@/lib/leadgen-appointment-qc";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
 import { clearBouncedEmailAction, resendLeadgenEmailAction } from "../../actions";
@@ -92,7 +94,20 @@ export default async function LeadgenAdminLeadDetailPage({
 
   const clientServices = await fetchClientServices(getSupabaseAdmin(), detail.lead.client_id, { activeOnly: true });
 
+  const qualificationPanel = await loadQualificationPanelData(getSupabaseAdmin(), { id: detail.lead.id, client_id: detail.lead.client_id, website: detail.lead.website ?? null });
+
   return (
+    <>
+      {qualificationPanel && (
+        <QualificationPanel
+          leadId={detail.lead.id}
+          clientName={detail.client!.name}
+          approvedServices={qualificationPanel.settings.approved_services}
+          initial={qualificationPanel.qualification}
+          preliminaryCategory={qualificationPanel.preliminaryCategory}
+          appointments={qualificationPanel.appointments}
+        />
+      )}
     <LeadDetailClient
       lead={detail.lead}
       client={detail.client!}
@@ -125,5 +140,6 @@ export default async function LeadgenAdminLeadDetailPage({
       proposal={detail.proposal}
         proposalDraft={detail.proposalDraft}
     />
+    </>
   );
 }
