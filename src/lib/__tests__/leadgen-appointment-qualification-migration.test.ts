@@ -181,6 +181,39 @@ describe("appointment approval enforced by the database", () => {
     expect(row2.qc_status).toBe("not_required");
   });
 
+  it("a signed-in agent cannot submit an appointment for a gated client without a qualified qualification", async () => {
+    const insert = (qualification: string) => `insert into leadgen_appointments (lead_id, client_id, campaign_id, assigned_specialist_id, booking_agent_id, qualification_id, appointment_notes)
+      values ('${leadHid2}','${hid}','${campHid}','${goodness}','${goodness}', ${qualification}, 'agent submit test')`;
+    await asUser(goodness);
+    await rejects(insert("null"), /qc_qualification_required/);
+    // A qualification for a different lead does not count either.
+    await asService();
+    const other = await rows<{ id: string }>(`select id from leadgen_lead_qualifications where lead_id='${leadHid}'`);
+    await asUser(goodness);
+    await rejects(insert(`'${other[0].id}'`), /qc_qualification_required/);
+    // An unqualified draft does not count.
+    await asService();
+    await db.exec(`update leadgen_lead_qualifications set outcome='not_qualified' where lead_id='${leadHid2}'`);
+    const draft = await rows<{ id: string }>(`select id from leadgen_lead_qualifications where lead_id='${leadHid2}'`);
+    await asUser(goodness);
+    await rejects(insert(`'${draft[0].id}'`), /qc_qualification_required/);
+    expect(await rows("select id from leadgen_appointments where appointment_notes='agent submit test'")).toEqual([]);
+  });
+
+  it("allows the same agent to submit once the lead is properly qualified, and keeps system bookings pending", async () => {
+    await asService();
+    await db.exec(`update leadgen_lead_qualifications set outcome='qualified' where lead_id='${leadHid}'`);
+    const q = await rows<{ id: string }>(`select id from leadgen_lead_qualifications where lead_id='${leadHid}'`);
+    await asUser(goodness);
+    await db.exec(`insert into leadgen_appointments (lead_id, client_id, campaign_id, assigned_specialist_id, booking_agent_id, qualification_id, appointment_notes)
+      values ('${leadHid}','${hid}','${campHid}','${goodness}','${goodness}','${q[0].id}', 'agent submit ok')`);
+    expect((await rows<{ qc_status: string }>("select qc_status from leadgen_appointments where appointment_notes='agent submit ok'"))[0].qc_status).toBe("pending_review");
+    // Service-role system booking (public page / Calendly): no signed-in user, held as pending without a qualification.
+    await asService();
+    await db.exec(`insert into leadgen_appointments (lead_id, client_id, campaign_id, appointment_notes) values (null,'${hid}','${campHid}','self booked')`);
+    expect((await rows<{ qc_status: string }>("select qc_status from leadgen_appointments where appointment_notes='self booked'"))[0].qc_status).toBe("pending_review");
+  });
+
   it("an agent session cannot change review state; Admin must", async () => {
     const { rows: [appt] } = await db.query<{ id: string }>(newAppt(leadHid, hid, campHid, goodness));
     await asUser(goodness);

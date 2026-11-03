@@ -28,7 +28,8 @@
 --     does not want lead generation only, and picked a service the client has Admin-
 --     approved;
 --   * a new appointment for a gated client always starts 'pending_review' (the caller
---     cannot choose another value);
+--     cannot choose another value), and a signed-in agent/Admin cannot even submit one
+--     without a valid, qualified qualification for that lead;
 --   * an appointment can only become 'approved' by an Admin reviewer, with a linked
 --     qualification that is still 'qualified' for the same lead and client;
 --   * 'rejected' needs a reason, 'needs_info' needs Admin feedback;
@@ -236,6 +237,21 @@ begin
     where s.client_id = new.client_id;
     -- The caller cannot choose the review state: gated clients always start pending.
     new.qc_status := case when coalesce(v_enabled, false) then 'pending_review' else 'not_required' end;
+    -- A signed-in user (agent or Admin) cannot submit an appointment for a gated
+    -- client unless it links a valid, qualified qualification for the same lead and
+    -- client. Server-side system bookings (public booking page, Calendly webhook) run
+    -- as the service role with no signed-in user; they are held as pending and can
+    -- never be approved without a qualification.
+    if new.qc_status = 'pending_review' and v_actor is not null then
+      select * into v_q from public.leadgen_lead_qualifications where id = new.qualification_id;
+      if not found
+         or v_q.outcome <> 'qualified'
+         or v_q.client_id <> new.client_id
+         or v_q.lead_id is distinct from new.lead_id
+         or not public.leadgen_qualification_is_qualifiable(v_q) then
+        raise exception 'qc_qualification_required: this client requires a complete, qualified qualification for the lead before an appointment can be submitted';
+      end if;
+    end if;
     new.qc_submitted_at := case when new.qc_status = 'pending_review' then now() else null end;
     new.qc_reviewed_by := null;
     new.qc_reviewed_at := null;
