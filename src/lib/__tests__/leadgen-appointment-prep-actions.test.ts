@@ -13,6 +13,11 @@ vi.mock("@/lib/leadgen-auth", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+const renderBriefPdfAttachmentMock = vi.fn();
+vi.mock("@/lib/leadgen-appointment-brief-pdf-data", () => ({
+  renderBriefPdfAttachment: (...args: unknown[]) => renderBriefPdfAttachmentMock(...args),
+}));
+
 const sendLeadgenEmailMock = vi.fn();
 vi.mock("@/lib/leadgen-email", () => ({
   sendLeadgenEmail: (...args: unknown[]) => sendLeadgenEmailMock(...args),
@@ -102,6 +107,7 @@ beforeEach(() => {
   requireLeadgenAdminMock.mockResolvedValue({ id: "admin-1", full_name: "Admin", email: "a@w.test" });
   requireLeadgenPortalClientMock.mockResolvedValue({ user: { id: "user-1" }, client: { id: "client-1" } });
   sendLeadgenEmailMock.mockResolvedValue({ emailId: "e1" });
+  renderBriefPdfAttachmentMock.mockResolvedValue({ filename: "appointment-brief-test.pdf", content: Buffer.from("%PDF-test") });
 });
 
 describe("Admin permissions", () => {
@@ -116,17 +122,73 @@ describe("Admin permissions", () => {
   });
 });
 
-describe("sendAppointmentBriefAction - Admin approval gate", () => {
-  it("does not email an unreviewed brief", async () => {
+describe("sendAppointmentBriefAction - approval, PDF and duplicate protection", () => {
+  function setup(briefOverride: Record<string, unknown> = {}) {
     adminDb = createMockSupabase({
       leadgen_appointments: [{ data: futureAppointment }],
-      leadgen_appointment_briefs: [{ data: null }, { data: { ...savedBrief, reviewed_at: null } }],
+      leadgen_appointment_briefs: [{ data: null }, { data: { ...savedBrief, ...briefOverride } }, { error: null }],
       leadgen_appointment_admin_notes: [{ error: null }],
       leadgen_clients: [{ data: clientRow }],
     });
+  }
+
+  it("sending an unreviewed brief from the preview step records the review at send time", async () => {
+    setup({ reviewed_at: null });
     const result = await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
-    expect(result.error).toMatch(/reviewed/i);
+    expect(result.error).toBeUndefined();
+    expect(sendLeadgenEmailMock).toHaveBeenCalledTimes(1);
+    const statusWrite = adminDb.ops.filter((o) => o.table === "leadgen_appointment_briefs").at(-1)!;
+    const update = statusWrite.calls.find(([m]) => m === "update")![1][0] as Record<string, unknown>;
+    expect(update.reviewed_at).toBeTruthy();
+    expect(update.reviewed_by).toBe("admin-1");
+  });
+
+  it("attaches the generated PDF and sends with an idempotency key", async () => {
+    setup();
+    await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
+    const input = sendLeadgenEmailMock.mock.calls[0][1];
+    expect(input.attachments).toHaveLength(1);
+    expect(input.attachments[0].filename).toBe("appointment-brief-test.pdf");
+    expect(input.requestKey).toMatch(/^brief:appt-1:pat@acme\.test:/);
+  });
+
+  it("sends nothing and reports a clear error if the PDF cannot be generated", async () => {
+    setup();
+    renderBriefPdfAttachmentMock.mockRejectedValueOnce(new Error("boom"));
+    const result = await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
+    expect(result.error).toMatch(/PDF could not be generated/);
     expect(sendLeadgenEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("a double click is not emailed twice and the status is not advanced by the duplicate", async () => {
+    setup();
+    sendLeadgenEmailMock.mockResolvedValueOnce({ emailId: "e1", error: "This email was already submitted. It has not been sent again.", duplicate: true });
+    adminDb = createMockSupabase({
+      leadgen_appointments: [{ data: futureAppointment }],
+      leadgen_appointment_briefs: [{ data: null }, { data: savedBrief }],
+      leadgen_appointment_admin_notes: [{ error: null }],
+      leadgen_clients: [{ data: clientRow }],
+      leadgen_emails: [{ data: { status: "delivered" } }],
+    });
+    const result = await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
+    expect(result.error).toMatch(/already submitted/);
+    expect(sendLeadgenEmailMock).toHaveBeenCalledTimes(1);
+    expect(adminDb.ops.filter((o) => o.table === "leadgen_appointment_briefs").flatMap((o) => o.calls).some(([m]) => m === "update")).toBe(false);
+  });
+
+  it("retries once when the earlier identical attempt had failed", async () => {
+    sendLeadgenEmailMock.mockResolvedValueOnce({ emailId: "e0", error: "This email was already submitted. It has not been sent again.", duplicate: true }).mockResolvedValueOnce({ emailId: "e2" });
+    adminDb = createMockSupabase({
+      leadgen_appointments: [{ data: futureAppointment }],
+      leadgen_appointment_briefs: [{ data: null }, { data: savedBrief }, { error: null }],
+      leadgen_appointment_admin_notes: [{ error: null }],
+      leadgen_clients: [{ data: clientRow }],
+      leadgen_emails: [{ data: { status: "failed" } }],
+    });
+    const result = await sendAppointmentBriefAction("appt-1", completeForm, reviewedEmail);
+    expect(result.error).toBeUndefined();
+    expect(sendLeadgenEmailMock).toHaveBeenCalledTimes(2);
+    expect(sendLeadgenEmailMock.mock.calls[1][1].requestKey).toContain(":retry:");
   });
 });
 
