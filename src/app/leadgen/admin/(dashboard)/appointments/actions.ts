@@ -6,6 +6,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendLeadgenEmail } from "@/lib/leadgen-email";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { isClientNotifiable } from "@/lib/leadgen-qualification";
+import { appointmentActivityType, checkQualificationForBooking, isAwaitingApproval } from "@/lib/leadgen-appointment-qc";
 import { sendLeadgenAppointmentEmail } from "@/lib/leadgen-appointment-emails";
 import {
   claimManualAppointmentReminderSlot,
@@ -104,9 +106,15 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const campaignId = campaignCheck.campaignId;
 
   const supabase = await createSupabaseServerClient();
+  // Appointment Quality Control: Admin-booked appointments for a gated client
+  // need the same recorded, qualified qualification as agent bookings, and
+  // also start "awaiting approval" (enforced by the database).
+  const qualificationGate = await checkQualificationForBooking(supabase, { clientId, leadId });
+  if (qualificationGate.required && !qualificationGate.ok) return { error: qualificationGate.error };
   const { data: appointment, error } = await supabase
     .from("leadgen_appointments")
     .insert({
+      ...(qualificationGate.required ? { qualification_id: qualificationGate.qualificationId } : {}),
       lead_id: leadId,
       client_id: clientId,
       campaign_id: campaignId,
@@ -133,20 +141,22 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   if (error || !appointment) return { error: "Failed to book the appointment." };
 
   if (leadId) {
+    // Held back from the client until Admin approval - see the agent booking action.
     await supabase
       .from("leadgen_leads")
-      .update({ status: "Appointment booked", last_contacted_at: new Date().toISOString() })
+      .update({ ...(qualificationGate.required ? {} : { status: "Appointment booked" }), last_contacted_at: new Date().toISOString() })
       .eq("id", leadId);
     await supabase.from("leadgen_lead_activities").insert({
       lead_id: leadId,
       agent_id: null,
-      activity_type: "appointment_booked",
+      activity_type: qualificationGate.required ? "note" : "appointment_booked",
       call_outcome: "Appointment booked",
       notes: `Appointment booked for ${appointmentDate} ${appointmentTime} (${timezone}) by ${adminUser.full_name || adminUser.email}.`,
     });
   }
 
-  if (formData.get("notify_client") === "true") {
+  const awaitingApproval = await isAwaitingApproval(getSupabaseAdmin(), appointment.id as string);
+  if (formData.get("notify_client") === "true" && !awaitingApproval) {
     const { data: client } = await supabase.from("leadgen_clients").select("contact_email").eq("id", clientId).maybeSingle();
     if (client?.contact_email) {
       await sendLeadgenEmail(supabase, {
@@ -180,16 +190,19 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
     .select("id, name, contact_name, contact_email, appointment_notification_emails, sms_notification_number")
     .eq("id", clientId)
     .maybeSingle();
-  await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {
-    table: "leadgen_appointment_sms_reminders",
-    appointmentId: appointment.id as string,
-    leadId,
-    scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(appointmentDate, appointmentTime, timezone)).toISOString(),
-    timezone,
-    prospectPhone: phone,
-    prospectConsent: isValidMobileNumber(phone),
-    businessName: clientForNotify?.name ?? "our team",
-  });
+  // Held back while the appointment awaits Admin approval; released on approval.
+  if (!awaitingApproval) {
+    await sendImmediateAppointmentConfirmation(getSupabaseAdmin(), {
+      table: "leadgen_appointment_sms_reminders",
+      appointmentId: appointment.id as string,
+      leadId,
+      scheduledAppointmentAtIso: new Date(zonedWallTimeToUtcMs(appointmentDate, appointmentTime, timezone)).toISOString(),
+      timezone,
+      prospectPhone: phone,
+      prospectConsent: isValidMobileNumber(phone),
+      businessName: clientForNotify?.name ?? "our team",
+    });
+  }
   if (clientForNotify) {
     await notifyOfNewLeadgenAppointment(
       {
@@ -212,8 +225,9 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   }
 
   revalidatePath("/leadgen/admin/appointments");
+  revalidatePath("/leadgen/admin/appointment-quality");
   if (leadId) revalidatePath(`/leadgen/admin/leads/${leadId}`);
-  return {};
+  return awaitingApproval ? { message: "Submitted for approval in Appointment Quality Control. The client and the prospect are not notified until it is approved." } : {};
 }
 
 // Fields "Edit Appointment" can change, each paired with a human label for
@@ -364,7 +378,7 @@ export async function updateAppointmentAction(appointmentId: string, formData: F
       await supabase.from("leadgen_lead_activities").insert({
         lead_id: appointment.lead_id,
         agent_id: null,
-        activity_type: "appointment_updated",
+        activity_type: await appointmentActivityType(getSupabaseAdmin(), appointmentId, "appointment_updated"),
         notes: `Appointment edited by ${adminUser.full_name || adminUser.email}:\n${changedLines.join("\n")}`,
       });
     }
@@ -432,7 +446,7 @@ export async function cancelOrReplaceAppointmentAction(appointmentId: string, fo
     await supabase.from("leadgen_lead_activities").insert({
       lead_id: appointment.lead_id,
       agent_id: null,
-      activity_type: "appointment_updated",
+      activity_type: await appointmentActivityType(getSupabaseAdmin(), appointmentId, "appointment_updated"),
       notes: reason
         ? `Appointment marked "${newStatus}" by ${adminUser.full_name || adminUser.email}. Reason: ${reason}`
         : `Appointment marked "${newStatus}" by ${adminUser.full_name || adminUser.email}.`,
@@ -549,11 +563,13 @@ export async function deleteLeadgenAppointmentAction(appointmentId: string): Pro
 
   const { data: appointment, error: readError } = await supabase
     .from("leadgen_appointments")
-    .select("id, lead_id, business_name")
+    .select("id, lead_id, business_name, qc_status")
     .eq("id", appointmentId)
     .maybeSingle();
   if (readError) return { error: "Failed to load the appointment." };
   if (!appointment) return { error: "Appointment not found." };
+  // Deleting an appointment the client never saw must not appear in the client's feed.
+  const deletedActivityType = isClientNotifiable((appointment as { qc_status?: string | null }).qc_status) ? "appointment_updated" : "note";
 
   const { error } = await supabase.from("leadgen_appointments").delete().eq("id", appointmentId);
   if (error) return { error: "Failed to delete the appointment." };
@@ -562,7 +578,7 @@ export async function deleteLeadgenAppointmentAction(appointmentId: string): Pro
     await supabase.from("leadgen_lead_activities").insert({
       lead_id: appointment.lead_id,
       agent_id: null,
-      activity_type: "appointment_updated",
+      activity_type: deletedActivityType,
       notes: `Appointment for ${appointment.business_name} permanently deleted by ${adminUser.full_name || adminUser.email}.`,
     });
   }

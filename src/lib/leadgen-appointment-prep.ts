@@ -547,6 +547,8 @@ export function buildBriefEmailBody(input: {
   primaryNeed: string | null;
   recommendedObjective: string | null;
   portalUrl: string;
+  // Appointment Quality Control: the qualification summary (see buildQualificationBriefLines).
+  qualificationLines?: string[] | null;
 }): string {
   const paragraphs = (input.summary ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   let discussion = clean(input.recommendedObjective);
@@ -577,6 +579,7 @@ export function buildBriefEmailBody(input: {
     ...bodyParagraphs,
     ...(highlights.length ? [highlights.join("\n")] : []),
     details.join("\n"),
+    ...(input.qualificationLines && input.qualificationLines.length > 0 ? [input.qualificationLines.join("\n")] : []),
     "A PDF copy of the brief is attached.",
     `${BRIEF_LINK_MARKER} (sign in to the Winsalot Client Portal):\n${input.portalUrl}`,
     "Regards,\nWinsalot Corp.",

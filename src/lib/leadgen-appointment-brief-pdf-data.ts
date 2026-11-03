@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppointmentBriefRow } from "./leadgen-appointment-prep";
 import type { LeadgenAppointmentRow } from "./leadgen-types";
 import { renderAppointmentBriefPdf, type BriefPdfInput } from "./leadgen-appointment-brief-pdf";
+import { loadQualificationBriefLines } from "./leadgen-appointment-qc";
 
 // Shared by the PDF preview/download route and the Send Appointment Brief
 // action, so the PDF Admin previews is exactly the PDF that is attached.
@@ -13,6 +14,7 @@ export async function buildBriefPdfInput(
   brief: AppointmentBriefRow,
   clientName: string
 ): Promise<BriefPdfInput> {
+  const qualificationLines = await loadQualificationBriefLines(admin, appointment);
   const [{ data: lead }, { data: agent }] = await Promise.all([
     appointment.lead_id ? admin.from("leadgen_leads").select("website, industry").eq("id", appointment.lead_id).maybeSingle() : Promise.resolve({ data: null }),
     appointment.assigned_specialist_id ? admin.from("leadgen_users").select("full_name").eq("id", appointment.assigned_specialist_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -31,6 +33,7 @@ export async function buildBriefPdfInput(
     meetingType: appointment.meeting_type,
     agentName: (agent as { full_name: string } | null)?.full_name ?? null,
     brief,
+    qualificationLines,
   };
 }
 

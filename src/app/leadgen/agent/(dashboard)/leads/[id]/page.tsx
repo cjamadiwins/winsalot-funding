@@ -6,6 +6,8 @@ import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/L
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchClientServices } from "@/lib/leadgen-client-services-data";
 import { prepareProposalRequestAction } from "./proposal-actions";
+import QualificationPanel from "@/components/leadgen/QualificationPanel";
+import { loadQualificationPanelData } from "@/lib/leadgen-appointment-qc";
 import { bookAppointmentAction } from "../../appointments/actions";
 import {
   completeFollowUpAction,
@@ -74,7 +76,10 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
 
   // Read-only client Products, Services & Pricing through the agent's own
   // session (RLS: active entries of assigned clients only).
-  const clientServices = await fetchClientServices(await createSupabaseServerClient(), detail.client!.id, { activeOnly: true });
+  const sessionClient = await createSupabaseServerClient();
+  const clientServices = await fetchClientServices(sessionClient, detail.client!.id, { activeOnly: true });
+  // Appointment Quality Control card - only for clients that require qualification.
+  const qualificationPanel = await loadQualificationPanelData(sessionClient, { id: detail.lead.id, client_id: detail.client!.id, website: detail.lead.website ?? null });
 
   return (
     <>
@@ -84,6 +89,16 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
         <span className="font-semibold">Calling for: {detail.client!.name}</span>
         {detail.campaign && <span className="text-sky-700">Campaign: {detail.campaign.name}</span>}
       </div>
+      {qualificationPanel && (
+        <QualificationPanel
+          leadId={detail.lead.id}
+          clientName={detail.client!.name}
+          approvedServices={qualificationPanel.settings.approved_services}
+          initial={qualificationPanel.qualification}
+          preliminaryCategory={qualificationPanel.preliminaryCategory}
+          appointments={qualificationPanel.appointments}
+        />
+      )}
     <LeadDetailClient
       lead={detail.lead}
       client={detail.client!}
