@@ -335,7 +335,7 @@ export function buildQualificationBriefLines(input: BriefQualificationInput): st
 // Reporting
 // ---------------------------------------------------------------------------
 export type QcCallRow = { client_id: string; agent_id: string | null; contact_key: string };
-export type QcQualificationRow = { client_id: string; agent_id: string | null; outcome: string };
+export type QcQualificationRow = { client_id: string; agent_id: string | null; outcome: string; lead_gen_only?: boolean };
 export type QcAppointmentRow = {
   id: string;
   client_id: string;
@@ -349,6 +349,8 @@ export type QcConversionRow = { appointment_id: string | null; conversion_status
 export type QcMetrics = {
   contacted: number;
   qualified: number;
+  // Prospects screened out because they only wanted lead generation.
+  leadGenOnly: number;
   submitted: number;
   approved: number;
   rejected: number;
@@ -360,7 +362,7 @@ export type QcMetrics = {
 };
 export type QcMetricsGroup = { clientId: string; clientName: string; totals: QcMetrics; agents: { agentId: string | null; agentName: string; metrics: QcMetrics }[] };
 
-const emptyMetrics = (): QcMetrics => ({ contacted: 0, qualified: 0, submitted: 0, approved: 0, rejected: 0, needsInfo: 0, pending: 0, completed: 0, converted: 0, rejectionReasons: {} });
+const emptyMetrics = (): QcMetrics => ({ contacted: 0, qualified: 0, leadGenOnly: 0, submitted: 0, approved: 0, rejected: 0, needsInfo: 0, pending: 0, completed: 0, converted: 0, rejectionReasons: {} });
 
 const CONVERTED_STATUSES = ["converted_paid", "converted_payment_pending"];
 
@@ -390,7 +392,10 @@ export function buildQcMetrics(input: {
     seenContacts.add(key);
     get(call.client_id, call.agent_id).contacted += 1;
   }
-  for (const q of input.qualifications) if (q.outcome === "qualified") get(q.client_id, q.agent_id).qualified += 1;
+  for (const q of input.qualifications) {
+    if (q.outcome === "qualified") get(q.client_id, q.agent_id).qualified += 1;
+    else if (q.outcome === "not_qualified" && q.lead_gen_only) get(q.client_id, q.agent_id).leadGenOnly += 1;
+  }
   for (const a of input.appointments) {
     if (a.qc_status === "not_required") continue; // never went through review
     const m = get(a.client_id, a.agent_id);
@@ -408,7 +413,7 @@ export function buildQcMetrics(input: {
   }
 
   const add = (target: QcMetrics, source: QcMetrics) => {
-    for (const key of ["contacted", "qualified", "submitted", "approved", "rejected", "needsInfo", "pending", "completed", "converted"] as const) target[key] += source[key];
+    for (const key of ["contacted", "qualified", "leadGenOnly", "submitted", "approved", "rejected", "needsInfo", "pending", "completed", "converted"] as const) target[key] += source[key];
     for (const [reason, n] of Object.entries(source.rejectionReasons)) target.rejectionReasons[reason] = (target.rejectionReasons[reason] ?? 0) + n;
   };
 

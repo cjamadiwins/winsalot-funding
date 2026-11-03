@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 import type { LeadgenBuiltCallScript } from "@/lib/leadgen-call-script";
+import { GUIDE_PREVIEW_SERVICES } from "@/lib/leadgen-call-guide";
+import InteractiveCallGuide from "./InteractiveCallGuide";
 
 // Compact, easy-to-read rendering of one built call script - shared by the
 // dashboard Client Call Script card, the Client Detail page, and the Call
@@ -23,6 +25,28 @@ export default function ClientCallScriptPanel({ script, compact = false }: { scr
       // Clipboard access can fail (e.g. insecure context, denied
       // permission) - never blocks the agent from reading the script.
     }
+  }
+
+  // Hidebrandt / Teknokraft: the interactive guide replaces the static blocks.
+  // It is a preview here (no lead in context); the lead page records answers.
+  if (script.guide) {
+    return (
+      <div>
+        <InteractiveCallGuide guide={script.guide} agentName={script.agentName ?? ""} approvedServices={GUIDE_PREVIEW_SERVICES[script.guide.clientKey]} compact={compact} />
+        {script.adminScript && (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin Campaign Script</p>
+            <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">{script.adminScript}</p>
+          </div>
+        )}
+        {script.notes && (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Internal Agent Notes — not for the prospect</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">{script.notes}</p>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

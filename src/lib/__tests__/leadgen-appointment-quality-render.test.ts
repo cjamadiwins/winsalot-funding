@@ -67,7 +67,7 @@ const item = (over: Partial<QueueItem>): QueueItem => ({
   ...over,
 });
 
-const emptyMetrics = { contacted: 0, qualified: 0, submitted: 0, approved: 0, rejected: 0, needsInfo: 0, pending: 0, completed: 0, converted: 0, rejectionReasons: {} };
+const emptyMetrics = { contacted: 0, qualified: 0, leadGenOnly: 0, submitted: 0, approved: 0, rejected: 0, needsInfo: 0, pending: 0, completed: 0, converted: 0, rejectionReasons: {} };
 
 const data: AppointmentQualityData = {
   migrationMissing: false,

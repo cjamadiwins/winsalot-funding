@@ -240,6 +240,7 @@ function MetricRow({ label, m, strong }: { label: string; m: QcMetrics; strong?:
       <td className="px-2 py-1.5">{label}</td>
       <td className={cell}>{m.contacted}</td>
       <td className={cell}>{m.qualified}</td>
+      <td className={cell}>{m.leadGenOnly}</td>
       <td className={cell}>{m.submitted}</td>
       <td className={cell}>{m.approved}</td>
       <td className={cell}>{m.rejected}</td>
@@ -346,12 +347,13 @@ export default function AppointmentQualityClient({ data, highlight }: { data: Ap
             <div key={group.clientId} className="mt-4">
               <h3 className="text-[14px] font-bold text-slate-800">{group.clientName}</h3>
               <div className="mt-1 overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
+                <table className="w-full min-w-[800px] text-sm">
                   <thead className="text-[11.5px] uppercase text-slate-500">
                     <tr>
                       <th className="px-2 py-1 text-left">Agent</th>
                       <th className="px-2 text-right">Leads contacted</th>
                       <th className="px-2 text-right">Qualified</th>
+                      <th className="px-2 text-right">Lead-gen only</th>
                       <th className="px-2 text-right">Submitted</th>
                       <th className="px-2 text-right">Approved</th>
                       <th className="px-2 text-right">Rejected</th>

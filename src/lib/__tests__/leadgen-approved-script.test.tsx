@@ -79,7 +79,8 @@ describe("standard approved website-services opening", () => {
   it("buildLeadgenCallScript uses the standard opening for website campaigns but still admin-overridable as additional text", () => {
     const client = { name: "Hidebrandt Web Services", ...baseClient, call_script_override: "Extra: mention Winnipeg." };
     const script = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client });
-    expect(script.opening?.[0]).toContain("Hi, my name is Goodness from Winsalot Corp., calling on behalf of Hidebrandt Web Services.");
+    expect(script.opening?.[0]).toBe("Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.");
+    expect(script.guide?.clientKey).toBe("hidebrandt");
     expect(script.adminScript).toBe("Extra: mention Winnipeg.");
     expect(script.isCustomOverride).toBe(false);
   });
@@ -95,13 +96,16 @@ describe("standard approved website-services opening", () => {
 describe("approved script panel rendering", () => {
   it("shows the correct agent and client automatically", () => {
     const henry = renderToStaticMarkup(createElement(ApprovedScriptPanel, { payload: teknokraft, agentName: "Henry Osuji" }));
-    expect(henry).toContain("Hi, my name is Henry from Winsalot Corp., calling on behalf of Teknokraft Canada Inc.");
+    expect(henry).toContain("Hi, my name is Henry, calling from Winsalot Corp. on behalf of Teknokraft Canada Inc.");
     expect(henry).not.toContain("Hidebrandt");
     const goodness = renderToStaticMarkup(createElement(ApprovedScriptPanel, { payload: hidebrandt, agentName: "Goodness Ugbana" }));
-    expect(goodness).toContain("Hi, my name is Goodness from Winsalot Corp., calling on behalf of Hidebrandt Web Services");
+    expect(goodness).toContain("Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Hidebrandt Web Services");
     expect(goodness).not.toContain("Teknokraft");
+    // Web6 Solutions keeps the standard script and its sections untouched.
+    const web6 = renderToStaticMarkup(createElement(ApprovedScriptPanel, { payload: payload("Web6 Solutions", "Calgary Plumbers"), agentName: "Henry Osuji" }));
+    expect(web6).toContain("Hi, my name is Henry from Winsalot Corp., calling on behalf of Web6 Solutions");
     for (const section of ["Opening", "Qualification questions", "Key talking points", "Objection handling", "Appointment / CTA"]) {
-      expect(goodness).toContain(section);
+      expect(web6).toContain(section);
     }
   });
 });
