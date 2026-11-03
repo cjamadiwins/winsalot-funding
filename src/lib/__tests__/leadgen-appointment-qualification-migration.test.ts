@@ -166,6 +166,41 @@ describe("qualification rules enforced by the database", () => {
   });
 });
 
+describe("rules apply separately to Hidebrandt and Teknokraft", () => {
+  const ecommerceOnly = (lead: string, client: string, camp: string, agent: string) => `
+    insert into leadgen_lead_qualifications (lead_id, client_id, campaign_id, agent_id, has_website, interested_in_new_or_redesign, satisfied_with_site,
+      needs_ecommerce, interested_in_seo, challenges, understands_services, agreed_to_appointment, services_of_interest, outcome)
+    values ('${lead}', '${client}', '${camp}', '${agent}', 'no', 'neither', 'not_applicable', 'yes', 'no', 'Wants an online store', true, true, array['ecommerce'], 'qualified')`;
+
+  it("identical e-commerce-only answers are Qualified for Hidebrandt but rejected for Teknokraft", async () => {
+    await asService();
+    // Fresh leads so earlier tests' rows do not interfere.
+    const hidLead = "30000000-0000-0000-0000-0000000000a1";
+    const tekLead = "30000000-0000-0000-0000-0000000000a2";
+    await db.exec(`insert into leadgen_leads values ('${hidLead}','${hid}','${campHid}','${goodness}',null), ('${tekLead}','${tek}','${campTek}','${henry}',null)`);
+    await db.exec(ecommerceOnly(hidLead, hid, campHid, goodness));
+    await rejects(ecommerceOnly(tekLead, tek, campTek, henry), /qualification_incomplete/);
+    // Once Admin confirms Teknokraft offers e-commerce, the same answers pass - and Hidebrandt is unaffected.
+    await db.exec(`update leadgen_client_qualification_settings set approved_services = approved_services || array['ecommerce'] where client_id='${tek}'`);
+    await db.exec(ecommerceOnly(tekLead, tek, campTek, henry));
+    expect((await rows<{ approved_services: string[] }>(`select approved_services from leadgen_client_qualification_settings where client_id='${hid}'`))[0].approved_services).toContain("ecommerce");
+    await db.exec(`update leadgen_client_qualification_settings set approved_services = array_remove(approved_services, 'ecommerce') where client_id='${tek}'`);
+    await db.exec(`delete from leadgen_lead_qualifications where lead_id in ('${hidLead}','${tekLead}'); delete from leadgen_leads where id in ('${hidLead}','${tekLead}')`);
+  });
+
+  it("turning one client's requirement off does not change the other client's", async () => {
+    await asService();
+    await db.exec(`update leadgen_client_qualification_settings set enabled=false where client_id='${tek}'`);
+    const tekAppt = await db.query<{ id: string }>(`insert into leadgen_appointments (client_id, campaign_id, appointment_notes) values ('${tek}','${campTek}','tek ungated now') returning id`);
+    const hidAppt = await db.query<{ id: string }>(`insert into leadgen_appointments (client_id, campaign_id, appointment_notes) values ('${hid}','${campHid}','hid still gated') returning id`);
+    const status = async (id: string) => (await rows<{ qc_status: string }>(`select qc_status from leadgen_appointments where id='${id}'`))[0].qc_status;
+    expect(await status(tekAppt.rows[0].id)).toBe("not_required");
+    expect(await status(hidAppt.rows[0].id)).toBe("pending_review");
+    await db.exec(`update leadgen_client_qualification_settings set enabled=true where client_id='${tek}'`);
+    await db.exec(`delete from leadgen_appointments where id in ('${tekAppt.rows[0].id}','${hidAppt.rows[0].id}')`);
+  });
+});
+
 describe("appointment approval enforced by the database", () => {
   const newAppt = (lead: string, client: string, camp: string, agent: string, extra = "") =>
     `insert into leadgen_appointments (lead_id, client_id, campaign_id, assigned_specialist_id, booking_agent_id, appointment_notes ${extra ? ", " + extra.split("|")[0] : ""})
