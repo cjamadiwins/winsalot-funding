@@ -1,4 +1,8 @@
--- STATUS: PREPARED, NOT YET EXECUTED against production as of this commit. The staged-chunk variant (per-row hash-verified) is what will run; this file is the full-payload reference and carries the same payload checksum.
+-- STATUS: EXECUTED 2026-11-03 against Supabase project 'Business Finance' (zntjevfbkouftyvtrzyu) via per-row hash-verified staged chunks (same payload checksum as below).
+-- RESULT: 387 CSV rows -> 239 assigned to Henry Osuji (120 No Website, 119 Website Review), 125 Admin Review (unassigned, Admin-only, 42 flagged possible duplicate/shared identifiers),
+-- 14 skipped (already in CRM), 9 skipped (in-file duplicates). 0 confirmed redesign opportunities (no site audit; 19 Henry-list leads carry an unverified no-SSL note).
+-- VERIFIED: no pre-existing row changed in 16 tables; no duplicates within the new lists or vs existing CRM phones; Henry sees only his 2 new lists under RLS; Admin sees all 3.
+-- Reverse (admin): delete call_list_leads where segment_id in the 3 segments with source_file_name = the CSV, then those segments, their segment_agents rows, the campaign agent row, and the campaign.
 -- Lead Generation CRM data-only import. Hidebrandt Web Services -> Winnipeg Plumbing Contractors -> Henry Osuji only.
 -- Source CSV (unchanged, in repo root): campaign-125885-search-933634-plumber_winnipeg-mb-canada_67a95ec8f6cc9e3295eae763fc3e13d5.csv (387 rows).
 -- Buckets: No Website (website blank or a social/directory profile only), Website Review (own website present; no defect presumed,
