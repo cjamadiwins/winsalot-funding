@@ -40,3 +40,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Google Ads API credentials (never commit)
+.env
+google-ads.yaml
+credentials/
+client_secret*.json
+credentials*.json
+token*.json
+
+# Python (google-ads-integration/)
+venv/
+__pycache__/
+*.pyc
