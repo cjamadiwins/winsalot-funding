@@ -387,3 +387,48 @@ describe("proposal status", () => {
     expect(counts).toEqual({ proposal_requested: 2, in_preparation: 0, proposal_sent: 0, accepted: 1, declined: 1 });
   });
 });
+
+describe("information request for a prospect who asked to see more (iBot Roofing)", () => {
+  const tek = { name: "Teknokraft Canada Inc.", slug: "teknokraft-canada" };
+  const ibot = {
+    business_name: "iBot Roofing",
+    contact_name: "Andrew",
+    industry: "Roofing",
+    email: "info@ibotroofing.com",
+    phone: "647-381-4551",
+    website: null,
+    city: "Markham",
+    province: "Ontario",
+    notes: "INTERNAL: he wants me to send more info to see how good we are.",
+    client_notes: null,
+  } as unknown as LeadgenLeadRow;
+  const draft = buildProposalRequestDraft({
+    client: tek,
+    lead: ibot,
+    brief: {
+      decisionMaker: "Andrew",
+      services: ["website_design", "seo", "local_search", "portfolio", "service_packages"],
+      servicesConfirmed: false,
+      prospectNote: "He asked for more information to see whether Teknokraft is a good fit.",
+      leadSource: "Cold Call",
+      leadId: "9dddabe4-0547-4730-ab53-ae536608f7b3",
+    },
+  });
+
+  it("is addressed to Teknokraft and carries the prospect, source and lead id", () => {
+    expect(draft.subject).toBe("Proposal Requested – iBot Roofing | Teknokraft Canada Inc.");
+    for (const text of ["Hello Teknokraft Team,", "Business Name: iBot Roofing", "Decision-Maker: Andrew", "Email: info@ibotroofing.com", "Phone: +1 647-381-4551", "Address: Markham, Ontario", "Industry: Roofing", "Lead Source: Cold Call", "Lead ID: 9dddabe4-0547-4730-ab53-ae536608f7b3"]) {
+      expect(draft.body).toContain(text);
+    }
+  });
+
+  it("covers the five areas as suggestions, not confirmed requirements, and never copies internal notes", () => {
+    expect(draft.body).not.toContain("Services requested");
+    expect(draft.body).toContain("The prospect has not confirmed any project requirements");
+    for (const text of ["Website design and development", "Search Engine Optimization (SEO)", "Local search visibility", "Portfolio and previous work", "Service packages and estimated pricing", "Examples of completed websites"]) {
+      expect(draft.body).toContain(text);
+    }
+    expect(draft.body).not.toContain("INTERNAL");
+    expect(validateProposalRequest(draft)).toBeNull();
+  });
+});

@@ -142,6 +142,7 @@ export const PROPOSAL_SERVICES = [
     listed: "Search Engine Optimization (SEO) to improve Google search visibility and attract potential customers.",
     ask: "Review the prospect’s existing website and recommend an appropriate SEO strategy.",
     optional: false,
+    recommendAsk: "",
   },
   {
     key: "website_improvements",
@@ -150,6 +151,7 @@ export const PROPOSAL_SERVICES = [
     listed: "Recommendations to improve the website’s functionality, user experience and the customer inquiries it generates.",
     ask: "Recommend improvements to the website’s functionality, user experience and customer inquiries.",
     optional: false,
+    recommendAsk: "",
   },
   {
     key: "rebranding",
@@ -158,6 +160,46 @@ export const PROPOSAL_SERVICES = [
     listed: "Website rebranding to modernize the company’s online presence. This is a possible additional service only; it is not an approved project.",
     ask: "Outline website rebranding separately as an optional add-on, with its own estimate, deliverables and timeline.",
     optional: true,
+    recommendAsk: "",
+  },
+  // Information-request areas (a prospect who asked to "see how good we are"): suggested for the
+  // client to present, never confirmed requirements. Listed after the original three so the
+  // existing request wording is unchanged.
+  {
+    key: "website_design",
+    label: "Website design and development (modern, mobile-friendly)",
+    possible: "Website design and development (modern, mobile-friendly websites)",
+    listed: "Modern, mobile-friendly website design and development.",
+    ask: "Describe your website design and development service.",
+    optional: false,
+    recommendAsk: "Information on your website design and development services, including modern, mobile-friendly websites for businesses like the prospect’s.",
+  },
+  {
+    key: "local_search",
+    label: "Local search visibility (Google Business Profile, local SEO)",
+    possible: "Local search visibility (attracting customers in the prospect’s city and surrounding communities)",
+    listed: "Local search visibility to attract customers in the prospect’s city and surrounding communities.",
+    ask: "Describe how you improve local search visibility.",
+    optional: false,
+    recommendAsk: "Information on how you help a local business attract customers in its city and the surrounding communities through local search.",
+  },
+  {
+    key: "portfolio",
+    label: "Portfolio and previous work",
+    possible: "Portfolio and previous work",
+    listed: "Examples of completed websites, preferably for trade or home-service businesses.",
+    ask: "Share examples of completed websites, preferably for trade or home-service businesses.",
+    optional: false,
+    recommendAsk: "Examples of completed websites, preferably for trade or home-service businesses such as roofing.",
+  },
+  {
+    key: "service_packages",
+    label: "Service packages and estimated pricing",
+    possible: "Service packages and estimated pricing",
+    listed: "Available service packages and estimated pricing, where appropriate.",
+    ask: "Outline your available service packages and estimated pricing, where appropriate.",
+    optional: false,
+    recommendAsk: "Your available service packages and estimated pricing, where appropriate.",
   },
 ] as const;
 
@@ -179,6 +221,9 @@ export type ProposalBrief = {
   prospectNote?: string | null;
   // The Winsalot agent who generated the lead, so the client knows who to reply about.
   assignedAgent?: string | null;
+  // Where the lead came from and its CRM id, so the client can quote them back.
+  leadSource?: string | null;
+  leadId?: string | null;
 };
 
 // The prospect's address from the lead's own fields. Imported leads sometimes carry the whole address
@@ -274,6 +319,8 @@ function buildBriefBody(input: {
     `Website: ${formatProposalWebsite(lead.website) ?? notProvided}`,
     ...(formatProposalAddress(lead) ? [`Address: ${formatProposalAddress(lead)}`] : []),
     ...(lead.industry?.trim() ? [`Industry: ${lead.industry.trim()}`] : []),
+    ...(brief.leadSource?.trim() ? [`Lead Source: ${brief.leadSource.trim()}`] : []),
+    ...(brief.leadId?.trim() ? [`Lead ID: ${brief.leadId.trim()}`] : []),
     ...(brief.assignedAgent?.trim() ? [`Winsalot Agent: ${brief.assignedAgent.trim()}`] : []),
   ].join("\n");
 
@@ -360,12 +407,13 @@ function buildUnconfirmedBody(input: {
     [
       `What we are asking ${clientName} to provide:`,
       "- Review the prospect’s existing website and recommend suitable digital solutions. These may include the areas above, or others you consider more appropriate.",
+      ...services.filter((service) => service.recommendAsk).map((service) => `- ${service.recommendAsk}`),
       "- Your recommended services, and why you recommend each one.",
       "- Estimated pricing for each recommended service, based on your own review.",
       "- The deliverables included in each recommended service.",
       "- Implementation timelines.",
     ].join("\n"),
-    "This request is for a proposal only. It does not approve any project or confirm any service, and it does not commit Winsalot Corp. or the prospect to any price, scope, ranking or result. Please base every estimate on your own review of the website, and do not guarantee specific search rankings or results.",
+    "The prospect has not confirmed any project requirements. This request is for information and a proposal only. It does not approve any project or confirm any service, and it does not commit Winsalot Corp. or the prospect to any price, scope, ranking or result. Please base every estimate on your own review of the website, and do not guarantee specific search rankings or results.",
     "Kindly confirm when the proposal is ready so we can coordinate the next steps.",
     PROPOSAL_SIGNATURE,
   ]
