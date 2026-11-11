@@ -31,6 +31,9 @@ type Props = {
   appointments: PanelAppointment[];
   // Logged-in user's name, used to fill [Agent Name] in the call guide.
   agentName?: string;
+  // Defaults to the real server action. Injectable only so the click-to-save
+  // behaviour can be exercised in a browser test without a signed-in session.
+  saveQualification?: typeof saveQualificationAction;
 };
 
 function Choice<T extends string>({ name, value, options, onChange }: { name: string; value: T | null; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
@@ -59,7 +62,7 @@ const YES_NO_UNSURE = [
 // this client actually offers, the filtering category (preliminary until the
 // agent submits), and the approval status of any appointment for this lead.
 // The database enforces the same rules - this only gives earlier feedback.
-export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments, agentName = "" }: Props) {
+export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments, agentName = "", saveQualification = saveQualificationAction }: Props) {
   const callGuide = getCallGuide(clientName);
   const [answers, setAnswers] = useState<QualificationAnswers>(() => (initial ? { ...EMPTY_ANSWERS, ...initial } : EMPTY_ANSWERS));
   const [outcome, setOutcome] = useState<QualificationOutcome>(initial?.outcome ?? "draft");
@@ -74,12 +77,28 @@ export default function QualificationPanel({ leadId, clientName, approvedService
   const liveCategory = useMemo(() => classifyFromAnswers(answers, approvedServices), [answers, approvedServices]);
   const suggested = useMemo(() => suggestOutcome(answers, approvedServices), [answers, approvedServices]);
 
+  // The Google-step buttons save as they are clicked, so the prospect's answer
+  // is on the lead straight away and survives a refresh. The save keeps the
+  // lead's current status (a draft stays a draft), writes no history entry and
+  // never creates or changes an appointment.
+  const [googleSave, setGoogleSave] = useState<{ state: "idle" | "saving" | "saved" | "error"; text?: string }>({ state: "idle" });
+  const guideChange = (patch: Partial<QualificationAnswers>) => {
+    const next = { ...answers, ...patch };
+    setAnswers(next);
+    if (!("google_interest" in patch) && !("online_customers_satisfied" in patch)) return;
+    setGoogleSave({ state: "saving" });
+    void saveQualification({ leadId, answers: next, outcome, quiet: true }).then(
+      (result) => setGoogleSave(result.error ? { state: "error", text: result.error } : { state: "saved" }),
+      () => setGoogleSave({ state: "error", text: "Could not save. Check your connection and try again." })
+    );
+  };
+
   const toggleService = (key: string) => set("services_of_interest", answers.services_of_interest.includes(key) ? answers.services_of_interest.filter((s) => s !== key) : [...answers.services_of_interest, key]);
 
   const save = (next: QualificationOutcome) => {
     setMessage(null);
     startTransition(async () => {
-      const result = await saveQualificationAction({ leadId, answers, outcome: next });
+      const result = await saveQualification({ leadId, answers, outcome: next });
       if (result.error) {
         setMessage({ kind: "error", text: result.error });
         return;
@@ -145,12 +164,13 @@ export default function QualificationPanel({ leadId, clientName, approvedService
             agentName={agentName}
             approvedServices={approvedServices}
             value={answers}
-            onChange={(patch) => setAnswers((prev) => ({ ...prev, ...patch }))}
+            onChange={guideChange}
             onMarkNotQualified={() => save("not_qualified")}
             pending={pending}
+            googleSave={googleSave}
             compact
           />
-          <p className="mt-1.5 text-[11.5px] text-slate-500">Answers in the guide fill the same questions below. Nothing is saved until you use a save button.</p>
+          <p className="mt-1.5 text-[11.5px] text-slate-500">Answers in the guide fill the same questions below. The Google question saves as you click it; everything else is saved when you use a save button. Nothing here books an appointment.</p>
         </div>
       )}
 

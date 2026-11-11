@@ -208,3 +208,35 @@ describe("agent qualification card", () => {
     expect(html).toContain("Resubmit for approval");
   });
 });
+
+describe("saved Google answer is still there after a page refresh", () => {
+  // A refresh re-renders the panel from the saved record (`initial`).
+  const hydrated = (clientName: string, approvedServices: string[], google_interest: "yes" | "more" | "no") =>
+    renderToStaticMarkup(
+      createElement(QualificationPanel, {
+        leadId: "lead-1",
+        clientName,
+        approvedServices,
+        initial: { ...qualification, ...EMPTY_ANSWERS, google_interest, outcome: "draft", category: null, category_source: "auto_preliminary" },
+        preliminaryCategory: "requires_further_qualification",
+        appointments: [],
+      })
+    );
+
+  for (const [clientName, services] of [["Hidebrandt Web Services", HID], ["Teknokraft Canada Inc.", TEK]] as const) {
+    it(`${clientName}: the chosen button is pressed and its response is showing`, () => {
+      for (const [choice, label, probe] of [["yes", "Yes, I’m interested", "That’s "], ["more", "Tell me more", "Of course!"], ["no", "No, not interested", "No problem at all."]] as const) {
+        const html = hydrated(clientName, [...services], choice);
+        expect(html).toMatch(new RegExp(`aria-pressed="true"[^>]*>${label}</button>`));
+        expect(html).toContain('data-testid="google-response"');
+        expect(html).toContain(probe);
+      }
+    });
+  }
+
+  it("no booking or appointment is created or shown just because an answer was chosen", () => {
+    const html = hydrated("Hidebrandt Web Services", HID, "yes");
+    expect(html).not.toContain('data-testid="booking-script"');
+    expect(html).not.toMatch(/Appointment \d{4}-\d{2}-\d{2}/);
+  });
+});

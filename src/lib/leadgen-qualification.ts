@@ -275,6 +275,8 @@ export function classifyFromAnswers(a: QualificationAnswers, approvedServices: r
   if (a.interested_in_new_or_redesign === "redesign" || a.interested_in_new_or_redesign === "both") wants.add("redesign");
   if (a.needs_ecommerce === "yes") wants.add("ecommerce");
   if (a.interested_in_seo === "yes") wants.add("seo");
+  // "Yes, I'm interested" in ranking higher on Google is interest in search visibility.
+  if (a.google_interest === "yes") wants.add("seo");
   // Drop anything the client does not offer.
   if (!approved.has("new_website")) wants.delete("new");
   if (!approved.has("redesign_rebranding")) wants.delete("redesign");
@@ -294,7 +296,10 @@ export function classifyFromAnswers(a: QualificationAnswers, approvedServices: r
 export function suggestOutcome(a: QualificationAnswers, approvedServices: readonly string[]): QualificationOutcome {
   if (a.lead_gen_only) return "not_qualified";
   if (evaluateQualifiable(a, approvedServices).ok) return "qualified";
-  if (a.interested_in_new_or_redesign === "neither" && a.needs_ecommerce !== "yes" && a.interested_in_seo !== "yes") return "not_qualified";
+  if (a.interested_in_new_or_redesign === "neither" && a.needs_ecommerce !== "yes" && a.interested_in_seo !== "yes" && a.google_interest !== "yes") return "not_qualified";
+  // Declined the Google question and satisfied with how customers find them
+  // online: nothing to offer unless they showed interest elsewhere.
+  if (a.google_interest === "no" && a.online_customers_satisfied === "satisfied" && a.interested_in_new_or_redesign !== "new_website" && a.interested_in_new_or_redesign !== "redesign" && a.interested_in_new_or_redesign !== "both" && a.needs_ecommerce !== "yes" && a.interested_in_seo !== "yes") return "not_qualified";
   return "requires_further_qualification";
 }
 

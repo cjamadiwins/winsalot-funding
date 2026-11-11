@@ -79,7 +79,8 @@ describe("standard approved website-services opening", () => {
   it("buildLeadgenCallScript uses the standard opening for website campaigns but still admin-overridable as additional text", () => {
     const client = { name: "Hidebrandt Web Services", ...baseClient, call_script_override: "Extra: mention Winnipeg." };
     const script = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client });
-    expect(script.opening?.[0]).toBe("Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.");
+    expect(script.opening?.[0]).toBe("Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Hidebrandt Web Services. We help businesses improve their Google visibility and attract more customers through website improvements and search optimization.");
+    expect(script.opening).toHaveLength(1);
     expect(script.guide?.clientKey).toBe("hidebrandt");
     expect(script.adminScript).toBe("Extra: mention Winnipeg.");
     expect(script.isCustomOverride).toBe(false);

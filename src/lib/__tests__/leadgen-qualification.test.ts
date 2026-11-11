@@ -275,3 +275,19 @@ describe("Google visibility / marketing answers", () => {
     expect(text).not.toMatch(/guarantee/i);
   });
 });
+
+describe("Google answer feeds the qualification workflow", () => {
+  const svc = ["new_website", "seo_visibility"];
+  it("Yes counts as search-visibility interest; Tell me more does not by itself", () => {
+    expect(classifyFromAnswers({ ...EMPTY_ANSWERS, google_interest: "yes" }, svc)).toBe("seo_visibility");
+    expect(classifyFromAnswers({ ...EMPTY_ANSWERS, google_interest: "more" }, svc)).toBe("requires_further_qualification");
+  });
+  it("No + satisfied with how customers find them suggests Not qualified; No alone does not", () => {
+    expect(suggestOutcome({ ...EMPTY_ANSWERS, google_interest: "no", online_customers_satisfied: "satisfied" }, svc)).toBe("not_qualified");
+    expect(suggestOutcome({ ...EMPTY_ANSWERS, google_interest: "no" }, svc)).toBe("requires_further_qualification");
+    expect(suggestOutcome({ ...EMPTY_ANSWERS, google_interest: "no", online_customers_satisfied: "not_satisfied" }, svc)).toBe("requires_further_qualification");
+  });
+  it("a Google answer alone never makes an appointment qualified", () => {
+    for (const g of ["yes", "more", "no"] as const) expect(evaluateQualifiable({ ...EMPTY_ANSWERS, google_interest: g }, svc).ok).toBe(false);
+  });
+});
