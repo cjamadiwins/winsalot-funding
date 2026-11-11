@@ -107,6 +107,17 @@ export default async function LeadgenAdminLeadDetailPage({
           preliminaryCategory={qualificationPanel.preliminaryCategory}
           appointments={qualificationPanel.appointments}
           agentName={detail.assignedAgentName || ""}
+          booking={{
+            lead: detail.lead,
+            client: detail.client!,
+            campaign: detail.campaign,
+            agents: detail.agents,
+            currentUserId: adminUser.id,
+            isAdmin: true,
+            bookAppointment: actions.bookAppointment,
+            recordCallOutcome: actions.recordCallOutcome,
+            scheduleFollowUp: actions.scheduleFollowUp,
+          }}
         />
       )}
     <LeadDetailClient

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 // Server-renders the new screens with realistic data (no browser, no database)
 // to catch runtime errors and wrong content, separately for each client.
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 vi.mock("../../app/leadgen/qualification-actions", () => ({
   saveQualificationAction: async () => ({}),
   resubmitAppointmentForApprovalAction: async () => ({}),
@@ -239,4 +240,45 @@ describe("saved Google answer is still there after a page refresh", () => {
     expect(html).not.toContain('data-testid="booking-script"');
     expect(html).not.toMatch(/Appointment \d{4}-\d{2}-\d{2}/);
   });
+});
+
+describe("BOOK APPOINTMENT is wired for both agent and Admin lead pages", () => {
+  const booking = (isAdmin: boolean) => ({
+    lead: { id: "lead-1", business_name: "JC Decorating", contact_name: "Jordan", phone: "2045550111", email: "jordan@prospect.test" },
+    client: { id: "hid", name: "Hidebrandt Web Services" },
+    campaign: { id: "camp" },
+    agents: isAdmin ? [{ id: "goodness", full_name: "Goodness Ugbana" }] : [],
+    currentUserId: isAdmin ? "admin-1" : "goodness",
+    isAdmin,
+    bookAppointment: async () => ({}),
+    recordCallOutcome: async () => ({}),
+    scheduleFollowUp: async () => ({}),
+  });
+  const html = (isAdmin: boolean, google_interest: "yes" | "more" | "no" | null) =>
+    renderToStaticMarkup(
+      createElement(QualificationPanel, {
+        leadId: "lead-1",
+        clientName: "Hidebrandt Web Services",
+        approvedServices: HID,
+        initial: google_interest ? { ...qualification, ...EMPTY_ANSWERS, google_interest, outcome: "draft", category: null, category_source: "auto_preliminary" } : null,
+        preliminaryCategory: "requires_further_qualification",
+        appointments: [],
+        booking: booking(isAdmin),
+      })
+    );
+
+  for (const isAdmin of [false, true]) {
+    it(`${isAdmin ? "Admin" : "agent"} view: Yes shows an enabled BOOK APPOINTMENT button; the booking form is closed until it is clicked`, () => {
+      const out = html(isAdmin, "yes");
+      const button = out.match(/<button[^>]*data-testid="book-appointment"[^>]*>/)?.[0] ?? "";
+      expect(button).not.toContain('disabled=""');
+      expect(out).not.toContain('data-testid="appointment-booking-form"');
+      expect(out).not.toContain('data-testid="booked-message"');
+    });
+    it(`${isAdmin ? "Admin" : "agent"} view: No shows the outcome buttons but no BOOK APPOINTMENT`, () => {
+      const out = html(isAdmin, "no");
+      expect(out).not.toContain('data-testid="book-appointment"');
+      expect(out).toContain('data-testid="record-do-not-call"');
+    });
+  }
 });

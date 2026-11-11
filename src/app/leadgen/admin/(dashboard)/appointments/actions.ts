@@ -1,5 +1,6 @@
 "use server";
 
+import { composeAppointmentNotes } from "@/lib/leadgen-appointment-notes";
 import { revalidatePath } from "next/cache";
 import { requireLeadgenAdmin } from "@/lib/leadgen-auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -92,7 +93,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const email = textOrNull(formData, "email");
   const timezone = String(formData.get("timezone") ?? "America/Toronto").trim();
   const meetingLink = textOrNull(formData, "meeting_link");
-  const agentNotes = textOrNull(formData, "appointment_notes");
+  const agentNotes = composeAppointmentNotes(formData);
   const clientVisibleNotes = textOrNull(formData, "client_visible_notes");
 
   // A campaign is required whenever the client has an active one to choose

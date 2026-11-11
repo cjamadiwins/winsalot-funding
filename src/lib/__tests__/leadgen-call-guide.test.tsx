@@ -145,7 +145,7 @@ describe("interactive guide rendering", () => {
   it("YES branch asks about redesign, performance, SEO and (where offered) e-commerce", () => {
     const value = { ...EMPTY_ANSWERS, has_website: "yes" as const };
     const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Hidebrandt Web Services", { value, onChange: () => undefined, approvedServices: ["new_website", "ecommerce"] })));
-    expect(html).toContain("Prospect has a website");
+    expect(html).toContain("Website: improvement or rebranding?");
     expect(html).toContain("Are you satisfied with how your website looks and performs");
     expect(html).toContain("Interested in a redesign or upgrade?");
     expect(html).toContain("Satisfied with design and performance?");
@@ -167,7 +167,7 @@ describe("interactive guide rendering", () => {
   it("NO branch asks about a new website and online presence, not satisfaction", () => {
     const value = { ...EMPTY_ANSWERS, has_website: "no" as const };
     const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Teknokraft Canada Inc.", { value, onChange: () => undefined })));
-    expect(html).toContain("Prospect has no website");
+    expect(html).toContain("No website: new website?");
     expect(html).toContain("Have you considered creating a professional website");
     expect(html).toContain("Interested in a new website?");
     expect(html).toContain("Interested in establishing an online presence / search visibility?");
@@ -196,8 +196,8 @@ describe("interactive guide rendering", () => {
   });
 
   it("states that Admin approval comes before anything reaches the client", () => {
-    const value = { ...EMPTY_ANSWERS, has_website: "yes" as const };
-    const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Hidebrandt Web Services", { value, onChange: () => undefined })));
+    const value = { ...EMPTY_ANSWERS, google_interest: "yes" as const };
+    const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Hidebrandt Web Services", { value, onChange: () => undefined, bookingOpen: true, bookingSlot: createElement("div", null, "form") })));
     expect(html).toContain("goes to Admin for approval before anything is sent to Hidebrandt");
   });
 });
@@ -286,29 +286,17 @@ describe("Google step: the exact statement appears right after each answer", () 
     expect(render("Teknokraft Canada Inc.", {})).not.toContain("May I ask, does your business currently have a website?");
     expect(render("Teknokraft Canada Inc.", { google_interest: "yes" })).toContain("May I ask, does your business currently have a website?");
     // A lead qualified before this step existed keeps its website flow.
-    expect(render("Hidebrandt Web Services", { has_website: "yes" })).toContain("Prospect has a website");
+    expect(render("Hidebrandt Web Services", { has_website: "yes" })).toContain("Website: improvement or rebranding?");
   });
 
   it("NO + satisfied ends the call politely and hides the rest of the flow", () => {
     for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
       const html = render(name, { google_interest: "no", online_customers_satisfied: "satisfied" });
       expect(html).toContain("Do not offer a");
-      expect(html).not.toContain("Does the prospect have a website?");
+      expect(html).not.toContain("Record remaining requirements");
       const keepGoing = render(name, { google_interest: "no", online_customers_satisfied: "not_satisfied" });
-      expect(keepGoing).toContain("Does the prospect have a website?");
+      expect(keepGoing).toContain("Record remaining requirements");
     }
-  });
-
-  it("booking script appears once the prospect wants a specialist (or agreed), not before", () => {
-    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
-      const booking = getCallGuide(name)!.google.booking;
-      expect(render(name, { google_interest: "yes", has_website: "yes" })).not.toContain(esc(booking));
-      expect(render(name, { google_interest: "yes", has_website: "yes", specialist_interest: "yes" })).toContain(esc(booking));
-      expect(render(name, { google_interest: "more", specialist_interest: "yes" })).toContain(esc(booking));
-      expect(render(name, { google_interest: "yes", has_website: "no", specialist_interest: "no" })).not.toContain(esc(booking));
-    }
-    expect(getCallGuide("Hidebrandt Web Services")!.google.booking).toContain("morning or afternoon appointment");
-    expect(getCallGuide("Teknokraft Canada Inc.")!.google.booking).toContain("What day and time would be convenient for you?");
   });
 
   it("Copy Script contains the whole Google flow for each client", () => {
@@ -369,29 +357,25 @@ describe("ten-step structure (Google first)", () => {
     }
   });
 
-  it("follows the ten steps in order in the interactive guide and in Copy Script", () => {
+  it("follows the booking-first sequence in the interactive guide and in Copy Script", () => {
     for (const name of CLIENTS) {
       const g = getCallGuide(name)!;
-      const html = render(name, { ...FULL, challenges: "More enquiries" });
+      const html = render(name, { google_interest: "yes" }, { bookingOpen: true, bookingSlot: createElement("div", { id: "slot" }, "BOOKING-FORM"), onBookAppointment: () => undefined });
       const marks = [
         "Professional introduction",
         esc(NEW_Q),
-        "Read this next",
-        esc(g.google.currentCustomers.label),
-        esc(g.websitePrompt),
-        "Prospect has a website: improvement or rebranding?",
-        esc(g.google.servicePitch.heading),
-        "Establish genuine customer interest",
-        "Confirm the owner or decision-maker",
-        "Offer a consultation",
-        "Confirm the appointment and record requirements",
+        "Recommended response",
+        'data-testid="book-appointment"',
+        "Confirm the appointment",
+        "BOOKING-FORM",
+        "Record remaining requirements",
         "Objection handling",
       ].map((m) => html.indexOf(m));
       expect(marks.every((i) => i >= 0)).toBe(true);
       expect([...marks].sort((a, b) => a - b)).toEqual(marks);
 
       const text = callGuideToText(g, "Henry");
-      const heads = ["1. PROFESSIONAL INTRODUCTION", "2. GOOGLE VISIBILITY QUESTION", "3. CUSTOMERS THROUGH GOOGLE", "4. DOES THE PROSPECT HAVE A WEBSITE?", "5. DOES THE WEBSITE NEED IMPROVEMENT", "6. ", "7. GENUINE CUSTOMER INTEREST", "8. OWNER OR DECISION-MAKER", "9. OFFER A CONSULTATION", "10. CONFIRM THE APPOINTMENT"].map((h) => text.indexOf(h));
+      const heads = ["1. PROFESSIONAL INTRODUCTION", "2. GOOGLE VISIBILITY QUESTION", "IF THE PROSPECT SAYS YES", "IF THE PROSPECT SAYS TELL ME MORE", "IF THE PROSPECT IS NOT READY TO BOOK", "IF THE PROSPECT SAYS NO", "3. CONFIRM THE APPOINTMENT", "4. RECORD REMAINING REQUIREMENTS", "OBJECTION HANDLING"].map((h) => text.indexOf(h));
       expect(heads.every((i) => i >= 0)).toBe(true);
       expect([...heads].sort((a, b) => a - b)).toEqual(heads);
     }
@@ -496,6 +480,95 @@ describe("qualified appointment rule", () => {
       expect(partial).not.toContain("Ready to save as a qualified appointment");
       const ready = render(name, { ...FULL, challenges: "More enquiries", contact_verified: true, appointment_confirmed: true, interested_in_new_or_redesign: "redesign", satisfied_with_site: "not_satisfied", needs_ecommerce: "no", interested_in_seo: "yes" });
       expect(ready).toContain("Ready to save as a qualified appointment");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Booking-first flow: Yes -> reassure -> offer -> BOOK APPOINTMENT
+// ---------------------------------------------------------------------------
+describe("booking-first flow", () => {
+  const P1 = "That’s excellent! We would love to help your business attract more customers and improve its visibility on Google. Our specialist can explain how we can help you achieve your business goals.";
+  const P2 = "The next step is a quick consultation to discuss the opportunities available for your business.";
+  const P3 = "Would you prefer a morning or afternoon appointment?";
+  const REASSURE = {
+    "Teknokraft Canada Inc.": "Our team can discuss ways to strengthen your website, improve your Google search visibility, and help more potential customers discover your business.",
+    "Hidebrandt Web Services": "Our team can discuss how website improvements, Google SEO, and Human Search Optimization can help make your business easier for potential customers to discover.",
+  } as const;
+  const withBook = { onBookAppointment: () => undefined, onRecordOutcome: async () => null, onScheduleFollowUp: async () => null };
+
+  it("Yes immediately shows the recommended response: reassure, then the appointment offer", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      expect(g.google.say.yes).toEqual([P1, REASSURE[name], P2, P3]);
+      const html = render(name, { google_interest: "yes" }, withBook);
+      expect(html).toContain("Recommended response");
+      const idx = g.google.say.yes.map((l) => html.indexOf(esc(l)));
+      expect(idx.every((i) => i >= 0)).toBe(true);
+      expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+    }
+  });
+
+  it("the prominent BOOK APPOINTMENT button sits directly below the response, with no discovery questions required first", () => {
+    for (const name of CLIENTS) {
+      // Nothing else answered: the button is still available and enabled.
+      const html = render(name, { google_interest: "yes" }, withBook);
+      const button = html.match(/<button[^>]*data-testid="book-appointment"[^>]*>/)?.[0] ?? "";
+      expect(button).not.toContain('disabled=""');
+      expect(html).toMatch(/Book appointment<\/button>/i);
+      const lastLine = html.indexOf(esc(getCallGuide(name)!.google.say.yes[3]));
+      expect(html.indexOf('data-testid="book-appointment"')).toBeGreaterThan(lastLine);
+      // The discovery questions come after the button, as secondary items.
+      expect(html.indexOf("Record remaining requirements")).toBeGreaterThan(html.indexOf('data-testid="book-appointment"'));
+      expect(html).toContain("Nothing is booked until you save it");
+    }
+  });
+
+  it("Tell me more also leads to the appointment offer and BOOK APPOINTMENT; No does not", () => {
+    for (const name of CLIENTS) {
+      const more = render(name, { google_interest: "more" }, withBook);
+      expect(more).toContain('data-testid="book-appointment"');
+      expect(more).toContain(esc(getCallGuide(name)!.google.say.more[2]));
+      const no = render(name, { google_interest: "no" }, withBook);
+      expect(no).not.toContain('data-testid="book-appointment"');
+      expect(render(name, {}, withBook)).not.toContain('data-testid="book-appointment"');
+    }
+  });
+
+  it("without a lead (preview) the button is disabled and says so; clicking never creates anything by itself", () => {
+    const html = render("Hidebrandt Web Services", { google_interest: "yes" });
+    expect(html.match(/<button[^>]*data-testid="book-appointment"[^>]*>/)?.[0]).toContain('disabled=""');
+    expect(html).toContain("Open a lead to book an appointment.");
+  });
+
+  it("offers 'Not ready to book' (follow-up, never an appointment) and a polite No with opt-out handling", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      const yes = render(name, { google_interest: "yes" }, withBook);
+      expect(yes).toContain('data-testid="not-ready"');
+      expect(g.google.notReady.say).toBe("No problem at all. When would be a good time for me to follow up with you?");
+      expect(g.google.notReady.note).toMatch(/never creates or confirms an appointment/i);
+      const no = render(name, { google_interest: "no" }, withBook);
+      expect(no).toContain('data-testid="record-not-interested"');
+      expect(no).toContain('data-testid="record-do-not-call"');
+      expect(no).toContain(esc(g.google.optOut.label));
+      expect(g.google.optOut.note).toMatch(/Record Do not call/);
+      expect(g.google.optOut.note).toMatch(/never contact them again/i);
+    }
+  });
+
+  it("keeps the secondary questions available after the offer", () => {
+    for (const name of CLIENTS) {
+      const html = render(name, { google_interest: "yes" }, withBook);
+      for (const t of ["Does your business currently receive customers through Google?", "May I ask, does your business currently have a website?", "Business need or growth objective", "Prospect understands the service?", "Is this person the owner or decision-maker?", "Genuine interest, services and business objective"]) expect(html).toContain(esc(t));
+    }
+  });
+
+  it("never promises rankings, traffic or sales in the new wording", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!.google;
+      const all = [...g.say.yes, ...g.say.more, g.notReady.say, g.notReady.note, g.optOut.note].join(" ");
+      expect(all).not.toMatch(/guarantee|first[- ]page|number one|#1|top spot|traffic increase|\d+% |double your/i);
     }
   });
 });

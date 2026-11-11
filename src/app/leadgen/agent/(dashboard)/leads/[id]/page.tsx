@@ -98,6 +98,17 @@ export default async function LeadgenAgentLeadDetailPage({ params }: { params: P
           preliminaryCategory={qualificationPanel.preliminaryCategory}
           appointments={qualificationPanel.appointments}
           agentName={agent.full_name || agent.email}
+          booking={{
+            lead: detail.lead,
+            client: detail.client!,
+            campaign: detail.campaign,
+            agents: [],
+            currentUserId: agent.id,
+            isAdmin: false,
+            bookAppointment: actions.bookAppointment,
+            recordCallOutcome: actions.recordCallOutcome,
+            scheduleFollowUp: actions.scheduleFollowUp,
+          }}
         />
       )}
     <LeadDetailClient

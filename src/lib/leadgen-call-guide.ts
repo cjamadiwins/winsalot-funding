@@ -47,6 +47,10 @@ export type GoogleStep = {
   // The approved label for the services choice (multiple selections).
   servicesLabel: string;
   booking: string;
+  // Prospect is interested but not ready to book: follow up, never an appointment.
+  notReady: { say: string; note: string };
+  // Prospect declines: respect an opt-out request.
+  optOut: { label: string; note: string };
   // Step 3: asked right after the Google answer. Saved as google_visibility.
   currentCustomers: { label: string; options: { value: "yes" | "no" | "unsure"; label: string }[] };
   // Step 6: what to say about this client's own services (client-specific).
@@ -203,9 +207,10 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       ],
       say: {
         yes: [
-          "That’s excellent! Hidebrandt specializes in helping businesses improve their visibility online through Google SEO and Human Search Optimization.",
-          "The goal is to make your business easier for potential customers to discover when searching for your services.",
-          "Are you currently doing anything to improve your Google ranking or online visibility?",
+          "That’s excellent! We would love to help your business attract more customers and improve its visibility on Google. Our specialist can explain how we can help you achieve your business goals.",
+          "Our team can discuss how website improvements, Google SEO, and Human Search Optimization can help make your business easier for potential customers to discover.",
+          "The next step is a quick consultation to discuss the opportunities available for your business.",
+          "Would you prefer a morning or afternoon appointment?",
         ],
         more: [
           "Of course! Today, people discover businesses through Google, online searches, and AI-powered search tools.",
@@ -229,6 +234,14 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       specialist: { label: "Interested in speaking with a Hidebrandt specialist?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "follow_up", label: "Follow up later" }] },
       servicesLabel: "Which services interest you? (select all that apply)",
       booking: "Wonderful! I can schedule a brief consultation with a Hidebrandt specialist to discuss how your business can improve its Google visibility, reach more potential customers, and strengthen its online presence. Would you prefer a morning or afternoon appointment?",
+      notReady: {
+        say: "No problem at all. When would be a good time for me to follow up with you?",
+        note: "Offer a follow-up, not an appointment: choose a date and time the prospect suggests and schedule the follow-up. This never creates or confirms an appointment.",
+      },
+      optOut: {
+        label: "Prospect asks not to be called or contacted again",
+        note: "Thank them politely and end the call. Record Do not call on this lead and never contact them again. Respect Do Not Call and communication-consent flags at all times.",
+      },
       currentCustomers: { label: "Does your business currently receive customers through Google?", options: YES_NO_UNSURE_OPTIONS },
       servicePitch: {
         heading: "Hidebrandt services to discuss",
@@ -289,9 +302,10 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       ],
       say: {
         yes: [
-          "That’s great! Teknokraft helps businesses improve their Google search visibility through search engine optimization, local search visibility, and digital marketing.",
-          "The goal is to help more potential customers discover your business when searching for services like yours.",
-          "May I ask, are you currently doing any Google advertising, SEO, or online marketing?",
+          "That’s excellent! We would love to help your business attract more customers and improve its visibility on Google. Our specialist can explain how we can help you achieve your business goals.",
+          "Our team can discuss ways to strengthen your website, improve your Google search visibility, and help more potential customers discover your business.",
+          "The next step is a quick consultation to discuss the opportunities available for your business.",
+          "Would you prefer a morning or afternoon appointment?",
         ],
         more: [
           "Of course! For example, when someone searches Google for services your company offers, you want your business to appear prominently in those search results.",
@@ -309,6 +323,14 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       specialist: { label: "Would you like to speak with a Teknokraft specialist about improving your online visibility?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "follow_up", label: "Follow up later" }] },
       servicesLabel: "Which services interest the prospect?",
       booking: "Excellent! I can arrange a brief consultation with a Teknokraft specialist who can discuss ways to improve your Google visibility, promote your services, and help potential customers discover your business. What day and time would be convenient for you?",
+      notReady: {
+        say: "No problem at all. When would be a good time for me to follow up with you?",
+        note: "Offer a follow-up, not an appointment: choose a date and time the prospect suggests and schedule the follow-up. This never creates or confirms an appointment.",
+      },
+      optOut: {
+        label: "Prospect asks not to be called or contacted again",
+        note: "Thank them politely and end the call. Record Do not call on this lead and never contact them again. Respect Do Not Call and communication-consent flags at all times.",
+      },
       currentCustomers: { label: "Does your business currently receive customers through Google?", options: YES_NO_UNSURE_OPTIONS },
       servicePitch: {
         heading: "Teknokraft services to discuss",
@@ -391,15 +413,13 @@ export function callGuideToText(guide: CallGuide, agentName: string, opts: { off
   const optLabels = (opts: { label: string }[]) => opts.map((o) => o.label).join(" / ");
   return [
     `1. PROFESSIONAL INTRODUCTION\n${guide.opening.map(fill).join("\n")}`,
-    `2. GOOGLE VISIBILITY QUESTION (ask this first, before anything about a website)\n${g.question}\nOptions: ${optLabels(g.options)}\n\nIF THE PROSPECT SAYS YES\n${g.say.yes.join("\n")}\n\nIF THE PROSPECT SAYS TELL ME MORE\n${g.say.more.join("\n")}\n\nIF THE PROSPECT SAYS NO\n${g.say.no.join("\n")}\n${g.noEnd}`,
-    `3. CUSTOMERS THROUGH GOOGLE\n${g.currentCustomers.label} (${optLabels(g.currentCustomers.options)})`,
-    `4. DOES THE PROSPECT HAVE A WEBSITE?\n${guide.websitePrompt}`,
-    `5. DOES THE WEBSITE NEED IMPROVEMENT OR REBRANDING?\nIF THE PROSPECT HAS A WEBSITE\n${guide.hasWebsite.say}\n${branchAsk(guide.hasWebsite)}\n\nIF THE PROSPECT HAS NO WEBSITE\n${guide.noWebsite.say}\n${branchAsk(guide.noWebsite)}`,
-    `6. ${g.servicePitch.heading.toUpperCase()}\n${g.servicePitch.say.join("\n")}\n${g.followUps.map((f) => `- ${f.label} (${optLabels(f.options)})`).join("\n")}\nAgent note (do not read aloud): ${g.servicePitch.agentNote}`,
-    `7. GENUINE CUSTOMER INTEREST\nRecord the services the prospect is interested in, that they understand them, and their business need or growth objective. (${g.servicesLabel})`,
-    `8. OWNER OR DECISION-MAKER\n${g.decisionMaker.say}\nOptions: ${optLabels(g.decisionMaker.options)}\nAgent note (do not read aloud): ${g.decisionMaker.ifNot}`,
-    `9. OFFER A CONSULTATION\n${guide.ifInterested}\n${g.specialist.label} (${optLabels(g.specialist.options)})\n\nWHEN THE PROSPECT AGREES\n${g.booking}`,
-    `10. CONFIRM THE APPOINTMENT AND RECORD REQUIREMENTS\n${g.confirmation.say.join("\n")}\nRecord: ${g.confirmation.contactLabel} ${g.confirmation.scheduleLabel} ${g.confirmation.requirementsLabel}`,
+    `2. GOOGLE VISIBILITY QUESTION (ask this first, before anything about a website)\n${g.question}\nOptions: ${optLabels(g.options)}`,
+    `IF THE PROSPECT SAYS YES, I’M INTERESTED (recommended response: reassure, offer the appointment, then book)\n${g.say.yes.join("\n")}\nThen click BOOK APPOINTMENT.`,
+    `IF THE PROSPECT SAYS TELL ME MORE (briefly explain, then offer the appointment)\n${g.say.more.join("\n")}\n${guide.ifInterested}\nIf they agree, click BOOK APPOINTMENT.`,
+    `IF THE PROSPECT IS NOT READY TO BOOK\n${g.notReady.say}\nAgent note (do not read aloud): ${g.notReady.note}`,
+    `IF THE PROSPECT SAYS NO, NOT INTERESTED\n${g.say.no.join("\n")}\n${g.noEnd}\nAgent note (do not read aloud): ${g.optOut.note}`,
+    `3. CONFIRM THE APPOINTMENT\nBOOK APPOINTMENT opens the CRM booking form for this lead and client. Verify the contact name, phone and email, confirm the date and time the prospect agrees to (no availability is assumed), and record their primary service requirements.\n${g.confirmation.say.join("\n")}\nNothing is booked until the appointment is saved. An appointment is submitted for Admin approval before anything is sent to ${guide.shortName}.\n${g.booking}`,
+    `4. RECORD REMAINING REQUIREMENTS (can be done during or after booking; not needed before the offer)\n- ${g.currentCustomers.label} (${optLabels(g.currentCustomers.options)})\n- ${guide.websitePrompt}\n- IF THE PROSPECT HAS A WEBSITE: ${guide.hasWebsite.say}\n${branchAsk(guide.hasWebsite)}\n- IF THE PROSPECT HAS NO WEBSITE: ${guide.noWebsite.say}\n${branchAsk(guide.noWebsite)}\n- ${g.servicePitch.heading}: ${g.servicePitch.say.join(" ")}\n${g.followUps.map((f) => `- ${f.label} (${optLabels(f.options)})`).join("\n")}\n- ${g.servicesLabel}\n- Business need or growth objective (in the prospect’s own words)\n- ${g.decisionMaker.say} (${optLabels(g.decisionMaker.options)})\nAgent note (do not read aloud): ${g.servicePitch.agentNote}\nAgent note (do not read aloud): ${g.decisionMaker.ifNot}`,
     `OBJECTION HANDLING\n${guide.objections.map((o) => `"${o.label}"\n${o.responses.join("\n")}${o.note ? `\nAgent note (do not read aloud): ${o.note}` : ""}`).join("\n\n")}`,
     `IF THE PROSPECT ONLY WANTS LEADS OR CUSTOMERS\n${guide.leadGenOnlyPrompt}\n${guide.leadGenOnlyOutcome}`,
     `A QUALIFIED APPOINTMENT NEEDS ALL OF THESE\n- Genuine interest in at least one service ${guide.shortName} offers\n- A relevant business need or growth objective\n- The appointment accepted by the owner or appropriate decision-maker\n- Contact information verified\n- Appointment date and time confirmed\nA request for information alone is not a confirmed appointment.`,

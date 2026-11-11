@@ -9,6 +9,7 @@ import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib
 import { zonedWallTimeToUtcMs } from "@/lib/leadgen-appointment-reminders";
 import { LEADGEN_MEETING_TYPES, type LeadgenMeetingType } from "@/lib/leadgen-types";
 import { checkQualificationForBooking, isAwaitingApproval } from "@/lib/leadgen-appointment-qc";
+import { composeAppointmentNotes } from "@/lib/leadgen-appointment-notes";
 
 type ActionResult = { error?: string; message?: string };
 
@@ -43,7 +44,7 @@ export async function bookAppointmentAction(formData: FormData): Promise<ActionR
   const email = textOrNull(formData, "email");
   const timezone = String(formData.get("timezone") ?? "America/Toronto").trim();
   const meetingLink = textOrNull(formData, "meeting_link");
-  const appointmentNotes = textOrNull(formData, "appointment_notes");
+  const appointmentNotes = composeAppointmentNotes(formData);
 
   const supabase = await createSupabaseServerClient();
   const { data: activeClient } = await supabase.from("leadgen_clients").select("id").eq("id", clientId).eq("active", true).maybeSingle();
