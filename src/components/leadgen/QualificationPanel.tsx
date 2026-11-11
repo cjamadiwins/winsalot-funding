@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   EMPTY_ANSWERS,
   QC_STATUS_LABELS,
@@ -19,6 +20,8 @@ import {
 import { resubmitAppointmentForApprovalAction, saveQualificationAction } from "@/app/leadgen/qualification-actions";
 import { getCallGuide } from "@/lib/leadgen-call-guide";
 import InteractiveCallGuide from "./InteractiveCallGuide";
+import AppointmentBookingForm from "./AppointmentBookingForm";
+import type { LeadgenCampaignRow, LeadgenClientRow, LeadgenLeadRow, LeadgenUserRow } from "@/lib/leadgen-types";
 
 type PanelAppointment = { id: string; appointment_date: string; appointment_time: string; qc_status: string; qc_admin_feedback: string | null; qc_rejection_reason: string | null };
 
@@ -34,6 +37,20 @@ type Props = {
   // Defaults to the real server action. Injectable only so the click-to-save
   // behaviour can be exercised in a browser test without a signed-in session.
   saveQualification?: typeof saveQualificationAction;
+  // Lead page only: what the call guide's BOOK APPOINTMENT / outcome / follow-up
+  // buttons need. They use the CRM's existing actions (the same ones the rest
+  // of the lead page uses), so approval, notifications and reminders are unchanged.
+  booking?: {
+    lead: Pick<LeadgenLeadRow, "id" | "business_name" | "contact_name" | "phone" | "email">;
+    client: Pick<LeadgenClientRow, "id" | "name">;
+    campaign: Pick<LeadgenCampaignRow, "id"> | null;
+    agents: Pick<LeadgenUserRow, "id" | "full_name">[];
+    currentUserId: string;
+    isAdmin: boolean;
+    bookAppointment: (formData: FormData) => Promise<{ error?: string; message?: string } | void>;
+    recordCallOutcome: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
+    scheduleFollowUp: (leadId: string, formData: FormData) => Promise<{ error?: string } | void>;
+  };
 };
 
 function Choice<T extends string>({ name, value, options, onChange }: { name: string; value: T | null; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
@@ -62,7 +79,7 @@ const YES_NO_UNSURE = [
 // this client actually offers, the filtering category (preliminary until the
 // agent submits), and the approval status of any appointment for this lead.
 // The database enforces the same rules - this only gives earlier feedback.
-export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments, agentName = "", saveQualification = saveQualificationAction }: Props) {
+export default function QualificationPanel({ leadId, clientName, approvedServices, initial, preliminaryCategory, appointments, agentName = "", saveQualification = saveQualificationAction, booking }: Props) {
   const callGuide = getCallGuide(clientName);
   const [answers, setAnswers] = useState<QualificationAnswers>(() => (initial ? { ...EMPTY_ANSWERS, ...initial } : EMPTY_ANSWERS));
   const [outcome, setOutcome] = useState<QualificationOutcome>(initial?.outcome ?? "draft");
@@ -85,12 +102,83 @@ export default function QualificationPanel({ leadId, clientName, approvedService
   const guideChange = (patch: Partial<QualificationAnswers>) => {
     const next = { ...answers, ...patch };
     setAnswers(next);
-    if (!("google_interest" in patch) && !("online_customers_satisfied" in patch)) return;
+    if (!("google_interest" in patch) && !("online_customers_satisfied" in patch) && !("specialist_interest" in patch)) return;
     setGoogleSave({ state: "saving" });
     void saveQualification({ leadId, answers: next, outcome, quiet: true }).then(
       (result) => setGoogleSave(result.error ? { state: "error", text: result.error } : { state: "saved" }),
       () => setGoogleSave({ state: "error", text: "Could not save. Check your connection and try again." })
     );
+  };
+
+  // BOOK APPOINTMENT: opens the CRM's booking form; nothing is booked until the
+  // agent saves it. Saving first records the qualification (which includes the
+  // decision-maker, verified contact and confirmed time), then books through the
+  // existing booking action, which keeps the Admin approval step.
+  const router = useRouter();
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [preferredPart, setPreferredPart] = useState<"morning" | "afternoon" | null>(null);
+  const [bookingState, setBookingState] = useState<{ saving: boolean; error: string | null }>({ saving: false, error: null });
+  const [bookedMessage, setBookedMessage] = useState<string | null>(null);
+  // Booking records what the agent just confirmed with the prospect. A client
+  // that does not offer e-commerce never asks that question, so a blank answer
+  // is recorded as "not sure" (nothing established) rather than blocking the booking.
+  const answersForBooking: QualificationAnswers = {
+    ...answers,
+    contact_verified: true,
+    appointment_confirmed: true,
+    agreed_to_appointment: true,
+    specialist_interest: "yes",
+    needs_ecommerce: answers.needs_ecommerce ?? (approvedServices.includes("ecommerce") ? null : "unsure"),
+  };
+  const bookingMissing = bookingOpen ? evaluateQualifiable(answersForBooking, approvedServices).reasons : [];
+  const submitBooking = async (formData: FormData) => {
+    if (!booking) return;
+    setBookingState({ saving: true, error: null });
+    const requirements = String(formData.get("service_requirements") ?? "").trim();
+    const next: QualificationAnswers = { ...answersForBooking, intended_improvements: requirements || answers.intended_improvements };
+    const readiness = evaluateQualifiable(next, approvedServices);
+    if (!readiness.ok) {
+      setBookingState({ saving: false, error: "This appointment can't be saved yet." });
+      return;
+    }
+    try {
+      const saved = await saveQualification({ leadId, answers: next, outcome: "qualified" });
+      if (saved.error) {
+        setBookingState({ saving: false, error: saved.error });
+        return;
+      }
+      setAnswers(next);
+      setOutcome("qualified");
+      const result = await booking.bookAppointment(formData);
+      if (result && result.error) {
+        setBookingState({ saving: false, error: `The qualification was saved, but the appointment was not: ${result.error}` });
+        return;
+      }
+      setBookingState({ saving: false, error: null });
+      setBookingOpen(false);
+      setBookedMessage((result && result.message) || "Appointment saved. It is waiting for Admin approval; the client and prospect are notified only after it is approved.");
+      router.refresh();
+    } catch {
+      setBookingState({ saving: false, error: "Could not save the appointment. Check your connection and try again." });
+    }
+  };
+  const recordOutcome = async (outcomeLabel: "Not interested" | "Do not call"): Promise<string | null> => {
+    if (!booking) return "Open the lead to record the outcome.";
+    const fd = new FormData();
+    fd.set("call_outcome", outcomeLabel);
+    fd.set("notes", outcomeLabel === "Do not call" ? "Prospect asked not to be called or contacted again (recorded from the call guide)." : "Prospect said they are not interested in improving their Google visibility (recorded from the call guide).");
+    const result = await booking.recordCallOutcome(leadId, fd);
+    return result && result.error ? result.error : null;
+  };
+  const scheduleFollowUp = async (scheduledAtLocal: string, note: string): Promise<string | null> => {
+    if (!booking) return "Open the lead to schedule the follow-up.";
+    const when = new Date(scheduledAtLocal);
+    if (Number.isNaN(when.getTime())) return "Enter a valid follow-up date and time.";
+    const fd = new FormData();
+    fd.set("scheduled_at", when.toISOString());
+    fd.set("note", note || "Follow up: prospect was interested but not ready to book (from the call guide).");
+    const result = await booking.scheduleFollowUp(leadId, fd);
+    return result && result.error ? result.error : null;
   };
 
   const toggleService = (key: string) => set("services_of_interest", answers.services_of_interest.includes(key) ? answers.services_of_interest.filter((s) => s !== key) : [...answers.services_of_interest, key]);
@@ -168,8 +256,43 @@ export default function QualificationPanel({ leadId, clientName, approvedService
             onMarkNotQualified={() => save("not_qualified")}
             pending={pending}
             googleSave={googleSave}
+            onBookAppointment={
+              booking
+                ? ({ timePreference }) => {
+                    setPreferredPart(timePreference);
+                    setBookedMessage(null);
+                    setBookingState({ saving: false, error: null });
+                    setBookingOpen(true);
+                    // Bring the booking form into view for the agent.
+                    window.setTimeout(() => document.querySelector('[data-testid="appointment-booking-form"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+                  }
+                : undefined
+            }
+            bookingOpen={bookingOpen}
+            bookingSlot={
+              booking && bookingOpen ? (
+                <AppointmentBookingForm
+                  lead={booking.lead}
+                  client={booking.client}
+                  campaign={booking.campaign}
+                  agents={booking.agents}
+                  currentUserId={booking.currentUserId}
+                  isAdmin={booking.isAdmin}
+                  isPending={false}
+                  onBook={(formData) => void submitBooking(formData)}
+                  guided={{ preferredPart, requirements: answers.intended_improvements ?? "", error: bookingState.error, missing: bookingMissing, saving: bookingState.saving }}
+                />
+              ) : null
+            }
+            onRecordOutcome={booking ? recordOutcome : undefined}
+            onScheduleFollowUp={booking ? scheduleFollowUp : undefined}
             compact
           />
+          {bookedMessage && (
+            <p role="status" data-testid="booked-message" className="mt-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+              {bookedMessage}
+            </p>
+          )}
           <p className="mt-1.5 text-[11.5px] text-slate-500">Answers in the guide fill the same questions below. The Google question saves as you click it; everything else is saved when you use a save button. Nothing here books an appointment.</p>
         </div>
       )}

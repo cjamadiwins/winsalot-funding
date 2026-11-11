@@ -214,6 +214,37 @@ describe("booking requires a valid qualification for gated clients", () => {
     expect(immediateSms).not.toHaveBeenCalled();
   });
 
+  it("books from the call guide's form: requirements, preferred time and verified contact are saved with the appointment", async () => {
+    awaiting = true;
+    const result = await bookAppointmentAction(
+      form({ contact_name: "Jordan Smith", phone: "2045550199", email: "jordan.smith@prospect.test", service_requirements: "Rank for emergency plumbing in Winnipeg", time_preference: "afternoon", appointment_notes: "Prefers phone" })
+    );
+    expect(result.error).toBeUndefined();
+    const row = db.tables.leadgen_appointments[0];
+    expect(row).toMatchObject({ lead_id: "lead-1", client_id: "hid", campaign_id: "camp", contact_name: "Jordan Smith", phone: "2045550199", email: "jordan.smith@prospect.test", qualification_id: "q1" });
+    expect(row.appointment_notes).toBe("Primary service requirements (from the prospect): Rank for emergency plumbing in Winnipeg\n\nProspect's preferred time of day: Afternoon\n\nPrefers phone");
+  });
+
+  it("triggers the existing notification workflow, and the notice carries the prospect's requirements", async () => {
+    await bookAppointmentAction(form({ service_requirements: "New website", time_preference: "morning" }));
+    const admin = sendEmail.mock.calls.map((c) => c[1] as { toEmail: string; body: string }).find((m) => m.toEmail === "info@winsalotcorp.com");
+    expect(admin).toBeDefined();
+    expect(admin!.body).toContain("Primary service requirements (from the prospect): New website");
+    expect(admin!.body).toContain("Prospect's preferred time of day: Morning");
+    // (That a gated appointment is held for Admin approval, with no client or prospect message, is
+    // enforced by the database trigger and covered by the migration tests and the hold tests above.)
+  });
+
+  it("an interested prospect is not an appointment: no booking without the decision-maker, verified contact and confirmed time", async () => {
+    for (const patch of [{ decision_maker: null }, { decision_maker: "no" }, { contact_verified: false }, { appointment_confirmed: null }]) {
+      db.tables.leadgen_appointments = [];
+      db.tables.leadgen_lead_qualifications[0] = { ...db.tables.leadgen_lead_qualifications[0], decision_maker: "yes", contact_verified: true, appointment_confirmed: true, ...patch };
+      const result = await bookAppointmentAction(form());
+      expect(result.error).toMatch(/no longer meets/);
+      expect(db.tables.leadgen_appointments).toHaveLength(0);
+    }
+  });
+
   it("does not interfere with clients that do not require qualification", async () => {
     db.tables.leadgen_client_qualification_settings[0].enabled = false;
     const gate = await checkQualificationForBooking(db.client as never, { clientId: "hid", leadId: "lead-1" });
