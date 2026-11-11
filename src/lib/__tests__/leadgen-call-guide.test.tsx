@@ -17,8 +17,9 @@ describe("approved call guide wording", () => {
     expect(g.opening.map((l) => renderGuideLine(l, "Henry Osuji"))).toEqual([
       "Hi, my name is Henry, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.",
       "We help businesses improve their online presence through professional website development, website redesign, and search visibility solutions.",
-      "May I ask, does your business currently have a website?",
+      "We help businesses improve their online presence through website design, Google search optimization, and Human Search Optimization, helping more potential customers discover their services online.",
     ]);
+    expect(g.websitePrompt).toBe("May I ask, does your business currently have a website?");
     expect(g.hasWebsite.say).toBe("Are you satisfied with how your website looks and performs, or have you considered upgrading it to better showcase your services and attract customers?");
     expect(g.noWebsite.say).toBe("Would you be interested in exploring a professional website that helps customers find your business online and understand your services?");
     expect(g.ifInterested).toBe("Would you be open to a short consultation with a Hidebrandt website specialist to discuss your specific requirements?");
@@ -29,8 +30,9 @@ describe("approved call guide wording", () => {
     expect(g.opening.map((l) => renderGuideLine(l, "Goodness Ugbana"))).toEqual([
       "Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Teknokraft Canada Inc.",
       "We help businesses establish and improve their online presence through website development, website redesign, and search engine optimization.",
-      "May I ask, does your business currently have a website?",
+      "We help businesses improve their visibility on Google, market their services online, and attract more potential customers.",
     ]);
+    expect(g.websitePrompt).toBe("May I ask, does your business currently have a website?");
     expect(g.hasWebsite.say).toBe("Are you happy with your website’s current design and performance, or would you be interested in improving it to attract more customers online?");
     expect(g.noWebsite.say).toBe("Have you considered creating a professional website so potential customers can find your business and learn more about your services?");
     expect(g.ifInterested).toBe("We can arrange a short consultation with a Teknokraft representative to discuss your website needs and possible solutions. Would that interest you?");
@@ -116,11 +118,12 @@ describe("displayed and copied script match", () => {
 describe("interactive guide rendering", () => {
   const props = (clientName: string, extra: Record<string, unknown> = {}) => ({ guide: getCallGuide(clientName)!, agentName: "Henry Osuji", approvedServices: ["new_website", "redesign_rebranding", "seo_visibility"], ...extra });
 
-  it("shows only the opening and the website question before an answer, with a Copy Script button", () => {
+  it("shows only the opening and the Google question before an answer, with a Copy Script button", () => {
     const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Hidebrandt Web Services")));
     expect(html).toContain("Hi, my name is Henry, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.");
     expect(html).toContain("Copy Script");
-    expect(html).toContain("Does the prospect have a website?");
+    expect(html).toContain("Would you like your business to rank higher on Google");
+    expect(html).not.toContain("Does the prospect have a website?");
     expect(html).not.toContain("Prospect has a website");
     expect(html).not.toContain("Prospect has no website");
     expect(html).toContain("Preview only");
@@ -225,5 +228,123 @@ describe("Admin monitoring counts lead-generation-only prospects per client and 
     expect(h.agents.find((a) => a.agentId === "henry")!.metrics).toMatchObject({ qualified: 1, leadGenOnly: 1 });
     expect(t.totals).toMatchObject({ qualified: 0, leadGenOnly: 1 });
     expect(acceptanceRate(h.totals)).toBeNull();
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Google ranking / marketing step
+// ---------------------------------------------------------------------------
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/'/g, "&#x27;");
+const render = (clientName: string, value: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+  renderToStaticMarkup(
+    createElement(InteractiveCallGuide, {
+      guide: getCallGuide(clientName)!,
+      agentName: "Henry Osuji",
+      approvedServices: ["new_website", "redesign_rebranding", "seo_visibility", "human_search_optimization", "digital_marketing"],
+      value: { ...EMPTY_ANSWERS, ...value },
+      onChange: () => undefined,
+      ...extra,
+    })
+  );
+
+describe("Google step: the exact statement appears right after each answer", () => {
+  for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+    const g = getCallGuide(name)!.google;
+    it(`${name}: yes / more / no each show only their own approved response`, () => {
+      for (const choice of ["yes", "more", "no"] as const) {
+        const html = render(name, { google_interest: choice });
+        for (const line of g.say[choice]) expect(html).toContain(esc(line));
+        for (const other of (["yes", "more", "no"] as const).filter((c) => c !== choice)) for (const line of g.say[other]) expect(html).not.toContain(esc(line));
+      }
+    });
+    it(`${name}: shows no Google response until an answer is chosen`, () => {
+      const html = render(name, {});
+      expect(html).toContain(esc(g.question));
+      expect(html).not.toContain('data-testid="google-response"');
+    });
+    it(`${name}: option labels are the approved ones`, () => {
+      const html = render(name, {});
+      for (const o of g.options) expect(html).toContain(`>${esc(o.label)}</button>`);
+    });
+  }
+
+  it("Hidebrandt follow-up questions and options (incl. 'Tell me more' on the AI-search question)", () => {
+    const html = render("Hidebrandt Web Services", { google_interest: "yes", has_website: "yes" });
+    expect(html).toContain("1. Are customers currently finding your business through Google?");
+    expect(html).toContain("2. Would you like your business to become easier to discover through Google and AI-powered search tools?");
+    expect(html).toContain("3. Are you currently investing in SEO or digital marketing?");
+    expect(html).toContain("Which services interest you? (select all that apply)");
+    expect(html).toContain("Digital marketing");
+    expect(html).toContain("Human search optimization");
+  });
+
+  it("Teknokraft follow-up questions use the approved numbering", () => {
+    const html = render("Teknokraft Canada Inc.", { google_interest: "yes" });
+    expect(html).toContain("2. Does your business currently appear on Google when customers search for your services?");
+    expect(html).toContain("3. Are you currently investing in SEO or digital marketing?");
+    expect(html).not.toContain("AI-powered search tools");
+  });
+
+  it("the website question and qualification follow the Google answer, and stay for older leads", () => {
+    expect(render("Teknokraft Canada Inc.", {})).not.toContain("May I ask, does your business currently have a website?");
+    expect(render("Teknokraft Canada Inc.", { google_interest: "yes" })).toContain("May I ask, does your business currently have a website?");
+    // A lead qualified before this step existed keeps its website flow.
+    expect(render("Hidebrandt Web Services", { has_website: "yes" })).toContain("Prospect has a website");
+  });
+
+  it("NO + satisfied ends the call politely and hides the rest of the flow", () => {
+    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+      const html = render(name, { google_interest: "no", online_customers_satisfied: "satisfied" });
+      expect(html).toContain("Do not offer a");
+      expect(html).not.toContain("Does the prospect have a website?");
+      const keepGoing = render(name, { google_interest: "no", online_customers_satisfied: "not_satisfied" });
+      expect(keepGoing).toContain("Does the prospect have a website?");
+    }
+  });
+
+  it("booking script appears once the prospect wants a specialist (or agreed), not before", () => {
+    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+      const booking = getCallGuide(name)!.google.booking;
+      expect(render(name, { google_interest: "yes", has_website: "yes" })).not.toContain(esc(booking));
+      expect(render(name, { google_interest: "yes", has_website: "yes", specialist_interest: "yes" })).toContain(esc(booking));
+      expect(render(name, { google_interest: "more", specialist_interest: "yes" })).toContain(esc(booking));
+      expect(render(name, { google_interest: "yes", has_website: "no", specialist_interest: "no" })).not.toContain(esc(booking));
+    }
+    expect(getCallGuide("Hidebrandt Web Services")!.google.booking).toContain("morning or afternoon appointment");
+    expect(getCallGuide("Teknokraft Canada Inc.")!.google.booking).toContain("What day and time would be convenient for you?");
+  });
+
+  it("Copy Script contains the whole Google flow for each client", () => {
+    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+      const g = getCallGuide(name)!;
+      const text = callGuideToText(g, "Henry Osuji");
+      expect(text).toContain(g.google.question);
+      for (const lines of Object.values(g.google.say)) for (const l of lines) expect(text).toContain(l);
+      expect(text).toContain(g.google.booking);
+      for (const f of g.google.followUps) expect(text).toContain(f.label);
+    }
+  });
+
+  it("never guarantees rankings, AI placement or lead volumes", () => {
+    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+      const text = callGuideToText(getCallGuide(name)!, "Henry");
+      expect(text).not.toMatch(/guarantee|first[- ]page|#1|number one|top spot|\d+\s+(new )?leads|ensure.*rank/i);
+    }
+  });
+
+  it("keeps the two clients' scripts separate and leaves other clients untouched", () => {
+    const h = callGuideToText(getCallGuide("Hidebrandt Web Services")!, "Henry");
+    const t = callGuideToText(getCallGuide("Teknokraft Canada Inc.")!, "Henry");
+    expect(h).not.toMatch(/Teknokraft/);
+    expect(t).not.toMatch(/Hidebrandt|Human Search Optimization|AI-powered/);
+    expect(getCallGuide("Web6 Solutions")).toBeNull();
+    expect(buildLeadgenCallScript({ agentName: "Henry", client: { name: "Web6 Solutions", ...base } }).guide).toBeUndefined();
+  });
+
+  it("is the same guide for every agent (Henry and Goodness)", () => {
+    const a = buildLeadgenCallScript({ agentName: "Henry Osuji", client: TEK }).fullText;
+    const b = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client: TEK }).fullText;
+    expect(a.replace(/Henry/g, "X")).toBe(b.replace(/Goodness/g, "X"));
   });
 });

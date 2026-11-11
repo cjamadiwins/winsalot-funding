@@ -403,3 +403,53 @@ describe("clients never see an appointment, or its conversion row, before it is 
     expect((await rows<{ note: string | null }>(`select note from leadgen_conversions where appointment_id='${id}'`))[0].note).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 20261111120000: Google visibility / marketing columns + digital_marketing key
+// ---------------------------------------------------------------------------
+describe("Google marketing columns (20261111120000)", () => {
+  const googleMigration = readFileSync("supabase/migrations/20261111120000_leadgen_google_marketing_qualification.sql", "utf8");
+  const leadG = "30000000-0000-0000-0000-0000000000a1";
+  const leadW = "30000000-0000-0000-0000-0000000000a2";
+
+  beforeAll(async () => {
+    await asService();
+    await db.exec(googleMigration);
+    await db.exec(`insert into leadgen_leads values ('${leadG}','${tek}','${campTek}','${henry}',null),('${leadW}','${brent}','${campBrent}','${henry}',null)`);
+  });
+
+  it("is safe to apply twice", async () => {
+    await asService();
+    await db.exec(googleMigration);
+  });
+
+  it("saves the Google answers on the existing qualification record and reads them back", async () => {
+    await asUser(henry);
+    await db.exec(`insert into leadgen_lead_qualifications (lead_id, client_id, campaign_id, agent_id, has_website, services_of_interest, google_interest, online_customers_satisfied, google_visibility, ai_search_interest, investing_marketing, specialist_interest)
+      values ('${leadG}','${tek}','${campTek}','${henry}','yes', array['seo_visibility','digital_marketing'], 'more', 'not_satisfied', 'no', 'more', 'unsure', 'follow_up')`);
+    const [r] = await rows<Record<string, unknown>>(`select google_interest, online_customers_satisfied, google_visibility, ai_search_interest, investing_marketing, specialist_interest, services_of_interest from leadgen_lead_qualifications where lead_id='${leadG}'`);
+    expect(r).toMatchObject({ google_interest: "more", online_customers_satisfied: "not_satisfied", google_visibility: "no", ai_search_interest: "more", investing_marketing: "unsure", specialist_interest: "follow_up" });
+    expect(r.services_of_interest).toEqual(["seo_visibility", "digital_marketing"]);
+  });
+
+  it("rejects values outside the allowed answers", async () => {
+    await asService();
+    await rejects(`update leadgen_lead_qualifications set google_interest = 'maybe' where lead_id='${leadG}'`, /check/i);
+    await rejects(`update leadgen_lead_qualifications set specialist_interest = 'sure' where lead_id='${leadG}'`, /check/i);
+    await rejects(`update leadgen_lead_qualifications set ai_search_interest = 'unsure' where lead_id='${leadG}'`, /check/i);
+  });
+
+  it("still rejects unknown service keys; digital_marketing is only a valid key, never auto-approved", async () => {
+    await asService();
+    await rejects(`update leadgen_lead_qualifications set services_of_interest = array['guaranteed_rankings'] where lead_id='${leadG}'`, /qualification_invalid_service/);
+    const [s] = await rows<{ approved_services: string[] }>(`select approved_services from leadgen_client_qualification_settings where client_id='${tek}'`);
+    expect(s.approved_services).not.toContain("digital_marketing");
+  });
+
+  it("leaves other clients' records free of Google answers and unchanged", async () => {
+    await asUser(henry);
+    await db.exec(`insert into leadgen_lead_qualifications (lead_id, client_id, campaign_id, agent_id) values ('${leadW}','${brent}','${campBrent}','${henry}')`);
+    const [r] = await rows<Record<string, unknown>>(`select google_interest, specialist_interest from leadgen_lead_qualifications where lead_id='${leadW}'`);
+    expect(r).toEqual({ google_interest: null, specialist_interest: null });
+  });
+});

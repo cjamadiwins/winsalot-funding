@@ -10,7 +10,7 @@ import { websiteOpportunity } from "./leadgen-website-opportunity";
 // Services a client can offer. Each client has its OWN approved list - one
 // client's services are never assumed to be offered by another.
 // ---------------------------------------------------------------------------
-export const QUALIFICATION_SERVICE_KEYS = ["new_website", "redesign_rebranding", "ecommerce", "seo_visibility", "human_search_optimization"] as const;
+export const QUALIFICATION_SERVICE_KEYS = ["new_website", "redesign_rebranding", "ecommerce", "seo_visibility", "human_search_optimization", "digital_marketing"] as const;
 export type QualificationServiceKey = (typeof QUALIFICATION_SERVICE_KEYS)[number];
 
 export const QUALIFICATION_SERVICE_LABELS: Record<QualificationServiceKey, string> = {
@@ -19,6 +19,7 @@ export const QUALIFICATION_SERVICE_LABELS: Record<QualificationServiceKey, strin
   ecommerce: "E-commerce website development",
   seo_visibility: "SEO and online visibility",
   human_search_optimization: "Human search optimization",
+  digital_marketing: "Digital marketing",
 };
 
 export const CUSTOM_SERVICE_PREFIX = "custom:";
@@ -76,6 +77,10 @@ export const QUALIFICATION_OUTCOME_LABELS: Record<QualificationOutcome, string> 
 // ---------------------------------------------------------------------------
 export type YesNoUnsure = "yes" | "no" | "unsure";
 export type InterestKind = "new_website" | "redesign" | "both" | "neither" | "unsure";
+export type GoogleInterest = "yes" | "more" | "no";
+export type OnlineSatisfaction = "satisfied" | "not_satisfied";
+export type YesNoMore = "yes" | "no" | "more";
+export type SpecialistInterest = "yes" | "no" | "follow_up";
 export type Satisfaction = "satisfied" | "not_satisfied" | "unsure" | "not_applicable";
 
 export type QualificationAnswers = {
@@ -92,7 +97,19 @@ export type QualificationAnswers = {
   intended_improvements: string | null;
   qualification_notes: string | null;
   lead_gen_only: boolean;
+  // Google visibility / marketing step of the Hidebrandt and Teknokraft call
+  // guides. Optional extras: they never gate "qualified" and stay null for
+  // every other client.
+  google_interest: GoogleInterest | null;
+  online_customers_satisfied: OnlineSatisfaction | null;
+  google_visibility: YesNoUnsure | null;
+  ai_search_interest: YesNoMore | null;
+  investing_marketing: YesNoUnsure | null;
+  specialist_interest: SpecialistInterest | null;
 };
+
+// Columns added by 20261111120000_leadgen_google_marketing_qualification.sql.
+export const GOOGLE_MARKETING_FIELDS = ["google_interest", "online_customers_satisfied", "google_visibility", "ai_search_interest", "investing_marketing", "specialist_interest"] as const;
 
 export const EMPTY_ANSWERS: QualificationAnswers = {
   has_website: null,
@@ -108,6 +125,12 @@ export const EMPTY_ANSWERS: QualificationAnswers = {
   intended_improvements: null,
   qualification_notes: null,
   lead_gen_only: false,
+  google_interest: null,
+  online_customers_satisfied: null,
+  google_visibility: null,
+  ai_search_interest: null,
+  investing_marketing: null,
+  specialist_interest: null,
 };
 
 export const QUALIFICATION_QUESTIONS = [
@@ -147,6 +170,12 @@ export function normalizeAnswers(raw: Partial<Record<keyof QualificationAnswers,
     intended_improvements: cleanText(raw.intended_improvements),
     qualification_notes: cleanText(raw.qualification_notes),
     lead_gen_only: raw.lead_gen_only === true || raw.lead_gen_only === "true",
+    google_interest: pick(raw.google_interest, ["yes", "more", "no"] as const),
+    online_customers_satisfied: pick(raw.online_customers_satisfied, ["satisfied", "not_satisfied"] as const),
+    google_visibility: pick(raw.google_visibility, ["yes", "no", "unsure"] as const),
+    ai_search_interest: pick(raw.ai_search_interest, ["yes", "no", "more"] as const),
+    investing_marketing: pick(raw.investing_marketing, ["yes", "no", "unsure"] as const),
+    specialist_interest: pick(raw.specialist_interest, ["yes", "no", "follow_up"] as const),
   };
 }
 
@@ -208,7 +237,7 @@ export function classifyFromAnswers(a: QualificationAnswers, approvedServices: r
   if (!approved.has("new_website")) wants.delete("new");
   if (!approved.has("redesign_rebranding")) wants.delete("redesign");
   if (!approved.has("ecommerce")) wants.delete("ecommerce");
-  if (!approved.has("seo_visibility") && !approved.has("human_search_optimization")) wants.delete("seo");
+  if (!approved.has("seo_visibility") && !approved.has("human_search_optimization") && !approved.has("digital_marketing")) wants.delete("seo");
   if (wants.size >= 2) return "multiple_services";
   if (wants.size === 0) return "requires_further_qualification";
   const only = Array.from(wants)[0];
@@ -301,6 +330,28 @@ const INTEREST_TEXT: Record<InterestKind, string> = {
   unsure: "Not confirmed",
 };
 
+const YNU_TEXT: Record<string, string> = { yes: "Yes", no: "No", unsure: "Not sure", more: "Wants to know more", follow_up: "Follow up later" };
+const GOOGLE_INTEREST_TEXT: Record<GoogleInterest, string> = { yes: "Interested in ranking higher on Google", more: "Asked to hear more about Google visibility", no: "Not interested in Google visibility" };
+
+// Google visibility / marketing interests for the appointment preparation
+// brief. Empty (no lines at all) unless the guide's Google step was used, so
+// every other client's brief is unchanged. Wording never implies a promise.
+export function buildMarketingBriefLines(a: QualificationAnswers): string[] {
+  const hasAny = GOOGLE_MARKETING_FIELDS.some((f) => a[f] !== null);
+  const marketingServices = a.services_of_interest.filter((s) => ["seo_visibility", "human_search_optimization", "digital_marketing"].includes(s)).map(serviceLabel);
+  if (!hasAny && marketingServices.length === 0) return [];
+  const say = (v: string | null) => (v ? (YNU_TEXT[v] ?? v) : "Not asked");
+  const lines = ["Google visibility and marketing interests (as stated by the prospect)"];
+  if (marketingServices.length > 0) lines.push(`Marketing services of interest: ${marketingServices.join(", ")}`);
+  if (a.google_interest) lines.push(`Google ranking interest: ${GOOGLE_INTEREST_TEXT[a.google_interest]}`);
+  if (a.online_customers_satisfied) lines.push(`Satisfied with how customers find the business online: ${a.online_customers_satisfied === "satisfied" ? "Yes" : "No"}`);
+  if (a.google_visibility) lines.push(`Customers currently finding the business through Google: ${say(a.google_visibility)}`);
+  if (a.ai_search_interest) lines.push(`Wants to be easier to discover through Google and AI-powered search: ${say(a.ai_search_interest)}`);
+  if (a.investing_marketing) lines.push(`Currently investing in SEO or digital marketing: ${say(a.investing_marketing)}`);
+  if (a.specialist_interest) lines.push(`Wants to speak with a specialist: ${say(a.specialist_interest)}`);
+  return lines;
+}
+
 // Every line says whether it was confirmed by the prospect. Nothing that the
 // prospect did not state is presented as a verified request.
 export function buildQualificationBriefLines(input: BriefQualificationInput): string[] {
@@ -326,6 +377,7 @@ export function buildQualificationBriefLines(input: BriefQualificationInput): st
     `Confirmed challenges: ${confirmed(a.challenges)}`,
     `Intended improvements: ${intent.length > 0 ? intent.join("; ") : "Not stated by the prospect"}${a.intended_improvements ? ` - ${a.intended_improvements}` : ""}`,
     `Qualification notes: ${confirmed(a.qualification_notes)}`,
+    ...buildMarketingBriefLines(a),
     `Appointment: ${input.appointmentDate} ${input.appointmentTime.slice(0, 5)} (${input.timezone})`,
     `Assigned agent: ${input.agentName?.trim() || "Not assigned"}`,
   ];

@@ -83,7 +83,17 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
   const toggleService = (key: string) =>
     patch({ services_of_interest: answers.services_of_interest.includes(key) ? answers.services_of_interest.filter((s) => s !== key) : [...answers.services_of_interest, key] });
 
-  const branch = hasSite === "yes" ? guide.hasWebsite : hasSite === "no" ? guide.noWebsite : null;
+  const g = guide.google;
+  const gi = answers.google_interest;
+  // "No" + satisfied: the call ends politely; nothing further is offered.
+  const callEnds = gi === "no" && answers.online_customers_satisfied === "satisfied";
+  // Leads saved before the Google step existed already have website answers.
+  const proceed = !callEnds && (gi !== null || hasSite !== null);
+  const branch = proceed ? (hasSite === "yes" ? guide.hasWebsite : hasSite === "no" ? guide.noWebsite : null) : null;
+  const wantsBooking = answers.specialist_interest === "yes" || answers.agreed_to_appointment === true;
+  const specialistPills = (
+    <Pills label={g.specialist.label} value={answers.specialist_interest} options={g.specialist.options} onPick={(v) => patch({ specialist_interest: v })} />
+  );
 
   return (
     <div data-testid="interactive-call-guide" data-client={guide.clientKey} className={`rounded-xl border border-sky-200 bg-sky-50/60 ${compact ? "p-3" : "p-4"}`}>
@@ -105,8 +115,53 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
           </div>
         </section>
 
+        <section aria-label="Google visibility question" className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">2. Google visibility question</p>
+          <Say>{g.question}</Say>
+          <Pills label="Prospect's answer" value={gi} options={g.options} onPick={(v) => patch({ google_interest: v })} />
+        </section>
+
+        {gi && (
+          <section aria-label={`Agent response: ${g.options.find((o) => o.value === gi)?.label}`} className="space-y-2 rounded-lg border border-sky-300 bg-white/80 p-3" data-testid="google-response">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Read this next</p>
+            {g.say[gi].map((line) => (
+              <Say key={line}>{line}</Say>
+            ))}
+            {gi === "more" && specialistPills}
+            {gi === "no" && (
+              <>
+                <Pills
+                  label={g.noFollowUp}
+                  value={answers.online_customers_satisfied}
+                  options={[
+                    { value: "satisfied", label: "Satisfied" },
+                    { value: "not_satisfied", label: "Not satisfied" },
+                  ]}
+                  onPick={(v) => patch({ online_customers_satisfied: v })}
+                />
+                {callEnds ? (
+                  <p role="status" className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-[13px] text-slate-800">
+                    {g.noEnd} Do not offer a {guide.shortName} appointment.
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-slate-600">{g.noEnd}</p>
+                )}
+              </>
+            )}
+            {(gi === "yes" || gi === "more") && (
+              <div className="space-y-2 border-t border-slate-200 pt-2">
+                {g.followUps.map((f) => (
+                  <Pills key={f.field} label={`${f.number}. ${f.label}`} value={answers[f.field]} options={f.options} onPick={(v) => patch({ [f.field]: v } as Partial<QualificationAnswers>)} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {proceed && (
         <section aria-label="Website question" className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">2. Does the prospect have a website?</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">3. Does the prospect have a website?</p>
+          <Say>{guide.websitePrompt}</Say>
           <Pills label="Prospect's answer" value={hasSite} options={[...YES_NO_UNSURE]} onPick={(v) =>
               patch({
                 has_website: v,
@@ -117,10 +172,11 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
           />
           {hasSite === "unsure" && <p className="text-[12.5px] text-slate-600">Ask where customers find them online, or for the website address, then choose Yes or No.</p>}
         </section>
+        )}
 
         {branch && (
           <section aria-label={hasSite === "yes" ? "Has a website" : "No website"} className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{hasSite === "yes" ? "3. Prospect has a website" : "3. Prospect has no website"}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{hasSite === "yes" ? "4. Prospect has a website" : "4. Prospect has no website"}</p>
             <Say>{branch.say}</Say>
             {hasSite === "yes" && (
               <input
@@ -174,7 +230,8 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
 
         {branch && (
           <section aria-label="Interested services" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">4. What does the prospect want to discuss?</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">5. What does the prospect want to discuss?</p>
+            <p className="text-[13px] font-semibold text-slate-800">{g.servicesLabel}</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Services the prospect is interested in">
               {services.length === 0 ? (
                 <p className="text-[12.5px] text-slate-500">Open the lead to choose from the services {guide.shortName} offers.</p>
@@ -209,11 +266,25 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
 
         {branch && (
           <section aria-label="Consultation" className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">5. If the prospect expresses interest</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">6. If the prospect expresses interest</p>
             <Say>{guide.ifInterested}</Say>
+            {gi !== "more" && specialistPills}
+            {wantsBooking && (
+              <div data-testid="booking-script" className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Appointment booking</p>
+                <Say>{g.booking}</Say>
+              </div>
+            )}
             <Pills label="Prospect understands the service?" value={answers.understands_services === null ? null : answers.understands_services ? "yes" : "no"} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ understands_services: v === "yes" })} />
             <Pills label="Prospect agreed to discuss it with the client?" value={answers.agreed_to_appointment === null ? null : answers.agreed_to_appointment ? "yes" : "no"} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ agreed_to_appointment: v === "yes" })} />
             <p className="text-[12px] text-slate-600">Not every answer has to be &ldquo;yes&rdquo;. Record what applies and confirm genuine interest in at least one approved service. An appointment still goes to Admin for approval before anything is sent to {guide.shortName}.</p>
+          </section>
+        )}
+
+        {gi === "more" && answers.specialist_interest === "yes" && wantsBooking && !branch && (
+          <section aria-label="Appointment booking" data-testid="booking-script" className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Appointment booking</p>
+            <Say>{g.booking}</Say>
           </section>
         )}
 
