@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Copy } from "lucide-react";
-import { EMPTY_ANSWERS, type QualificationAnswers } from "@/lib/leadgen-qualification";
+import { EMPTY_ANSWERS, evaluateQualifiable, type QualificationAnswers } from "@/lib/leadgen-qualification";
 import { NOT_QUALIFIED_LEAD_GEN_LABEL, callGuideToText, clientOffersEcommerce, guideServiceOptions, renderGuideLine, type CallGuide } from "@/lib/leadgen-call-guide";
 
 type Props = {
@@ -36,7 +36,7 @@ function Pills<T extends string>({ label, value, options, onPick }: { label: str
             type="button"
             aria-pressed={value === o.value}
             onClick={() => onPick(o.value)}
-            className={`min-h-9 rounded-full border px-3 py-1 text-[13px] font-medium transition ${value === o.value ? "border-sky-600 bg-sky-100 text-sky-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+            className={`min-h-10 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${value === o.value ? "border-sky-600 bg-sky-100 text-sky-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
           >
             {o.label}
           </button>
@@ -51,6 +51,27 @@ const YES_NO_UNSURE = [
   { value: "no", label: "No" },
   { value: "unsure", label: "Not sure" },
 ] as const;
+
+
+function StepHeading({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <span aria-hidden className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-600 text-[11px] font-bold text-white">
+        {n}
+      </span>
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function AgentNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] leading-5 text-amber-900">
+      <span className="font-semibold">Agent note, do not read aloud: </span>
+      {children}
+    </p>
+  );
+}
 
 // Interactive call guide for Hidebrandt / Teknokraft: opening, then the
 // website question, then the matching branch, the consultation ask and the
@@ -69,6 +90,7 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
   const services = useMemo(() => guideServiceOptions(approvedServices), [approvedServices]);
   const text = useMemo(() => callGuideToText(guide, agentName, { offersEcommerce }), [guide, agentName, offersEcommerce]);
   const hasSite = answers.has_website;
+  const yesNo = (v: boolean | null) => (v === null ? null : v ? "yes" : "no");
 
   async function copy() {
     try {
@@ -90,24 +112,39 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
   // Leads saved before the Google step existed already have website answers.
   const proceed = !callEnds && (gi !== null || hasSite !== null);
   const branch = proceed ? (hasSite === "yes" ? guide.hasWebsite : hasSite === "no" ? guide.noWebsite : null) : null;
+  // Steps 6-10 follow the website answer.
+  const showRest = proceed && hasSite !== null;
   const wantsBooking = answers.specialist_interest === "yes" || answers.agreed_to_appointment === true;
-  const specialistPills = (
-    <Pills label={g.specialist.label} value={answers.specialist_interest} options={g.specialist.options} onPick={(v) => patch({ specialist_interest: v })} />
-  );
+  const specialistPills = <Pills label={g.specialist.label} value={answers.specialist_interest} options={g.specialist.options} onPick={(v) => patch({ specialist_interest: v })} />;
+  const approved = new Set(approvedServices);
+  const interestedInOffered = answers.services_of_interest.some((k) => approved.has(k));
+  const check = evaluateQualifiable(answers, approvedServices);
+  const checklist = [
+    { done: interestedInOffered && answers.understands_services === true, text: `Genuine interest in at least one service ${guide.shortName} offers` },
+    { done: Boolean(answers.challenges?.trim()), text: "A relevant business need or growth objective" },
+    { done: answers.decision_maker === "yes" && answers.agreed_to_appointment === true, text: "Appointment accepted by the owner or appropriate decision-maker" },
+    { done: answers.contact_verified === true, text: "Contact information verified" },
+    { done: answers.appointment_confirmed === true, text: "Appointment date and time confirmed" },
+  ];
 
   return (
-    <div data-testid="interactive-call-guide" data-client={guide.clientKey} className={`rounded-xl border border-sky-200 bg-sky-50/60 ${compact ? "p-3" : "p-4"}`}>
+    <div data-testid="interactive-call-guide" data-client={guide.clientKey} className={`rounded-xl border border-sky-200 bg-sky-50/60 ${compact ? "p-3" : "p-3 sm:p-4"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-sky-700">Call guide · {guide.clientName}</h3>
-        <button type="button" onClick={copy} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-50">
-          <Copy className="h-3 w-3" strokeWidth={2.5} />
-          {copied ? "Copied!" : "Copy Script"}
-        </button>
+        <div className="flex items-center gap-2">
+          <a href={`#objections-${guide.clientKey}`} className="inline-flex min-h-10 items-center rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-50">
+            Objections
+          </a>
+          <button type="button" onClick={copy} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-50">
+            <Copy className="h-3 w-3" strokeWidth={2.5} />
+            {copied ? "Copied!" : "Copy Script"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 space-y-3 text-sm text-slate-800">
         <section aria-label="Opening">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">1. Opening</p>
+          <StepHeading n={1}>Professional introduction</StepHeading>
           <div className="mt-1 space-y-1.5">
             {guide.opening.map((line) => (
               <Say key={line}>{renderGuideLine(line, agentName)}</Say>
@@ -116,7 +153,7 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
         </section>
 
         <section aria-label="Google visibility question" className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">2. Google visibility question</p>
+          <StepHeading n={2}>Google visibility question</StepHeading>
           <Say>{g.question}</Say>
           <Pills label="Prospect's answer" value={gi} options={g.options} onPick={(v) => patch({ google_interest: v })} />
         </section>
@@ -128,6 +165,12 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
               <Say key={line}>{line}</Say>
             ))}
             {gi === "more" && specialistPills}
+            {gi === "more" && answers.specialist_interest === "yes" && !showRest && (
+              <div data-testid="booking-script" className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Appointment booking</p>
+                <Say>{g.booking}</Say>
+              </div>
+            )}
             {gi === "no" && (
               <>
                 <Pills
@@ -152,24 +195,36 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
         )}
 
         {proceed && (
-        <section aria-label="Website question" className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">3. Does the prospect have a website?</p>
-          <Say>{guide.websitePrompt}</Say>
-          <Pills label="Prospect's answer" value={hasSite} options={[...YES_NO_UNSURE]} onPick={(v) =>
-              patch({
-                has_website: v,
-                ...(v === "no" ? { satisfied_with_site: "not_applicable" as const, website_url: null } : {}),
-                ...(v !== "no" && answers.satisfied_with_site === "not_applicable" ? { satisfied_with_site: null } : {}),
-              })
-            }
-          />
-          {hasSite === "unsure" && <p className="text-[12.5px] text-slate-600">Ask where customers find them online, or for the website address, then choose Yes or No.</p>}
-        </section>
+          <section aria-label="Customers through Google" className="space-y-2">
+            <StepHeading n={3}>Customers through Google</StepHeading>
+            <Say>{g.currentCustomers.label}</Say>
+            <Pills label="Prospect's answer" value={answers.google_visibility} options={g.currentCustomers.options} onPick={(v) => patch({ google_visibility: v })} />
+          </section>
+        )}
+
+        {proceed && (
+          <section aria-label="Website question" className="space-y-2">
+            <StepHeading n={4}>Does the prospect have a website?</StepHeading>
+            <Say>{guide.websitePrompt}</Say>
+            <Pills
+              label="Prospect's answer"
+              value={hasSite}
+              options={[...YES_NO_UNSURE]}
+              onPick={(v) =>
+                patch({
+                  has_website: v,
+                  ...(v === "no" ? { satisfied_with_site: "not_applicable" as const, website_url: null } : {}),
+                  ...(v !== "no" && answers.satisfied_with_site === "not_applicable" ? { satisfied_with_site: null } : {}),
+                })
+              }
+            />
+            {hasSite === "unsure" && <p className="text-[12.5px] text-slate-600">Ask where customers find them online, or for the website address, then choose Yes or No.</p>}
+          </section>
         )}
 
         {branch && (
           <section aria-label={hasSite === "yes" ? "Has a website" : "No website"} className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{hasSite === "yes" ? "4. Prospect has a website" : "4. Prospect has no website"}</p>
+            <StepHeading n={5}>{hasSite === "yes" ? "Prospect has a website: improvement or rebranding?" : "Prospect has no website: new website?"}</StepHeading>
             <Say>{branch.say}</Say>
             {hasSite === "yes" && (
               <input
@@ -178,7 +233,7 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
                 onChange={(e) => patch({ website_url: e.target.value })}
                 placeholder="Website address"
                 aria-label="Website address"
-                className="w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="min-h-10 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
               />
             )}
             <Pills
@@ -221,18 +276,22 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
           </section>
         )}
 
-        {proceed && hasSite !== null && (gi === "yes" || gi === "more") && (
-          <section aria-label="Additional SEO and marketing qualification" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">5. Additional SEO and marketing qualification</p>
+        {showRest && (
+          <section aria-label="Services to discuss" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
+            <StepHeading n={6}>{g.servicePitch.heading}</StepHeading>
+            {g.servicePitch.say.map((line) => (
+              <Say key={line}>{line}</Say>
+            ))}
+            <AgentNote>{g.servicePitch.agentNote}</AgentNote>
             {g.followUps.map((f) => (
-              <Pills key={f.field} label={`${f.number}. ${f.label}`} value={answers[f.field]} options={f.options} onPick={(v) => patch({ [f.field]: v } as Partial<QualificationAnswers>)} />
+              <Pills key={f.field} label={f.label} value={answers[f.field]} options={f.options} onPick={(v) => patch({ [f.field]: v } as Partial<QualificationAnswers>)} />
             ))}
           </section>
         )}
 
-        {branch && (
+        {showRest && (
           <section aria-label="Interested services" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">6. What does the prospect want to discuss?</p>
+            <StepHeading n={7}>Establish genuine customer interest</StepHeading>
             <p className="text-[13px] font-semibold text-slate-800">{g.servicesLabel}</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Services the prospect is interested in">
               {services.length === 0 ? (
@@ -244,51 +303,92 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
                     type="button"
                     aria-pressed={answers.services_of_interest.includes(s.key)}
                     onClick={() => toggleService(s.key)}
-                    className={`min-h-9 rounded-full border px-3 py-1 text-[13px] font-medium ${answers.services_of_interest.includes(s.key) ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    className={`min-h-10 rounded-full border px-3.5 py-1.5 text-[13px] font-medium ${answers.services_of_interest.includes(s.key) ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
                   >
                     {s.label}
                   </button>
                 ))
               )}
             </div>
+            <Pills label="Prospect understands the service?" value={yesNo(answers.understands_services)} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ understands_services: v === "yes" })} />
             <label className="block text-[13px] font-semibold text-slate-800">
-              Specific website-related need (in the prospect&apos;s own words)
+              Business need or growth objective (in the prospect&apos;s own words)
               <textarea value={answers.challenges ?? ""} onChange={(e) => patch({ challenges: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
-            </label>
-            <label className="block text-[13px] font-semibold text-slate-800">
-              Prospect requirements
-              <textarea value={answers.intended_improvements ?? ""} onChange={(e) => patch({ intended_improvements: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
-            </label>
-            <label className="block text-[13px] font-semibold text-slate-800">
-              Call notes
-              <textarea value={answers.qualification_notes ?? ""} onChange={(e) => patch({ qualification_notes: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
             </label>
           </section>
         )}
 
-        {branch && (
+        {showRest && (
+          <section aria-label="Owner or decision-maker" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
+            <StepHeading n={8}>Confirm the owner or decision-maker</StepHeading>
+            <Say>{g.decisionMaker.say}</Say>
+            <Pills label={g.decisionMaker.label} value={answers.decision_maker} options={g.decisionMaker.options} onPick={(v) => patch({ decision_maker: v })} />
+            {answers.decision_maker && answers.decision_maker !== "yes" && <AgentNote>{g.decisionMaker.ifNot}</AgentNote>}
+          </section>
+        )}
+
+        {showRest && (
           <section aria-label="Consultation" className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">7. Appointment booking or follow-up</p>
+            <StepHeading n={9}>Offer a consultation</StepHeading>
             <Say>{guide.ifInterested}</Say>
             {gi !== "more" && specialistPills}
+            <Pills label="Prospect agreed to discuss it with the client?" value={yesNo(answers.agreed_to_appointment)} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ agreed_to_appointment: v === "yes" })} />
             {wantsBooking && (
               <div data-testid="booking-script" className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Appointment booking</p>
                 <Say>{g.booking}</Say>
               </div>
             )}
-            <Pills label="Prospect understands the service?" value={answers.understands_services === null ? null : answers.understands_services ? "yes" : "no"} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ understands_services: v === "yes" })} />
-            <Pills label="Prospect agreed to discuss it with the client?" value={answers.agreed_to_appointment === null ? null : answers.agreed_to_appointment ? "yes" : "no"} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} onPick={(v) => patch({ agreed_to_appointment: v === "yes" })} />
-            <p className="text-[12px] text-slate-600">Not every answer has to be &ldquo;yes&rdquo;. Record what applies and confirm genuine interest in at least one approved service. An appointment still goes to Admin for approval before anything is sent to {guide.shortName}.</p>
+            <p className="text-[12px] text-slate-600">A request for information alone is not an appointment: if that is all the prospect wants, record Needs follow-up. An appointment still goes to Admin for approval before anything is sent to {guide.shortName}.</p>
           </section>
         )}
 
-        {gi === "more" && answers.specialist_interest === "yes" && wantsBooking && !branch && (
-          <section aria-label="Appointment booking" data-testid="booking-script" className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Appointment booking</p>
-            <Say>{g.booking}</Say>
+        {showRest && (
+          <section aria-label="Confirm appointment and requirements" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
+            <StepHeading n={10}>Confirm the appointment and record requirements</StepHeading>
+            {g.confirmation.say.map((line) => (
+              <Say key={line}>{line}</Say>
+            ))}
+            <Pills label={g.confirmation.contactLabel} value={yesNo(answers.contact_verified)} options={[{ value: "yes", label: "Verified" }, { value: "no", label: "Not yet" }]} onPick={(v) => patch({ contact_verified: v === "yes" })} />
+            <Pills label={g.confirmation.scheduleLabel} value={yesNo(answers.appointment_confirmed)} options={[{ value: "yes", label: "Confirmed" }, { value: "no", label: "Not yet" }]} onPick={(v) => patch({ appointment_confirmed: v === "yes" })} />
+            <label className="block text-[13px] font-semibold text-slate-800">
+              {g.confirmation.requirementsLabel}
+              <textarea value={answers.intended_improvements ?? ""} onChange={(e) => patch({ intended_improvements: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+            </label>
+            <label className="block text-[13px] font-semibold text-slate-800">
+              Call notes
+              <textarea value={answers.qualification_notes ?? ""} onChange={(e) => patch({ qualification_notes: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+            </label>
+            <div data-testid="qualified-checklist" className={`rounded-lg border px-3 py-2 ${check.ok ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+              <p className="text-[13px] font-semibold text-slate-800">{check.ok ? "Ready to save as a qualified appointment" : "A qualified appointment needs all of these"}</p>
+              <ul className="mt-1 space-y-0.5 text-[12.5px]">
+                {checklist.map((c) => (
+                  <li key={c.text} className={c.done ? "text-emerald-800" : "text-slate-600"}>
+                    <span aria-hidden>{c.done ? "✓" : "○"}</span> {c.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         )}
+
+        <section id={`objections-${guide.clientKey}`} aria-label="Objection handling" className="scroll-mt-4 space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Objection handling · tap to open</p>
+          {guide.objections.map((o) => (
+            <details key={o.id} className="group rounded-lg border border-amber-200 bg-white">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-[13.5px] font-semibold text-slate-900 [&::-webkit-details-marker]:hidden">
+                <span>&ldquo;{o.label}&rdquo;</span>
+                <span aria-hidden className="shrink-0 text-amber-700 transition group-open:rotate-45">+</span>
+              </summary>
+              <div className="space-y-1.5 border-t border-amber-100 px-3 py-2">
+                {o.responses.map((line) => (
+                  <Say key={line}>{line}</Say>
+                ))}
+                {o.note && <AgentNote>{o.note}</AgentNote>}
+              </div>
+            </details>
+          ))}
+        </section>
 
         <section aria-label="Lead generation only" className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">If the prospect only wants leads or customers</p>

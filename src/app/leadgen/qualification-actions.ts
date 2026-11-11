@@ -10,6 +10,7 @@ import {
   composeRejectionReason,
   customServiceKey,
   evaluateQualifiable,
+  isLegacyQualification,
   isValidServiceKey,
   GOOGLE_MARKETING_FIELDS,
   normalizeAnswers,
@@ -141,7 +142,7 @@ export async function resubmitAppointmentForApprovalAction(appointmentId: string
   const settings = await fetchQualificationSettings(admin, appt.client_id);
   const qualification = await fetchQualificationForLead(admin, appt.lead_id);
   if (!settings || !qualification || qualification.outcome !== "qualified") return { error: "Update the lead's qualification and mark it Qualified before resubmitting." };
-  const check = evaluateQualifiable(qualification, settings.approved_services);
+  const check = evaluateQualifiable(qualification, settings.approved_services, { legacy: isLegacyQualification(qualification.created_at) });
   if (!check.ok) return { error: check.reasons.join(" ") };
 
   const { error } = await admin.from("leadgen_appointments").update({ qc_status: "pending_review", qualification_id: qualification.id }).eq("id", appointmentId).eq("qc_status", "needs_info");

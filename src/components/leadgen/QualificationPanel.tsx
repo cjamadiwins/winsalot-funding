@@ -251,6 +251,31 @@ export default function QualificationPanel({ leadId, clientName, approvedService
         </div>
 
         <div>
+          <p className="text-sm font-semibold text-slate-800">9. Is the person the owner or the decision-maker who accepted the appointment?</p>
+          <Choice name="decision_maker" value={answers.decision_maker} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No, someone else" }, { value: "unsure", label: "Not sure" }]} onChange={(v) => set("decision_maker", v)} />
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-800">10. Did you verify the contact&apos;s name, phone number and email address?</p>
+          <Choice
+            name="contact_verified"
+            value={answers.contact_verified === null ? null : answers.contact_verified ? "yes" : "no"}
+            options={[{ value: "yes", label: "Verified" }, { value: "no", label: "Not yet" }]}
+            onChange={(v) => set("contact_verified", v === "yes")}
+          />
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-800">11. Did you confirm the appointment date and time with the prospect?</p>
+          <Choice
+            name="appointment_confirmed"
+            value={answers.appointment_confirmed === null ? null : answers.appointment_confirmed ? "yes" : "no"}
+            options={[{ value: "yes", label: "Confirmed" }, { value: "no", label: "Not yet" }]}
+            onChange={(v) => set("appointment_confirmed", v === "yes")}
+          />
+        </div>
+
+        <div>
           <p className="text-sm font-semibold text-slate-800">Services the prospect is interested in ({clientName} offers these)</p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {approvedServices.map((key) => (

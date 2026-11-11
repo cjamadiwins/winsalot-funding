@@ -5,7 +5,7 @@ import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "./app
 import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
 import { notifyOfNewLeadgenAppointment } from "./leadgen-appointment-notifications";
 import type { LeadgenAppointmentRow, LeadgenClientRow } from "./leadgen-types";
-import { preliminaryCategoryFromLead, buildQualificationBriefLines, evaluateQualifiable, isClientNotifiable, normalizeAnswers, type QualificationAnswers, type QualificationOutcome, type QualificationCategory } from "./leadgen-qualification";
+import { isLegacyQualification, preliminaryCategoryFromLead, buildQualificationBriefLines, evaluateQualifiable, isClientNotifiable, normalizeAnswers, type QualificationAnswers, type QualificationOutcome, type QualificationCategory } from "./leadgen-qualification";
 
 // Server-side helpers for the client-qualification / appointment-approval
 // feature. Every function degrades to "no gate" when the feature's tables or
@@ -24,6 +24,7 @@ export type QualificationRecord = QualificationAnswers & {
   category_source: "auto_preliminary" | "agent_verified";
   outcome: QualificationOutcome;
   submitted_at: string | null;
+  created_at?: string | null;
   updated_at: string;
 };
 
@@ -49,6 +50,7 @@ export function rowToQualification(row: Record<string, unknown>): QualificationR
     category_source: (row.category_source as "auto_preliminary" | "agent_verified") ?? "auto_preliminary",
     outcome: (row.outcome as QualificationOutcome) ?? "draft",
     submitted_at: (row.submitted_at as string | null) ?? null,
+    created_at: (row.created_at as string | null) ?? null,
     updated_at: row.updated_at as string,
   };
 }
@@ -78,7 +80,7 @@ export async function checkQualificationForBooking(supabase: SupabaseClient, inp
   if (qualification.outcome !== "qualified") {
     return { required: true, ok: false, error: "The saved qualification is not marked Qualified. Finish the qualification first - appointments are only accepted for prospects who confirmed interest in one of this client's services." };
   }
-  const result = evaluateQualifiable(qualification, settings.approved_services);
+  const result = evaluateQualifiable(qualification, settings.approved_services, { legacy: isLegacyQualification(qualification.created_at) });
   if (!result.ok) return { required: true, ok: false, error: `The qualification no longer meets this client's requirements: ${result.reasons.join(" ")}` };
   return { required: true, ok: true, qualificationId: qualification.id };
 }
