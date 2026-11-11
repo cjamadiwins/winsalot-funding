@@ -11,6 +11,7 @@ import {
   customServiceKey,
   evaluateQualifiable,
   isValidServiceKey,
+  GOOGLE_MARKETING_FIELDS,
   normalizeAnswers,
   type QualificationAnswers,
   type QualificationOutcome,
@@ -74,12 +75,16 @@ export async function saveQualificationAction(input: SaveQualificationInput): Pr
   const finalOutcome: QualificationOutcome = answers.lead_gen_only && outcome !== "draft" ? "not_qualified" : outcome;
 
   const category = classifyFromAnswers(answers, settings.approved_services);
+  // The Google step's columns belong to the Hidebrandt/Teknokraft guides. Leave
+  // them out of the write when unused so every other client saves exactly as before.
+  const answerColumns: Record<string, unknown> = { ...answers };
+  for (const f of GOOGLE_MARKETING_FIELDS) if (answers[f] === null) delete answerColumns[f];
   const row = {
     lead_id: lead.id as string,
     client_id: lead.client_id as string,
     campaign_id: (lead.campaign_id as string | null) ?? null,
     agent_id: user.id,
-    ...answers,
+    ...answerColumns,
     category,
     // Submitting (anything other than a draft) is the agent's verification.
     category_source: finalOutcome === "draft" ? "auto_preliminary" : "agent_verified",

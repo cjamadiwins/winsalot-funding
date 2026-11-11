@@ -11,6 +11,7 @@ import {
   customServiceKey,
   evaluateQualifiable,
   isClientNotifiable,
+  isValidServiceKey,
   missingAnswers,
   normalizeAnswers,
   preliminaryCategoryFromLead,
@@ -234,5 +235,40 @@ describe("reporting", () => {
   it("computes the acceptance rate over decided appointments only", () => {
     expect(acceptanceRate(metrics[0].totals)).toBe(50);
     expect(acceptanceRate({ approved: 0, rejected: 0 })).toBeNull();
+  });
+});
+
+
+describe("Google visibility / marketing answers", () => {
+  it("normalizes the new fields and rejects unknown values", () => {
+    const a = normalizeAnswers({ google_interest: "more", online_customers_satisfied: "satisfied", google_visibility: "unsure", ai_search_interest: "more", investing_marketing: "no", specialist_interest: "follow_up" });
+    expect(a).toMatchObject({ google_interest: "more", online_customers_satisfied: "satisfied", google_visibility: "unsure", ai_search_interest: "more", investing_marketing: "no", specialist_interest: "follow_up" });
+    const bad = normalizeAnswers({ google_interest: "maybe", specialist_interest: "sure", ai_search_interest: "unsure" });
+    expect(bad.google_interest).toBeNull();
+    expect(bad.specialist_interest).toBeNull();
+    expect(bad.ai_search_interest).toBeNull();
+  });
+
+  it("does not change what is required for a qualified appointment", () => {
+    expect(missingAnswers({ ...EMPTY_ANSWERS })).toHaveLength(8);
+    expect(isValidServiceKey("digital_marketing")).toBe(true);
+  });
+
+  it("adds marketing interests to the appointment preparation brief only when recorded", () => {
+    const ctx = { verified: true, prospectName: "Pat", businessName: "Pat Plumbing", appointmentDate: "2026-11-20", appointmentTime: "10:00:00", timezone: "America/Toronto", agentName: "Henry", leadWebsite: null };
+    const plain = buildQualificationBriefLines({ ...ctx, answers: { ...EMPTY_ANSWERS } }).join("\n");
+    expect(plain).not.toContain("Google visibility and marketing");
+    const text = buildQualificationBriefLines({
+      ...ctx,
+      answers: { ...EMPTY_ANSWERS, services_of_interest: ["seo_visibility", "human_search_optimization", "digital_marketing", "new_website"], google_interest: "yes", google_visibility: "no", ai_search_interest: "yes", investing_marketing: "unsure", specialist_interest: "yes" },
+    }).join("\n");
+    expect(text).toContain("Google visibility and marketing interests (as stated by the prospect)");
+    expect(text).toContain("Marketing services of interest: SEO and online visibility, Human search optimization, Digital marketing");
+    expect(text).toContain("Google ranking interest: Interested in ranking higher on Google");
+    expect(text).toContain("Customers currently finding the business through Google: No");
+    expect(text).toContain("AI-powered search: Yes");
+    expect(text).toContain("Currently investing in SEO or digital marketing: Not sure");
+    expect(text).toContain("Wants to speak with a specialist: Yes");
+    expect(text).not.toMatch(/guarantee/i);
   });
 });
