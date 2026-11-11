@@ -45,6 +45,9 @@ export type SaveQualificationInput = {
   answers: Partial<Record<keyof QualificationAnswers, unknown>>;
   // 'draft' keeps the answers without claiming an outcome.
   outcome: QualificationOutcome;
+  // Autosave of a clicked answer: no history entry is written for it. It never
+  // creates or changes an appointment either way.
+  quiet?: boolean;
 };
 
 // Agents save for leads assigned to them (enforced by RLS and re-checked
@@ -100,7 +103,7 @@ export async function saveQualificationAction(input: SaveQualificationInput): Pr
     : await supabase.from("leadgen_lead_qualifications").insert(row);
   if (error) return { error: friendlyDbError(error.message, "Failed to save the qualification.") };
 
-  if (finalOutcome !== "draft") {
+  if (finalOutcome !== "draft" && !input.quiet) {
     await supabase.from("leadgen_lead_activities").insert({
       lead_id: lead.id,
       agent_id: user.id,

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { NOT_QUALIFIED_LEAD_GEN_LABEL, callGuideToText, clientOffersEcommerce, getCallGuide, renderGuideLine } from "../leadgen-call-guide";
+import { GUIDE_PREVIEW_SERVICES, NOT_QUALIFIED_LEAD_GEN_LABEL, callGuideToText, clientOffersEcommerce, getCallGuide, renderGuideLine } from "../leadgen-call-guide";
 import { buildLeadgenCallScript } from "../leadgen-call-script";
 import { acceptanceRate, buildQcMetrics, evaluateQualifiable, isLegacyQualification, suggestOutcome, EMPTY_ANSWERS } from "../leadgen-qualification";
 import InteractiveCallGuide from "@/components/leadgen/InteractiveCallGuide";
@@ -12,30 +12,43 @@ const HID = { name: "Hidebrandt Web Services", ...base };
 const TEK = { name: "Teknokraft Canada Inc.", ...base };
 
 describe("approved call guide wording", () => {
-  it("Hidebrandt uses the exact approved script", () => {
+  it("Hidebrandt: one concise introduction, no repeated description, then the Google question", () => {
     const g = getCallGuide("Hidebrandt Web Services")!;
     expect(g.opening.map((l) => renderGuideLine(l, "Henry Osuji"))).toEqual([
-      "Hi, my name is Henry, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.",
-      "We help businesses improve their online presence through professional website development, website redesign, and search visibility solutions.",
-      "We help businesses improve their online presence through website design, Google search optimization, and Human Search Optimization, helping more potential customers discover their services online.",
+      "Hi, my name is Henry, calling from Winsalot Corp. on behalf of Hidebrandt Web Services. We help businesses improve their Google visibility and attract more customers through website improvements and search optimization.",
     ]);
     expect(g.websitePrompt).toBe("May I ask, does your business currently have a website?");
     expect(g.hasWebsite.say).toBe("Are you satisfied with how your website looks and performs, or have you considered upgrading it to better showcase your services and attract customers?");
     expect(g.noWebsite.say).toBe("Would you be interested in exploring a professional website that helps customers find your business online and understand your services?");
     expect(g.ifInterested).toBe("Would you be open to a short consultation with a Hidebrandt website specialist to discuss your specific requirements?");
+    // The only description of the company is inside the introduction itself.
+    const text = callGuideToText(g, "Henry");
+    expect(text.match(/We help businesses/g)).toHaveLength(1);
+    expect(text).toMatch(/1\. PROFESSIONAL INTRODUCTION\nHi, my name is Henry, [^\n]+\n\n2\. GOOGLE VISIBILITY QUESTION[^\n]*\nWould you like your business to appear higher on Google/);
   });
 
-  it("Teknokraft uses the exact approved script", () => {
+  it("Teknokraft: same concise introduction structure, then the Google question", () => {
     const g = getCallGuide("Teknokraft Canada Inc.")!;
     expect(g.opening.map((l) => renderGuideLine(l, "Goodness Ugbana"))).toEqual([
-      "Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Teknokraft Canada Inc.",
-      "We help businesses establish and improve their online presence through website development, website redesign, and search engine optimization.",
-      "We help businesses improve their visibility on Google, market their services online, and attract more potential customers.",
+      "Hi, my name is Goodness, calling from Winsalot Corp. on behalf of Teknokraft Canada Inc. We help businesses attract more potential customers through website design and redesign, Google search visibility, SEO, and digital marketing.",
     ]);
     expect(g.websitePrompt).toBe("May I ask, does your business currently have a website?");
     expect(g.hasWebsite.say).toBe("Are you happy with your website’s current design and performance, or would you be interested in improving it to attract more customers online?");
     expect(g.noWebsite.say).toBe("Have you considered creating a professional website so potential customers can find your business and learn more about your services?");
     expect(g.ifInterested).toBe("We can arrange a short consultation with a Teknokraft representative to discuss your website needs and possible solutions. Would that interest you?");
+    const text = callGuideToText(g, "Goodness");
+    expect(text.match(/We help businesses/g)).toHaveLength(1);
+    expect(text).toMatch(/1\. PROFESSIONAL INTRODUCTION\nHi, my name is Goodness, [^\n]+\n\n2\. GOOGLE VISIBILITY QUESTION[^\n]*\nWould you like your business to appear higher on Google/);
+    for (const topic of [/website design and redesign/, /Google search visibility/, /SEO/, /digital marketing/, /attract more potential customers/]) expect(g.opening[0]).toMatch(topic);
+  });
+
+  it("Hidebrandt keeps Human Search Optimization in the service explanation and qualification, not repeated in the introduction", () => {
+    const g = getCallGuide("Hidebrandt Web Services")!;
+    expect(g.opening.join(" ")).not.toMatch(/Human Search Optimization/);
+    expect(g.google.servicePitch.say.join(" ")).toMatch(/Human Search Optimization/);
+    expect(g.google.say.yes.join(" ")).toMatch(/Human Search Optimization/);
+    expect(GUIDE_PREVIEW_SERVICES.hidebrandt).toContain("human_search_optimization");
+    expect(callGuideToText(g, "Henry")).toMatch(/separate from traditional SEO/);
   });
 
   it("has seven qualification questions and the lead-generation-only handling for both", () => {

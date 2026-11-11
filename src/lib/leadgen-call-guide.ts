@@ -192,9 +192,7 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
     clientName: "Hidebrandt Web Services",
     shortName: "Hidebrandt",
     opening: [
-      "Hi, my name is [Agent Name], calling from Winsalot Corp. on behalf of Hidebrandt Web Services.",
-      "We help businesses improve their online presence through professional website development, website redesign, and search visibility solutions.",
-      "We help businesses improve their online presence through website design, Google search optimization, and Human Search Optimization, helping more potential customers discover their services online.",
+      "Hi, my name is [Agent Name], calling from Winsalot Corp. on behalf of Hidebrandt Web Services. We help businesses improve their Google visibility and attract more customers through website improvements and search optimization.",
     ],
     google: {
       question: "Would you like your business to appear higher on Google when customers search for your services, so more people can find you and contact you?",
@@ -280,9 +278,7 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
     clientName: "Teknokraft Canada Inc.",
     shortName: "Teknokraft",
     opening: [
-      "Hi, my name is [Agent Name], calling from Winsalot Corp. on behalf of Teknokraft Canada Inc.",
-      "We help businesses establish and improve their online presence through website development, website redesign, and search engine optimization.",
-      "We help businesses improve their visibility on Google, market their services online, and attract more potential customers.",
+      "Hi, my name is [Agent Name], calling from Winsalot Corp. on behalf of Teknokraft Canada Inc. We help businesses attract more potential customers through website design and redesign, Google search visibility, SEO, and digital marketing.",
     ],
     google: {
       question: "Would you like your business to appear higher on Google when customers search for your services, so more people can find you and contact you?",

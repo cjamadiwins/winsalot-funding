@@ -18,6 +18,8 @@ type Props = {
   // Lead page only: lets the agent record "Not Qualified — Lead Generation Only".
   onMarkNotQualified?: () => void;
   pending?: boolean;
+  // Lead page only: result of saving the Google answer as it is clicked.
+  googleSave?: { state: "idle" | "saving" | "saved" | "error"; text?: string };
   compact?: boolean;
 };
 
@@ -78,7 +80,7 @@ function AgentNote({ children }: { children: React.ReactNode }) {
 // lead-generation-only handling. Answers recorded here are the same fields as
 // the qualification form below it. It never books anything: a qualified
 // prospect still goes to Admin review before anything reaches the client.
-export default function InteractiveCallGuide({ guide, agentName, approvedServices, value, onChange, onMarkNotQualified, pending = false, compact = false }: Props) {
+export default function InteractiveCallGuide({ guide, agentName, approvedServices, value, onChange, onMarkNotQualified, pending = false, googleSave, compact = false }: Props) {
   const [local, setLocal] = useState<QualificationAnswers>(EMPTY_ANSWERS);
   const [copied, setCopied] = useState(false);
   const [leadGenAsked, setLeadGenAsked] = useState(false);
@@ -156,6 +158,15 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
           <StepHeading n={2}>Google visibility question</StepHeading>
           <Say>{g.question}</Say>
           <Pills label="Prospect's answer" value={gi} options={g.options} onPick={(v) => patch({ google_interest: v })} />
+          {googleSave && googleSave.state !== "idle" && (
+            <p
+              role="status"
+              data-testid="google-save-status"
+              className={`text-[12px] ${googleSave.state === "error" ? "font-semibold text-red-700" : googleSave.state === "saved" ? "text-emerald-700" : "text-slate-500"}`}
+            >
+              {googleSave.state === "saving" ? "Saving…" : googleSave.state === "saved" ? "✓ Answer saved to this lead" : `Not saved: ${googleSave.text ?? "try again."}`}
+            </p>
+          )}
         </section>
 
         {gi && (

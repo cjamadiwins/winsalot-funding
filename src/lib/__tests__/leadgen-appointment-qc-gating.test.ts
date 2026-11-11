@@ -326,3 +326,80 @@ describe("saving a qualification", () => {
     expect((await save()).error).toMatch(/not set up/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The Google question's three buttons save to the correct lead as they are clicked
+// ---------------------------------------------------------------------------
+describe("Google answer autosave", () => {
+  const click = (google_interest: string, extra: Record<string, unknown> = {}, outcome = "draft") =>
+    saveQualificationAction({ leadId: "lead-1", answers: { google_interest, ...extra }, outcome: outcome as never, quiet: true });
+
+  beforeEach(() => {
+    currentUser = { id: "agent-1", email: "g@example.com", full_name: "Goodness", role: "agent" };
+    db.tables.leadgen_lead_qualifications = [];
+    db.tables.leadgen_lead_activities = [];
+  });
+
+  for (const choice of ["yes", "more", "no"]) {
+    it(`"${choice}" is saved to the right lead and read back, as a draft, with no history entry and no appointment`, async () => {
+      const appointmentsBefore = JSON.stringify(db.tables.leadgen_appointments);
+      const writesBefore = db.writes.length;
+      expect((await click(choice)).error).toBeUndefined();
+
+      const rows = db.tables.leadgen_lead_qualifications;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ lead_id: "lead-1", client_id: "hid", agent_id: "agent-1", google_interest: choice, outcome: "draft", category_source: "auto_preliminary" });
+
+      // Read back through the same function the lead page uses (what a refresh shows).
+      const { fetchQualificationForLead } = await import("../leadgen-appointment-qc");
+      expect((await fetchQualificationForLead(db.client as never, "lead-1"))?.google_interest).toBe(choice);
+
+      // Only the qualification record was written: no appointment, no history note.
+      expect(db.writes.slice(writesBefore).map((w) => w.table)).toEqual(["leadgen_lead_qualifications"]);
+      expect(JSON.stringify(db.tables.leadgen_appointments)).toBe(appointmentsBefore);
+      expect(db.tables.leadgen_lead_activities).toHaveLength(0);
+    });
+  }
+
+  it("changing the answer updates the same record instead of adding another", async () => {
+    await click("yes");
+    await click("no", { online_customers_satisfied: "not_satisfied" });
+    expect(db.tables.leadgen_lead_qualifications).toHaveLength(1);
+    expect(db.tables.leadgen_lead_qualifications[0]).toMatchObject({ google_interest: "no", online_customers_satisfied: "not_satisfied" });
+  });
+
+  it("keeps the lead's existing status (a click never downgrades or upgrades a qualification)", async () => {
+    await click("more", {}, "requires_further_qualification");
+    expect(db.tables.leadgen_lead_qualifications[0].outcome).toBe("requires_further_qualification");
+    await click("yes", {}, "requires_further_qualification");
+    expect(db.tables.leadgen_lead_qualifications[0].outcome).toBe("requires_further_qualification");
+    expect(db.tables.leadgen_lead_activities).toHaveLength(0);
+  });
+
+  it("feeds the qualification workflow: Yes counts as search-visibility interest", async () => {
+    await click("yes");
+    expect(db.tables.leadgen_lead_qualifications[0].category).toBe("seo_visibility");
+    await click("more");
+    expect(db.tables.leadgen_lead_qualifications[0].category).toBe("requires_further_qualification");
+  });
+
+  it("an agent cannot save an answer on a lead assigned to someone else; Admin can", async () => {
+    db.tables.leadgen_leads[0].assigned_agent_id = "someone-else";
+    expect((await click("yes")).error).toMatch(/not assigned to you/);
+    expect(db.tables.leadgen_lead_qualifications).toHaveLength(0);
+    currentUser = { id: "admin-1", email: "admin@example.com", full_name: "Admin", role: "admin" };
+    expect((await click("yes")).error).toBeUndefined();
+    expect(db.tables.leadgen_lead_qualifications).toHaveLength(1);
+  });
+
+  it("a click on the wrong role is refused and the record is left alone", async () => {
+    currentUser = { id: "client-1", email: "c@example.com", full_name: "Client", role: "client" };
+    expect((await click("yes")).error).toMatch(/not allowed/i);
+    expect(db.tables.leadgen_lead_qualifications).toHaveLength(0);
+  });
+
+  it("a normal (non-autosave) status save still writes its history entry", async () => {
+    await saveQualificationAction({ leadId: "lead-1", answers: { google_interest: "no", online_customers_satisfied: "satisfied" }, outcome: "not_qualified" });
+    expect(db.tables.leadgen_lead_activities).toHaveLength(1);
+  });
+});
