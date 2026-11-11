@@ -34,6 +34,9 @@ const complete: QualificationAnswers = {
   challenges: "Old site, not mobile friendly, no enquiries",
   understands_services: true,
   agreed_to_appointment: true,
+  decision_maker: "yes" as const,
+  contact_verified: true,
+  appointment_confirmed: true,
   services_of_interest: ["redesign_rebranding", "seo_visibility"],
 };
 

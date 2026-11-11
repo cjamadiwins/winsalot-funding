@@ -81,6 +81,7 @@ export type GoogleInterest = "yes" | "more" | "no";
 export type OnlineSatisfaction = "satisfied" | "not_satisfied";
 export type YesNoMore = "yes" | "no" | "more";
 export type SpecialistInterest = "yes" | "no" | "follow_up";
+export type DecisionMaker = "yes" | "no" | "unsure";
 export type Satisfaction = "satisfied" | "not_satisfied" | "unsure" | "not_applicable";
 
 export type QualificationAnswers = {
@@ -106,10 +107,28 @@ export type QualificationAnswers = {
   ai_search_interest: YesNoMore | null;
   investing_marketing: YesNoUnsure | null;
   specialist_interest: SpecialistInterest | null;
+  // Confirmations a qualified appointment needs (20261112000000): the person
+  // is the owner / decision-maker, their contact details were verified, and
+  // the appointment date and time were confirmed with them.
+  decision_maker: DecisionMaker | null;
+  contact_verified: boolean | null;
+  appointment_confirmed: boolean | null;
 };
 
-// Columns added by 20261111120000_leadgen_google_marketing_qualification.sql.
-export const GOOGLE_MARKETING_FIELDS = ["google_interest", "online_customers_satisfied", "google_visibility", "ai_search_interest", "investing_marketing", "specialist_interest"] as const;
+// Columns added after the original qualification table (20261111120000 and
+// 20261112000000). They are left out of a save while unanswered, so a lead
+// that never used them saves exactly as before.
+export const GOOGLE_MARKETING_FIELDS = [
+  "google_interest",
+  "online_customers_satisfied",
+  "google_visibility",
+  "ai_search_interest",
+  "investing_marketing",
+  "specialist_interest",
+  "decision_maker",
+  "contact_verified",
+  "appointment_confirmed",
+] as const;
 
 export const EMPTY_ANSWERS: QualificationAnswers = {
   has_website: null,
@@ -131,6 +150,9 @@ export const EMPTY_ANSWERS: QualificationAnswers = {
   ai_search_interest: null,
   investing_marketing: null,
   specialist_interest: null,
+  decision_maker: null,
+  contact_verified: null,
+  appointment_confirmed: null,
 };
 
 export const QUALIFICATION_QUESTIONS = [
@@ -176,6 +198,9 @@ export function normalizeAnswers(raw: Partial<Record<keyof QualificationAnswers,
     ai_search_interest: pick(raw.ai_search_interest, ["yes", "no", "more"] as const),
     investing_marketing: pick(raw.investing_marketing, ["yes", "no", "unsure"] as const),
     specialist_interest: pick(raw.specialist_interest, ["yes", "no", "follow_up"] as const),
+    decision_maker: pick(raw.decision_maker, ["yes", "no", "unsure"] as const),
+    contact_verified: bool(raw.contact_verified),
+    appointment_confirmed: bool(raw.appointment_confirmed),
   };
 }
 
@@ -193,11 +218,23 @@ export function missingAnswers(a: QualificationAnswers): QualificationQuestionKe
   return missing;
 }
 
+// Qualifications created before the call confirmations existed keep working
+// under the earlier rule. Mirrors the cut-off in
+// leadgen_qualification_is_qualifiable() (20261112000000).
+export const CALL_CONFIRMATIONS_CUTOFF = "2026-11-11T00:00:00Z";
+export function isLegacyQualification(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return Number.isFinite(t) && t < Date.parse(CALL_CONFIRMATIONS_CUTOFF);
+}
+
 export type QualifiableResult = { ok: boolean; reasons: string[] };
 
 // Mirrors leadgen_qualification_is_qualifiable(): an appointment may be marked
 // Qualified only when every rule below holds.
-export function evaluateQualifiable(a: QualificationAnswers, approvedServices: readonly string[]): QualifiableResult {
+// `legacy` skips the three call confirmations for records created before they
+// existed (the database applies the same cut-off), so old approvals still work.
+export function evaluateQualifiable(a: QualificationAnswers, approvedServices: readonly string[], opts: { legacy?: boolean } = {}): QualifiableResult {
   const reasons: string[] = [];
   const missing = missingAnswers(a);
   if (missing.length > 0) {
@@ -207,6 +244,11 @@ export function evaluateQualifiable(a: QualificationAnswers, approvedServices: r
   if (a.lead_gen_only) reasons.push("The prospect wants lead generation only - this is not a website-services appointment.");
   if (a.understands_services !== true) reasons.push("The prospect must understand the services being offered.");
   if (a.agreed_to_appointment !== true) reasons.push("The prospect must agree to an appointment to discuss those services.");
+  if (!opts.legacy) {
+    if (a.decision_maker !== "yes") reasons.push("Confirm the person is the owner or the decision-maker (or the appropriate contact for this decision).");
+    if (a.contact_verified !== true) reasons.push("Verify the contact's name, phone number and email address.");
+    if (a.appointment_confirmed !== true) reasons.push("Confirm the appointment date and time with the prospect.");
+  }
   const approved = new Set(approvedServices);
   if (!a.services_of_interest.some((s) => approved.has(s))) reasons.push("Confirm interest in at least one service this client offers.");
   return { ok: reasons.length === 0, reasons };
@@ -333,6 +375,19 @@ const INTEREST_TEXT: Record<InterestKind, string> = {
 const YNU_TEXT: Record<string, string> = { yes: "Yes", no: "No", unsure: "Not sure", more: "Wants to know more", follow_up: "Follow up later" };
 const GOOGLE_INTEREST_TEXT: Record<GoogleInterest, string> = { yes: "Interested in ranking higher on Google", more: "Asked to hear more about Google visibility", no: "Not interested in Google visibility" };
 
+const DECISION_MAKER_TEXT: Record<DecisionMaker, string> = { yes: "Confirmed owner / decision-maker", no: "Not the decision-maker", unsure: "Not confirmed" };
+
+// Who accepted the appointment and what was confirmed. Nothing is shown for
+// records that never recorded these (older qualifications).
+export function buildConfirmationBriefLines(a: QualificationAnswers): string[] {
+  if (a.decision_maker === null && a.contact_verified === null && a.appointment_confirmed === null) return [];
+  return [
+    `Appointment accepted by: ${a.decision_maker ? DECISION_MAKER_TEXT[a.decision_maker] : "Not recorded"}`,
+    `Contact details verified by the agent: ${a.contact_verified === null ? "Not recorded" : a.contact_verified ? "Yes" : "No"}`,
+    `Date and time confirmed with the prospect: ${a.appointment_confirmed === null ? "Not recorded" : a.appointment_confirmed ? "Yes" : "No"}`,
+  ];
+}
+
 // Google visibility / marketing interests for the appointment preparation
 // brief. Empty (no lines at all) unless the guide's Google step was used, so
 // every other client's brief is unchanged. Wording never implies a promise.
@@ -377,6 +432,7 @@ export function buildQualificationBriefLines(input: BriefQualificationInput): st
     `Confirmed challenges: ${confirmed(a.challenges)}`,
     `Intended improvements: ${intent.length > 0 ? intent.join("; ") : "Not stated by the prospect"}${a.intended_improvements ? ` - ${a.intended_improvements}` : ""}`,
     `Qualification notes: ${confirmed(a.qualification_notes)}`,
+    ...buildConfirmationBriefLines(a),
     ...buildMarketingBriefLines(a),
     `Appointment: ${input.appointmentDate} ${input.appointmentTime.slice(0, 5)} (${input.timezone})`,
     `Assigned agent: ${input.agentName?.trim() || "Not assigned"}`,

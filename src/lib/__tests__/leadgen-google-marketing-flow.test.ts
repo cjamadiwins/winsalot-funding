@@ -12,6 +12,9 @@ const clicks: Partial<QualificationAnswers> = {
   investing_marketing: "unsure",
   specialist_interest: "yes",
   has_website: "yes",
+  decision_maker: "yes",
+  contact_verified: true,
+  appointment_confirmed: true,
   services_of_interest: ["seo_visibility", "human_search_optimization", "digital_marketing"],
 };
 
@@ -34,10 +37,14 @@ describe("Google marketing answers: save -> read back -> appointment brief", () 
     expect(brief).toContain("Google ranking interest: Interested in ranking higher on Google");
     expect(brief).toContain("Wants to be easier to discover through Google and AI-powered search: Wants to know more");
     expect(brief).toContain("Wants to speak with a specialist: Yes");
+    expect(brief).toContain("Appointment accepted by: Confirmed owner / decision-maker");
+    expect(brief).toContain("Contact details verified by the agent: Yes");
+    expect(brief).toContain("Date and time confirmed with the prospect: Yes");
   });
 
   it("a lead with no Google answers (other clients, older leads) gets an unchanged brief", () => {
     const brief = buildQualificationBriefLines({ answers: { ...EMPTY_ANSWERS, services_of_interest: ["new_website"] }, verified: true, prospectName: null, businessName: "X", appointmentDate: "2026-11-20", appointmentTime: "10:00:00", timezone: "America/Toronto", agentName: null, leadWebsite: null }).join("\n");
     expect(brief).not.toContain("Google visibility and marketing");
+    expect(brief).not.toContain("Appointment accepted by");
   });
 });

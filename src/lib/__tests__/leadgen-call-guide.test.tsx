@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NOT_QUALIFIED_LEAD_GEN_LABEL, callGuideToText, clientOffersEcommerce, getCallGuide, renderGuideLine } from "../leadgen-call-guide";
 import { buildLeadgenCallScript } from "../leadgen-call-script";
-import { acceptanceRate, buildQcMetrics, evaluateQualifiable, suggestOutcome, EMPTY_ANSWERS } from "../leadgen-qualification";
+import { acceptanceRate, buildQcMetrics, evaluateQualifiable, isLegacyQualification, suggestOutcome, EMPTY_ANSWERS } from "../leadgen-qualification";
 import InteractiveCallGuide from "@/components/leadgen/InteractiveCallGuide";
 import ClientCallScriptPanel from "@/components/leadgen/ClientCallScriptPanel";
 
@@ -122,7 +122,7 @@ describe("interactive guide rendering", () => {
     const html = renderToStaticMarkup(createElement(InteractiveCallGuide, props("Hidebrandt Web Services")));
     expect(html).toContain("Hi, my name is Henry, calling from Winsalot Corp. on behalf of Hidebrandt Web Services.");
     expect(html).toContain("Copy Script");
-    expect(html).toContain("Would you like your business to rank higher on Google");
+    expect(html).toContain("Would you like your business to appear higher on Google when customers search for your services");
     expect(html).not.toContain("Does the prospect have a website?");
     expect(html).not.toContain("Prospect has a website");
     expect(html).not.toContain("Prospect has no website");
@@ -168,9 +168,9 @@ describe("interactive guide rendering", () => {
     expect(html).toContain("New website");
     expect(html).toContain("SEO");
     expect(html).not.toContain("E-commerce");
-    expect(html).toContain("Prospect requirements");
+    expect(html).toContain("Specific requirements");
     expect(html).toContain("Call notes");
-    expect(html).toContain("Specific website-related need");
+    expect(html).toContain("Business need or growth objective");
   });
 
   it("lead-generation-only: shows the follow-up question, the unqualified outcome and no appointment offer", () => {
@@ -191,7 +191,7 @@ describe("interactive guide rendering", () => {
 
 describe("qualification rules still gate the guide's answers", () => {
   const approved = ["new_website", "redesign_rebranding", "seo_visibility"];
-  const full = { ...EMPTY_ANSWERS, has_website: "no" as const, interested_in_new_or_redesign: "new_website" as const, satisfied_with_site: "not_applicable" as const, needs_ecommerce: "no" as const, interested_in_seo: "yes" as const, challenges: "No site", understands_services: true, agreed_to_appointment: true, services_of_interest: ["new_website"] };
+  const full = { ...EMPTY_ANSWERS, decision_maker: "yes" as const, contact_verified: true, appointment_confirmed: true, has_website: "no" as const, interested_in_new_or_redesign: "new_website" as const, satisfied_with_site: "not_applicable" as const, needs_ecommerce: "no" as const, interested_in_seo: "yes" as const, challenges: "No site", understands_services: true, agreed_to_appointment: true, services_of_interest: ["new_website"] };
 
   it("lead-generation-only can never be qualified and suggests not qualified", () => {
     const answers = { ...full, lead_gen_only: true };
@@ -269,45 +269,6 @@ describe("Google step: the exact statement appears right after each answer", () 
     });
   }
 
-  it("the Google question is the same approved wording, ahead of the website question, in the guide and the script", () => {
-    const Q = "Would you like your business to rank higher on Google and market your services online so more customers can find you?";
-    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
-      const g = getCallGuide(name)!;
-      expect(g.google.question).toBe(Q);
-      expect(g.google.options.map((o) => o.label)).toEqual(["Yes, I’m interested", "Tell me more", "No, not interested"]);
-      const html = render(name, { google_interest: "yes", has_website: "yes" });
-      const order = [esc(Q), "Read this next", esc(g.websitePrompt), "Additional SEO and marketing qualification", "Which services", "Appointment booking or follow-up"].map((t) => html.indexOf(t));
-      expect(order.every((i) => i >= 0)).toBe(true);
-      expect([...order].sort((a, b) => a - b)).toEqual(order);
-      const text = callGuideToText(g, "Henry");
-      const t = [Q, g.google.say.yes[0], g.websitePrompt, "5. ADDITIONAL SEO AND MARKETING", "6. APPOINTMENT BOOKING"].map((x) => text.indexOf(x));
-      expect(t.every((i) => i >= 0)).toBe(true);
-      expect([...t].sort((a, b) => a - b)).toEqual(t);
-      expect(text.indexOf("1. AGENT INTRODUCTION")).toBeLessThan(text.indexOf(Q));
-      const script = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client: { name, ...base } }).fullText;
-      expect(script.indexOf(Q)).toBeLessThan(script.indexOf(g.websitePrompt));
-    }
-    expect(getCallGuide("Teknokraft Canada Inc.")!.google.say.yes.join(" ")).toMatch(/local search visibility/);
-    expect(getCallGuide("Hidebrandt Web Services")!.google.say.yes.join(" ")).toMatch(/Human Search Optimization/);
-  });
-
-  it("Hidebrandt follow-up questions and options (incl. 'Tell me more' on the AI-search question)", () => {
-    const html = render("Hidebrandt Web Services", { google_interest: "yes", has_website: "yes" });
-    expect(html).toContain("1. Are customers currently finding your business through Google?");
-    expect(html).toContain("2. Would you like your business to become easier to discover through Google and AI-powered search tools?");
-    expect(html).toContain("3. Are you currently investing in SEO or digital marketing?");
-    expect(html).toContain("Which services interest you? (select all that apply)");
-    expect(html).toContain("Digital marketing");
-    expect(html).toContain("Human search optimization");
-  });
-
-  it("Teknokraft follow-up questions use the approved numbering", () => {
-    const html = render("Teknokraft Canada Inc.", { google_interest: "yes", has_website: "no" });
-    expect(html).toContain("2. Does your business currently appear on Google when customers search for your services?");
-    expect(html).toContain("3. Are you currently investing in SEO or digital marketing?");
-    expect(html).not.toContain("AI-powered search tools");
-  });
-
   it("the website question and qualification follow the Google answer, and stay for older leads", () => {
     expect(render("Teknokraft Canada Inc.", {})).not.toContain("May I ask, does your business currently have a website?");
     expect(render("Teknokraft Canada Inc.", { google_interest: "yes" })).toContain("May I ask, does your business currently have a website?");
@@ -368,5 +329,160 @@ describe("Google step: the exact statement appears right after each answer", () 
     const a = buildLeadgenCallScript({ agentName: "Henry Osuji", client: TEK }).fullText;
     const b = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client: TEK }).fullText;
     expect(a.replace(/Henry/g, "X")).toBe(b.replace(/Goodness/g, "X"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Google-first, ten-step call structure, objection handling and the
+// qualified-appointment rule
+// ---------------------------------------------------------------------------
+const CLIENTS = ["Hidebrandt Web Services", "Teknokraft Canada Inc."] as const;
+const NEW_Q = "Would you like your business to appear higher on Google when customers search for your services, so more people can find you and contact you?";
+const FULL = { google_interest: "yes", google_visibility: "no", has_website: "yes", services_of_interest: ["seo_visibility"], understands_services: true, specialist_interest: "yes", agreed_to_appointment: true, decision_maker: "yes" } as const;
+
+describe("ten-step structure (Google first)", () => {
+  it("the mandatory Google question is exact, in both guides and both scripts, right after the introduction", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      expect(g.google.question).toBe(NEW_Q);
+      expect(g.google.options.map((o) => o.label)).toEqual(["Yes, I’m interested", "Tell me more", "No, not interested"]);
+      const text = callGuideToText(g, "Henry");
+      expect(text.indexOf("1. PROFESSIONAL INTRODUCTION")).toBe(0);
+      expect(text.indexOf(NEW_Q)).toBeLessThan(text.indexOf(g.websitePrompt));
+      const script = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client: { name, ...base } }).fullText;
+      expect(script.indexOf(NEW_Q)).toBeLessThan(script.indexOf(g.websitePrompt));
+      // The website question is never asked before the Google question.
+      expect(g.opening.join(" ")).not.toContain(g.websitePrompt);
+    }
+  });
+
+  it("follows the ten steps in order in the interactive guide and in Copy Script", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      const html = render(name, { ...FULL, challenges: "More enquiries" });
+      const marks = [
+        "Professional introduction",
+        esc(NEW_Q),
+        "Read this next",
+        esc(g.google.currentCustomers.label),
+        esc(g.websitePrompt),
+        "Prospect has a website: improvement or rebranding?",
+        esc(g.google.servicePitch.heading),
+        "Establish genuine customer interest",
+        "Confirm the owner or decision-maker",
+        "Offer a consultation",
+        "Confirm the appointment and record requirements",
+        "Objection handling",
+      ].map((m) => html.indexOf(m));
+      expect(marks.every((i) => i >= 0)).toBe(true);
+      expect([...marks].sort((a, b) => a - b)).toEqual(marks);
+
+      const text = callGuideToText(g, "Henry");
+      const heads = ["1. PROFESSIONAL INTRODUCTION", "2. GOOGLE VISIBILITY QUESTION", "3. CUSTOMERS THROUGH GOOGLE", "4. DOES THE PROSPECT HAVE A WEBSITE?", "5. DOES THE WEBSITE NEED IMPROVEMENT", "6. ", "7. GENUINE CUSTOMER INTEREST", "8. OWNER OR DECISION-MAKER", "9. OFFER A CONSULTATION", "10. CONFIRM THE APPOINTMENT"].map((h) => text.indexOf(h));
+      expect(heads.every((i) => i >= 0)).toBe(true);
+      expect([...heads].sort((a, b) => a - b)).toEqual(heads);
+    }
+  });
+
+  it("each client emphasizes its own services", () => {
+    const tek = callGuideToText(getCallGuide("Teknokraft Canada Inc.")!, "Henry");
+    for (const t of [/website development/i, /website redesign/i, /search engine optimization/i, /digital marketing/i, /online visibility/i]) expect(tek).toMatch(t);
+    const hid = callGuideToText(getCallGuide("Hidebrandt Web Services")!, "Henry");
+    for (const t of [/website redesign/i, /Human Search Optimization/, /search visibility/i, /relevant customers/i]) expect(hid).toMatch(t);
+  });
+
+  it("never describes HSO and traditional SEO as the same service", () => {
+    const text = callGuideToText(getCallGuide("Hidebrandt Web Services")!, "Henry");
+    expect(text).toMatch(/separate from traditional SEO/);
+    expect(text).not.toMatch(/HSO (is|means|=) (just )?(SEO|traditional SEO)|same as (traditional )?SEO|another (word|name) for SEO|HSO and (traditional )?SEO are (the same|identical)/i);
+    expect(callGuideToText(getCallGuide("Teknokraft Canada Inc.")!, "Henry")).not.toMatch(/Human Search Optimization|HSO/);
+  });
+});
+
+describe("objection handling", () => {
+  const LABELS = ["We already have a website.", "We already appear on Google.", "We are not interested.", "We don’t have a budget.", "Send me information by email.", "We already have someone handling our marketing.", "How much does it cost?"];
+
+  it("covers all seven objections for both clients, as expandable items", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      expect(g.objections.map((o) => o.label)).toEqual(LABELS);
+      const html = render(name, {});
+      expect(html.match(/<details/g)).toHaveLength(7);
+      for (const o of g.objections) for (const line of o.responses) expect(html).toContain(esc(line));
+      expect(html).toContain(`id="objections-${g.clientKey}"`);
+    }
+  });
+
+  it("is in Copy Script too", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      const text = callGuideToText(g, "Henry");
+      for (const o of g.objections) expect(text).toContain(o.label);
+    }
+  });
+
+  it("cost response gives no price; email response is not an appointment and respects consent; no guarantees", () => {
+    for (const name of CLIENTS) {
+      const g = getCallGuide(name)!;
+      const cost = g.objections.find((o) => o.id === "cost")!;
+      expect([...cost.responses, cost.note].join(" ")).not.toMatch(/\$|\d+\s*(dollars|per month)|free|discount/i);
+      const email = g.objections.find((o) => o.id === "send-info")!;
+      expect(email.note).toMatch(/NOT a confirmed appointment/);
+      expect(email.note).toMatch(/Do Not Call/i);
+      expect(email.note).toMatch(/opt|consent/i);
+      for (const o of g.objections) expect([...o.responses, o.note ?? ""].join(" ")).not.toMatch(/guarantee|first[- ]page|number one|#1|top spot/i);
+    }
+  });
+
+  it("keeps each client's name in its own objection responses", () => {
+    expect(callGuideToText(getCallGuide("Hidebrandt Web Services")!, "Henry")).not.toMatch(/Teknokraft/);
+    expect(callGuideToText(getCallGuide("Teknokraft Canada Inc.")!, "Henry")).not.toMatch(/Hidebrandt/);
+  });
+});
+
+describe("qualified appointment rule", () => {
+  const complete = { ...EMPTY_ANSWERS, has_website: "yes" as const, interested_in_new_or_redesign: "redesign" as const, satisfied_with_site: "not_satisfied" as const, needs_ecommerce: "no" as const, interested_in_seo: "yes" as const, challenges: "Wants more enquiries" as string | null, understands_services: true, agreed_to_appointment: true, services_of_interest: ["seo_visibility"], decision_maker: "yes" as "yes" | "no" | null, contact_verified: true as boolean | null, appointment_confirmed: true as boolean | null };
+  const approved = ["new_website", "seo_visibility"];
+
+  it("qualifies only with interest, a need, the decision-maker, verified contact and a confirmed time", () => {
+    expect(evaluateQualifiable(complete, approved).ok).toBe(true);
+    const cases: [Partial<typeof complete>, RegExp][] = [
+      [{ services_of_interest: [] }, /at least one service/i],
+      [{ challenges: null }, /Answer every required question/],
+      [{ decision_maker: "no" }, /owner or the decision-maker/],
+      [{ decision_maker: null }, /owner or the decision-maker/],
+      [{ contact_verified: false }, /Verify the contact/],
+      [{ appointment_confirmed: false }, /date and time/],
+      [{ agreed_to_appointment: false }, /agree to an appointment/],
+    ];
+    for (const [patch, re] of cases) {
+      const r = evaluateQualifiable({ ...complete, ...patch }, approved);
+      expect(r.ok).toBe(false);
+      expect(r.reasons.join(" ")).toMatch(re);
+    }
+  });
+
+  it("a request for information alone is not a qualified appointment", () => {
+    const infoOnly = { ...complete, agreed_to_appointment: false, specialist_interest: "follow_up" as const, appointment_confirmed: null };
+    expect(evaluateQualifiable(infoOnly, approved).ok).toBe(false);
+    expect(suggestOutcome(infoOnly, approved)).not.toBe("qualified");
+  });
+
+  it("records created before the rule keep the earlier requirements", () => {
+    const legacy = { ...complete, decision_maker: null, contact_verified: null, appointment_confirmed: null };
+    expect(evaluateQualifiable(legacy, approved).ok).toBe(false);
+    expect(evaluateQualifiable(legacy, approved, { legacy: true }).ok).toBe(true);
+    expect(isLegacyQualification("2026-11-03T12:00:00Z")).toBe(true);
+    expect(isLegacyQualification("2026-11-12T12:00:00Z")).toBe(false);
+  });
+
+  it("the guide shows a live checklist that turns ready only when everything is confirmed", () => {
+    for (const name of CLIENTS) {
+      const partial = render(name, { ...FULL, challenges: "More enquiries" });
+      expect(partial).toContain("A qualified appointment needs all of these");
+      expect(partial).not.toContain("Ready to save as a qualified appointment");
+      const ready = render(name, { ...FULL, challenges: "More enquiries", contact_verified: true, appointment_confirmed: true, interested_in_new_or_redesign: "redesign", satisfied_with_site: "not_satisfied", needs_ecommerce: "no", interested_in_seo: "yes" });
+      expect(ready).toContain("Ready to save as a qualified appointment");
+    }
   });
 });

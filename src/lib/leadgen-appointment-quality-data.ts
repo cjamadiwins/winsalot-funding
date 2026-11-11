@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildQcMetrics, evaluateQualifiable, type QcMetricsGroup, type QualificationAnswers } from "./leadgen-qualification";
+import { buildQcMetrics, evaluateQualifiable, isLegacyQualification, type QcMetricsGroup, type QualificationAnswers } from "./leadgen-qualification";
 import { rowToQualification, type QualificationRecord } from "./leadgen-appointment-qc";
 
 // Reads for the Admin "Appointment Quality Control" page. Service-role client,
@@ -109,7 +109,7 @@ export async function loadAppointmentQualityData(admin: SupabaseClient): Promise
     else if (!qualification) blockers.push("No qualification on file. Request more qualification from the agent.");
     else {
       if (qualification.outcome !== "qualified") blockers.push("The qualification is not marked Qualified.");
-      blockers.push(...evaluateQualifiable(qualification as QualificationAnswers, approvedServices).reasons);
+      blockers.push(...evaluateQualifiable(qualification as QualificationAnswers, approvedServices, { legacy: isLegacyQualification((qualification as { created_at?: string | null }).created_at) }).reasons);
     }
     return {
       id: a.id as string,

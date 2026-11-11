@@ -22,7 +22,7 @@ export type CallGuideBranch = {
 // A clickable follow-up question in the Google visibility / marketing step.
 // `field` is the existing qualification column the answer is saved to.
 export type GoogleFollowUp = {
-  field: "google_visibility" | "ai_search_interest" | "investing_marketing";
+  field: "ai_search_interest" | "investing_marketing";
   // Position in the client's approved numbered list (display only).
   number: number;
   label: string;
@@ -47,7 +47,19 @@ export type GoogleStep = {
   // The approved label for the services choice (multiple selections).
   servicesLabel: string;
   booking: string;
+  // Step 3: asked right after the Google answer. Saved as google_visibility.
+  currentCustomers: { label: string; options: { value: "yes" | "no" | "unsure"; label: string }[] };
+  // Step 6: what to say about this client's own services (client-specific).
+  servicePitch: { heading: string; say: string[]; agentNote: string };
+  // Step 8: owner / decision-maker.
+  decisionMaker: { say: string; label: string; options: { value: "yes" | "no" | "unsure"; label: string }[]; ifNot: string };
+  // Step 10: confirm the details and record the specific requirements.
+  confirmation: { say: string[]; contactLabel: string; scheduleLabel: string; requirementsLabel: string };
 };
+
+// One expandable objection response. `responses` is read aloud; `note` is for
+// the agent only and is never read to the prospect.
+export type ObjectionItem = { id: string; label: string; responses: string[]; note?: string };
 
 export type CallGuide = {
   clientKey: "hidebrandt" | "teknokraft";
@@ -59,6 +71,7 @@ export type CallGuide = {
   google: GoogleStep;
   // Asked after the Google step (previously the last opening line).
   websitePrompt: string;
+  objections: ObjectionItem[];
   hasWebsite: CallGuideBranch;
   noWebsite: CallGuideBranch;
   ifInterested: string;
@@ -94,7 +107,7 @@ const QUALIFICATION_QUESTIONS = [
 const LEAD_GEN_ONLY_PROMPT = "Are you also considering improvements to your website or online visibility to help customers find and contact your business?";
 const LEAD_GEN_ONLY_OUTCOME = `If the prospect has no interest in any website-related service, mark the lead "${NOT_QUALIFIED_LEAD_GEN_LABEL}" and do not offer a client appointment.`;
 
-const YES_NO_UNSURE_OPTIONS = [
+const YES_NO_UNSURE_OPTIONS: { value: "yes" | "no" | "unsure"; label: string }[] = [
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
   { value: "unsure", label: "Not sure" },
@@ -102,6 +115,77 @@ const YES_NO_UNSURE_OPTIONS = [
 
 // Compliance: no wording in either Google step may promise a ranking, an AI
 // search placement or a lead volume (checked by the tests).
+// Expandable objection responses (read aloud). Shared structure, with the
+// client's own services and name substituted so each script stays separate.
+// Nothing here quotes prices or promises rankings, AI placement or lead
+// volumes, and a request for information alone is never an appointment.
+function buildObjections(c: { name: string; website: string; hasSomeone: string }): ObjectionItem[] {
+  return [
+    {
+      id: "has-website",
+      label: "We already have a website.",
+      responses: [
+        "That’s great, a website is a strong foundation. What we look at is whether it is helping customers find and contact you, for example when they search on Google.",
+        `${c.name} ${c.website}`,
+        "Would you be open to a brief consultation to see whether there is room to improve how your website attracts customers?",
+      ],
+    },
+    {
+      id: "on-google",
+      label: "We already appear on Google.",
+      responses: [
+        "That’s good to hear. Do the people finding you through Google turn into the customers you want, and for the services you most want to be found for?",
+        `Appearing in search results and being found by the right customers are not always the same thing. ${c.name} can take a look at where your business stands and what could improve it. I can’t promise any specific result, but a consultation will show you the options.`,
+        "Would you like to set up a brief consultation?",
+      ],
+    },
+    {
+      id: "not-interested",
+      label: "We are not interested.",
+      responses: [
+        "No problem at all, and I appreciate your time. May I ask whether you’re currently satisfied with the number of customers finding your business online?",
+      ],
+      note: "If they are satisfied or decline further discussion, thank them, end the call politely and respect their decision. Do not push. Offer the consultation once only if they show any hesitation or interest.",
+    },
+    {
+      id: "no-budget",
+      label: "We don’t have a budget.",
+      responses: [
+        "I understand, and I’m not asking you to commit to anything today. The consultation is a conversation about your goals and what would make sense for your business, so you can decide whether and when to go further.",
+        "Would it be useful to learn what the options are, even if the timing isn’t right yet?",
+      ],
+      note: "Do not quote prices, ranges or discounts. If they want to be contacted later, record Follow up later.",
+    },
+    {
+      id: "send-info",
+      label: "Send me information by email.",
+      responses: [
+        "I’d be happy to. So I send you something relevant, what would you most like to know about: your Google visibility, your website, or marketing?",
+        "A short consultation is usually more useful, because the specialist can tailor it to your business. Would you like to schedule one, and I can also send you a summary by email?",
+      ],
+      note: "A request for information is NOT a confirmed appointment: mark it Needs follow-up unless the prospect also accepts an appointment. Only email an address the prospect has given and confirmed, and only if they agree to receive it. Respect Do Not Call, email opt-out and consent flags on the lead; never contact anyone who has opted out.",
+    },
+    {
+      id: "have-marketing",
+      label: "We already have someone handling our marketing.",
+      responses: [
+        "That’s good to hear. Is that someone in-house, or an outside company?",
+        `We’re not suggesting replacing anyone. ${c.hasSomeone}`,
+        "Would it be useful to get a second opinion in a brief consultation?",
+      ],
+    },
+    {
+      id: "cost",
+      label: "How much does it cost?",
+      responses: [
+        "It depends on what your business needs, such as which services and how much work is involved, so I don’t want to guess and mislead you.",
+        `A ${c.name} specialist can discuss your goals and explain the options, including pricing, during the consultation. Can we find a time that works?`,
+      ],
+      note: "Never quote a price, range or package. Pricing is discussed by the specialist.",
+    },
+  ];
+}
+
 const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
   hidebrandt: {
     clientKey: "hidebrandt",
@@ -113,7 +197,7 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       "We help businesses improve their online presence through website design, Google search optimization, and Human Search Optimization, helping more potential customers discover their services online.",
     ],
     google: {
-      question: "Would you like your business to rank higher on Google and market your services online so more customers can find you?",
+      question: "Would you like your business to appear higher on Google when customers search for your services, so more people can find you and contact you?",
       options: [
         { value: "yes", label: "Yes, I’m interested" },
         { value: "more", label: "Tell me more" },
@@ -135,20 +219,48 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       noFollowUp: "Currently satisfied with how customers find the business online?",
       noEnd: "If the prospect declines, respect their decision and end the conversation politely.",
       followUps: [
-        { field: "google_visibility", number: 1, label: "Are customers currently finding your business through Google?", options: YES_NO_UNSURE_OPTIONS },
         {
           field: "ai_search_interest",
-          number: 2,
+          number: 1,
           label: "Would you like your business to become easier to discover through Google and AI-powered search tools?",
           options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "more", label: "Tell me more" }],
         },
-        { field: "investing_marketing", number: 3, label: "Are you currently investing in SEO or digital marketing?", options: YES_NO_UNSURE_OPTIONS },
+        { field: "investing_marketing", number: 2, label: "Are you currently investing in SEO or digital marketing?", options: YES_NO_UNSURE_OPTIONS },
       ],
       websiteNumber: 4,
       specialist: { label: "Interested in speaking with a Hidebrandt specialist?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "follow_up", label: "Follow up later" }] },
       servicesLabel: "Which services interest you? (select all that apply)",
       booking: "Wonderful! I can schedule a brief consultation with a Hidebrandt specialist to discuss how your business can improve its Google visibility, reach more potential customers, and strengthen its online presence. Would you prefer a morning or afternoon appointment?",
+      currentCustomers: { label: "Does your business currently receive customers through Google?", options: YES_NO_UNSURE_OPTIONS },
+      servicePitch: {
+        heading: "Hidebrandt services to discuss",
+        say: [
+          "Hidebrandt helps businesses with website redesign, Human Search Optimization, and improved search visibility, with the goal of attracting relevant customers who are looking for what you offer.",
+          "Human Search Optimization is Hidebrandt’s own service. It looks at how potential customers search and what they are looking for, so the right people can find your business. It is separate from traditional SEO.",
+        ],
+        agentNote: "Hidebrandt’s emphasis: website redesign, Human Search Optimization, improved search visibility, attracting relevant customers. HSO and traditional SEO are different services: never say they are the same or interchangeable. Do not promise rankings, AI search placement or lead volumes, and do not invent technical details; the specialist explains scope.",
+      },
+      decisionMaker: {
+        say: "May I ask, are you the owner, or the person who makes the decisions about your website and marketing?",
+        label: "Is this person the owner or decision-maker?",
+        options: [{ value: "yes", label: "Yes, owner / decision-maker" }, { value: "no", label: "No, someone else" }, { value: "unsure", label: "Not sure" }],
+        ifNot: "Ask who the right person is and when they are available. Record the name and follow up. Do not book the appointment until the appropriate contact has accepted it.",
+      },
+      confirmation: {
+        say: [
+          "Let me confirm your details so the Hidebrandt specialist can reach you: your name, the best phone number, and your email address.",
+          "And what would you most like the consultation to cover?",
+        ],
+        contactLabel: "Contact name, phone number and email address verified?",
+        scheduleLabel: "Appointment date and time confirmed with the prospect?",
+        requirementsLabel: "Specific requirements (what the prospect wants the consultation to cover, in their own words)",
+      },
     },
+    objections: buildObjections({
+      name: "Hidebrandt",
+      website: "can review how your website supports your business, and offers website redesign and Human Search Optimization to help the right potential customers find and contact you.",
+      hasSomeone: "Hidebrandt’s website redesign and Human Search Optimization services can sit alongside what is already being done, and a consultation would show where they could help.",
+    }),
     websitePrompt: "May I ask, does your business currently have a website?",
     hasWebsite: {
       say: "Are you satisfied with how your website looks and performs, or have you considered upgrading it to better showcase your services and attract customers?",
@@ -173,7 +285,7 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       "We help businesses improve their visibility on Google, market their services online, and attract more potential customers.",
     ],
     google: {
-      question: "Would you like your business to rank higher on Google and market your services online so more customers can find you?",
+      question: "Would you like your business to appear higher on Google when customers search for your services, so more people can find you and contact you?",
       options: [
         { value: "yes", label: "Yes, I’m interested" },
         { value: "more", label: "Tell me more" },
@@ -195,14 +307,41 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       noFollowUp: "Currently satisfied with the number of customers finding the business online?",
       noEnd: "If the prospect is satisfied or declines further discussion, politely end the call and respect their preference.",
       followUps: [
-        { field: "google_visibility", number: 2, label: "Does your business currently appear on Google when customers search for your services?", options: YES_NO_UNSURE_OPTIONS },
-        { field: "investing_marketing", number: 3, label: "Are you currently investing in SEO or digital marketing?", options: YES_NO_UNSURE_OPTIONS },
+        { field: "investing_marketing", number: 1, label: "Are you currently investing in SEO or digital marketing?", options: YES_NO_UNSURE_OPTIONS },
       ],
       websiteNumber: 4,
       specialist: { label: "Would you like to speak with a Teknokraft specialist about improving your online visibility?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "follow_up", label: "Follow up later" }] },
       servicesLabel: "Which services interest the prospect?",
       booking: "Excellent! I can arrange a brief consultation with a Teknokraft specialist who can discuss ways to improve your Google visibility, promote your services, and help potential customers discover your business. What day and time would be convenient for you?",
+      currentCustomers: { label: "Does your business currently receive customers through Google?", options: YES_NO_UNSURE_OPTIONS },
+      servicePitch: {
+        heading: "Teknokraft services to discuss",
+        say: [
+          "Teknokraft helps businesses with website development, website redesign, search engine optimization, and digital marketing, to increase online visibility so more potential customers can find and contact your business.",
+        ],
+        agentNote: "Teknokraft’s emphasis: website development, website redesign, SEO, digital marketing, increased online visibility. Do not promise rankings or lead volumes, and do not invent technical details or pricing; the specialist explains scope.",
+      },
+      decisionMaker: {
+        say: "May I ask, are you the owner, or the person who makes the decisions about your website and marketing?",
+        label: "Is this person the owner or decision-maker?",
+        options: [{ value: "yes", label: "Yes, owner / decision-maker" }, { value: "no", label: "No, someone else" }, { value: "unsure", label: "Not sure" }],
+        ifNot: "Ask who the right person is and when they are available. Record the name and follow up. Do not book the appointment until the appropriate contact has accepted it.",
+      },
+      confirmation: {
+        say: [
+          "Let me confirm your details so the Teknokraft specialist can reach you: your name, the best phone number, and your email address.",
+          "And what would you most like the consultation to cover?",
+        ],
+        contactLabel: "Contact name, phone number and email address verified?",
+        scheduleLabel: "Appointment date and time confirmed with the prospect?",
+        requirementsLabel: "Specific requirements (what the prospect wants the consultation to cover, in their own words)",
+      },
     },
+    objections: buildObjections({
+      name: "Teknokraft",
+      website: "can review how your website supports your business, and offers website redesign, SEO, and digital marketing to help more potential customers find and contact you.",
+      hasSomeone: "Teknokraft’s website, SEO, and digital marketing services can complement what is already being done, and a consultation would show where they could help.",
+    }),
     websitePrompt: "May I ask, does your business currently have a website?",
     hasWebsite: {
       say: "Are you happy with your website’s current design and performance, or would you be interested in improving it to attract more customers online?",
@@ -255,15 +394,19 @@ export function callGuideToText(guide: CallGuide, agentName: string, opts: { off
   const g = guide.google;
   const optLabels = (opts: { label: string }[]) => opts.map((o) => o.label).join(" / ");
   return [
-    `1. AGENT INTRODUCTION\n${guide.opening.map(fill).join("\n")}`,
-    `2. GOOGLE RANKING AND MARKETING QUESTION (ask this first, before the website question)\n${g.question}\nOptions: ${optLabels(g.options)}`,
-    `3. READ THIS NEXT, BASED ON THE ANSWER\nIF THE PROSPECT SAYS YES\n${g.say.yes.join("\n")}\n\nIF THE PROSPECT SAYS TELL ME MORE\n${g.say.more.join("\n")}\n\nIF THE PROSPECT SAYS NO\n${g.say.no.join("\n")}\n${g.noEnd}`,
-    `4. WEBSITE QUALIFICATION\n${guide.websitePrompt}`,
-    `IF THE PROSPECT HAS A WEBSITE\n${guide.hasWebsite.say}\n${branchAsk(guide.hasWebsite)}`,
-    `IF THE PROSPECT HAS NO WEBSITE\n${guide.noWebsite.say}\n${branchAsk(guide.noWebsite)}`,
-    `5. ADDITIONAL SEO AND MARKETING QUALIFICATION (record each answer)\n${g.followUps.map((f) => `${f.number}. ${f.label} (${optLabels(f.options)})`).join("\n")}\n${g.specialist.label} (${optLabels(g.specialist.options)})`,
-    `6. APPOINTMENT BOOKING OR FOLLOW-UP\nIF THE PROSPECT EXPRESSES INTEREST\n${guide.ifInterested}\n\nWHEN THE PROSPECT AGREES TO A CONSULTATION\n${g.booking}`,
+    `1. PROFESSIONAL INTRODUCTION\n${guide.opening.map(fill).join("\n")}`,
+    `2. GOOGLE VISIBILITY QUESTION (ask this first, before anything about a website)\n${g.question}\nOptions: ${optLabels(g.options)}\n\nIF THE PROSPECT SAYS YES\n${g.say.yes.join("\n")}\n\nIF THE PROSPECT SAYS TELL ME MORE\n${g.say.more.join("\n")}\n\nIF THE PROSPECT SAYS NO\n${g.say.no.join("\n")}\n${g.noEnd}`,
+    `3. CUSTOMERS THROUGH GOOGLE\n${g.currentCustomers.label} (${optLabels(g.currentCustomers.options)})`,
+    `4. DOES THE PROSPECT HAVE A WEBSITE?\n${guide.websitePrompt}`,
+    `5. DOES THE WEBSITE NEED IMPROVEMENT OR REBRANDING?\nIF THE PROSPECT HAS A WEBSITE\n${guide.hasWebsite.say}\n${branchAsk(guide.hasWebsite)}\n\nIF THE PROSPECT HAS NO WEBSITE\n${guide.noWebsite.say}\n${branchAsk(guide.noWebsite)}`,
+    `6. ${g.servicePitch.heading.toUpperCase()}\n${g.servicePitch.say.join("\n")}\n${g.followUps.map((f) => `- ${f.label} (${optLabels(f.options)})`).join("\n")}\nAgent note (do not read aloud): ${g.servicePitch.agentNote}`,
+    `7. GENUINE CUSTOMER INTEREST\nRecord the services the prospect is interested in, that they understand them, and their business need or growth objective. (${g.servicesLabel})`,
+    `8. OWNER OR DECISION-MAKER\n${g.decisionMaker.say}\nOptions: ${optLabels(g.decisionMaker.options)}\nAgent note (do not read aloud): ${g.decisionMaker.ifNot}`,
+    `9. OFFER A CONSULTATION\n${guide.ifInterested}\n${g.specialist.label} (${optLabels(g.specialist.options)})\n\nWHEN THE PROSPECT AGREES\n${g.booking}`,
+    `10. CONFIRM THE APPOINTMENT AND RECORD REQUIREMENTS\n${g.confirmation.say.join("\n")}\nRecord: ${g.confirmation.contactLabel} ${g.confirmation.scheduleLabel} ${g.confirmation.requirementsLabel}`,
+    `OBJECTION HANDLING\n${guide.objections.map((o) => `"${o.label}"\n${o.responses.join("\n")}${o.note ? `\nAgent note (do not read aloud): ${o.note}` : ""}`).join("\n\n")}`,
     `IF THE PROSPECT ONLY WANTS LEADS OR CUSTOMERS\n${guide.leadGenOnlyPrompt}\n${guide.leadGenOnlyOutcome}`,
+    `A QUALIFIED APPOINTMENT NEEDS ALL OF THESE\n- Genuine interest in at least one service ${guide.shortName} offers\n- A relevant business need or growth objective\n- The appointment accepted by the owner or appropriate decision-maker\n- Contact information verified\n- Appointment date and time confirmed\nA request for information alone is not a confirmed appointment.`,
     `QUALIFICATION QUESTIONS (record what applies; genuine interest in at least one approved service is required)\n${guide.qualificationQuestions
       .filter((q) => offersEcommerce || !/e-commerce/i.test(q))
       .map((q, i) => `${i + 1}. ${q}`)

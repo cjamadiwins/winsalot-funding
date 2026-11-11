@@ -453,3 +453,61 @@ describe("Google marketing columns (20261111120000)", () => {
     expect(r).toEqual({ google_interest: null, specialist_interest: null });
   });
 });
+
+// ---------------------------------------------------------------------------
+// 20261112000000: qualified-appointment confirmations
+// ---------------------------------------------------------------------------
+describe("Qualified appointment confirmations (20261112000000)", () => {
+  const confirmMigration = readFileSync("supabase/migrations/20261112000000_leadgen_qualified_appointment_confirmations.sql", "utf8");
+  const lead = (n: number) => `30000000-0000-0000-0000-0000000000b${n}`;
+
+  beforeAll(async () => {
+    await asService();
+    await db.exec(confirmMigration);
+    await db.exec([1, 2, 3, 4, 5].map((n) => `insert into leadgen_leads values ('${lead(n)}','${tek}','${campTek}','${henry}',null)`).join(";"));
+  });
+
+  it("is safe to apply twice", async () => {
+    await asService();
+    await db.exec(confirmMigration);
+  });
+
+  it("rejects 'qualified' without the call confirmations", async () => {
+    await asService();
+    await rejects(goodQualification(lead(1), tek, campTek, henry).replace("'seo_visibility'", "'seo_visibility'"), /qualification_incomplete/);
+  });
+
+  it("rejects 'qualified' when the contact is not the decision-maker, or a confirmation is missing", async () => {
+    await asService();
+    const cols = "decision_maker, contact_verified, appointment_confirmed";
+    await rejects(goodQualification(lead(2), tek, campTek, henry, `${cols}|'no', true, true`).replace("array['redesign_rebranding']", "array['seo_visibility']"), /qualification_incomplete/);
+    await rejects(goodQualification(lead(2), tek, campTek, henry, `${cols}|'yes', false, true`).replace("array['redesign_rebranding']", "array['seo_visibility']"), /qualification_incomplete/);
+    await rejects(goodQualification(lead(2), tek, campTek, henry, `${cols}|'yes', true, null`).replace("array['redesign_rebranding']", "array['seo_visibility']"), /qualification_incomplete/);
+  });
+
+  it("accepts 'qualified' once every confirmation is recorded", async () => {
+    await asService();
+    const cols = "decision_maker, contact_verified, appointment_confirmed";
+    await db.exec(goodQualification(lead(3), tek, campTek, henry, `${cols}|'yes', true, true`));
+    const [r] = await rows<{ outcome: string; decision_maker: string }>(`select outcome, decision_maker from leadgen_lead_qualifications where lead_id='${lead(3)}'`);
+    expect(r).toEqual({ outcome: "qualified", decision_maker: "yes" });
+  });
+
+  it("a request for information alone (no agreement to an appointment) can never be qualified", async () => {
+    await asService();
+    const cols = "decision_maker, contact_verified, appointment_confirmed";
+    await rejects(goodQualification(lead(4), tek, campTek, henry, `${cols}|'yes', true, true`).replace("true, true,\n    array", "true, false,\n    array"), /qualification_incomplete/);
+  });
+
+  it("older qualifications (created before the rule) keep working unchanged", async () => {
+    await asService();
+    await db.exec(goodQualification(lead(5), tek, campTek, henry, "created_at|timestamptz '2026-11-03 12:00:00+00'"));
+    const [r] = await rows<{ ok: boolean }>(`select leadgen_qualification_is_qualifiable(q) as ok from leadgen_lead_qualifications q where lead_id='${lead(5)}'`);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects values outside the allowed decision-maker answers", async () => {
+    await asService();
+    await rejects(`insert into leadgen_lead_qualifications (lead_id, client_id, campaign_id, agent_id, outcome, decision_maker) values ('${lead(4)}','${tek}','${campTek}','${henry}','draft','maybe')`, /check/i);
+  });
+});
