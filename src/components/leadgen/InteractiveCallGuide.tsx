@@ -148,13 +148,6 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
                 )}
               </>
             )}
-            {(gi === "yes" || gi === "more") && (
-              <div className="space-y-2 border-t border-slate-200 pt-2">
-                {g.followUps.map((f) => (
-                  <Pills key={f.field} label={`${f.number}. ${f.label}`} value={answers[f.field]} options={f.options} onPick={(v) => patch({ [f.field]: v } as Partial<QualificationAnswers>)} />
-                ))}
-              </div>
-            )}
           </section>
         )}
 
@@ -228,9 +221,18 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
           </section>
         )}
 
+        {proceed && hasSite !== null && (gi === "yes" || gi === "more") && (
+          <section aria-label="Additional SEO and marketing qualification" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">5. Additional SEO and marketing qualification</p>
+            {g.followUps.map((f) => (
+              <Pills key={f.field} label={`${f.number}. ${f.label}`} value={answers[f.field]} options={f.options} onPick={(v) => patch({ [f.field]: v } as Partial<QualificationAnswers>)} />
+            ))}
+          </section>
+        )}
+
         {branch && (
           <section aria-label="Interested services" className="space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">5. What does the prospect want to discuss?</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">6. What does the prospect want to discuss?</p>
             <p className="text-[13px] font-semibold text-slate-800">{g.servicesLabel}</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Services the prospect is interested in">
               {services.length === 0 ? (
@@ -266,7 +268,7 @@ export default function InteractiveCallGuide({ guide, agentName, approvedService
 
         {branch && (
           <section aria-label="Consultation" className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">6. If the prospect expresses interest</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">7. Appointment booking or follow-up</p>
             <Say>{guide.ifInterested}</Say>
             {gi !== "more" && specialistPills}
             {wantsBooking && (

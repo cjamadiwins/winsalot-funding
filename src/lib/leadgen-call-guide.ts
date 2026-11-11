@@ -113,7 +113,7 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       "We help businesses improve their online presence through website design, Google search optimization, and Human Search Optimization, helping more potential customers discover their services online.",
     ],
     google: {
-      question: "Would you like your business to rank higher on Google and become easier for customers to find when they’re searching online for services like yours?",
+      question: "Would you like your business to rank higher on Google and market your services online so more customers can find you?",
       options: [
         { value: "yes", label: "Yes, I’m interested" },
         { value: "more", label: "Tell me more" },
@@ -173,15 +173,15 @@ const GUIDES: Record<CallGuide["clientKey"], CallGuide> = {
       "We help businesses improve their visibility on Google, market their services online, and attract more potential customers.",
     ],
     google: {
-      question: "Would you like your business to rank higher on Google and reach more customers who are searching for your services?",
+      question: "Would you like your business to rank higher on Google and market your services online so more customers can find you?",
       options: [
         { value: "yes", label: "Yes, I’m interested" },
-        { value: "no", label: "No, not interested" },
         { value: "more", label: "Tell me more" },
+        { value: "no", label: "No, not interested" },
       ],
       say: {
         yes: [
-          "That’s great! Teknokraft helps businesses improve their Google search visibility through search engine optimization and digital marketing.",
+          "That’s great! Teknokraft helps businesses improve their Google search visibility through search engine optimization, local search visibility, and digital marketing.",
           "The goal is to help more potential customers discover your business when searching for services like yours.",
           "May I ask, are you currently doing any Google advertising, SEO, or online marketing?",
         ],
@@ -254,21 +254,15 @@ export function callGuideToText(guide: CallGuide, agentName: string, opts: { off
   const branchAsk = (branch: CallGuideBranch) => branch.ask.filter((q) => offersEcommerce || !/e-commerce/i.test(q)).map((q) => `- ${q}`).join("\n");
   const g = guide.google;
   const optLabels = (opts: { label: string }[]) => opts.map((o) => o.label).join(" / ");
-  const googleText = [
-    `GOOGLE VISIBILITY QUESTION\n${g.question}\nOptions: ${optLabels(g.options)}`,
-    `IF THE PROSPECT SAYS YES\n${g.say.yes.join("\n")}\nThen continue to qualification and appointment booking.`,
-    `IF THE PROSPECT SAYS TELL ME MORE\n${g.say.more.join("\n")}`,
-    `IF THE PROSPECT SAYS NO\n${g.say.no.join("\n")}\n${g.noEnd}`,
-    `GOOGLE VISIBILITY QUALIFICATION (record each answer)\n${g.followUps.map((f) => `${f.number}. ${f.label} (${optLabels(f.options)})`).join("\n")}\n${g.websiteNumber}. Does your business currently have a website? (Yes / No / Not sure)\nConsultation: ${g.specialist.label} (${optLabels(g.specialist.options)})`,
-    `APPOINTMENT BOOKING (when the prospect is interested)\n${g.booking}`,
-  ].join("\n\n");
   return [
-    `OPENING\n${guide.opening.map(fill).join("\n")}`,
-    googleText,
-    `WEBSITE QUESTION\n${guide.websitePrompt}`,
+    `1. AGENT INTRODUCTION\n${guide.opening.map(fill).join("\n")}`,
+    `2. GOOGLE RANKING AND MARKETING QUESTION (ask this first, before the website question)\n${g.question}\nOptions: ${optLabels(g.options)}`,
+    `3. READ THIS NEXT, BASED ON THE ANSWER\nIF THE PROSPECT SAYS YES\n${g.say.yes.join("\n")}\n\nIF THE PROSPECT SAYS TELL ME MORE\n${g.say.more.join("\n")}\n\nIF THE PROSPECT SAYS NO\n${g.say.no.join("\n")}\n${g.noEnd}`,
+    `4. WEBSITE QUALIFICATION\n${guide.websitePrompt}`,
     `IF THE PROSPECT HAS A WEBSITE\n${guide.hasWebsite.say}\n${branchAsk(guide.hasWebsite)}`,
     `IF THE PROSPECT HAS NO WEBSITE\n${guide.noWebsite.say}\n${branchAsk(guide.noWebsite)}`,
-    `IF THE PROSPECT EXPRESSES INTEREST\n${guide.ifInterested}`,
+    `5. ADDITIONAL SEO AND MARKETING QUALIFICATION (record each answer)\n${g.followUps.map((f) => `${f.number}. ${f.label} (${optLabels(f.options)})`).join("\n")}\n${g.specialist.label} (${optLabels(g.specialist.options)})`,
+    `6. APPOINTMENT BOOKING OR FOLLOW-UP\nIF THE PROSPECT EXPRESSES INTEREST\n${guide.ifInterested}\n\nWHEN THE PROSPECT AGREES TO A CONSULTATION\n${g.booking}`,
     `IF THE PROSPECT ONLY WANTS LEADS OR CUSTOMERS\n${guide.leadGenOnlyPrompt}\n${guide.leadGenOnlyOutcome}`,
     `QUALIFICATION QUESTIONS (record what applies; genuine interest in at least one approved service is required)\n${guide.qualificationQuestions
       .filter((q) => offersEcommerce || !/e-commerce/i.test(q))

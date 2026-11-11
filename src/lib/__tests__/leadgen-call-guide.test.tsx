@@ -269,6 +269,28 @@ describe("Google step: the exact statement appears right after each answer", () 
     });
   }
 
+  it("the Google question is the same approved wording, ahead of the website question, in the guide and the script", () => {
+    const Q = "Would you like your business to rank higher on Google and market your services online so more customers can find you?";
+    for (const name of ["Hidebrandt Web Services", "Teknokraft Canada Inc."]) {
+      const g = getCallGuide(name)!;
+      expect(g.google.question).toBe(Q);
+      expect(g.google.options.map((o) => o.label)).toEqual(["Yes, I’m interested", "Tell me more", "No, not interested"]);
+      const html = render(name, { google_interest: "yes", has_website: "yes" });
+      const order = [esc(Q), "Read this next", esc(g.websitePrompt), "Additional SEO and marketing qualification", "Which services", "Appointment booking or follow-up"].map((t) => html.indexOf(t));
+      expect(order.every((i) => i >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+      const text = callGuideToText(g, "Henry");
+      const t = [Q, g.google.say.yes[0], g.websitePrompt, "5. ADDITIONAL SEO AND MARKETING", "6. APPOINTMENT BOOKING"].map((x) => text.indexOf(x));
+      expect(t.every((i) => i >= 0)).toBe(true);
+      expect([...t].sort((a, b) => a - b)).toEqual(t);
+      expect(text.indexOf("1. AGENT INTRODUCTION")).toBeLessThan(text.indexOf(Q));
+      const script = buildLeadgenCallScript({ agentName: "Goodness Ugbana", client: { name, ...base } }).fullText;
+      expect(script.indexOf(Q)).toBeLessThan(script.indexOf(g.websitePrompt));
+    }
+    expect(getCallGuide("Teknokraft Canada Inc.")!.google.say.yes.join(" ")).toMatch(/local search visibility/);
+    expect(getCallGuide("Hidebrandt Web Services")!.google.say.yes.join(" ")).toMatch(/Human Search Optimization/);
+  });
+
   it("Hidebrandt follow-up questions and options (incl. 'Tell me more' on the AI-search question)", () => {
     const html = render("Hidebrandt Web Services", { google_interest: "yes", has_website: "yes" });
     expect(html).toContain("1. Are customers currently finding your business through Google?");
@@ -280,7 +302,7 @@ describe("Google step: the exact statement appears right after each answer", () 
   });
 
   it("Teknokraft follow-up questions use the approved numbering", () => {
-    const html = render("Teknokraft Canada Inc.", { google_interest: "yes" });
+    const html = render("Teknokraft Canada Inc.", { google_interest: "yes", has_website: "no" });
     expect(html).toContain("2. Does your business currently appear on Google when customers search for your services?");
     expect(html).toContain("3. Are you currently investing in SEO or digital marketing?");
     expect(html).not.toContain("AI-powered search tools");
