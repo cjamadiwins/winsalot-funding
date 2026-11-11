@@ -4,6 +4,8 @@ import { loadLeadgenLeadDetail } from "@/lib/leadgen-lead-detail-data";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { fetchClientServices } from "@/lib/leadgen-client-services-data";
 import QualificationPanel from "@/components/leadgen/QualificationPanel";
+import { isTeknokraftClient } from "@/lib/leadgen-types";
+import ProspectProposalPanel, { type ProspectProposalView } from "@/components/leadgen/ProspectProposalPanel";
 import { loadQualificationPanelData } from "@/lib/leadgen-appointment-qc";
 import LeadDetailClient, { type LeadDetailActions } from "@/components/leadgen/LeadDetailClient";
 import { assignLeadAction, deleteLeadgenLeadAction } from "../actions";
@@ -96,8 +98,26 @@ export default async function LeadgenAdminLeadDetailPage({
 
   const qualificationPanel = await loadQualificationPanelData(getSupabaseAdmin(), { id: detail.lead.id, client_id: detail.lead.client_id, website: detail.lead.website ?? null });
 
+  // Teknokraft leads: the saved prospect proposal (Admin-only draft), if any.
+  let proposalView: ProspectProposalView | null = null;
+  const isTeknokraftLead = isTeknokraftClient(detail.client!);
+  if (isTeknokraftLead) {
+    const { data: proposalRow } = await getSupabaseAdmin()
+      .from("leadgen_prospect_proposals")
+      .select("id, status, title, email_to, email_subject, email_body, attachment_filename, prepared_at, sent_at, content")
+      .eq("lead_id", detail.lead.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (proposalRow) {
+      const r = proposalRow as { id: string; status: "draft" | "sent"; title: string; email_to: string; email_subject: string; email_body: string; attachment_filename: string; prepared_at: string; sent_at: string | null; content: { sections?: { heading: string }[] } };
+      proposalView = { id: r.id, status: r.status, title: r.title, to: r.email_to, subject: r.email_subject, body: r.email_body, filename: r.attachment_filename, preparedAt: r.prepared_at, sentAt: r.sent_at, sections: (r.content.sections ?? []).map((x) => x.heading) };
+    }
+  }
+
   return (
     <>
+      {isTeknokraftLead && <ProspectProposalPanel leadId={detail.lead.id} clientName={detail.client!.name} leadEmail={detail.lead.email ?? null} proposal={proposalView} />}
       {qualificationPanel && (
         <QualificationPanel
           leadId={detail.lead.id}
