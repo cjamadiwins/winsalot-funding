@@ -1,4 +1,11 @@
--- STATUS: PREPARED (dry run by default: v_commit=false rolls everything back and reports the result in the error message).
+-- STATUS: EXECUTED 2026-11-12 against Supabase project 'Business Finance' (zntjevfbkouftyvtrzyu) with v_commit=true (single atomic transaction).
+-- RESULT: 1,262 CSV rows kept -> 939 active leads (Teknokraft 467, Hidebrandt 472) assigned to Goodness Ugbana; 323 Admin Review (Teknokraft list 160, Hidebrandt list 163), unassigned, draft, Admin-only.
+--   Active by category: Teknokraft no_website 297 / website_rebrand 54 / website_review 116; Hidebrandt no_website 295 / website_rebrand 53 / website_review 124.
+--   Review kinds: shared_identifier 144, fit_unconfirmed 93, duplicate_in_file 41, incomplete_or_outside_area 44, existing_crm 1. DNC 0.
+-- VERIFIED: totals 6,700->7,962 leads (+1,262), 79->83 lists, 18->20 campaigns, 15->17 campaign agents, leadgen_leads unchanged (81); no pre-existing row changed in 16 tables;
+--   no phone shared across the two active lists; nothing under Winsalot Corp. Test; Goodness sees exactly the 2 active lists (467 + 472 leads), 0 Admin Review leads, and can update her leads (RLS simulation, rolled back).
+-- Reverse (admin): delete call_list_leads where extra_fields->>'import_batch'='calgary-plumbing-2026-11-12', then the 4 segments (source_file_name = the CSV), their segment_agents rows, the 2 campaign agent rows and the 2 'Calgary Plumbing Contractors' campaigns.
+-- Follow-up (not done, would change counts): ~42 shared-identifier groups are one business under name variants (e.g. '&amp;', 'Ltd'); Admin could consolidate and promote them.
 -- Lead Generation CRM data-only import. Calgary plumbing (LeadSwift) -> two separate client call lists, both assigned to Goodness Ugbana:
 --   Teknokraft Canada Inc. – Calgary Plumbers – Goodness
 --   Hidebrandt Web Services – Calgary Plumbers – Goodness
