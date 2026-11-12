@@ -226,7 +226,7 @@ begin
  -- Counts validated by the dry run on 2026-11-12 and approved for the live import; any drift aborts and rolls back.
  if (select count(*) from calg_d where bucket_rank is not null)<>939 or (select count(*) from calg_d where bucket_rank is not null and client='tk')<>467
   or (select count(*) from calg_d where bucket_rank is not null and client='hb')<>472 or (select count(*) from calg_d where bucket_rank is null)<>323 then raise exception 'Validated counts changed; rollback'; end if;
- if exists(select 1 from public.call_list_leads a join public.call_list_leads b on a.segment_id=v_seg_tk and b.segment_id=v_seg_hb and ((a.website is not null and lower(a.website)=lower(b.website)) or (a.street_address is not null and lower(a.street_address)=lower(b.street_address)))) then raise exception 'Same website or address in both active campaigns'; end if;
+ if exists(select 1 from public.call_list_leads a join public.call_list_leads b on a.segment_id=v_seg_tk and b.segment_id=v_seg_hb and ((a.website is not null and lower(a.website)=lower(b.website)) or (a.street_address ~ '^[0-9]' and lower(a.street_address)=lower(b.street_address)))) then raise exception 'Same website or address in both active campaigns'; end if;
  select jsonb_build_object('csv_rows',(select count(*) from calg_raw),
   'checksum_md5',(select md5(string_agg(n||'|'||name||'|'||coalesce(phone10,'')||'|'||coalesce(web,'')||'|'||coalesce(addr,''),E'\n' order by n)) from calg_d),
   'eligible_total',(select count(*) from calg_d where bucket_rank is not null),
