@@ -92,6 +92,7 @@ begin
   coalesce(addr ~* '\m(edmonton|red deer|lethbridge|canmore|high river|strathmore|carstairs|medicine hat|banff|brooks|olds|innisfail|didsbury|claresholm|stettler|nanton|vulcan|lacombe|sherwood park|st\. albert|fort mcmurray|grande prairie|leduc|spruce grove|camrose|turner valley|black diamond|brant)\M',false) as other_city,
   coalesce(substring(upper(addr) from '[A-Z][0-9][A-Z]') ~ '^(T2[A-Z]|T1Y|T1X|T1S|T3[ABCEGHJKLMNPRZ]|T4[ABC])$',false) as fsa_metro,
   nullif(upper(substring(upper(addr) from '[A-Z][0-9][A-Z] ?[0-9][A-Z][0-9]')),'') as postal_raw,
+  regexp_replace(regexp_replace(lower(addr),'[, ]*canada$',''),'[^a-z0-9]','','g') as addr_key,
   left(phone10,3) in ('403','587','825','368') as area_ab,
   (f[24]='0' and coalesce(web,'') !~* '^https://') as sig_nossl, f[16]='0' as sig_notitle, f[17]='0' as sig_nodesc,
   (coalesce(g_reviews,0)<10) as sig_g_reviews, (g_rating is null or g_rating<4.0) as sig_g_rating
@@ -114,8 +115,7 @@ begin
    and ((p.phone10 is not null),(p.web is not null),(p.addr is not null),-p.n) > ((b.phone10 is not null),(b.web is not null),(b.addr is not null),-b.n)) as dup_in_file,
   (phone10 is not null and exists(select 1 from calg_b p where p.n<>b.n and p.phone10=b.phone10 and p.name_key<>b.name_key)) as shared_phone,
   (website_key<>'' and exists(select 1 from calg_b p where p.n<>b.n and p.website_key=b.website_key and p.name_key<>b.name_key)) as shared_web,
-  (addr ~ '^[0-9]' and exists(select 1 from calg_b p where p.n<>b.n and p.name_key<>b.name_key and p.addr is not null
-     and regexp_replace(regexp_replace(lower(p.addr),'[, ]*canada$',''),'[^a-z0-9]','','g')=regexp_replace(regexp_replace(lower(b.addr),'[, ]*canada$',''),'[^a-z0-9]','','g'))) as shared_addr,
+  (addr ~ '^[0-9]' and exists(select 1 from calg_b p where p.n<>b.n and p.name_key<>b.name_key and p.addr_key=b.addr_key)) as shared_addr,
   exists(select 1 from calg_ex e where e.name_key=b.name_key and ((b.phone10 is not null and e.phone10=b.phone10) or (b.phone10 is null and b.website_key<>'' and e.website_key=b.website_key))) as ex_match,
   (phone10 is not null and exists(select 1 from calg_ex e where e.phone10=b.phone10 and e.name_key<>b.name_key)) as ex_phone_conflict,
   exists(select 1 from public.crm_dnc_suppressions d where d.status='active' and d.removed_at is null and d.block_phone and b.phone10 is not null and right(d.normalized_phone,10)=b.phone10) as dnc
@@ -225,10 +225,13 @@ begin
 
  select jsonb_build_object('csv_rows',(select count(*) from calg_raw),
   'checksum_md5',(select md5(string_agg(n||'|'||name||'|'||coalesce(phone10,'')||'|'||coalesce(web,'')||'|'||coalesce(addr,''),E'\n' order by n)) from calg_d),
-  'by_client_bucket',(select jsonb_object_agg(k,c) from (select client||':'||coalesce(bucket,'')||case when bucket_rank is null then '' else '' end k, count(*) c from calg_d group by 1) x),
   'eligible_total',(select count(*) from calg_d where bucket_rank is not null),
   'eligible_teknokraft',(select count(*) from calg_d where bucket_rank is not null and client='tk'),
   'eligible_hidebrandt',(select count(*) from calg_d where bucket_rank is not null and client='hb'),
+  'tk_by_bucket',(select jsonb_object_agg(bucket,c) from (select bucket,count(*) c from calg_d where bucket_rank is not null and client='tk' group by 1) x),
+  'hb_by_bucket',(select jsonb_object_agg(bucket,c) from (select bucket,count(*) c from calg_d where bucket_rank is not null and client='hb' group by 1) x),
+  'review_by_client',(select jsonb_object_agg(client,c) from (select client,count(*) c from calg_d where bucket_rank is null group by 1) x),
+  'sites',(select jsonb_object_agg(site_kind,c) from (select site_kind,count(*) c from calg_d group by 1) x),
   'eligible_by_bucket',(select jsonb_object_agg(bucket,c) from (select bucket,count(*) c from calg_d where bucket_rank is not null group by 1) x),
   'admin_review_total',(select count(*) from calg_d where bucket_rank is null),
   'admin_review_by_kind',(select jsonb_object_agg(review_kind,c) from (select review_kind,count(*) c from calg_d where bucket_rank is null group by 1) x),
