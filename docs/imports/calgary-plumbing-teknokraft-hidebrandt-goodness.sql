@@ -189,7 +189,7 @@ begin
   case when postal_raw is not null then left(replace(postal_raw,' ',''),3)||' '||right(replace(postal_raw,' ',''),3) end,'Canada','Plumbing Contractors',
   case bucket
    when 'no_website' then 'No identifiable business website in source; confirm website status during the call. A social/directory profile is not a standalone business website.'
-   when 'website_rebrand' then 'Website present. Crawler signals (unverified, no manual site audit): '||concat_ws(', ',case when sig_nossl then 'served over plain http with no SSL' end,case when site_kind='free' then 'free site-builder domain' end,case when sig_notitle then 'no page title tag' end,case when sig_nodesc then 'no meta description')||'. Qualify website redesign/rebrand, SEO and Google visibility without presuming a defect.'
+   when 'website_rebrand' then 'Website present. Crawler signals (unverified, no manual site audit): '||concat_ws(', ',case when sig_nossl then 'served over plain http with no SSL' end,case when site_kind='free' then 'free site-builder domain' end,case when sig_notitle then 'no page title tag' end,case when sig_nodesc then 'no meta description' end)||'. Qualify website redesign/rebrand, SEO and Google visibility without presuming a defect.'
    when 'website_review' then 'Website present; qualify website design, redesign, SEO, mobile experience or lead-generation needs without presuming a defect.'||case when sig_notitle or sig_nodesc then ' SEO signal (unverified): '||concat_ws(', ',case when sig_notitle then 'no page title tag' end,case when sig_nodesc then 'no meta description' end)||'.' else '' end
    else reason end
    ||case when bucket_rank is not null and addr is null then ' No street address in source (Alberta area code); confirm Calgary-area service on the call.' else '' end
@@ -223,6 +223,10 @@ begin
  if (select count(*) from public.leadgen_campaign_agents where campaign_id in(v_camp_tk,v_camp_hb))<>2 then raise exception 'Unexpected campaign agents'; end if;
  if exists(select 1 from public.leadgen_campaigns where client_id=v_test and created_at>now()-interval '1 minute') then raise exception 'Test client touched'; end if;
 
+ -- Counts validated by the dry run on 2026-11-12 and approved for the live import; any drift aborts and rolls back.
+ if (select count(*) from calg_d where bucket_rank is not null)<>939 or (select count(*) from calg_d where bucket_rank is not null and client='tk')<>467
+  or (select count(*) from calg_d where bucket_rank is not null and client='hb')<>472 or (select count(*) from calg_d where bucket_rank is null)<>323 then raise exception 'Validated counts changed; rollback'; end if;
+ if exists(select 1 from public.call_list_leads a join public.call_list_leads b on a.segment_id=v_seg_tk and b.segment_id=v_seg_hb and ((a.website is not null and lower(a.website)=lower(b.website)) or (a.street_address is not null and lower(a.street_address)=lower(b.street_address)))) then raise exception 'Same website or address in both active campaigns'; end if;
  select jsonb_build_object('csv_rows',(select count(*) from calg_raw),
   'checksum_md5',(select md5(string_agg(n||'|'||name||'|'||coalesce(phone10,'')||'|'||coalesce(web,'')||'|'||coalesce(addr,''),E'\n' order by n)) from calg_d),
   'eligible_total',(select count(*) from calg_d where bucket_rank is not null),
