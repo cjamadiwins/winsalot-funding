@@ -31,7 +31,7 @@ import {
   type InterestLevel,
   type PrepStatus,
 } from "@/lib/leadgen-appointment-prep";
-import { BRIEF_TEMPLATE_WEBSITE_HSO } from "@/lib/leadgen-appointment-brief-template";
+import { BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE, BRIEF_TEMPLATE_WEBSITE_HSO } from "@/lib/leadgen-appointment-brief-template";
 import { renderBriefPdfAttachment } from "@/lib/leadgen-appointment-brief-pdf-data";
 import { createHash } from "node:crypto";
 import { fetchBrief, fetchClientPortalLogins, fetchSdrCallNotes } from "@/lib/leadgen-appointment-prep-data";
@@ -159,7 +159,12 @@ async function persistBrief(
     next_step_note: trimmedOrNull(input.next_step_note, 300),
   };
 
-  const template = input.brief_template === BRIEF_TEMPLATE_WEBSITE_HSO ? BRIEF_TEMPLATE_WEBSITE_HSO : input.brief_template === "" ? null : (existing?.brief_template ?? null);
+  const template =
+    input.brief_template === BRIEF_TEMPLATE_WEBSITE_HSO || input.brief_template === BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE
+      ? input.brief_template
+      : input.brief_template === ""
+        ? null
+        : (existing?.brief_template ?? null);
   const nowIso = new Date().toISOString();
   const contentChanged = !existing || (Object.keys(fields) as (keyof typeof fields)[]).some((key) => JSON.stringify(fields[key] ?? null) !== JSON.stringify(existing[key] ?? null)) || template !== (existing.brief_template ?? null);
 
