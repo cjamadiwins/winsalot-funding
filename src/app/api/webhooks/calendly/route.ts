@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyOfNewLeadgenAppointment } from "@/lib/leadgen-appointment-notifications";
+import { isAwaitingApproval } from "@/lib/leadgen-appointment-qc";
 import { type LeadgenAppointmentRow, type LeadgenClientRow, type LeadgenMeetingType } from "@/lib/leadgen-types";
 import { resolveBookingCampaign } from "@/lib/leadgen-booking-campaign";
 import { isValidMobileNumber, sendImmediateAppointmentConfirmation } from "@/lib/appointment-sms";
@@ -283,30 +284,35 @@ export async function POST(request: NextRequest) {
 
   console.log(`[calendly-webhook] saved appointment ${appointment.id} for client ${client.name} (invitee ${invitee.uri})`);
 
+  // Self-booked appointments for a gated client wait for Admin approval: nothing the client can see changes yet.
+  const heldForApproval = await isAwaitingApproval(admin, appointment.id as string);
   if (matchedLeadId) {
     await admin
       .from("leadgen_leads")
-      .update({ status: "Appointment booked", last_contacted_at: new Date().toISOString() })
+      .update({ ...(heldForApproval ? {} : { status: "Appointment booked" }), last_contacted_at: new Date().toISOString() })
       .eq("id", matchedLeadId);
     await admin.from("leadgen_lead_activities").insert({
       lead_id: matchedLeadId,
       agent_id: null,
-      activity_type: "appointment_booked",
+      activity_type: heldForApproval ? "note" : "appointment_booked",
       call_outcome: "Appointment booked",
       notes: `Appointment self-booked via booking link for ${date} ${time} (${timezone}).`,
     });
   }
 
-  await sendImmediateAppointmentConfirmation(admin, {
-    table: "leadgen_appointment_sms_reminders",
-    appointmentId: appointment.id as string,
-    leadId: matchedLeadId,
-    scheduledAppointmentAtIso: startTime,
-    timezone,
-    prospectPhone: invitee.text_reminder_number ?? null,
-    prospectConsent: isValidMobileNumber(invitee.text_reminder_number),
-    businessName: client.name,
-  });
+  // Held back while the appointment awaits Admin approval; released on approval.
+  if (!heldForApproval) {
+    await sendImmediateAppointmentConfirmation(admin, {
+      table: "leadgen_appointment_sms_reminders",
+      appointmentId: appointment.id as string,
+      leadId: matchedLeadId,
+      scheduledAppointmentAtIso: startTime,
+      timezone,
+      prospectPhone: invitee.text_reminder_number ?? null,
+      prospectConsent: isValidMobileNumber(invitee.text_reminder_number),
+      businessName: client.name,
+    });
+  }
 
   await notifyOfNewLeadgenAppointment(appointment as LeadgenAppointmentRow, client, null);
 

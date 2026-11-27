@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireCrmAdmin } from "@/lib/crm-auth";
 import { fetchLendingPartnerList } from "@/lib/crm-lending-partners-data";
@@ -27,6 +28,13 @@ export default async function AdminLendingPartnersPage({
         with. Distinct from Business Finance Prospects/Clients (see the CRM dashboard), which is the demand side.
         Admin-only.
       </p>
+
+      <Link
+        href="/admin/crm/lending-partners/canacap"
+        className="mt-4 inline-block rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+      >
+        CanaCap Financing Application
+      </Link>
 
       {error && (
         <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

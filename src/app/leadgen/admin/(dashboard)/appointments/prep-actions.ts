@@ -31,7 +31,12 @@ import {
   type InterestLevel,
   type PrepStatus,
 } from "@/lib/leadgen-appointment-prep";
+import { BRIEF_TEMPLATE_WEBSITE_HSO } from "@/lib/leadgen-appointment-brief-template";
+import { renderBriefPdfAttachment } from "@/lib/leadgen-appointment-brief-pdf-data";
+import { createHash } from "node:crypto";
 import { fetchBrief, fetchClientPortalLogins, fetchSdrCallNotes } from "@/lib/leadgen-appointment-prep-data";
+import { loadQualificationBriefLines } from "@/lib/leadgen-appointment-qc";
+import { AWAITING_APPROVAL_MESSAGE, isClientNotifiable } from "@/lib/leadgen-qualification";
 
 type ActionResult = { error?: string; message?: string };
 
@@ -48,6 +53,7 @@ export type BriefFormInput = {
   recommended_next_step: string;
   next_step_note: string;
   admin_note: string; // internal - never client-visible
+  brief_template?: string; // optional built-in layout key
 };
 
 export type AppointmentPrepData = {
@@ -64,7 +70,7 @@ export type AppointmentPrepData = {
   recipients: string[];
   // Appointment Brief emails already sent for this appointment (newest first),
   // with their real delivery status - from leadgen_emails.brief_appointment_id.
-  emailHistory: { id: string; to_email: string; status: string; created_at: string; sent_at: string | null; failure_reason: string | null; bounce_reason: string | null }[];
+  emailHistory: { id: string; to_email: string; status: string; created_at: string; sent_at: string | null; delivered_at: string | null; failure_reason: string | null; bounce_reason: string | null }[];
 };
 
 async function loadAppointment(appointmentId: string): Promise<LeadgenAppointmentRow | null> {
@@ -96,7 +102,7 @@ export async function loadAppointmentPrepAction(appointmentId: string): Promise<
     admin.from("leadgen_appointment_feedback").select("*").eq("appointment_id", appointmentId).maybeSingle(),
     admin
       .from("leadgen_emails")
-      .select("id, to_email, status, created_at, sent_at, failure_reason, bounce_reason")
+      .select("id, to_email, status, created_at, sent_at, delivered_at, failure_reason, bounce_reason")
       .eq("brief_appointment_id", appointmentId)
       .order("created_at", { ascending: false }),
   ]);
@@ -153,13 +159,25 @@ async function persistBrief(
     next_step_note: trimmedOrNull(input.next_step_note, 300),
   };
 
+  const template = input.brief_template === BRIEF_TEMPLATE_WEBSITE_HSO ? BRIEF_TEMPLATE_WEBSITE_HSO : input.brief_template === "" ? null : (existing?.brief_template ?? null);
+  const nowIso = new Date().toISOString();
+  const contentChanged = !existing || (Object.keys(fields) as (keyof typeof fields)[]).some((key) => JSON.stringify(fields[key] ?? null) !== JSON.stringify(existing[key] ?? null)) || template !== (existing.brief_template ?? null);
+
   const alreadyDelivered = existing?.prep_status === "sent_to_client" || existing?.prep_status === "client_viewed";
   const prepStatus: PrepStatus = alreadyDelivered ? existing!.prep_status : isBriefContentComplete(fields) ? "brief_ready" : "brief_not_prepared";
 
   const { data, error } = await admin
     .from("leadgen_appointment_briefs")
     .upsert(
-      { appointment_id: appointment.id, client_id: appointment.client_id, ...fields, prep_status: prepStatus, prepared_by: adminId, updated_at: new Date().toISOString() },
+      { appointment_id: appointment.id, client_id: appointment.client_id, ...fields, prep_status: prepStatus,
+        prepared_by: adminId,
+        brief_template: template,
+        // Audit trail: first time the brief has sendable content; any later
+        // content change withdraws the Admin's review so it must be re-approved.
+        generated_at: existing?.generated_at ?? (isBriefContentComplete(fields) ? nowIso : null),
+        ...(contentChanged && existing?.reviewed_at ? { reviewed_at: null, reviewed_by: null } : {}),
+        updated_at: nowIso,
+      },
       { onConflict: "appointment_id" }
     )
     .select("*")
@@ -186,6 +204,29 @@ export async function saveAppointmentBriefAction(appointmentId: string, input: B
 
   revalidatePath("/leadgen/admin/appointments");
   return { message: "Brief saved.", prepStatus: result.brief.prep_status };
+}
+
+// Admin approval of the saved brief. Recorded with who/when; required before
+// the brief can be sent. Does not send anything or touch the appointment.
+export async function markBriefReviewedAction(appointmentId: string, input: BriefFormInput): Promise<ActionResult & { prepStatus?: PrepStatus; reviewedAt?: string }> {
+  const adminUser = await requireLeadgenAdmin();
+  const appointment = await loadAppointment(appointmentId);
+  if (!appointment) return { error: "Appointment not found." };
+  if (!isPreparableAppointment(appointment)) return { error: "Cancelled or replaced appointments can't be prepared." };
+
+  const saved = await persistBrief(appointment, adminUser.id, input);
+  if (saved.error || !saved.brief) return { error: saved.error };
+  if (!isBriefContentComplete(saved.brief)) return { error: "Add why the prospect is interested, a primary opportunity, and at least one talking point or question before marking the brief reviewed. Your changes were saved." };
+
+  const reviewedAt = new Date().toISOString();
+  const { error } = await getSupabaseAdmin()
+    .from("leadgen_appointment_briefs")
+    .update({ reviewed_at: reviewedAt, reviewed_by: adminUser.id })
+    .eq("appointment_id", appointment.id);
+  if (error) return { error: "Failed to record the review." };
+
+  revalidatePath("/leadgen/admin/appointments");
+  return { message: "Brief marked as reviewed.", prepStatus: saved.brief.prep_status, reviewedAt };
 }
 
 export type BriefEmailPreview = {
@@ -225,6 +266,7 @@ export async function previewAppointmentBriefEmailAction(appointmentId: string, 
   if (!appointment) return { error: "Appointment not found." };
   if (!isPreparableAppointment(appointment)) return { error: "Cancelled or replaced appointments can't be prepared." };
   if (hasAppointmentPassed(appointment)) return { error: "This appointment has already taken place - there is nothing left to prepare." };
+  if (!isClientNotifiable(appointment.qc_status)) return { error: AWAITING_APPROVAL_MESSAGE };
 
   const fields = {
     why_interested: trimmedOrNull(input.why_interested, BRIEF_LIMITS.why),
@@ -266,6 +308,7 @@ export async function previewAppointmentBriefEmailAction(appointmentId: string, 
         primaryNeed: trimmedOrNull(input.primary_need, BRIEF_LIMITS.need),
         recommendedObjective: trimmedOrNull(input.recommended_objective, BRIEF_LIMITS.objective),
         portalUrl,
+        qualificationLines: await loadQualificationBriefLines(admin, appointment),
       }),
     },
   };
@@ -290,6 +333,7 @@ export async function sendAppointmentBriefAction(
   if (!appointment) return { error: "Appointment not found." };
   if (!isPreparableAppointment(appointment)) return { error: "Cancelled or replaced appointments can't be prepared." };
   if (hasAppointmentPassed(appointment)) return { error: "This appointment has already taken place - there is nothing left to prepare." };
+  if (!isClientNotifiable(appointment.qc_status)) return { error: AWAITING_APPROVAL_MESSAGE };
 
   const subject = String(email?.subject ?? "").trim().slice(0, 200);
   const body = String(email?.body ?? "").trim().slice(0, 8000);
@@ -309,16 +353,33 @@ export async function sendAppointmentBriefAction(
   const recipients = await resolveBriefRecipients(admin, clientRow);
   if (recipients.length === 0) return { error: "This client has no email address on file. Add one before sending. Your changes were saved." };
 
+  // The PDF is rendered from the brief that was just saved, and attached to
+  // every recipient's email. If it cannot be generated nothing is sent.
+  let attachment: { filename: string; content: Buffer };
+  try {
+    attachment = await renderBriefPdfAttachment(admin, appointment, brief, clientRow.name);
+  } catch (err) {
+    console.error("[appointment-brief] PDF generation failed", err instanceof Error ? err.message : err);
+    return { error: "The brief PDF could not be generated, so nothing was sent. Your changes were saved. Please try again." };
+  }
+
   let delivered = 0;
   const failures: string[] = [];
   const deliveredTo: string[] = [];
+  const duplicates: string[] = [];
+  const bodyHash = createHash("sha256").update(`${subject}\n${body}`).digest("hex").slice(0, 16);
+  // Same recipient + same email content inside the same 5-minute window is the
+  // same send (double click, second tab, retried request): the unique request
+  // key stops it being emailed twice.
+  const bucket = Math.floor(Date.now() / 300000);
   for (const recipient of recipients) {
     const personalBody = personalizeGreeting(body, greetingNameFor(recipient, recipients), clientRow.name);
     const parts = splitBriefEmailBody(personalBody);
     const html = parts
       ? `${textToSimpleHtml(parts.before)}${leadgenButtonHtml(parts.url, "View Appointment Brief")}${parts.after ? textToSimpleHtml(parts.after) : ""}`
       : textToSimpleHtml(personalBody);
-    const result = await sendLeadgenEmail(admin, {
+    const baseKey = `brief:${appointment.id}:${recipient.email.toLowerCase()}:${bodyHash}:${bucket}`;
+    const sendOnce = (requestKey: string) => sendLeadgenEmail(admin, {
       clientId: appointment.client_id,
       campaignId: appointment.campaign_id,
       // Client-level communication: lead_id/appointment_id stay null so this
@@ -336,7 +397,20 @@ export async function sendAppointmentBriefAction(
       html,
       sentBy: adminUser.id,
       clientVisible: true,
+      attachments: [attachment],
+      requestKey,
     });
+    let result = await sendOnce(baseKey);
+    if (result.duplicate) {
+      // The same send was already recorded. If it actually failed, a retry is
+      // legitimate; if it was accepted (or is in flight) never email again.
+      const { data: original } = result.emailId ? await admin.from("leadgen_emails").select("status").eq("id", result.emailId).maybeSingle() : { data: null };
+      if ((original as { status?: string } | null)?.status === "failed") result = await sendOnce(`${baseKey}:retry:${Date.now()}`);
+      else {
+        duplicates.push(recipient.email);
+        continue;
+      }
+    }
     if (result.error) failures.push(`${recipient.email}: ${result.error}`);
     else {
       delivered += 1;
@@ -346,12 +420,21 @@ export async function sendAppointmentBriefAction(
 
   // A failed send is already stored as "failed" in leadgen_emails; the brief
   // status and activity timeline are never advanced for it.
+  if (delivered === 0 && duplicates.length > 0 && failures.length === 0) return { error: "This brief was already submitted for sending moments ago, so it was not sent again. Refresh to see its status." };
   if (delivered === 0) return { error: `The brief email could not be delivered (${failures.join("; ")}). Your changes were saved; the status was not changed.` };
 
   const now = new Date().toISOString();
   const { error: statusError } = await admin
     .from("leadgen_appointment_briefs")
-    .update({ prep_status: "sent_to_client", sent_at: now, sent_by: adminUser.id, viewed_at: null, updated_at: now })
+    .update({
+      prep_status: "sent_to_client",
+      sent_at: now,
+      sent_by: adminUser.id,
+      viewed_at: null,
+      // Admin reviewed the email preview and pressed Send: that is the approval.
+      ...(brief.reviewed_at ? {} : { reviewed_at: now, reviewed_by: adminUser.id }),
+      updated_at: now,
+    })
     .eq("appointment_id", appointment.id);
 
   if (appointment.lead_id) {

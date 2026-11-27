@@ -13,7 +13,6 @@ import {
   leadgenEmailStatusAt,
   LEADGEN_LEAD_STATUSES,
   LEADGEN_LEAD_STATUS_STYLES,
-  LEADGEN_MEETING_TYPES,
   LEADGEN_PROVINCES,
   renderLeadgenTemplate,
   leadgenBookingParagraph,
@@ -52,7 +51,7 @@ import FollowUpPrompt from "./FollowUpPrompt";
 import RefreshOnFocus from "./RefreshOnFocus";
 import LeadgenEmailStatusPanel from "./LeadgenEmailStatusPanel";
 import AppointmentEmailActions from "./AppointmentEmailActions";
-import { SMS_CONSENT_NOTICE } from "@/lib/sms-notice";
+import AppointmentBookingForm from "./AppointmentBookingForm";
 
 const inputClass = "w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900";
 
@@ -831,7 +830,7 @@ export default function LeadDetailClient({
       )}
 
       {showAppointmentForm && (
-        <BookAppointmentInlineForm
+        <AppointmentBookingForm
           lead={lead}
           client={client}
           campaign={campaign}
@@ -1179,99 +1178,6 @@ export default function LeadDetailClient({
         </section>
       </div>
     </div>
-  );
-}
-
-function BookAppointmentInlineForm({
-  lead,
-  client,
-  campaign,
-  agents,
-  currentUserId,
-  isAdmin,
-  isPending,
-  onBook,
-}: {
-  lead: LeadgenLeadRow;
-  client: LeadgenClientRow;
-  campaign: LeadgenCampaignRow | null;
-  agents: LeadgenUserRow[];
-  currentUserId: string;
-  isAdmin: boolean;
-  isPending: boolean;
-  onBook: (formData: FormData) => void;
-}) {
-  return (
-    <form action={onBook} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-[var(--crm-surface)] p-4 sm:grid-cols-2">
-      <input type="hidden" name="lead_id" value={lead.id} />
-      <input type="hidden" name="client_id" value={client.id} />
-      {campaign && <input type="hidden" name="campaign_id" value={campaign.id} />}
-      <input type="hidden" name="business_name" value={lead.business_name} />
-      <input type="hidden" name="contact_name" value={lead.contact_name ?? ""} />
-      <input type="hidden" name="phone" value={lead.phone ?? ""} />
-      <input type="hidden" name="email" value={lead.email ?? ""} />
-
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Appointment Date</span>
-        <input name="appointment_date" type="date" required className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Appointment Time</span>
-        <input name="appointment_time" type="time" required className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Time Zone</span>
-        <input name="timezone" defaultValue="America/Toronto" className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Meeting Type</span>
-        <select name="meeting_type" defaultValue="Phone Call" className={inputClass}>
-          {LEADGEN_MEETING_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Meeting Link (optional)</span>
-        <input name="meeting_link" type="url" className={inputClass} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-slate-600">Assigned Specialist</span>
-        {isAdmin && agents.length > 0 ? (
-          <select name="assigned_specialist_id" defaultValue={currentUserId} className={inputClass}>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.full_name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input type="hidden" name="assigned_specialist_id" value={currentUserId} />
-        )}
-      </label>
-      <label className="flex flex-col gap-1.5 sm:col-span-2">
-        <span className="text-sm font-semibold text-slate-600">Internal Appointment Notes</span>
-        <textarea name="appointment_notes" className={`${inputClass} min-h-[50px] resize-y`} />
-      </label>
-      <label className="flex items-center gap-2 text-sm sm:col-span-2">
-        <input type="hidden" name="notify_client" value="false" />
-        <input
-          type="checkbox"
-          onChange={(e) => {
-            const hidden = e.currentTarget.previousElementSibling as HTMLInputElement;
-            hidden.value = e.currentTarget.checked ? "true" : "false";
-          }}
-          defaultChecked
-        />
-        Email the client a notification now
-      </label>
-      <p className="text-xs text-slate-500 sm:col-span-2">{SMS_CONSENT_NOTICE}</p>
-      <button type="submit" disabled={isPending} className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 sm:col-span-2 sm:w-fit">
-        {isPending ? "Booking…" : "Book Appointment"}
-      </button>
-    </form>
   );
 }
 

@@ -112,7 +112,7 @@ export default function ProposalRequestModal({
 
   function generateFromDetails() {
     if (services.length === 0) return;
-    const generated = buildProposalRequestDraft({ client, lead, brief: { decisionMaker, services, servicesConfirmed, prospectNote, assignedAgent: assignedAgentName } });
+    const generated = buildProposalRequestDraft({ client, lead, brief: { decisionMaker, services, servicesConfirmed, prospectNote, assignedAgent: assignedAgentName, leadSource: lead.lead_source, leadId: lead.id } });
     setSubject(generated.subject);
     setBody(generated.body);
     setError(null);
@@ -345,7 +345,7 @@ export default function ProposalRequestModal({
                 onClick={handleConfirmSend}
                 className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? "Sending…" : "Confirm & Send"}
+                {submitting ? "Sending…" : "Send Proposal Request to Client"}
               </button>
               <button type="button" disabled={submitting} onClick={() => setStep("edit")} className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50">
                 Back to Edit

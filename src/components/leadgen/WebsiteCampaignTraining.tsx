@@ -13,8 +13,8 @@ export function WebsiteServicesCampaignTraining() {
       <p className="mt-2 text-sm text-slate-600">Use this shared approach for the website-services campaigns below. Keep the opening short and conversational.</p>
       <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-700">
         <li>Confirm the prospect&apos;s business name first. Introduce yourself: &ldquo;My name is [Agent Name] calling from Winsalot Corp on behalf of [Client Business Name].&rdquo;</li>
-        <li>Briefly explain the applicable services: a new website, redesign or rebrand, stronger online visibility, and lead generation through SEO where offered.</li>
-        <li>Ask whether the prospect has no website, has an outdated or weak website, wants better visibility, or wants more inquiries from their website.</li>
+        <li>Briefly explain the applicable services: a new website, website redesign, and stronger search visibility or SEO where the client offers it. Do not describe the call as lead generation.</li>
+        <li>Ask whether the prospect currently has a website, then follow the Call Guide for Hidebrandt and Teknokraft. If the prospect only wants leads or customers, ask whether they are also considering website or online visibility improvements; if not, mark the lead &ldquo;Not Qualified — Lead Generation Only&rdquo; and do not offer a client appointment.</li>
         <li>Qualify the right business or industry, a decision maker or appropriate contact, genuine interest in the client&apos;s offered website, SEO, e-commerce, hosting or maintenance services, and willingness to meet the client.</li>
         <li>Book qualified prospects through the existing appointment workflow. Do not promise results, guaranteed sales, or conversions.</li>
       </ol>

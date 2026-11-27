@@ -6,13 +6,15 @@ import { getNextPayday, PAYROLL_CURRENCY_LABELS } from "@/lib/payroll";
 import type { HolidayPayAssignmentWithHoliday } from "@/lib/holiday-pay";
 import MyPayView from "@/components/payroll/MyPayView";
 import HolidayPaySection from "@/components/payroll/HolidayPaySection";
+import SalesBonusAgentSection from "@/components/payroll/SalesBonusAgentSection";
+import { loadMySalesBonuses } from "@/lib/sales-bonus-data";
 
 export default async function LeadgenAgentPayPage() {
   const agent = await requireLeadgenAgent();
   const supabase = await createSupabaseServerClient();
 
   // Shared security-invoker view preserves own-record RLS; explicit agent fields exclude internal reasons.
-  const [{ data: records, error }, { data: holidayAssignments, error: holidayError }] = await Promise.all([
+  const [{ data: records, error }, { data: holidayAssignments, error: holidayError }, { data: salesBonuses, error: salesBonusError }] = await Promise.all([
     loadSharedPayrollData(supabase, "winsalot_payroll", AGENT_PAYROLL_COLUMNS, agent.id),
     // holiday_pay_assignments_agent_select_own RLS restricts this to this
     // agent's own rows regardless of the .eq() below - same defense-in-
@@ -22,6 +24,9 @@ export default async function LeadgenAgentPayPage() {
       .select("*, holidays(*)")
       .eq("leadgen_user_id", agent.id)
       .order("created_at", { ascending: false }),
+    // Scoped to this agent by the database function itself; carries no
+    // client billing fields.
+    loadMySalesBonuses(supabase),
   ]);
 
   return (
@@ -47,6 +52,7 @@ export default async function LeadgenAgentPayPage() {
             records={(records ?? []) as unknown as AgentPayrollRecord[]}
             currency={agent.payroll_currency}
           />
+          {!salesBonusError && <SalesBonusAgentSection bonuses={salesBonuses} />}
           {!holidayError && (
             <HolidayPaySection
               assignments={(holidayAssignments ?? []) as HolidayPayAssignmentWithHoliday[]}

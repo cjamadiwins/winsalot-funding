@@ -283,9 +283,12 @@ export default async function LeadgenAgentDashboardPage() {
   const restrictedCampaignIds = new Set((myCampaignRestrictions ?? []).map((r) => r.campaign_id));
   const permittedClientIds = new Set((campaigns ?? []).filter((c) => restrictedCampaignIds.has(c.id)).map((c) => c.client_id));
   const preparationClientIds = new Set(websiteTraining.map(({ client }) => client.id));
+  // A website-launch client shows when the agent has an assigned call list
+  // for it OR is assigned to one of its campaigns, so Henry and Goodness get
+  // the guide for every campaign they are assigned to.
   const callScriptClients = (activeClientsWithScripts ?? []).filter((c) =>
     WEBSITE_LAUNCH_CLIENTS.includes(c.name as (typeof WEBSITE_LAUNCH_CLIENTS)[number])
-      ? preparationClientIds.has(c.id)
+      ? preparationClientIds.has(c.id) || permittedClientIds.has(c.id)
       : permittedClientIds.has(c.id)
   );
 

@@ -44,6 +44,27 @@ export async function workspaceCampaigns(
     .map((c) => ({ ...c, clientName: names.get(c.client_id)! }));
 }
 
+const LIST_CONCURRENCY = 4;
+type Page<Row> = { data: Row[]; error: { message: string } | null };
+async function fetchPerList<Row>(
+  ids: string[],
+  load: (id: string) => Promise<Page<Row>>,
+): Promise<Page<Row>> {
+  const out: Row[] = [];
+  let next = 0;
+  let failure: { message: string } | null = null;
+  await Promise.all(
+    Array.from({ length: Math.min(LIST_CONCURRENCY, ids.length) }, async () => {
+      while (!failure && next < ids.length) {
+        const result = await load(ids[next++]);
+        if (result.error) failure = result.error;
+        else out.push(...result.data);
+      }
+    }),
+  );
+  return { data: out, error: failure };
+}
+
 // Always session-scoped: explicit campaign filters narrow existing RLS; never bypass it.
 export async function loadCampaignWorkspace(
   db: SupabaseClient,
@@ -101,19 +122,22 @@ export async function loadCampaignWorkspace(
   );
   const ids = lists.map((s) => s.id);
   const [rawLeads, rawPipeline, rawCalls, rawAppointments] = await Promise.all([
-    ids.length
-      ? fetchAllRows((from, to) =>
-          db
-            .from("call_list_leads")
-            .select(
-              "id, business_name, website, extra_fields, last_outcome, callback_at, promoted_leadgen_lead_id, segment_id",
-            )
-            .in("segment_id", ids)
-            .is("removed_at", null)
-            .order("id")
-            .range(from, to),
-        )
-      : { data: [], error: null },
+    // One small query per call list, a few at a time. A single query over every
+    // list sorted and paged all rows through row-level security and timed out
+    // (8s) once the lists grew, which left the page loading forever.
+    fetchPerList(ids, (segmentId) =>
+      fetchAllRows((from, to) =>
+        db
+          .from("call_list_leads")
+          .select(
+            "id, business_name, website, website_verification:extra_fields->>website_verification, last_outcome, callback_at, promoted_leadgen_lead_id, segment_id",
+          )
+          .eq("segment_id", segmentId)
+          .is("removed_at", null)
+          .order("id")
+          .range(from, to),
+      ),
+    ),
     fetchAllRows((from, to) => {
       let q = db
         .from("leadgen_leads")
@@ -167,7 +191,7 @@ export async function loadCampaignWorkspace(
       name: l.business_name as string,
       opportunity: websiteOpportunity(
         l.website,
-        l.extra_fields?.website_verification,
+        l.website_verification,
       ),
       status: l.last_outcome as string | null,
       callbackAt: l.callback_at as string | null,

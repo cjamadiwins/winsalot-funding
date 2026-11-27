@@ -11,6 +11,9 @@ import AdminPayrollClient from "@/components/payroll/AdminPayrollClient";
 import HolidayPayAdminSection from "@/components/payroll/HolidayPayAdminSection";
 import GrowthSubcontractorPayrollSection from "@/components/payroll/GrowthSubcontractorPayrollSection";
 import PayrollCostSummary from "@/components/payroll/PayrollCostSummary";
+import SalesBonusAdminSection from "@/components/payroll/SalesBonusAdminSection";
+import { loadSalesBonuses } from "@/lib/sales-bonus-data";
+import { salesBonusPayrollCost } from "@/lib/sales-bonus";
 import { createPayrollAction, updatePayrollAction, approvePayrollAction, markPayrollPaidAction, cancelPayrollAction, reopenPayrollAction, updatePayrollAgentCurrencyAction, loadAttendanceSummaryAction, loadHolidayPaySummaryAction } from "@/lib/shared-payroll-actions";
 import {
   assignHolidayAction,
@@ -37,6 +40,7 @@ export default async function AdminCrmPayrollPage() {
     { data: assignments, error: assignmentsError },
     { data: subcontractors, error: subcontractorsError },
     { data: subcontractorPayments, error: subcontractorPaymentsError },
+    { data: salesBonuses, error: salesBonusesError },
   ] = await Promise.all([
     supabase.from("crm_users").select("*").eq("role", "agent").order("full_name"),
     loadSharedPayrollData(supabase, "winsalot_payroll_agents"),
@@ -46,6 +50,7 @@ export default async function AdminCrmPayrollPage() {
     supabase.from("holiday_pay_assignments").select("*").not("crm_user_id", "is", null),
     supabase.from("crm_subcontractors").select("*").order("full_name"),
     supabase.from("crm_subcontractor_payments").select("*").order("period_start", { ascending: false }),
+    loadSalesBonuses(supabase),
   ]);
 
   const payrollEmails = await loadPayrollEmailNotifications((records ?? []) as PayrollRecord[]);
@@ -77,6 +82,12 @@ export default async function AdminCrmPayrollPage() {
           className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-700"
         >
           Holiday Pay
+        </a>
+        <a
+          href="#sales-bonuses"
+          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-700"
+        >
+          Sales Bonuses
         </a>
         <a
           href="#subcontractors"
@@ -141,6 +152,17 @@ export default async function AdminCrmPayrollPage() {
             />
           </div>
 
+          <div className="mt-8 scroll-mt-6">
+            {/* A bonus-ledger failure must never take the existing payroll register down with it. */}
+            {salesBonusesError ? (
+              <p id="sales-bonuses" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Sales conversion bonuses are unavailable right now: {salesBonusesError.message}
+              </p>
+            ) : (
+              <SalesBonusAdminSection id="sales-bonuses" rows={salesBonuses} paydays={getUpcomingPaydays(4)} />
+            )}
+          </div>
+
           <div id="subcontractors" className="mt-8 scroll-mt-6">
             <GrowthSubcontractorPayrollSection
               subcontractors={subcontractorRows}
@@ -154,6 +176,7 @@ export default async function AdminCrmPayrollPage() {
             <PayrollCostSummary
               employeeTotals={sumPayrollRecordsByCurrency((records ?? []) as PayrollRecord[], agentCurrencyById)}
               subcontractorTotals={sumSubcontractorPaymentRecordsByCurrency(subcontractorPaymentRows)}
+              salesBonusTotals={salesBonusPayrollCost(salesBonuses)}
             />
           </div>
         </div>

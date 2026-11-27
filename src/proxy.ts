@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { GET_USER_ATTEMPT_MS, getUserWithRetry } from "@/lib/get-user-with-retry";
 import { LEAD_GEN_HOSTS, isLeadGenHost, isGrowthCrmHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
@@ -123,7 +124,10 @@ async function handleSessionGate(
   // getUser() itself via the require*() gates, so a revoked session is
   // rejected there regardless.
   const useLocalClaims = !isPublicPath && !forcePasswordChangePath;
-  const { data } = await getUserWithTimeout(supabase, pathname, useLocalClaims);
+  // A missing/invalid local token falls through to the retrying getUser() so a
+  // slow or flaky answer is never read as "signed out" on the first miss.
+  const fromClaims = useLocalClaims ? await getUserFromClaims(supabase, pathname) : null;
+  const { data } = fromClaims?.data.user ? fromClaims : await getUserWithRetry(supabase, pathname);
 
   if (!data.user && !isPublicPath) {
     if (isServerAction) return response;
@@ -150,41 +154,27 @@ async function handleSessionGate(
   return response;
 }
 
-const GET_USER_TIMEOUT_MS = 8000;
-
 // getClaims() verifies the access token's signature and expiry locally (it also
 // refreshes a token that is about to expire). Anything other than a verified
-// token - no session, invalid or expired token, an error - means "no session",
-// exactly like getUser() returning no user.
-async function getUserFromClaims(supabase: SupabaseClient): Promise<{ data: { user: User | null } }> {
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims?.sub) return { data: { user: null } };
-  const claims = data.claims as { sub: string; user_metadata?: Record<string, unknown> };
-  return { data: { user: { id: claims.sub, user_metadata: claims.user_metadata ?? {} } as unknown as User } };
-}
-
-async function getUserWithTimeout(
+// token - no session, invalid or expired token, an error - yields no user, and
+// the caller then asks getUser() (with retry) before treating it as signed out.
+async function getUserFromClaims(
   supabase: SupabaseClient,
-  pathname: string,
-  useLocalClaims = false
+  pathname: string
 ): Promise<{ data: { user: User | null } }> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), GET_USER_TIMEOUT_MS);
+    timer = setTimeout(() => resolve("timeout"), GET_USER_ATTEMPT_MS);
   });
-
   try {
-    const lookup = useLocalClaims ? getUserFromClaims(supabase) : supabase.auth.getUser();
-    const result = await Promise.race([lookup, timeout]);
-    if (result === "timeout") {
-      console.error(
-        `[proxy:getUserWithTimeout] supabase.auth.getUser() did not respond within ${GET_USER_TIMEOUT_MS}ms for ${pathname} - treating as no session.`
-      );
-      return { data: { user: null } };
-    }
-    return result;
+    const result = await Promise.race([supabase.auth.getClaims(), timeout]);
+    if (result === "timeout") return { data: { user: null } };
+    const { data, error } = result;
+    if (error || !data?.claims?.sub) return { data: { user: null } };
+    const claims = data.claims as { sub: string; user_metadata?: Record<string, unknown> };
+    return { data: { user: { id: claims.sub, user_metadata: claims.user_metadata ?? {} } as unknown as User } };
   } catch (error) {
-    console.error(`[proxy:getUserWithTimeout] supabase.auth.getUser() threw for ${pathname} - treating as no session.`, error);
+    console.error(`[proxy:getUserFromClaims] getClaims() threw for ${pathname}.`, error);
     return { data: { user: null } };
   } finally {
     clearTimeout(timer!);

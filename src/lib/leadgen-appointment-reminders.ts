@@ -1,3 +1,4 @@
+import { isClientNotifiable } from "./leadgen-qualification";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "./supabase-admin";
@@ -453,6 +454,8 @@ export async function runLeadgenAppointmentReminderJob(options?: { dryRun?: bool
 
   for (const appt of rows) {
     if (!activeClientIds.has(appt.client_id)) continue;
+    // Appointment Quality Control: no reminder to the prospect or the client while the appointment awaits Admin approval or was rejected.
+    if (!isClientNotifiable(appt.qc_status)) continue;
     const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
     if (scheduledMs < windowStartMs || scheduledMs > windowEndMs) continue;
     if (scheduledMs <= nowMs) continue; // must still be in the future
@@ -646,6 +649,8 @@ export async function runLeadgenProspect1HourReminderJob(options?: { dryRun?: bo
 
   for (const appt of rows) {
     if (!activeClientIds.has(appt.client_id)) continue;
+    // Appointment Quality Control: no reminder to the prospect or the client while the appointment awaits Admin approval or was rejected.
+    if (!isClientNotifiable(appt.qc_status)) continue;
     const scheduledMs = zonedWallTimeToUtcMs(appt.appointment_date, appt.appointment_time, appt.timezone);
     if (scheduledMs < windowStartMs || scheduledMs > windowEndMs) continue;
     if (scheduledMs <= nowMs) continue;
@@ -779,6 +784,7 @@ export async function sendManualLeadgenAppointmentSms(
   automaticSmsRemindersEnabled: boolean
 ): Promise<ManualSmsResult> {
   if (!automaticSmsRemindersEnabled) return { outcome: "disabled" };
+  if (!isClientNotifiable(appointment.qc_status)) return { outcome: "disabled" }; // awaiting Admin approval: no prospect SMS
 
   const scheduledMs = zonedWallTimeToUtcMs(appointment.appointment_date, appointment.appointment_time, appointment.timezone);
   const timeLabel = formatSmsTimeLabel(scheduledMs, appointment.timezone);

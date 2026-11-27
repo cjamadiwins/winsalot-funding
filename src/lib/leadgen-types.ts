@@ -700,6 +700,16 @@ export type LeadgenAppointmentRow = {
   // Mandatory reason when incentive_status is anything other than
   // Qualified (migration 0061) - null for Qualified or unreviewed.
   incentive_status_reason: string | null;
+  // Appointment Quality Control (migration 20261103120000). Optional so code
+  // keeps working against a database that has not applied the migration yet:
+  // an absent qc_status means "no review required".
+  qc_status?: "not_required" | "pending_review" | "needs_info" | "approved" | "rejected";
+  qualification_id?: string | null;
+  qc_submitted_at?: string | null;
+  qc_reviewed_by?: string | null;
+  qc_reviewed_at?: string | null;
+  qc_rejection_reason?: string | null;
+  qc_admin_feedback?: string | null;
   // Optional reason plus who/when for the current `status` value,
   // captured by the "Cancel/Replace Appointment" admin action (migration
   // 0064) - e.g. "Incorrect email—appointment rebooked." Null unless

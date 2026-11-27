@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { resolveAppointmentNotificationRecipients, type LeadgenAppointmentRow, type LeadgenClientRow } from "./leadgen-types";
 import { claimAndSendAppointmentSms, buildClientAppointmentBookingSms, formatSmsDateWithWeekdayLabel, formatSmsTimeLabel } from "./appointment-sms";
 import { zonedWallTimeToUtcMs } from "./leadgen-appointment-reminders";
+import { isClientNotifiable } from "./leadgen-qualification";
 
 type AppointmentForNotify = Pick<
   LeadgenAppointmentRow,
@@ -81,6 +82,52 @@ function buildCustomerConfirmationBody(appt: AppointmentForNotify, clientName: s
   return lines.join("\n");
 }
 
+// Appointment Quality Control: while a gated client's appointment is awaiting
+// Admin approval (or was rejected / sent back for more qualification) NOTHING
+// goes to the client or the prospect. Only an internal heads-up to Winsalot's
+// own inbox is sent. The deferred notifications are released by
+// releaseHeldAppointmentNotifications() when Admin approves. If the review
+// column does not exist yet (migration not applied) the status reads as
+// "no gate" and behaviour is exactly as before.
+async function readQcState(supabase: ReturnType<typeof getSupabaseAdmin>, appointmentId: string): Promise<{ status: string | null; submittedAt: string | null }> {
+  const { data, error } = await supabase.from("leadgen_appointments").select("qc_status, qc_submitted_at").eq("id", appointmentId).maybeSingle();
+  if (error || !data) return { status: null, submittedAt: null };
+  const row = data as { qc_status?: string | null; qc_submitted_at?: string | null };
+  return { status: row.qc_status ?? null, submittedAt: row.qc_submitted_at ?? null };
+}
+
+async function notifyAdminAwaitingReview(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  appt: AppointmentForNotify,
+  client: Pick<LeadgenClientRow, "id" | "name">,
+  agentName: string | null,
+  submittedAt: string | null
+): Promise<void> {
+  const adminEmail = process.env.LEADGEN_ADMIN_NOTIFICATION_EMAIL || "info@winsalotcorp.com";
+  const link = `${getSiteUrl()}/leadgen/admin/appointment-quality?highlight=${appt.id}`;
+  const result = await sendLeadgenEmail(supabase, {
+    clientId: client.id,
+    leadId: appt.lead_id,
+    appointmentId: appt.id,
+    templateKey: null,
+    toEmail: adminEmail,
+    subject: `Appointment awaiting approval: ${appt.business_name} (${client.name})`,
+    body: [
+      `${agentName || "An agent"} submitted an appointment for ${client.name}. It needs Admin approval before the client or the prospect is told about it.`,
+      "",
+      `Business: ${appt.business_name}`,
+      `Requested time: ${appt.appointment_date} ${appt.appointment_time} (${appt.timezone})`,
+      "",
+      `Review the qualification answers: ${link}`,
+    ].join("\n"),
+    sentBy: null,
+    clientVisible: false,
+    // A resubmission after "more qualification requested" gets its own notice.
+    requestKey: `qc-awaiting:${appt.id}:${submittedAt ?? "first"}`,
+  });
+  if (result.error && !result.duplicate) console.error("[leadgen] Failed to send awaiting-approval notice:", result.error);
+}
+
 // Post-booking notifications for a newly booked consultation:
 // 1. A confirmation email to the customer/prospect (when an email address
 //    is on file).
@@ -129,6 +176,12 @@ export async function notifyOfNewLeadgenAppointment(
   agentName: string | null
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
+
+  const qc = await readQcState(supabase, appt.id);
+  if (!isClientNotifiable(qc.status)) {
+    await notifyAdminAwaitingReview(supabase, appt, client, agentName, qc.submittedAt);
+    return;
+  }
 
   const { data: claimed } = await supabase
     .from("leadgen_appointments")

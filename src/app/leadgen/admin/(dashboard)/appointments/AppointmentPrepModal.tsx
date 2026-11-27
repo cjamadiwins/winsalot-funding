@@ -20,9 +20,11 @@ import {
   type PrepStatus,
 } from "@/lib/leadgen-appointment-prep";
 import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailStatus } from "@/lib/leadgen-types";
+import { BRIEF_PREPARED_BY, BRIEF_TEMPLATE_WEBSITE_HSO, buildWebsiteHsoTemplate } from "@/lib/leadgen-appointment-brief-template";
 import AppointmentBriefEmailModal from "./AppointmentBriefEmailModal";
 import {
   loadAppointmentPrepAction,
+  markBriefReviewedAction,
   previewAppointmentBriefEmailAction,
   saveAppointmentBriefAction,
   saveFeedbackAdminNoteAction,
@@ -69,6 +71,7 @@ function toForm(data: AppointmentPrepData): BriefFormInput {
     recommended_next_step: brief?.recommended_next_step ?? "",
     next_step_note: brief?.next_step_note ?? "",
     admin_note: data.adminNote?.prep_note ?? "",
+    brief_template: brief?.brief_template ?? "",
   };
 }
 
@@ -126,6 +129,33 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
     if (form.appointment_summary.trim() && form.appointment_summary.trim() !== generatedText && !window.confirm("Replace the current client summary with a freshly generated one? Your edits to it will be lost.")) return;
     setForm({ ...form, appointment_summary: generatedText });
     setSummaryAuto(true);
+  }
+
+  // Fills the editable fields with the Website Redesign + HSO layout. Nothing
+  // is saved or sent until Admin presses Save Brief / Mark Reviewed / Send.
+  function applyWebsiteHsoTemplate() {
+    if (!form || !data) return;
+    const hasContent = Boolean(form.why_interested.trim() || form.talking_points.trim() || form.suggested_questions.trim());
+    if (hasContent && !window.confirm("Replace the current brief fields with the Website Redesign + HSO template? Your edits will be lost.")) return;
+    const t = buildWebsiteHsoTemplate({ businessName: data.appointment.business_name, contactName: data.appointment.contact_name });
+    const next = { ...form, ...t, brief_template: BRIEF_TEMPLATE_WEBSITE_HSO };
+    next.appointment_summary = generateSummary(next, data.appointment.business_name).summary;
+    setForm(next);
+    setSummaryAuto(true);
+  }
+
+  async function markReviewed() {
+    if (!form) return;
+    setMessage(null);
+    startTransition(async () => {
+      const result = await markBriefReviewedAction(appointmentId, form);
+      if (result.prepStatus) setStatus(result.prepStatus);
+      if (result.error) return setMessage({ kind: "error", text: result.error });
+      setMessage({ kind: "ok", text: result.message ?? "Reviewed." });
+      const refreshed = await loadAppointmentPrepAction(appointmentId);
+      if (refreshed.data) setData(refreshed.data);
+      router.refresh();
+    });
   }
 
   // "Send Appointment Brief" only opens the review step - it never sends.
@@ -429,6 +459,44 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
           </label>
 
           {/* Appointment Brief emails already sent - real delivery status */}
+          <section className="rounded-xl border border-slate-200 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-[12.5px] font-bold text-slate-800">Brief Document · {BRIEF_PREPARED_BY}</h3>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={isPending} onClick={applyWebsiteHsoTemplate} className="rounded-full border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  Use Website Redesign + HSO Template
+                </button>
+                {data.brief ? (
+                  <>
+                    <a href={`/leadgen/admin/appointments/${appointmentId}/brief-pdf`} target="_blank" rel="noreferrer" className="rounded-full border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+                      Preview PDF
+                    </a>
+                    <a href={`/leadgen/admin/appointments/${appointmentId}/brief-pdf?download=1`} className="rounded-full border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+                      Download PDF
+                    </a>
+                  </>
+                ) : null}
+                <button type="button" disabled={isPending} onClick={markReviewed} className="rounded-full bg-emerald-600 px-3 py-1 text-[12px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                  Save &amp; Mark Reviewed
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-[11.5px] text-slate-400">The PDF reflects the last saved brief. Editing the brief after review withdraws the review; sending requires it.</p>
+            <ol className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[12.5px] sm:grid-cols-4">
+              {[
+                ["Generated", data.brief?.generated_at],
+                ["Reviewed", data.brief?.reviewed_at],
+                ["Sent", data.brief?.sent_at],
+                ["Delivered", data.emailHistory.find((e) => e.delivered_at)?.delivered_at],
+              ].map(([label, at]) => (
+                <li key={label as string}>
+                  <span className="text-slate-400">{label}: </span>
+                  <span className={at ? "font-medium text-slate-800" : "text-slate-400"}>{at ? formatDateTime(at as string) : "Pending"}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
           <section className="rounded-xl border border-slate-200 px-3 py-2">
             <h3 className="text-[12.5px] font-bold text-slate-800">Appointment Brief Emails</h3>
             {data.emailHistory.length === 0 ? (

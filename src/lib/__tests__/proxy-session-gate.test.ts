@@ -81,7 +81,7 @@ describe("page requests", () => {
     getUser.mockReturnValue(new Promise(() => {}));
     getClaims.mockReturnValue(new Promise(() => {}));
     const pending = proxy(req("/agent/dashboard"));
-    await vi.advanceTimersByTimeAsync(8100);
+    await vi.advanceTimersByTimeAsync(12100);
     const res = await pending;
     vi.useRealTimers();
     expect(location(res)).toContain("/agent/login");
@@ -152,7 +152,7 @@ describe("local token verification (getClaims) on protected pages", () => {
     vi.useFakeTimers();
     getClaims.mockReturnValue(new Promise(() => {}));
     const pending = proxy(req("/agent/dashboard"));
-    await vi.advanceTimersByTimeAsync(8100);
+    await vi.advanceTimersByTimeAsync(12100);
     const res = await pending;
     vi.useRealTimers();
     expect(location(res)).toContain("/agent/login");
