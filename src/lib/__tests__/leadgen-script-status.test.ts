@@ -107,3 +107,10 @@ describe("deriveScriptDisplayState", () => {
     for (const d of Object.values(SCRIPT_DISPLAY)) expect(["green", "amber", "gray"]).toContain(d.tone);
   });
 });
+
+describe("heartbeat cadence", () => {
+  it("leaves at least one full interval of slack before a heartbeat counts as stale", async () => {
+    const { SCRIPT_HEARTBEAT_INTERVAL_MS, SCRIPT_HEARTBEAT_STALE_MS } = await import("../leadgen-script-status");
+    expect(SCRIPT_HEARTBEAT_STALE_MS - SCRIPT_HEARTBEAT_INTERVAL_MS).toBeGreaterThanOrEqual(SCRIPT_HEARTBEAT_INTERVAL_MS);
+  });
+});

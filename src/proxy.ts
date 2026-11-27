@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getUserWithRetry } from "@/lib/get-user-with-retry";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { GET_USER_ATTEMPT_MS, getUserWithRetry } from "@/lib/get-user-with-retry";
 import { LEAD_GEN_HOSTS, isLeadGenHost, isGrowthCrmHost, authCookieName } from "@/lib/hosts";
 
 export async function proxy(request: NextRequest) {
@@ -88,6 +89,15 @@ async function handleSessionGate(
     return response;
   }
 
+  // Server Actions are never redirected or blocked here (every branch below
+  // returns `response` untouched for them - each action authenticates itself
+  // through the require*() gates, which also refresh an expiring session and
+  // may set cookies from an action). The Auth-server lookup below would only
+  // add one network round trip per action, which adds up for the background
+  // check-ins (attendance and script-status) that fire every 30-60 seconds
+  // for every clocked-in agent.
+  if (isServerAction) return response;
+
   const supabase = createServerClient(supabaseUrl, anonKey, {
     cookieOptions: { name: authCookieName(host) },
     cookies: {
@@ -102,7 +112,22 @@ async function handleSessionGate(
     },
   });
 
-  const { data } = await getUserWithRetry(supabase, pathname);
+  // Verify the session token locally (getClaims) instead of asking the Auth
+  // server (getUser) when it is safe to: only on protected pages (never the
+  // login/public pages, where a revoked-but-unexpired token would otherwise
+  // bounce between login and dashboard) and only on gates with no forced
+  // password-change check (that flag lives in user metadata, which a cached
+  // token does not reflect until it is refreshed). With asymmetric JWT signing
+  // keys this saves one Auth round trip per page request/prefetch; with the
+  // legacy shared secret the Supabase client transparently falls back to
+  // getUser(), so behaviour is identical. Every page and action still calls
+  // getUser() itself via the require*() gates, so a revoked session is
+  // rejected there regardless.
+  const useLocalClaims = !isPublicPath && !forcePasswordChangePath;
+  // A missing/invalid local token falls through to the retrying getUser() so a
+  // slow or flaky answer is never read as "signed out" on the first miss.
+  const fromClaims = useLocalClaims ? await getUserFromClaims(supabase, pathname) : null;
+  const { data } = fromClaims?.data.user ? fromClaims : await getUserWithRetry(supabase, pathname);
 
   if (!data.user && !isPublicPath) {
     if (isServerAction) return response;
@@ -127,6 +152,33 @@ async function handleSessionGate(
   }
 
   return response;
+}
+
+// getClaims() verifies the access token's signature and expiry locally (it also
+// refreshes a token that is about to expire). Anything other than a verified
+// token - no session, invalid or expired token, an error - yields no user, and
+// the caller then asks getUser() (with retry) before treating it as signed out.
+async function getUserFromClaims(
+  supabase: SupabaseClient,
+  pathname: string
+): Promise<{ data: { user: User | null } }> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), GET_USER_ATTEMPT_MS);
+  });
+  try {
+    const result = await Promise.race([supabase.auth.getClaims(), timeout]);
+    if (result === "timeout") return { data: { user: null } };
+    const { data, error } = result;
+    if (error || !data?.claims?.sub) return { data: { user: null } };
+    const claims = data.claims as { sub: string; user_metadata?: Record<string, unknown> };
+    return { data: { user: { id: claims.sub, user_metadata: claims.user_metadata ?? {} } as unknown as User } };
+  } catch (error) {
+    console.error(`[proxy:getUserFromClaims] getClaims() threw for ${pathname}.`, error);
+    return { data: { user: null } };
+  } finally {
+    clearTimeout(timer!);
+  }
 }
 
 export const config = {

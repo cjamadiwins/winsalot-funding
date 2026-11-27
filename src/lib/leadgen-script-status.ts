@@ -2,7 +2,11 @@
 // Pure state-transition + display logic (no I/O) so the duplicate-notification
 // rules are unit-testable. Only the CRM script-panel state is ever tracked.
 
-export const SCRIPT_HEARTBEAT_INTERVAL_MS = 60_000;
+// Each heartbeat is a Server Action costing roughly a dozen Supabase requests
+// (session, assignment checks, status read + upsert), so this is one of the
+// biggest drivers of monthly request volume. 90s keeps a full 90s of slack
+// before the 3-minute staleness threshold below.
+export const SCRIPT_HEARTBEAT_INTERVAL_MS = 90_000;
 // A heartbeat older than this means the agent is no longer on the CRM.
 export const SCRIPT_HEARTBEAT_STALE_MS = 3 * 60_000;
 // "Closed while working" must persist this long before Admin is told, so a
