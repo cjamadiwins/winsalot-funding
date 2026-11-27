@@ -3,8 +3,14 @@ import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@
 import { WINSALOT_LOGO_DATA_URI } from "./winsalot-logo-base64";
 import { formatAppointmentWhen, type AppointmentBriefRow } from "./leadgen-appointment-prep";
 import {
-  BRIEF_PREPARED_BY,
+  BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE,
   BRIEF_TEMPLATE_WEBSITE_HSO,
+  GOOGLE_COMBINED_SOLUTION_SUMMARY,
+  GOOGLE_CUSTOMER_ACQUISITION_OBJECTIVES,
+  GOOGLE_EXPECTED_OUTCOMES,
+  GOOGLE_RECOMMENDED_NEXT_STEPS,
+  GOOGLE_VISIBILITY_OBJECTIVES,
+  briefPreparedBy,
   COMBINED_SOLUTION_SUMMARY,
   EXPECTED_OUTCOMES,
   HSO_OBJECTIVES,
@@ -80,9 +86,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// "6:00 PM EST" for the same instant, so a client in Toronto reads the
+// appointment in its own time even when it is stored in the prospect's zone.
+function formatEasternTime(date: string, time: string, timezone: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  const wall = Date.UTC(y, m - 1, d, hh, mm);
+  const fmt = (ms: number, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(ms));
+  const get = (parts: Intl.DateTimeFormatPart[], t: string) => Number(parts.find((p) => p.type === t)?.value);
+  // Find the UTC instant whose wall clock in `timezone` equals the stored wall time.
+  let ms = wall;
+  for (let i = 0; i < 2; i++) {
+    const p = fmt(ms, timezone);
+    const shown = Date.UTC(get(p, "year"), get(p, "month") - 1, get(p, "day"), get(p, "hour"), get(p, "minute"));
+    ms += wall - shown;
+  }
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/Toronto", weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date(ms));
+}
+
 export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
   const { brief } = input;
   const isWebsiteHso = brief.brief_template === BRIEF_TEMPLATE_WEBSITE_HSO;
+  const isGoogle = brief.brief_template === BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE;
+  const preparedBy = briefPreparedBy(brief.brief_template);
   const norm = (text: string) => text.replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim().toLowerCase();
   const why = norm(brief.why_interested ?? "");
   // The generated summary opens with the "why interested" sentence, which is
@@ -104,7 +130,7 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
           <View>
             <Text style={styles.title}>Appointment Brief</Text>
             <Text style={styles.meta}>{input.businessName}</Text>
-            <Text style={styles.meta}>{BRIEF_PREPARED_BY}</Text>
+            <Text style={styles.meta}>{preparedBy}</Text>
           </View>
         </View>
 
@@ -117,6 +143,9 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
             <Field label="Website" value={input.website} />
             <Field label="Industry" value={input.industry} />
             <Field label="Date & time" value={formatAppointmentWhen(input.appointmentDate, input.appointmentTime, input.timezone)} />
+            {isGoogle && input.timezone !== "America/Toronto" && (
+              <Field label="Eastern time" value={formatEasternTime(input.appointmentDate, input.appointmentTime, input.timezone)} />
+            )}
             <Field label="Meeting type" value={input.meetingType} />
             <Field label="Winsalot specialist" value={input.agentName} />
             <Field label="Service provider" value={input.clientName} />
@@ -156,6 +185,20 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
           </>
         )}
 
+        {isGoogle && (
+          <>
+            <Section title="Google Visibility Objectives">
+              <Bullets items={GOOGLE_VISIBILITY_OBJECTIVES} />
+            </Section>
+            <Section title="Customer Acquisition & Website Objectives">
+              <Bullets items={GOOGLE_CUSTOMER_ACQUISITION_OBJECTIVES} />
+            </Section>
+            <Section title="Recommended Approach">
+              <Text style={styles.body}>{GOOGLE_COMBINED_SOLUTION_SUMMARY}</Text>
+            </Section>
+          </>
+        )}
+
         {brief.talking_points.length > 0 && (
           <Section title="Key Talking Points">
             <Bullets items={brief.talking_points} />
@@ -171,6 +214,7 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
         <Section title="Expected Consultation Outcome">
           {brief.recommended_objective && <Text style={styles.body}>Objective: {brief.recommended_objective}</Text>}
           {isWebsiteHso && <Bullets items={EXPECTED_OUTCOMES} />}
+          {isGoogle && <Bullets items={GOOGLE_EXPECTED_OUTCOMES} />}
           {brief.recommended_next_step && (
             <Text style={styles.body}>
               Recommended next step: {brief.recommended_next_step}
@@ -185,7 +229,13 @@ export function AppointmentBriefPdf({ input }: { input: BriefPdfInput }) {
           </Section>
         )}
 
-        <Text style={styles.footer} fixed>{BRIEF_PREPARED_BY} · info@winsalotcorp.com · winsalotcorp.com</Text>
+        {isGoogle && (
+          <Section title="Recommended Next Steps After the Consultation">
+            <Bullets items={GOOGLE_RECOMMENDED_NEXT_STEPS} />
+          </Section>
+        )}
+
+        <Text style={styles.footer} fixed>{preparedBy} · info@winsalotcorp.com · winsalotcorp.com</Text>
       </Page>
     </Document>
   );

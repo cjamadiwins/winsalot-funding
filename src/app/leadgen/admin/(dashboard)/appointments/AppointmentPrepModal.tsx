@@ -20,7 +20,7 @@ import {
   type PrepStatus,
 } from "@/lib/leadgen-appointment-prep";
 import { LEADGEN_EMAIL_STATUS_LABELS, LEADGEN_EMAIL_STATUS_STYLES, type LeadgenEmailStatus } from "@/lib/leadgen-types";
-import { BRIEF_PREPARED_BY, BRIEF_TEMPLATE_WEBSITE_HSO, buildWebsiteHsoTemplate } from "@/lib/leadgen-appointment-brief-template";
+import { BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE, BRIEF_TEMPLATE_WEBSITE_HSO, briefPreparedBy, buildTeknokraftGoogleTemplate, buildWebsiteHsoTemplate } from "@/lib/leadgen-appointment-brief-template";
 import AppointmentBriefEmailModal from "./AppointmentBriefEmailModal";
 import {
   loadAppointmentPrepAction,
@@ -139,6 +139,19 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
     if (hasContent && !window.confirm("Replace the current brief fields with the Website Redesign + HSO template? Your edits will be lost.")) return;
     const t = buildWebsiteHsoTemplate({ businessName: data.appointment.business_name, contactName: data.appointment.contact_name });
     const next = { ...form, ...t, brief_template: BRIEF_TEMPLATE_WEBSITE_HSO };
+    next.appointment_summary = generateSummary(next, data.appointment.business_name).summary;
+    setForm(next);
+    setSummaryAuto(true);
+  }
+
+  // Fills the editable fields with the Teknokraft Google Visibility + Local SEO
+  // layout. Like the HSO template, nothing is saved or sent automatically.
+  function applyTeknokraftGoogleTemplate() {
+    if (!form || !data) return;
+    const hasContent = Boolean(form.why_interested.trim() || form.talking_points.trim() || form.suggested_questions.trim());
+    if (hasContent && !window.confirm("Replace the current brief fields with the Teknokraft Google Visibility + Local SEO template? Your edits will be lost.")) return;
+    const t = buildTeknokraftGoogleTemplate({ businessName: data.appointment.business_name, contactName: data.appointment.contact_name });
+    const next = { ...form, ...t, brief_template: BRIEF_TEMPLATE_TEKNOKRAFT_GOOGLE };
     next.appointment_summary = generateSummary(next, data.appointment.business_name).summary;
     setForm(next);
     setSummaryAuto(true);
@@ -461,10 +474,13 @@ export default function AppointmentPrepModal({ appointmentId, onClose }: { appoi
           {/* Appointment Brief emails already sent - real delivery status */}
           <section className="rounded-xl border border-slate-200 px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[12.5px] font-bold text-slate-800">Brief Document · {BRIEF_PREPARED_BY}</h3>
+              <h3 className="text-[12.5px] font-bold text-slate-800">Brief Document · {briefPreparedBy(form.brief_template)}</h3>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={isPending} onClick={applyWebsiteHsoTemplate} className="rounded-full border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   Use Website Redesign + HSO Template
+                </button>
+                <button type="button" disabled={isPending} onClick={applyTeknokraftGoogleTemplate} className="rounded-full border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  Use Teknokraft Google Visibility + Local SEO Template
                 </button>
                 {data.brief ? (
                   <>
